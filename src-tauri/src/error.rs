@@ -51,12 +51,6 @@ impl From<reqwest::Error> for AppError {
     }
 }
 
-impl From<keyring::Error> for AppError {
-    fn from(e: keyring::Error) -> Self {
-        AppError::Keychain(e.to_string())
-    }
-}
-
 impl serde::Serialize for AppError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -66,9 +60,7 @@ impl serde::Serialize for AppError {
 
         let (error_type, message) = match self {
             AppError::Git(e) => ("Git", e.to_string()),
-            AppError::GitCli { message, exit_code } => {
-                ("GitCli", format!("exit {:?}: {}", exit_code, message))
-            }
+            AppError::GitCli { message, .. } => ("GitCli", message.clone()),
             AppError::Auth(msg) => ("Auth", msg.clone()),
             AppError::TokenExpired { account_id } => {
                 ("TokenExpired", format!("Token expired for {}", account_id))
