@@ -1,0 +1,86 @@
+{
+  "app": { "name": "GitEase" },
+  "welcome": {
+    "title": "Welcome to GitEase",
+    "description": "A simple Git client with per-repo GitHub account management",
+    "signIn": "Sign in with GitHub",
+    "clone": "Clone a Repository",
+    "openLocal": "Open a Local Repository"
+  },
+  "toolbar": {
+    "fetch": "Fetch origin",
+    "push": "Push",
+    "pull": "Pull"
+  },
+  "changes": {
+    "title": "Changes",
+    "stageAll": "Stage All",
+    "unstageAll": "Unstage All",
+    "noChanges": "No local changes",
+    "discard": "Discard Changes"
+  },
+  "commit": {
+    "summary": "Summary (required)",
+    "description": "Description",
+    "submit": "Commit to {{branch}}",
+    "amend": "Amend previous commit",
+    "noStagedFiles": "No staged files to commit"
+  },
+  "history": { "title": "History", "noCommits": "No commits yet" },
+  "branch": {
+    "current": "Current Branch",
+    "create": "New Branch",
+    "name": "Branch name",
+    "from": "Create from",
+    "delete": "Delete Branch",
+    "deleteConfirm": "Are you sure you want to delete {{name}}?"
+  },
+  "account": {
+    "switch": "Switch Account",
+    "add": "Add Another Account",
+    "manage": "Manage Accounts",
+    "remove": "Remove Account",
+    "removeConfirm": "Remove {{username}} from GitEase?",
+    "signInWith": "Sign in with GitHub"
+  },
+  "repo": {
+    "clone": "Clone a Repository",
+    "add": "Add Local Repository",
+    "create": "Create New Repository",
+    "open": "Open Repository",
+    "noRepos": "No repositories",
+    "search": "Search repositories..."
+  },
+  "settings": {
+    "title": "Settings",
+    "accounts": "Accounts",
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "editor": "Default Editor",
+    "shell": "Default Shell",
+    "language": "Language"
+  },
+  "diff": {
+    "unified": "Unified",
+    "split": "Side by Side",
+    "noSelection": "Select a file to view changes",
+    "binary": "Binary file changed"
+  },
+  "error": {
+    "generic": "Something went wrong",
+    "network": "Network connection lost",
+    "auth": "Authentication failed. Please sign in again.",
+    "rateLimit": "Rate limit exceeded. Try again in {{time}}.",
+    "gitNotFound": "Git is not installed. Please install Xcode Command Line Tools.",
+    "reload": "Reload",
+    "retry": "Retry"
+  },
+  "conflict": {
+    "title": "Merge Conflicts",
+    "openTool": "Open in External Merge Tool",
+    "files": "{{count}} conflicted files"
+  }
+}
