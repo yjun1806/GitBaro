@@ -1,12 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { X, AlertCircle, AlertTriangle, Info, CheckCircle } from "lucide-react";
 import clsx from "clsx";
-import type { Toast, ToastType } from "@/hooks/useToast";
-
-interface ErrorToastProps {
-  toasts: Toast[];
-  onRemove: (id: string) => void;
-}
+import { useToastStore, type Toast, type ToastType } from "@/stores/toast";
 
 const toastConfig: Record<
   ToastType,
@@ -70,13 +65,16 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
   );
 }
 
-export function ErrorToast({ toasts, onRemove }: ErrorToastProps) {
+export function ErrorToast() {
+  const toasts = useToastStore((s) => s.toasts);
+  const removeToast = useToastStore((s) => s.removeToast);
+
   if (toasts.length === 0) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
       {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onRemove={onRemove} />
+        <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
       ))}
     </div>
   );

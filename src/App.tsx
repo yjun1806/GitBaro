@@ -4,10 +4,13 @@ import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { applyTheme, watchSystemTheme } from "@/lib/theme";
-import { startOAuth, addLocalRepository } from "@/api/commands";
+import { addLocalRepository, getAccounts } from "@/api/commands";
+import { getErrorMessage } from "@/lib/utils";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { WelcomeScreen } from "@/components/welcome/WelcomeScreen";
-import { OAuthDialog } from "@/components/account/OAuthDialog";
+import { DeviceFlowDialog } from "@/components/account/DeviceFlowDialog";
+import { ErrorToast } from "@/components/error/ErrorToast";
+import { useToastStore } from "@/stores/toast";
 
 // --- Error Boundary ---
 interface ErrorBoundaryState {
@@ -49,17 +52,34 @@ class ErrorBoundary extends Component<
 }
 
 // --- App ---
-type OAuthState = "idle" | "loading" | "success" | "error";
 
 function AppContent() {
   const accounts = useAccountStore((s) => s.accounts);
+  const setAccounts = useAccountStore((s) => s.setAccounts);
+  const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
   const repos = useRepositoryStore((s) => s.repos);
   const addRepo = useRepositoryStore((s) => s.addRepo);
   const setActiveRepo = useRepositoryStore((s) => s.setActiveRepo);
   const theme = useUIStore((s) => s.theme);
 
-  const [oauthState, setOauthState] = useState<OAuthState>("idle");
-  const [oauthError, setOauthError] = useState("");
+  const addToast = useToastStore((s) => s.addToast);
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
+
+  // Load accounts from backend on startup
+  useEffect(() => {
+    getAccounts().then((loaded) => {
+      setAccounts(loaded);
+      if (loaded.length > 0) {
+        const stillExists = loaded.some((a) => a.id === activeAccountId);
+        if (!stillExists) {
+          setActiveAccount(loaded[0].id);
+        }
+      }
+    }).catch((err) => {
+      addToast(`Failed to load accounts: ${getErrorMessage(err)}`, "error");
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply theme on change
   useEffect(() => {
@@ -75,19 +95,8 @@ function AppContent() {
     return cleanup;
   }, [theme]);
 
-  const handleSignIn = useCallback(async () => {
-    setOauthState("loading");
-    setOauthError("");
-    try {
-      const { authUrl } = await startOAuth();
-      // Open auth URL in default browser
-      const { openUrl } = await import("@tauri-apps/plugin-opener");
-      await openUrl(authUrl);
-      // For now, keep loading state — real flow needs a callback listener
-    } catch (err) {
-      setOauthError(err instanceof Error ? err.message : String(err));
-      setOauthState("error");
-    }
+  const handleSignIn = useCallback(() => {
+    setShowLoginDialog(true);
   }, []);
 
   const handleOpenLocal = useCallback(async () => {
@@ -99,7 +108,7 @@ function AppContent() {
       addRepo(repoInfo);
       setActiveRepo(repoInfo.path);
     } catch (err) {
-      console.error("Failed to open local repository:", err);
+      addToast(`Failed to open repository: ${getErrorMessage(err)}`, "error");
     }
   }, [addRepo, setActiveRepo]);
 
@@ -116,14 +125,8 @@ function AppContent() {
           }}
           onOpenLocal={handleOpenLocal}
         />
-        {oauthState !== "idle" && (
-          <OAuthDialog
-            state={oauthState as "loading" | "success" | "error"}
-            errorMessage={oauthError}
-            onRetry={handleSignIn}
-            onClose={() => setOauthState("idle")}
-            onDeviceCode={() => setOauthState("idle")}
-          />
+        {showLoginDialog && (
+          <DeviceFlowDialog onClose={() => setShowLoginDialog(false)} />
         )}
       </>
     );
@@ -136,6 +139,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AppContent />
+      <ErrorToast />
     </ErrorBoundary>
   );
 }

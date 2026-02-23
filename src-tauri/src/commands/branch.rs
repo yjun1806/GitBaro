@@ -20,16 +20,33 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
                 git2::BranchType::Remote => "remote",
             };
 
-            let upstream = branch
-                .upstream()
-                .ok()
+            let upstream_branch = branch.upstream().ok();
+            let upstream = upstream_branch
+                .as_ref()
                 .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
+
+            // Calculate ahead/behind if upstream exists
+            let ahead_behind = if let Some(ref ub) = upstream_branch {
+                let local_oid = branch.get().target();
+                let upstream_oid = ub.get().target();
+                match (local_oid, upstream_oid) {
+                    (Some(local), Some(remote)) => {
+                        repo.graph_ahead_behind(local, remote)
+                            .ok()
+                            .map(|(ahead, behind)| json!({ "ahead": ahead, "behind": behind }))
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            };
 
             list.push(json!({
                 "name": name,
                 "isHead": is_head,
                 "kind": kind,
                 "upstream": upstream,
+                "aheadBehind": ahead_behind,
             }));
         }
 

@@ -58,8 +58,9 @@ export async function createCommit(
   repoPath: string,
   message: string,
   amend = false,
+  accountId?: string | null,
 ): Promise<string> {
-  return invoke("create_commit", { repoPath, message, amend });
+  return invoke("create_commit", { repoPath, message, amend, accountId: accountId ?? null });
 }
 
 export async function getDiff(repoPath: string, staged: boolean): Promise<DiffOutput> {
@@ -68,6 +69,26 @@ export async function getDiff(repoPath: string, staged: boolean): Promise<DiffOu
 
 export async function discardChanges(repoPath: string, paths: string[]): Promise<void> {
   return invoke("discard_changes", { repoPath, paths });
+}
+
+export async function gitFetch(repoPath: string, accountId: string): Promise<void> {
+  return invoke("git_fetch", { repoPath, accountId });
+}
+
+export async function gitPush(
+  repoPath: string,
+  accountId: string,
+  force = false,
+): Promise<void> {
+  return invoke("git_push", { repoPath, accountId, force });
+}
+
+export async function gitPull(
+  repoPath: string,
+  accountId: string,
+  rebase = false,
+): Promise<void> {
+  return invoke("git_pull", { repoPath, accountId, rebase });
 }
 
 // Repository
@@ -178,9 +199,32 @@ export async function getCommitDetail(
   };
 }
 
-// Auth
-export async function startOAuth(): Promise<{ authUrl: string; state: string }> {
-  return invoke("start_oauth");
+// Auth — Device Flow
+export interface DeviceFlowStart {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  expires_in: number;
+  interval: number;
+}
+
+export interface DeviceFlowPollResult {
+  status: string;
+  message?: string;
+  account?: {
+    id: string;
+    username: string;
+    email: string;
+    avatarUrl: string;
+  };
+}
+
+export async function startDeviceFlow(): Promise<DeviceFlowStart> {
+  return invoke("start_device_flow");
+}
+
+export async function pollDeviceFlow(deviceCode: string): Promise<DeviceFlowPollResult> {
+  return invoke("poll_device_flow", { deviceCode });
 }
 
 interface RawAccount {

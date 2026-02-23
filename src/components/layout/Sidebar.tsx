@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -8,14 +8,18 @@ import {
   GitFork,
   FolderPlus,
   Circle,
+  ArrowUp,
 } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useBranchStore } from "@/stores/branch";
-import { useStatus, useCommitHistory } from "@/api/queries";
-import { cn } from "@/lib/utils";
-import { formatRelativeTime } from "@/lib/utils";
+import { useStatus, useCommitHistory, useBranches } from "@/api/queries";
+import { addLocalRepository, createCommit, stageFiles, unstageFiles } from "@/api/commands";
+import { useQueryClient } from "@tanstack/react-query";
+import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
+import { useToastStore } from "@/stores/toast";
 import type { CommitInfo, RepoInfo } from "@/types";
 
 /* ─── Status helpers ─── */
@@ -48,10 +52,12 @@ function FileEntry({
   entry,
   isSelected,
   onClick,
+  onToggleStage,
 }: {
   entry: { path: string; status: string; staged: boolean };
   isSelected: boolean;
   onClick: () => void;
+  onToggleStage: () => void;
 }) {
   const colorClass = statusColors[entry.status] ?? "text-muted";
   const label = statusLabels[entry.status] ?? "?";
@@ -63,7 +69,7 @@ function FileEntry({
         onClick();
       }}
       className={cn(
-        "flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors select-none",
+        "flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors select-none border-b border-border",
         isSelected
           ? "bg-primary text-white"
           : "hover:bg-black/5 dark:hover:bg-white/10",
@@ -71,9 +77,12 @@ function FileEntry({
     >
       <input
         type="checkbox"
-        className="w-3.5 h-3.5 shrink-0"
-        defaultChecked={entry.staged}
-        readOnly
+        className="w-3.5 h-3.5 shrink-0 cursor-pointer"
+        checked={entry.staged}
+        onChange={(e) => {
+          e.stopPropagation();
+          onToggleStage();
+        }}
       />
       <span className="text-sm truncate flex-1">{entry.path}</span>
       <span
@@ -126,8 +135,25 @@ function RepoListView({
   const addRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const repos = useRepositoryStore((s) => s.repos);
+  const addRepo = useRepositoryStore((s) => s.addRepo);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const accounts = useAccountStore((s) => s.accounts);
+
+  const addToast = useToastStore((s) => s.addToast);
+
+  const handleAddLocal = useCallback(async () => {
+    setAddMenuOpen(false);
+    try {
+      const selected = await open({ directory: true, multiple: false });
+      if (!selected) return;
+      const dirPath = typeof selected === "string" ? selected : selected;
+      const repoInfo = await addLocalRepository(dirPath);
+      addRepo(repoInfo);
+      onSelectRepo(repoInfo.path);
+    } catch (err) {
+      addToast(`Failed to add repository: ${getErrorMessage(err)}`, "error");
+    }
+  }, [addRepo, onSelectRepo, addToast]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -174,7 +200,7 @@ function RepoListView({
           {addMenuOpen && (
             <div className="absolute right-0 top-full mt-1 min-w-48 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1">
               <button
-                onClick={() => setAddMenuOpen(false)}
+                onClick={handleAddLocal}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-left whitespace-nowrap"
               >
                 <FolderOpen className="w-4 h-4 text-muted shrink-0" />
@@ -255,25 +281,142 @@ function ChangesView({
 }) {
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const currentBranch = useBranchStore((s) => s.currentBranch);
+  const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
+  const queryClient = useQueryClient();
+
+  const addToast = useToastStore((s) => s.addToast);
+  const [commitSummary, setCommitSummary] = useState("");
+  const [commitDescription, setCommitDescription] = useState("");
+  const [isCommitting, setIsCommitting] = useState(false);
+
+  const stagedFiles = statusEntries.filter((e) => e.staged);
+  const unstagedFiles = statusEntries.filter((e) => !e.staged);
+
+  const handleStageAll = async () => {
+    if (!activeRepoPath || unstagedFiles.length === 0) return;
+    try {
+      await stageFiles(activeRepoPath, unstagedFiles.map((e) => e.path));
+      await queryClient.invalidateQueries({ queryKey: ["status"] });
+    } catch (err) {
+      addToast(`Stage failed: ${getErrorMessage(err)}`, "error");
+    }
+  };
+
+  const handleUnstageAll = async () => {
+    if (!activeRepoPath || stagedFiles.length === 0) return;
+    try {
+      await unstageFiles(activeRepoPath, stagedFiles.map((e) => e.path));
+      await queryClient.invalidateQueries({ queryKey: ["status"] });
+    } catch (err) {
+      addToast(`Unstage failed: ${getErrorMessage(err)}`, "error");
+    }
+  };
+
+  const handleCommit = async () => {
+    if (!activeRepoPath || !commitSummary.trim() || stagedFiles.length === 0) return;
+    setIsCommitting(true);
+    try {
+      const message = commitDescription.trim()
+        ? `${commitSummary.trim()}\n\n${commitDescription.trim()}`
+        : commitSummary.trim();
+      await createCommit(activeRepoPath, message, false, activeAccountId);
+      setCommitSummary("");
+      setCommitDescription("");
+      await queryClient.invalidateQueries({ queryKey: ["status"] });
+      await queryClient.invalidateQueries({ queryKey: ["commitHistory"] });
+    } catch (err) {
+      addToast(`Commit failed: ${getErrorMessage(err)}`, "error");
+    } finally {
+      setIsCommitting(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
       {/* File list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-white dark:bg-zinc-900">
         {statusEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted gap-2">
             <p className="text-sm">No local changes</p>
           </div>
         ) : (
-          statusEntries.map((entry) => (
-            <FileEntry
-              key={entry.path}
-              entry={entry}
-              isSelected={selectedFile === entry.path}
-              onClick={() => onSelectFile(entry.path, entry.staged)}
-            />
-          ))
+          <>
+            {/* Staged Changes */}
+            {stagedFiles.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border-b border-border">
+                  <input
+                    type="checkbox"
+                    className="w-3.5 h-3.5 shrink-0 cursor-pointer"
+                    checked={true}
+                    onChange={handleUnstageAll}
+                  />
+                  <span className="text-xs font-bold text-foreground flex-1">
+                    Staged Changes
+                  </span>
+                  <span className="text-xs text-muted">{stagedFiles.length}</span>
+                </div>
+                {stagedFiles.map((entry) => (
+                  <FileEntry
+                    key={`${entry.path}-staged`}
+                    entry={entry}
+                    isSelected={selectedFile === entry.path}
+                    onClick={() => onSelectFile(entry.path, entry.staged)}
+                    onToggleStage={async () => {
+                      if (!activeRepoPath) return;
+                      try {
+                        await unstageFiles(activeRepoPath, [entry.path]);
+                        await queryClient.invalidateQueries({ queryKey: ["status"] });
+                      } catch (err) {
+                        addToast(`Unstage failed: ${getErrorMessage(err)}`, "error");
+                      }
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Divider */}
+            {stagedFiles.length > 0 && unstagedFiles.length > 0 && (
+              <div className="border-b-2 border-border" />
+            )}
+
+            {/* Unstaged Changes */}
+            {unstagedFiles.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border-b border-border">
+                  <input
+                    type="checkbox"
+                    className="w-3.5 h-3.5 shrink-0 cursor-pointer"
+                    checked={false}
+                    onChange={handleStageAll}
+                  />
+                  <span className="text-xs font-bold text-foreground flex-1">
+                    Changes
+                  </span>
+                  <span className="text-xs text-muted">{unstagedFiles.length}</span>
+                </div>
+                {unstagedFiles.map((entry) => (
+                  <FileEntry
+                    key={`${entry.path}-unstaged`}
+                    entry={entry}
+                    isSelected={selectedFile === entry.path}
+                    onClick={() => onSelectFile(entry.path, entry.staged)}
+                    onToggleStage={async () => {
+                      if (!activeRepoPath) return;
+                      try {
+                        await stageFiles(activeRepoPath, [entry.path]);
+                        await queryClient.invalidateQueries({ queryKey: ["status"] });
+                      } catch (err) {
+                        addToast(`Stage failed: ${getErrorMessage(err)}`, "error");
+                      }
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -282,6 +425,8 @@ function ChangesView({
         <input
           type="text"
           placeholder="Summary (required)"
+          value={commitSummary}
+          onChange={(e) => setCommitSummary(e.target.value)}
           className={cn(
             "w-full px-3 py-2 text-sm rounded-md border border-border",
             "bg-white dark:bg-black/20 outline-none",
@@ -291,6 +436,8 @@ function ChangesView({
         <textarea
           placeholder="Description"
           rows={3}
+          value={commitDescription}
+          onChange={(e) => setCommitDescription(e.target.value)}
           className={cn(
             "w-full px-3 py-2 text-sm rounded-md border border-border",
             "bg-white dark:bg-black/20 outline-none resize-none",
@@ -298,12 +445,14 @@ function ChangesView({
           )}
         />
         <button
+          onClick={handleCommit}
           className={cn(
             "w-full py-2 rounded-md text-sm font-medium",
             "bg-primary text-white hover:bg-primary-hover transition-colors",
-            statusEntries.length === 0 && "opacity-50 cursor-not-allowed",
+            (stagedFiles.length === 0 || !commitSummary.trim() || isCommitting) &&
+              "opacity-50 cursor-not-allowed",
           )}
-          disabled={statusEntries.length === 0}
+          disabled={stagedFiles.length === 0 || !commitSummary.trim() || isCommitting}
         >
           Commit to <strong>{currentBranch ?? "main"}</strong>
         </button>
@@ -324,6 +473,10 @@ function HistoryView({
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const accounts = useAccountStore((s) => s.accounts);
   const { data: commits = [], isLoading } = useCommitHistory(activeRepoPath);
+  const { data: branches = [] } = useBranches(activeRepoPath);
+
+  const headBranch = branches.find((b) => b.isHead);
+  const ahead = headBranch?.aheadBehind?.ahead ?? 0;
 
   // 연동된 GitHub 계정의 이메일 → avatarUrl 매핑
   const accountAvatarMap = new Map(
@@ -347,9 +500,10 @@ function HistoryView({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      {commits.map((commit: CommitInfo) => {
+    <div className="flex-1 overflow-y-auto bg-white dark:bg-zinc-900">
+      {commits.map((commit: CommitInfo, index: number) => {
         const isActive = selectedCommitId === commit.id;
+        const isUnpushed = index < ahead;
         return (
           <div
             key={commit.id}
@@ -370,40 +524,62 @@ function HistoryView({
                 : "hover:bg-black/5 dark:hover:bg-white/5",
             )}
           >
-            {(() => {
-              const avatarSrc =
-                accountAvatarMap.get(commit.author.email?.toLowerCase()) ||
-                commit.author.avatarUrl;
-              return avatarSrc ? (
-                <img
-                  src={avatarSrc}
-                  alt={commit.author.name ?? ""}
-                  className="w-8 h-8 rounded-full shrink-0 mt-0.5 object-cover"
-                />
-              ) : (
-                <div
-                  className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5",
-                    isActive
-                      ? "bg-white/20 text-white"
-                      : "bg-primary/10 text-primary",
-                  )}
-                >
-                  {(commit.author.name ?? "?")[0].toUpperCase()}
-                </div>
-              );
-            })()}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{commit.summary}</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className={cn("text-xs", isActive ? "text-white/70" : "text-muted")}>
+              <p className="text-xs font-medium truncate">{commit.summary}</p>
+              <div className="flex items-center gap-1 mt-0.5">
+                {(() => {
+                  const avatarSrc =
+                    accountAvatarMap.get(commit.author.email?.toLowerCase()) ||
+                    commit.author.avatarUrl;
+                  return avatarSrc ? (
+                    <img
+                      src={avatarSrc}
+                      alt={commit.author.name ?? ""}
+                      className="w-3.5 h-3.5 rounded-full shrink-0 object-cover"
+                    />
+                  ) : (
+                    <div
+                      className={cn(
+                        "w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0",
+                        "text-[8px] font-bold",
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : "bg-primary/10 text-primary",
+                      )}
+                    >
+                      {(commit.author.name ?? "?")[0].toUpperCase()}
+                    </div>
+                  );
+                })()}
+                <span className={cn("text-[11px] truncate", isActive ? "text-white/70" : "text-muted")}>
                   {commit.author.name}
                 </span>
-                <span className={cn("text-xs", isActive ? "text-white/70" : "text-muted")}>
+                <span className={cn("text-[11px] shrink-0 leading-none", isActive ? "text-white/50" : "text-zinc-400 dark:text-zinc-500")}>
+                  •
+                </span>
+                <span className={cn("text-[11px] shrink-0", isActive ? "text-white/70" : "text-muted")}>
                   {formatRelativeTime(commit.timestamp)}
                 </span>
               </div>
             </div>
+            {isUnpushed && (
+              <div
+                className={cn(
+                  "shrink-0 self-center flex items-center justify-center w-5 h-5 rounded-full",
+                  isActive
+                    ? "bg-white/20"
+                    : "bg-primary/10",
+                )}
+              >
+                <ArrowUp
+                  strokeWidth={3}
+                  className={cn(
+                    "w-3 h-3",
+                    isActive ? "text-white" : "text-primary",
+                  )}
+                />
+              </div>
+            )}
           </div>
         );
       })}

@@ -15,7 +15,7 @@ interface UIState {
 export const useUIStore = create<UIState>((set) => ({
   theme: "system",
   activeTab: "changes",
-  sidebarWidth: 300,
+  sidebarWidth: 500,
   isSidebarCollapsed: false,
 
   setTheme: (theme) => set({ theme }),

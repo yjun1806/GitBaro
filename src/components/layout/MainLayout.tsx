@@ -4,7 +4,7 @@ import { Sidebar } from "./Sidebar";
 import { ContentArea } from "./ContentArea";
 
 const MIN_SIDEBAR_WIDTH = 200;
-const MAX_SIDEBAR_WIDTH = 500;
+const MIN_RIGHT_PANEL_WIDTH = 700;
 
 export function MainLayout() {
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
@@ -28,8 +28,9 @@ export function MainLayout() {
       const onMouseMove = (ev: MouseEvent) => {
         if (!isDragging.current) return;
         const delta = ev.clientX - startX.current;
+        const maxWidth = window.innerWidth - MIN_RIGHT_PANEL_WIDTH;
         const next = Math.min(
-          MAX_SIDEBAR_WIDTH,
+          maxWidth,
           Math.max(MIN_SIDEBAR_WIDTH, startWidth.current + delta),
         );
         setSidebarWidth(next);

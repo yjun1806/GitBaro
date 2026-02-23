@@ -10,3 +10,36 @@
   --color-border: #d0d7de;
   --color-surface: #f6f8fa;
 }
+
+/* Scrollbar - slim & visible (placed after Tailwind to ensure priority) */
+html *::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+}
+
+html *::-webkit-scrollbar-track {
+  background: #f3f3f3 !important;
+}
+
+html *::-webkit-scrollbar-thumb {
+  background: #aaa !important;
+  border-radius: 4px;
+}
+
+html *::-webkit-scrollbar-thumb:hover {
+  background: #888 !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  html *::-webkit-scrollbar-track {
+    background: #2a2a2a !important;
+  }
+
+  html *::-webkit-scrollbar-thumb {
+    background: #555 !important;
+  }
+
+  html *::-webkit-scrollbar-thumb:hover {
+    background: #777 !important;
+  }
+}

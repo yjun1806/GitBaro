@@ -1,72 +1,125 @@
+use crate::auth::keychain::KeychainManager;
+use crate::auth::oauth::fetch_user_info;
 use crate::error::AppError;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use rand::RngCore;
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 
-const CLIENT_ID: &str = "Ov23liXXXXXXXXXXXXXX"; // Placeholder — set via env or config
-const REDIRECT_URI: &str = "http://localhost:7878/callback";
-const SCOPE: &str = "repo user:email read:org";
+/// GitHub App Client ID — replace with your actual Client ID after creating the app.
+const CLIENT_ID: &str = "Iv23liPCP9M7lm3HwbUM";
 
-fn generate_pkce() -> (String, String) {
-    let mut verifier_bytes = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut verifier_bytes);
-    let verifier = URL_SAFE_NO_PAD.encode(verifier_bytes);
+// ─── Device Flow ───
 
-    let mut hasher = Sha256::new();
-    hasher.update(verifier.as_bytes());
-    let challenge = URL_SAFE_NO_PAD.encode(hasher.finalize());
+#[tauri::command]
+pub async fn start_device_flow() -> Result<Value, AppError> {
+    let client = reqwest::Client::new();
 
-    (verifier, challenge)
+    let response = client
+        .post("https://github.com/login/device/code")
+        .header("Accept", "application/json")
+        .form(&[("client_id", CLIENT_ID), ("scope", "repo user:email read:org")])
+        .send()
+        .await
+        .map_err(|e| AppError::Network(e.to_string()))?;
+
+    if !response.status().is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(AppError::Auth(format!("Device flow start failed: {}", body)));
+    }
+
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Network(e.to_string()))?;
+
+    tracing::info!(
+        "Device flow started: user_code={}",
+        body["user_code"].as_str().unwrap_or("?")
+    );
+
+    Ok(body)
 }
 
 #[tauri::command]
-pub async fn start_oauth() -> Result<Value, AppError> {
-    let (verifier, challenge) = generate_pkce();
-    let state: String = {
-        let mut bytes = [0u8; 16];
-        rand::thread_rng().fill_bytes(&mut bytes);
-        URL_SAFE_NO_PAD.encode(bytes)
-    };
+pub async fn poll_device_flow(device_code: String) -> Result<Value, AppError> {
+    let client = reqwest::Client::new();
 
-    let auth_url = format!(
-        "https://github.com/login/oauth/authorize?client_id={}&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method=S256",
-        CLIENT_ID,
-        urlencoding_simple(REDIRECT_URI),
-        urlencoding_simple(SCOPE),
-        state,
-        challenge,
-    );
+    let response = client
+        .post("https://github.com/login/oauth/access_token")
+        .header("Accept", "application/json")
+        .form(&[
+            ("client_id", CLIENT_ID),
+            ("device_code", device_code.as_str()),
+            (
+                "grant_type",
+                "urn:ietf:params:oauth:grant-type:device_code",
+            ),
+        ])
+        .send()
+        .await
+        .map_err(|e| AppError::Network(e.to_string()))?;
 
-    tracing::info!("OAuth flow started, state={}", state);
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Network(e.to_string()))?;
+
+    // GitHub returns error field while user hasn't approved yet
+    if let Some(error) = body.get("error").and_then(|e| e.as_str()) {
+        return Ok(json!({
+            "status": error,
+            "message": body.get("error_description").and_then(|d| d.as_str()).unwrap_or(""),
+        }));
+    }
+
+    // Success — we have access_token
+    let access_token = body["access_token"]
+        .as_str()
+        .ok_or_else(|| AppError::Auth("No access_token in response".to_string()))?;
+
+    // Fetch user info
+    let user = fetch_user_info(access_token).await?;
+
+    // Store token in Keychain
+    let token_ref = KeychainManager::generate_token_ref();
+    KeychainManager::store_token(&token_ref, access_token)?;
+
+    // Save account to registry
+    let user_id = user.id.to_string();
+    let email = user.email.clone().unwrap_or_default();
+    let account = json!({
+        "id": user_id,
+        "username": user.login,
+        "email": email,
+        "avatarUrl": user.avatar_url,
+        "tokenRef": token_ref,
+    });
+
+    let mut registry = load_account_registry().await?;
+    if let Some(arr) = registry.as_array_mut() {
+        arr.retain(|a| a["id"].as_str() != Some(&user_id));
+        arr.push(account.clone());
+    } else {
+        registry = json!([account]);
+    }
+    save_account_registry(&registry).await?;
+
+    tracing::info!("Login complete: user={}", user.login);
 
     Ok(json!({
-        "authUrl": auth_url,
-        "state": state,
-        "codeVerifier": verifier,
-        "redirectUri": REDIRECT_URI,
+        "status": "success",
+        "account": {
+            "id": user_id,
+            "username": user.login,
+            "email": email,
+            "avatarUrl": user.avatar_url,
+        },
     }))
 }
 
-/// Minimal percent-encoding for URL query values (encodes space, /, :, @)
-fn urlencoding_simple(s: &str) -> String {
-    let mut encoded = String::new();
-    for c in s.chars() {
-        match c {
-            ' ' => encoded.push_str("%20"),
-            ':' => encoded.push_str("%3A"),
-            '/' => encoded.push_str("%2F"),
-            '@' => encoded.push_str("%40"),
-            _ => encoded.push(c),
-        }
-    }
-    encoded
-}
+// ─── Account Management ───
 
 #[tauri::command]
 pub async fn get_accounts() -> Result<Vec<Value>, AppError> {
     let registry = load_account_registry().await?;
-    // Strip tokens before returning
     let accounts: Vec<Value> = registry
         .as_array()
         .map(|arr| {
@@ -94,16 +147,20 @@ pub async fn get_accounts() -> Result<Vec<Value>, AppError> {
 pub async fn remove_account(account_id: String) -> Result<(), AppError> {
     let mut registry = load_account_registry().await?;
 
+    // Find and remove token from keychain
+    if let Some(arr) = registry.as_array() {
+        if let Some(account) = arr.iter().find(|a| a["id"].as_str() == Some(&account_id)) {
+            if let Some(token_ref) = account["tokenRef"].as_str() {
+                let _ = KeychainManager::delete_token(token_ref);
+            }
+        }
+    }
+
     if let Some(arr) = registry.as_array_mut() {
         arr.retain(|a| a["id"].as_str() != Some(&account_id));
     }
 
     save_account_registry(&registry).await?;
-
-    // Remove token from keychain
-    let entry = keyring::Entry::new("gitbaro", &account_id)?;
-    let _ = entry.delete_credential(); // ignore error if not found
-
     tracing::info!("Removed account: {}", account_id);
     Ok(())
 }
@@ -121,7 +178,12 @@ pub async fn set_repo_account(
     mapping[key] = json!(account_id);
 
     save_json_file(&mapping_path, &mapping).await?;
-    tracing::info!("Set account {} for repo {} remote {}", account_id, repo_path, remote_name);
+    tracing::info!(
+        "Set account {} for repo {} remote {}",
+        account_id,
+        repo_path,
+        remote_name
+    );
     Ok(())
 }
 
@@ -143,29 +205,32 @@ pub async fn get_repo_account(
     let account = registry
         .as_array()
         .and_then(|arr| arr.iter().find(|a| a["id"].as_str() == Some(&account_id)))
-        .map(|a| json!({
-            "id": a["id"],
-            "username": a.get("username")
-                .or_else(|| a.get("login"))
-                .unwrap_or(&Value::Null),
-            "email": a["email"],
-            "avatarUrl": a.get("avatar_url")
-                .or_else(|| a.get("avatarUrl"))
-                .unwrap_or(&Value::Null),
-        }));
+        .map(|a| {
+            json!({
+                "id": a["id"],
+                "username": a.get("username")
+                    .or_else(|| a.get("login"))
+                    .unwrap_or(&Value::Null),
+                "email": a["email"],
+                "avatarUrl": a.get("avatar_url")
+                    .or_else(|| a.get("avatarUrl"))
+                    .unwrap_or(&Value::Null),
+            })
+        });
 
     Ok(account)
 }
 
 #[tauri::command]
 pub async fn refresh_token(account_id: String) -> Result<(), AppError> {
-    // GitHub's OAuth tokens do not expire unless revoked.
-    // This is a no-op stub for future support of fine-grained PATs or GitHub Apps.
-    tracing::info!("refresh_token called for {} (no-op for GitHub OAuth)", account_id);
+    tracing::info!(
+        "refresh_token called for {} (no-op for GitHub App device flow)",
+        account_id
+    );
     Ok(())
 }
 
-// --- Helpers ---
+// ─── Helpers ───
 
 fn app_support_dir() -> std::path::PathBuf {
     dirs::data_dir()
@@ -181,14 +246,13 @@ fn repo_account_mapping_path() -> std::path::PathBuf {
     app_support_dir().join("repo_accounts.json")
 }
 
-async fn load_account_registry() -> Result<Value, AppError> {
+pub(crate) async fn load_account_registry() -> Result<Value, AppError> {
     load_json_file(&account_registry_path())
         .await
         .map(|v| {
             if v.is_array() {
                 v
             } else if let Some(accounts) = v.get("accounts") {
-                // AccountRegistry struct format: { schema_version, accounts: [...], ... }
                 accounts.clone()
             } else {
                 json!([])
@@ -214,4 +278,19 @@ async fn save_json_file(path: &std::path::Path, value: &Value) -> Result<(), App
     let contents = serde_json::to_string_pretty(value)?;
     tokio::fs::write(path, contents).await?;
     Ok(())
+}
+
+/// Resolve an account ID to its access token from the keychain.
+pub(crate) async fn resolve_token(account_id: &str) -> Result<String, AppError> {
+    let registry = load_account_registry().await?;
+    let account = registry
+        .as_array()
+        .and_then(|arr| arr.iter().find(|a| a["id"].as_str() == Some(account_id)))
+        .ok_or_else(|| AppError::Auth(format!("Account '{}' not found", account_id)))?;
+
+    let token_ref = account["tokenRef"]
+        .as_str()
+        .ok_or_else(|| AppError::Auth("No tokenRef for account".to_string()))?;
+
+    KeychainManager::retrieve_token(token_ref)
 }

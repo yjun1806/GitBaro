@@ -1,4 +1,7 @@
+use crate::commands::auth::resolve_token;
 use crate::error::AppError;
+use crate::git::cli::GitCliEngine;
+use crate::git::engine::GitRemoteEngine;
 use serde_json::{json, Value};
 
 #[tauri::command]
@@ -129,14 +132,41 @@ pub async fn create_commit(
     repo_path: String,
     message: String,
     amend: bool,
+    account_id: Option<String>,
 ) -> Result<String, AppError> {
+    // If an account is provided, look up its name/email for the commit signature
+    let account_info: Option<(String, String)> = if let Some(ref id) = account_id {
+        let registry = crate::commands::auth::load_account_registry().await?;
+        registry.as_array().and_then(|arr| {
+            arr.iter().find(|a| a["id"].as_str() == Some(id)).map(|a| {
+                let name = a
+                    .get("username")
+                    .or_else(|| a.get("login"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown")
+                    .to_string();
+                let email = a["email"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string();
+                (name, email)
+            })
+        })
+    } else {
+        None
+    };
+
     let oid = tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
         let mut index = repo.index()?;
         let tree_id = index.write_tree()?;
         let tree = repo.find_tree(tree_id)?;
 
-        let sig = repo.signature()?;
+        let sig = if let Some((ref name, ref email)) = account_info {
+            git2::Signature::now(name, email)?
+        } else {
+            repo.signature()?
+        };
 
         let oid = if amend {
             let head = repo.head()?;
@@ -235,6 +265,77 @@ pub async fn discard_changes(repo_path: String, paths: Vec<String>) -> Result<()
     .await
     .map_err(|e| AppError::Channel(e.to_string()))??;
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_fetch(repo_path: String, account_id: String) -> Result<(), AppError> {
+    let token = resolve_token(&account_id).await?;
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.fetch("origin", &token).await?;
+    tracing::info!("Fetched origin for {}", repo_path);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_push(
+    repo_path: String,
+    account_id: String,
+    force: Option<bool>,
+) -> Result<(), AppError> {
+    let token = resolve_token(&account_id).await?;
+    let branch = tokio::task::spawn_blocking({
+        let rp = repo_path.clone();
+        move || -> Result<String, AppError> {
+            let repo = git2::Repository::open(&rp)?;
+            let head = repo.head()?;
+            let name = head
+                .shorthand()
+                .ok_or_else(|| AppError::GitCli {
+                    message: "HEAD is detached".to_string(),
+                    exit_code: None,
+                })?
+                .to_string();
+            Ok(name)
+        }
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.push("origin", &branch, &token, force.unwrap_or(false)).await?;
+    tracing::info!("Pushed {} to origin for {}", branch, repo_path);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_pull(
+    repo_path: String,
+    account_id: String,
+    rebase: Option<bool>,
+) -> Result<(), AppError> {
+    let token = resolve_token(&account_id).await?;
+    let branch = tokio::task::spawn_blocking({
+        let rp = repo_path.clone();
+        move || -> Result<String, AppError> {
+            let repo = git2::Repository::open(&rp)?;
+            let head = repo.head()?;
+            let name = head
+                .shorthand()
+                .ok_or_else(|| AppError::GitCli {
+                    message: "HEAD is detached".to_string(),
+                    exit_code: None,
+                })?
+                .to_string();
+            Ok(name)
+        }
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.pull("origin", &branch, &token, rebase.unwrap_or(false)).await?;
+    tracing::info!("Pulled {} from origin for {}", branch, repo_path);
     Ok(())
 }
 

@@ -4,12 +4,13 @@ import type { GitHubAccount } from "@/types";
 
 interface AccountAvatarProps {
   account: GitHubAccount;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   isActive?: boolean;
   className?: string;
 }
 
 const sizeMap = {
+  xs: "w-4 h-4 text-[9px]",
   sm: "w-6 h-6 text-xs",
   md: "w-8 h-8 text-sm",
   lg: "w-12 h-12 text-base",
