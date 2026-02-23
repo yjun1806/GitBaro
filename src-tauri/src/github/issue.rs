@@ -10,7 +10,7 @@ pub async fn list_issues(
     repo: &str,
 ) -> Result<Vec<Value>, AppError> {
     let http = reqwest::Client::builder()
-        .user_agent("GitEase/0.1.0")
+        .user_agent("GitBaro/0.1.0")
         .build()
         .map_err(|e| AppError::Network(e.to_string()))?;
 
@@ -55,7 +55,7 @@ pub async fn get_issue(
     number: u64,
 ) -> Result<Value, AppError> {
     let http = reqwest::Client::builder()
-        .user_agent("GitEase/0.1.0")
+        .user_agent("GitBaro/0.1.0")
         .build()
         .map_err(|e| AppError::Network(e.to_string()))?;
 

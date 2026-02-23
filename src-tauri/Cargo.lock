@@ -1322,7 +1322,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitease"
+name = "gitbaro"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",

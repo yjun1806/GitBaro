@@ -9,7 +9,7 @@ pub async fn list_notifications(
     all: bool,
 ) -> Result<Vec<Value>, AppError> {
     let http = reqwest::Client::builder()
-        .user_agent("GitEase/0.1.0")
+        .user_agent("GitBaro/0.1.0")
         .build()
         .map_err(|e| AppError::Network(e.to_string()))?;
 
@@ -52,7 +52,7 @@ pub async fn mark_notification_read(
     thread_id: u64,
 ) -> Result<(), AppError> {
     let http = reqwest::Client::builder()
-        .user_agent("GitEase/0.1.0")
+        .user_agent("GitBaro/0.1.0")
         .build()
         .map_err(|e| AppError::Network(e.to_string()))?;
 

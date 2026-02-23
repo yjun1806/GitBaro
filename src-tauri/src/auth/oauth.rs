@@ -184,7 +184,7 @@ pub async fn fetch_user_info(access_token: &str) -> Result<GitHubUser, AppError>
         .get("https://api.github.com/user")
         .header("Authorization", &auth_header)
         .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "gitease/0.1")
+        .header("User-Agent", "gitbaro/0.1")
         .send()
         .await
         .map_err(|e| AppError::Network(e.to_string()))?;
@@ -212,7 +212,7 @@ pub async fn fetch_user_info(access_token: &str) -> Result<GitHubUser, AppError>
             .get("https://api.github.com/user/emails")
             .header("Authorization", &auth_header)
             .header("Accept", "application/vnd.github+json")
-            .header("User-Agent", "gitease/0.1")
+            .header("User-Agent", "gitbaro/0.1")
             .send()
             .await
             .map_err(|e| AppError::Network(e.to_string()))?;

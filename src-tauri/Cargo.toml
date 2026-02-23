@@ -1,12 +1,12 @@
 [package]
-name = "gitease"
+name = "gitbaro"
 version = "0.1.0"
 description = "A macOS Git GUI with per-repo GitHub account management"
-authors = ["GitEase"]
+authors = ["GitBaro"]
 edition = "2021"
 
 [lib]
-name = "gitease_lib"
+name = "gitbaro_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

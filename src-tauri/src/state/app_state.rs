@@ -4,7 +4,7 @@ use tracing::{info, warn};
 
 use crate::error::AppError;
 
-const APP_DATA_DIR: &str = "com.gitease.app";
+const APP_DATA_DIR: &str = "com.gitbaro.app";
 const STATE_FILE: &str = "app-state.json";
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -23,7 +23,7 @@ pub struct WindowBounds {
     pub height: f64,
 }
 
-/// Returns the application data directory (`~/Library/Application Support/com.gitease.app`),
+/// Returns the application data directory (`~/Library/Application Support/com.gitbaro.app`),
 /// creating it if it does not exist.
 pub fn get_state_dir() -> PathBuf {
     let base = dirs::data_dir()
@@ -64,7 +64,7 @@ pub async fn load_app_state(_app_handle: &tauri::AppHandle) -> AppState {
     }
 }
 
-/// Persist `AppState` to `~/Library/Application Support/com.gitease.app/app-state.json`.
+/// Persist `AppState` to `~/Library/Application Support/com.gitbaro.app/app-state.json`.
 pub async fn save_app_state(state: &AppState) -> Result<(), AppError> {
     let dir = get_state_dir();
     std::fs::create_dir_all(&dir)?;

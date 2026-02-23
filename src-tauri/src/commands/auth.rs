@@ -101,7 +101,7 @@ pub async fn remove_account(account_id: String) -> Result<(), AppError> {
     save_account_registry(&registry).await?;
 
     // Remove token from keychain
-    let entry = keyring::Entry::new("gitease", &account_id)?;
+    let entry = keyring::Entry::new("gitbaro", &account_id)?;
     let _ = entry.delete_credential(); // ignore error if not found
 
     tracing::info!("Removed account: {}", account_id);
@@ -170,7 +170,7 @@ pub async fn refresh_token(account_id: String) -> Result<(), AppError> {
 fn app_support_dir() -> std::path::PathBuf {
     dirs::data_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("com.gitease.app")
+        .join("com.gitbaro.app")
 }
 
 fn account_registry_path() -> std::path::PathBuf {

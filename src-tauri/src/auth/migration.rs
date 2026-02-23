@@ -35,7 +35,7 @@ pub fn migrate_account_registry(data: &str) -> Result<AccountRegistry, AppError>
         }
         unknown => Err(AppError::Serde(serde::de::Error::custom(format!(
             "Unknown AccountRegistry schema version: {}. \
-             Please upgrade GitEase to read this file.",
+             Please upgrade GitBaro to read this file.",
             unknown
         )))),
     }

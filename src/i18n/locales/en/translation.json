@@ -1,7 +1,7 @@
 {
-  "app": { "name": "GitEase" },
+  "app": { "name": "GitBaro" },
   "welcome": {
-    "title": "Welcome to GitEase",
+    "title": "Welcome to GitBaro",
     "description": "A simple Git client with per-repo GitHub account management",
     "signIn": "Sign in with GitHub",
     "clone": "Clone a Repository",
@@ -40,7 +40,7 @@
     "add": "Add Another Account",
     "manage": "Manage Accounts",
     "remove": "Remove Account",
-    "removeConfirm": "Remove {{username}} from GitEase?",
+    "removeConfirm": "Remove {{username}} from GitBaro?",
     "signInWith": "Sign in with GitHub"
   },
   "repo": {

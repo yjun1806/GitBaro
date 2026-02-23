@@ -49,7 +49,7 @@ pub fn run() {
             commands::settings::set_theme,
         ])
         .setup(|app| {
-            tracing::info!("GitEase starting up");
+            tracing::info!("GitBaro starting up");
 
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -62,12 +62,12 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running GitEase");
+        .expect("error while running GitBaro");
 }
 
 fn init_logging() {
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("gitease=debug,git2=warn"));
+        .unwrap_or_else(|_| EnvFilter::new("gitbaro=debug,git2=warn"));
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)

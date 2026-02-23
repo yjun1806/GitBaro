@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 
-const SERVICE_NAME: &str = "com.gitease.app";
+const SERVICE_NAME: &str = "com.gitbaro.app";
 
 pub struct KeychainManager;
 
@@ -42,11 +42,11 @@ impl KeychainManager {
 
     /// Generate a unique, unpredictable Keychain key for an access token.
     pub fn generate_token_ref() -> String {
-        format!("gitease-tkn-{}", Uuid::new_v4())
+        format!("gitbaro-tkn-{}", Uuid::new_v4())
     }
 
     /// Generate a unique, unpredictable Keychain key for a refresh token.
     pub fn generate_refresh_token_ref() -> String {
-        format!("gitease-rtk-{}", Uuid::new_v4())
+        format!("gitbaro-rtk-{}", Uuid::new_v4())
     }
 }

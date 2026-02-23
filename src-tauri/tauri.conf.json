@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/refs/heads/main/nicegui/static/tauri.conf.schema.json",
-  "productName": "GitEase",
+  "productName": "GitBaro",
   "version": "0.1.0",
-  "identifier": "com.gitease.app",
+  "identifier": "com.gitbaro.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "GitEase",
+        "title": "GitBaro",
         "width": 1200,
         "height": 800,
         "minWidth": 900,

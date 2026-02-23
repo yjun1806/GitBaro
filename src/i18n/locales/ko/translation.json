@@ -1,7 +1,7 @@
 {
-  "app": { "name": "GitEase" },
+  "app": { "name": "GitBaro" },
   "welcome": {
-    "title": "GitEase에 오신 것을 환영합니다",
+    "title": "GitBaro에 오신 것을 환영합니다",
     "description": "저장소별 GitHub 계정 관리를 지원하는 간단한 Git 클라이언트",
     "signIn": "GitHub으로 로그인",
     "clone": "저장소 복제",
@@ -40,7 +40,7 @@
     "add": "다른 계정 추가",
     "manage": "계정 관리",
     "remove": "계정 제거",
-    "removeConfirm": "GitEase에서 {{username}}을 제거하시겠습니까?",
+    "removeConfirm": "GitBaro에서 {{username}}을 제거하시겠습니까?",
     "signInWith": "GitHub으로 로그인"
   },
   "repo": {

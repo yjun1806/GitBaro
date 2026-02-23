@@ -7,7 +7,7 @@ use crate::error::AppError;
 use super::keychain::KeychainManager;
 use super::migration::migrate_account_registry;
 
-const APP_DATA_DIR: &str = "com.gitease.app";
+const APP_DATA_DIR: &str = "com.gitbaro.app";
 const ACCOUNTS_FILE: &str = "accounts.json";
 const SCHEMA_VERSION: u32 = 1;
 

@@ -12,7 +12,7 @@ pub struct GitHubClient {
 impl GitHubClient {
     pub fn new() -> Self {
         let http = reqwest::Client::builder()
-            .user_agent("GitEase/0.1.0")
+            .user_agent("GitBaro/0.1.0")
             .build()
             .expect("Failed to create HTTP client");
 

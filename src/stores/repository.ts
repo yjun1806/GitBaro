@@ -60,7 +60,7 @@ export const useRepositoryStore = create<RepositoryState>()(
       setLoading: (loading) => set({ isLoading: loading }),
     }),
     {
-      name: "gitease-repos",
+      name: "gitbaro-repos",
       partialize: (state) => ({
         repos: state.repos,
         activeRepoPath: state.activeRepoPath,

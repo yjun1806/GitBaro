@@ -13,7 +13,7 @@ pub async fn list_pull_requests(
     let url = format!("/repos/{}/{}/pulls", owner, repo);
     // Call the GitHub API via a temporary client instance
     let http = reqwest::Client::builder()
-        .user_agent("GitEase/0.1.0")
+        .user_agent("GitBaro/0.1.0")
         .build()
         .map_err(|e| AppError::Network(e.to_string()))?;
 
@@ -55,7 +55,7 @@ pub async fn get_pull_request(
     number: u64,
 ) -> Result<Value, AppError> {
     let http = reqwest::Client::builder()
-        .user_agent("GitEase/0.1.0")
+        .user_agent("GitBaro/0.1.0")
         .build()
         .map_err(|e| AppError::Network(e.to_string()))?;
 
