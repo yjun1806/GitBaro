@@ -1,6 +1,9 @@
+use crate::commands::auth::resolve_token;
 use crate::error::AppError;
+use crate::git::cli::GitCliEngine;
+use crate::git::engine::GitRemoteEngine;
+use crate::state::TokenStore;
 use serde_json::{json, Value};
-use std::process::Stdio;
 
 fn repo_info_from_path(repo_path: &str) -> Result<Value, AppError> {
     let repo = git2::Repository::open(repo_path)?;
@@ -24,7 +27,7 @@ fn repo_info_from_path(repo_path: &str) -> Result<Value, AppError> {
             .unwrap_or(false)
     };
 
-    let remotes: Vec<String> = repo
+    let remote_names: Vec<String> = repo
         .remotes()
         .map(|r| {
             r.iter()
@@ -32,6 +35,18 @@ fn repo_info_from_path(repo_path: &str) -> Result<Value, AppError> {
                 .collect()
         })
         .unwrap_or_default();
+
+    let remotes: Vec<Value> = remote_names
+        .iter()
+        .filter_map(|name| {
+            repo.find_remote(name).ok().map(|remote| {
+                json!({
+                    "name": name,
+                    "url": remote.url().unwrap_or(""),
+                })
+            })
+        })
+        .collect();
 
     Ok(json!({
         "path": path,
@@ -59,34 +74,36 @@ pub async fn open_repository(path: String) -> Result<Value, AppError> {
 pub async fn clone_repository(
     url: String,
     path: String,
-    token: Option<String>,
+    account_id: Option<String>,
+    token_store: tauri::State<'_, TokenStore>,
 ) -> Result<Value, AppError> {
-    let clone_url = if let Some(ref tok) = token {
-        // Embed token in URL for HTTPS authentication
-        if let Some(stripped) = url.strip_prefix("https://") {
-            format!("https://{}@{}", tok, stripped)
-        } else {
-            url.clone()
-        }
+    let token = if let Some(ref id) = account_id {
+        Some(resolve_token(&token_store, id).await?)
     } else {
-        url.clone()
+        None
     };
 
+    // Use GIT_ASKPASS for secure credential passing (no token in URL/process args)
     let path_clone = path.clone();
-    let output = tokio::process::Command::new("git")
-        .args(["clone", &clone_url, &path])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|_| AppError::GitCliNotFound)?;
+    if let Some(ref tok) = token {
+        let engine = GitCliEngine::new(std::path::Path::new(&path));
+        engine.clone_repo(&url, std::path::Path::new(&path), tok).await?;
+    } else {
+        let output = tokio::process::Command::new("git")
+            .args(["clone", &url, &path])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .await
+            .map_err(|_| AppError::GitCliNotFound)?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        return Err(AppError::GitCli {
-            message: stderr,
-            exit_code: output.status.code(),
-        });
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            return Err(AppError::GitCli {
+                message: stderr,
+                exit_code: output.status.code(),
+            });
+        }
     }
 
     let result = tokio::task::spawn_blocking(move || repo_info_from_path(&path_clone))

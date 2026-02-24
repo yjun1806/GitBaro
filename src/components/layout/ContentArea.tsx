@@ -12,17 +12,22 @@ import {
 } from "lucide-react";
 import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
-import { useBranches, useStatus, useFileDiff } from "@/api/queries";
-import { gitFetch, gitPush, gitPull } from "@/api/commands";
+import { useBranches, useStatus, useFileDiff, useTokenValidation } from "@/api/queries";
+import {
+  gitFetch, gitPush, gitPull,
+  getSettings, updateSettings as updateSettingsApi,
+  removeAccount as removeAccountApi,
+} from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { useToastStore } from "@/stores/toast";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
-import { DeviceFlowDialog } from "@/components/account/DeviceFlowDialog";
+import { GhLoginDialog } from "@/components/account/GhLoginDialog";
+import { SettingsPanel } from "@/components/settings/SettingsPanel";
 import { DiffViewer } from "@/components/diff/DiffViewer";
-import type { FileStatus } from "@/types";
+import type { FileStatus, AppSettings } from "@/types";
 
-/* ─── Branch Dropdown ─── */
+/* --- Branch Dropdown --- */
 
 function BranchDropdown({
   branches,
@@ -48,7 +53,7 @@ function BranchDropdown({
   return (
     <div
       ref={ref}
-      className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1 max-h-80 overflow-y-auto"
+      className="absolute left-0 ml-2 top-full mt-2 w-64 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1 max-h-80 overflow-y-auto"
     >
       {branches.length === 0 ? (
         <p className="text-sm text-muted text-center py-3">No branches</p>
@@ -71,14 +76,16 @@ function BranchDropdown({
   );
 }
 
-/* ─── Account Dropdown ─── */
+/* --- Account Dropdown --- */
 
 function AccountDropdown({
   onClose,
   onSignIn,
+  onManageAccounts,
 }: {
   onClose: () => void;
   onSignIn: () => void;
+  onManageAccounts: () => void;
 }) {
   const accounts = useAccountStore((s) => s.accounts);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
@@ -98,7 +105,7 @@ function AccountDropdown({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1"
+      className="absolute right-0 mr-2 top-full mt-2 w-56 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1"
     >
       {accounts.length === 0 ? (
         <div className="px-3 py-2">
@@ -141,6 +148,15 @@ function AccountDropdown({
             >
               Add another account
             </button>
+            <button
+              onClick={() => {
+                onClose();
+                onManageAccounts();
+              }}
+              className="w-full px-3 py-2 text-sm text-muted hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-left"
+            >
+              Manage Accounts
+            </button>
           </div>
         </>
       )}
@@ -148,7 +164,7 @@ function AccountDropdown({
   );
 }
 
-/* ─── Fetch Dropdown ─── */
+/* --- Fetch Dropdown --- */
 
 function FetchDropdown({
   onFetch,
@@ -172,7 +188,7 @@ function FetchDropdown({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1"
+      className="absolute right-0 mr-2 top-full mt-2 w-64 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1"
     >
       <button
         onClick={() => {
@@ -191,7 +207,7 @@ function FetchDropdown({
   );
 }
 
-/* ─── Right Panel Header ─── */
+/* --- Right Panel Header --- */
 
 function RightPanelHeader() {
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
@@ -209,11 +225,63 @@ function RightPanelHeader() {
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
   const [fetchDropdownOpen, setFetchDropdownOpen] = useState(false);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
 
+  const { data: tokenStatus, isLoading: isValidating } = useTokenValidation(activeAccountId, activeRepoPath);
+  const canSync = tokenStatus?.valid === true && tokenStatus?.canPush === true;
+  const syncDisabled = isSyncing || !activeAccountId || (!isValidating && !canSync);
+
+  // Determine specific error state for sync area
+  const syncError = (() => {
+    if (!activeAccountId || isValidating || canSync) return null;
+    if (!tokenStatus?.valid) {
+      if (tokenStatus?.reason === "token_not_found") return { title: "Token missing", description: "Sign in again to continue" };
+      if (tokenStatus?.reason === "network_error") return { title: "Network error", description: "Check your connection" };
+      return { title: "Session expired", description: "Sign in again to sync" };
+    }
+    if (!tokenStatus?.canPush) {
+      if (tokenStatus?.reason === "repo_not_found") return { title: "Repository not found", description: "No access to this repository" };
+      return { title: "Read-only access", description: "No push permission for this repo" };
+    }
+    return null;
+  })();
+
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
+  const logout = useAccountStore((s) => s.logout);
+
+  const handleOpenSettings = async () => {
+    try {
+      const settings = await getSettings();
+      setAppSettings(settings);
+    } catch {
+      setAppSettings({ theme: "system", language: "ko", defaultEditor: "", defaultShell: "" } as AppSettings);
+    }
+    setShowSettings(true);
+  };
+
+  const handleRemoveAccount = async (accountId: string) => {
+    try {
+      await removeAccountApi(accountId);
+      logout(accountId);
+    } catch (err) {
+      addToast(`Failed to log out: ${getErrorMessage(err)}`, "error");
+    }
+  };
+
+  const handleUpdateSettings = async (patch: Partial<AppSettings>) => {
+    if (!appSettings) return;
+    const updated = { ...appSettings, ...patch };
+    setAppSettings(updated);
+    try {
+      await updateSettingsApi(updated);
+    } catch (err) {
+      addToast(`Failed to update settings: ${getErrorMessage(err)}`, "error");
+    }
+  };
 
   const currentAccount = accounts.find((a) => a.id === activeAccountId);
 
@@ -232,7 +300,12 @@ function RightPanelHeader() {
         addToast("Fetch completed", "success");
       }
       setLastFetchedAt(Math.floor(Date.now() / 1000));
-      await queryClient.invalidateQueries({ queryKey: ["branches"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["branches"] }),
+        queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
+        queryClient.invalidateQueries({ queryKey: ["status"] }),
+        queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+      ]);
     } catch (err) {
       const action = behind > 0 ? "Pull" : ahead > 0 ? "Push" : "Fetch";
       addToast(`${action} failed: ${getErrorMessage(err)}`, "error");
@@ -247,7 +320,12 @@ function RightPanelHeader() {
     try {
       await gitFetch(activeRepoPath, activeAccountId);
       setLastFetchedAt(Math.floor(Date.now() / 1000));
-      await queryClient.invalidateQueries({ queryKey: ["branches"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["branches"] }),
+        queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
+        queryClient.invalidateQueries({ queryKey: ["status"] }),
+        queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+      ]);
       addToast("Fetch completed", "success");
     } catch (err) {
       addToast(`Fetch failed: ${getErrorMessage(err)}`, "error");
@@ -297,7 +375,8 @@ function RightPanelHeader() {
         {/* Main sync button */}
         <button
           onClick={handleSync}
-          disabled={isSyncing || !activeAccountId}
+          disabled={syncDisabled}
+          title={syncError ? `${syncError.title}: ${syncError.description}` : undefined}
           className="flex items-center gap-2.5 px-6 h-[52px] min-w-[180px] hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {behind > 0 ? (
@@ -309,12 +388,16 @@ function RightPanelHeader() {
           )}
           <div className="min-w-0">
             <p className="text-sm font-semibold whitespace-nowrap">
-              {behind > 0 ? "Pull origin" : ahead > 0 ? "Push origin" : "Fetch origin"}
+              {syncError
+                ? syncError.title
+                : behind > 0 ? "Pull origin" : ahead > 0 ? "Push origin" : "Fetch origin"}
             </p>
             <p className="text-[11px] text-muted leading-tight whitespace-nowrap">
-              {lastFetchedAt
-                ? `Last fetched ${formatRelativeTime(lastFetchedAt)}`
-                : "Never fetched"}
+              {syncError
+                ? syncError.description
+                : lastFetchedAt
+                  ? `Last fetched ${formatRelativeTime(lastFetchedAt)}`
+                  : "Never fetched"}
             </p>
           </div>
           {(ahead > 0 || behind > 0) && (
@@ -338,7 +421,7 @@ function RightPanelHeader() {
                 setBranchDropdownOpen(false);
                 setAccountDropdownOpen(false);
               }}
-              disabled={isSyncing || !activeAccountId}
+              disabled={syncDisabled}
               className="flex items-center justify-center w-10 h-[52px] hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-50"
             >
               <ChevronDown className="w-3.5 h-3.5 text-muted" />
@@ -383,18 +466,48 @@ function RightPanelHeader() {
           <AccountDropdown
             onClose={() => setAccountDropdownOpen(false)}
             onSignIn={() => setShowLoginDialog(true)}
+            onManageAccounts={handleOpenSettings}
           />
         )}
       </div>
 
       {showLoginDialog && (
-        <DeviceFlowDialog onClose={() => setShowLoginDialog(false)} />
+        <GhLoginDialog
+          onClose={() => setShowLoginDialog(false)}
+          onSuccess={() => {
+            setShowLoginDialog(false);
+            queryClient.invalidateQueries({ queryKey: ["accounts"] });
+            queryClient.invalidateQueries({ queryKey: ["ghStatus"] });
+            queryClient.invalidateQueries({ queryKey: ["tokenValidation"] });
+            // Refresh accounts in store
+            import("@/api/commands").then(({ getAccounts }) =>
+              getAccounts().then((loaded) => {
+                const { setAccounts } = useAccountStore.getState();
+                setAccounts(loaded);
+              }).catch(() => {}),
+            );
+          }}
+        />
+      )}
+
+      {showSettings && appSettings && (
+        <SettingsPanel
+          settings={appSettings}
+          accounts={accounts}
+          onUpdateSettings={handleUpdateSettings}
+          onRemoveAccount={handleRemoveAccount}
+          onAddAccount={() => {
+            setShowSettings(false);
+            setShowLoginDialog(true);
+          }}
+          onClose={() => setShowSettings(false)}
+        />
       )}
     </div>
   );
 }
 
-/* ─── Empty / Placeholder States ─── */
+/* --- Empty / Placeholder States --- */
 
 function EmptyState({
   icon: Icon,
@@ -459,7 +572,7 @@ function CommitDetailPlaceholder({ commitId }: { commitId: string }) {
   );
 }
 
-/* ─── ContentArea (main export) ─── */
+/* --- ContentArea (main export) --- */
 
 interface ContentAreaProps {
   activeTab: "changes" | "history";

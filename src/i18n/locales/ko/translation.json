@@ -41,7 +41,25 @@
     "manage": "계정 관리",
     "remove": "계정 제거",
     "removeConfirm": "GitBaro에서 {{username}}을 제거하시겠습니까?",
-    "signInWith": "GitHub으로 로그인"
+    "logout": "로그아웃",
+    "logoutConfirm": "{{username}} 계정에서 로그아웃하시겠습니까?",
+    "signInWith": "GitHub으로 로그인",
+    "connecting": "GitHub에 연결 중...",
+    "enterCode": "GitHub에서 이 코드를 입력하세요",
+    "copied": "복사됨!",
+    "openGitHub": "github.com/login/device 열기",
+    "waitingAuth": "인증 대기 중...",
+    "completeSignIn": "GitHub에서 로그인을 완료하세요",
+    "signedInAs": "로그인 완료:",
+    "continue": "계속"
+  },
+  "gh": {
+    "notInstalled": "GitHub CLI가 설치되지 않았습니다",
+    "installDescription": "GitBaro는 인증을 위해 GitHub CLI (gh)가 필요합니다. 설치 후 계속해 주세요.",
+    "versionTooOld": "GitHub CLI 업데이트가 필요합니다",
+    "upgradeDescription": "GitBaro는 gh 버전 2.40 이상이 필요합니다. 업그레이드해 주세요.",
+    "checkAgain": "다시 확인",
+    "managedByCli": "GitHub CLI로 관리되는 계정"
   },
   "repo": {
     "clone": "저장소 복제",

@@ -41,7 +41,25 @@
     "manage": "Manage Accounts",
     "remove": "Remove Account",
     "removeConfirm": "Remove {{username}} from GitBaro?",
-    "signInWith": "Sign in with GitHub"
+    "logout": "Log Out",
+    "logoutConfirm": "Log out from {{username}}?",
+    "signInWith": "Sign in with GitHub",
+    "connecting": "Connecting to GitHub...",
+    "enterCode": "Enter this code on GitHub",
+    "copied": "Copied!",
+    "openGitHub": "Open github.com/login/device",
+    "waitingAuth": "Waiting for authorization...",
+    "completeSignIn": "Complete the sign-in on GitHub",
+    "signedInAs": "Signed in as",
+    "continue": "Continue"
+  },
+  "gh": {
+    "notInstalled": "GitHub CLI is not installed",
+    "installDescription": "GitBaro requires the GitHub CLI (gh) for authentication. Install it to continue.",
+    "versionTooOld": "GitHub CLI needs to be updated",
+    "upgradeDescription": "GitBaro requires gh version 2.40 or higher. Please upgrade.",
+    "checkAgain": "Check again",
+    "managedByCli": "Accounts managed by GitHub CLI"
   },
   "repo": {
     "clone": "Clone a Repository",

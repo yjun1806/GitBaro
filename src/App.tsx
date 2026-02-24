@@ -4,11 +4,12 @@ import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { applyTheme, watchSystemTheme } from "@/lib/theme";
-import { addLocalRepository, getAccounts } from "@/api/commands";
+import { addLocalRepository, getAccounts, openRepository } from "@/api/commands";
 import { getErrorMessage } from "@/lib/utils";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { WelcomeScreen } from "@/components/welcome/WelcomeScreen";
-import { DeviceFlowDialog } from "@/components/account/DeviceFlowDialog";
+import { GhLoginDialog } from "@/components/account/GhLoginDialog";
+import { GhSetupGuard } from "@/components/account/GhSetupGuard";
 import { ErrorToast } from "@/components/error/ErrorToast";
 import { useToastStore } from "@/stores/toast";
 
@@ -56,7 +57,6 @@ class ErrorBoundary extends Component<
 function AppContent() {
   const accounts = useAccountStore((s) => s.accounts);
   const setAccounts = useAccountStore((s) => s.setAccounts);
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
   const repos = useRepositoryStore((s) => s.repos);
   const addRepo = useRepositoryStore((s) => s.addRepo);
@@ -65,20 +65,40 @@ function AppContent() {
 
   const addToast = useToastStore((s) => s.addToast);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load accounts from backend on startup
-  useEffect(() => {
-    getAccounts().then((loaded) => {
+  // Reusable: load accounts from gh CLI and update store
+  const refreshAccounts = useCallback(async () => {
+    try {
+      const loaded = await getAccounts();
       setAccounts(loaded);
       if (loaded.length > 0) {
-        const stillExists = loaded.some((a) => a.id === activeAccountId);
+        const currentId = useAccountStore.getState().activeAccountId;
+        const stillExists = loaded.some((a) => a.id === currentId);
         if (!stillExists) {
           setActiveAccount(loaded[0].id);
         }
       }
-    }).catch((err) => {
+    } catch (err) {
       addToast(`Failed to load accounts: ${getErrorMessage(err)}`, "error");
-    });
+    }
+  }, [setAccounts, setActiveAccount, addToast]);
+
+  // Load accounts from backend on startup
+  useEffect(() => {
+    refreshAccounts().finally(() => setIsLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Refresh persisted repos from backend on startup (to get latest remotes, etc.)
+  useEffect(() => {
+    if (repos.length === 0) return;
+    Promise.all(
+      repos.map((r) =>
+        openRepository(r.path)
+          .then((fresh) => addRepo({ ...fresh, accountId: r.accountId }))
+          .catch(() => { /* repo may have been removed from disk */ })
+      ),
+    );
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply theme on change
@@ -99,6 +119,11 @@ function AppContent() {
     setShowLoginDialog(true);
   }, []);
 
+  const handleLoginSuccess = useCallback(() => {
+    setShowLoginDialog(false);
+    refreshAccounts();
+  }, [refreshAccounts]);
+
   const handleOpenLocal = useCallback(async () => {
     try {
       const selected = await open({ directory: true, multiple: false });
@@ -110,13 +135,22 @@ function AppContent() {
     } catch (err) {
       addToast(`Failed to open repository: ${getErrorMessage(err)}`, "error");
     }
-  }, [addRepo, setActiveRepo]);
+  }, [addRepo, setActiveRepo, addToast]);
+
+  // Show loading screen while initial account check runs
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-pulse text-muted text-sm">Loading...</div>
+      </div>
+    );
+  }
 
   const showWelcome = accounts.length === 0 && repos.length === 0;
 
-  if (showWelcome) {
-    return (
-      <>
+  return (
+    <>
+      {showWelcome ? (
         <WelcomeScreen
           isSignedIn={false}
           onSignIn={handleSignIn}
@@ -125,20 +159,26 @@ function AppContent() {
           }}
           onOpenLocal={handleOpenLocal}
         />
-        {showLoginDialog && (
-          <DeviceFlowDialog onClose={() => setShowLoginDialog(false)} />
-        )}
-      </>
-    );
-  }
-
-  return <MainLayout />;
+      ) : (
+        <MainLayout />
+      )}
+      {/* Dialog rendered outside conditional to survive welcome→main transition */}
+      {showLoginDialog && (
+        <GhLoginDialog
+          onClose={() => setShowLoginDialog(false)}
+          onSuccess={handleLoginSuccess}
+        />
+      )}
+    </>
+  );
 }
 
 export default function App() {
   return (
     <ErrorBoundary>
-      <AppContent />
+      <GhSetupGuard>
+        <AppContent />
+      </GhSetupGuard>
       <ErrorToast />
     </ErrorBoundary>
   );

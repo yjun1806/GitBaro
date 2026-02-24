@@ -7,6 +7,9 @@ import {
   getRepoAccount,
   getSettings,
   getFileDiff,
+  validateToken,
+  checkGhStatus,
+  resolveCommitAvatars,
 } from "./commands";
 
 export function useStatus(repoPath: string | null) {
@@ -14,7 +17,9 @@ export function useStatus(repoPath: string | null) {
     queryKey: ["status", repoPath],
     queryFn: () => getStatus(repoPath!),
     enabled: repoPath !== null,
-    refetchInterval: 5000,
+    staleTime: 0,
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -61,5 +66,32 @@ export function useFileDiff(repoPath: string | null, filePath: string | null, st
     queryKey: ["fileDiff", repoPath, filePath, staged],
     queryFn: () => getFileDiff(repoPath!, filePath!, staged),
     enabled: repoPath !== null && filePath !== null,
+  });
+}
+
+export function useTokenValidation(accountId: string | null, repoPath: string | null) {
+  return useQuery({
+    queryKey: ["tokenValidation", accountId, repoPath],
+    queryFn: () => validateToken(accountId!, repoPath!),
+    enabled: accountId !== null && repoPath !== null,
+    retry: false,
+  });
+}
+
+export function useCommitAvatars(repoPath: string | null) {
+  return useQuery({
+    queryKey: ["commitAvatars", repoPath],
+    queryFn: () => resolveCommitAvatars(repoPath!),
+    enabled: repoPath !== null,
+    staleTime: 5 * 60 * 1000, // 5min cache
+    retry: false,
+  });
+}
+
+export function useGhStatus() {
+  return useQuery({
+    queryKey: ["ghStatus"],
+    queryFn: checkGhStatus,
+    staleTime: 60_000,
   });
 }

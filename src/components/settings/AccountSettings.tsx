@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trash2, Plus } from "lucide-react";
+import { LogOut, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { GitHubAccount } from "@/types";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
@@ -16,11 +16,13 @@ export function AccountSettings({
   onAddAccount,
 }: AccountSettingsProps) {
   const { t } = useTranslation();
-  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [confirmLogoutId, setConfirmLogoutId] = useState<string | null>(null);
 
-  const handleRemove = (accountId: string) => {
+  const confirmAccount = accounts.find((a) => a.id === confirmLogoutId);
+
+  const handleLogout = (accountId: string) => {
     onRemove(accountId);
-    setConfirmRemove(null);
+    setConfirmLogoutId(null);
   };
 
   return (
@@ -37,40 +39,15 @@ export function AccountSettings({
                 {account.username}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">{account.email}</p>
-              {account.tokenExpiresAt && (
-                <p className="text-xs text-amber-500 mt-0.5">
-                  Token expires {new Date(account.tokenExpiresAt * 1000).toLocaleDateString()}
-                </p>
-              )}
             </div>
 
-            {confirmRemove === account.id ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {t("account.removeConfirm", { username: account.username })}
-                </span>
-                <button
-                  onClick={() => setConfirmRemove(null)}
-                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleRemove(account.id)}
-                  className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 font-medium transition-colors"
-                >
-                  Remove
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setConfirmRemove(account.id)}
-                className="p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                title={t("account.remove")}
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
+            <button
+              onClick={() => setConfirmLogoutId(account.id)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              {t("account.logout")}
+            </button>
           </div>
         ))}
       </div>
@@ -82,6 +59,37 @@ export function AccountSettings({
         <Plus className="w-4 h-4" />
         {t("account.add")}
       </button>
+
+      {/* 로그아웃 확인 모달 */}
+      {confirmAccount && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col items-center gap-4">
+            <AccountAvatar account={confirmAccount} size="lg" />
+            <div className="text-center">
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                {t("account.logoutConfirm", { username: confirmAccount.username })}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {confirmAccount.email}
+              </p>
+            </div>
+            <div className="flex gap-3 w-full mt-2">
+              <button
+                onClick={() => setConfirmLogoutId(null)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleLogout(confirmAccount.id)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-600 text-white transition-colors"
+              >
+                {t("account.logout")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

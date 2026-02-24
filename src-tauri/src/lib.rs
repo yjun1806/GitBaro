@@ -1,7 +1,7 @@
-pub mod auth;
 pub mod commands;
 pub mod concurrency;
 pub mod error;
+pub mod gh;
 pub mod git;
 pub mod github;
 pub mod state;
@@ -17,6 +17,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .manage(state::TokenStore::new())
         .invoke_handler(tauri::generate_handler![
             commands::git::get_status,
             commands::git::stage_files,
@@ -39,13 +40,14 @@ pub fn run() {
             commands::branch::get_current_branch,
             commands::history::get_commit_history,
             commands::history::get_commit_detail,
-            commands::auth::start_device_flow,
-            commands::auth::poll_device_flow,
+            commands::history::resolve_commit_avatars,
+            commands::auth::check_gh_status,
+            commands::auth::start_gh_login,
             commands::auth::get_accounts,
             commands::auth::remove_account,
             commands::auth::set_repo_account,
             commands::auth::get_repo_account,
-            commands::auth::refresh_token,
+            commands::auth::validate_token,
             commands::diff::get_file_diff,
             commands::settings::get_settings,
             commands::settings::update_settings,
@@ -59,6 +61,9 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = check_git_cli().await {
                     tracing::warn!("Git CLI check failed: {}", e);
+                }
+                if let Err(e) = check_gh_cli().await {
+                    tracing::warn!("GitHub CLI check: {}", e);
                 }
                 state::app_state::load_app_state(&app_handle).await;
             });
@@ -94,5 +99,11 @@ async fn check_git_cli() -> Result<(), error::AppError> {
 
     let version_str = String::from_utf8_lossy(&output.stdout);
     tracing::info!("Git CLI detected: {}", version_str.trim());
+    Ok(())
+}
+
+async fn check_gh_cli() -> Result<(), error::AppError> {
+    let version = gh::cli::check_gh_version().await?;
+    tracing::info!("GitHub CLI detected: gh {}", version);
     Ok(())
 }

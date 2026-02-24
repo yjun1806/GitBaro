@@ -12,6 +12,7 @@ interface RepositoryState {
   addRepo: (repo: RepoInfo) => void;
   removeRepo: (path: string) => void;
   setRepos: (repos: RepoInfo[]) => void;
+  updateRepoAccount: (repoPath: string, accountId: string | null) => void;
   setStatusEntries: (entries: StatusEntry[]) => void;
   setLoading: (loading: boolean) => void;
 }
@@ -54,6 +55,18 @@ export const useRepositoryStore = create<RepositoryState>()(
           : null;
         set({ repos, activeRepo });
       },
+
+      updateRepoAccount: (repoPath, accountId) =>
+        set((state) => {
+          const repos = state.repos.map((r) =>
+            r.path === repoPath ? { ...r, accountId } : r,
+          );
+          const activeRepo =
+            state.activeRepoPath === repoPath
+              ? repos.find((r) => r.path === repoPath) ?? null
+              : state.activeRepo;
+          return { repos, activeRepo };
+        }),
 
       setStatusEntries: (entries) => set({ statusEntries: entries }),
 

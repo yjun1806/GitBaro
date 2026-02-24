@@ -7,6 +7,7 @@ import type {
   BranchInfo,
   CommitInfo,
   GitHubAccount,
+  GhStatus,
   AppSettings,
   Theme,
 } from "@/types";
@@ -99,9 +100,9 @@ export async function openRepository(path: string): Promise<RepoInfo> {
 export async function cloneRepository(
   url: string,
   path: string,
-  token?: string,
+  accountId?: string,
 ): Promise<RepoInfo> {
-  return invoke("clone_repository", { url, path, token });
+  return invoke("clone_repository", { url, path, accountId: accountId ?? null });
 }
 
 export async function getOpenRepos(): Promise<RepoInfo[]> {
@@ -199,32 +200,26 @@ export async function getCommitDetail(
   };
 }
 
-// Auth — Device Flow
-export interface DeviceFlowStart {
-  device_code: string;
-  user_code: string;
-  verification_uri: string;
-  expires_in: number;
-  interval: number;
+// Commit avatars — resolve GitHub avatar URLs for commit authors
+
+export async function resolveCommitAvatars(
+  repoPath: string,
+): Promise<Record<string, string>> {
+  try {
+    return await invoke("resolve_commit_avatars", { repoPath });
+  } catch {
+    return {};
+  }
 }
 
-export interface DeviceFlowPollResult {
-  status: string;
-  message?: string;
-  account?: {
-    id: string;
-    username: string;
-    email: string;
-    avatarUrl: string;
-  };
+// Auth — gh CLI based
+
+export async function checkGhStatus(): Promise<GhStatus> {
+  return invoke("check_gh_status");
 }
 
-export async function startDeviceFlow(): Promise<DeviceFlowStart> {
-  return invoke("start_device_flow");
-}
-
-export async function pollDeviceFlow(deviceCode: string): Promise<DeviceFlowPollResult> {
-  return invoke("poll_device_flow", { deviceCode });
+export async function startGhLogin(): Promise<void> {
+  return invoke("start_gh_login");
 }
 
 interface RawAccount {
@@ -235,8 +230,6 @@ interface RawAccount {
   email?: string;
   avatarUrl?: string;
   avatar_url?: string;
-  tokenExpiresAt?: number | null;
-  createdAt?: string;
 }
 
 export async function getAccounts(): Promise<GitHubAccount[]> {
@@ -246,7 +239,6 @@ export async function getAccounts(): Promise<GitHubAccount[]> {
     username: a.login ?? a.username ?? a.name ?? "",
     email: a.email ?? "",
     avatarUrl: a.avatarUrl ?? a.avatar_url ?? "",
-    tokenExpiresAt: a.tokenExpiresAt ?? null,
   }));
 }
 
@@ -273,12 +265,17 @@ export async function getRepoAccount(
     username: raw.login ?? raw.username ?? raw.name ?? "",
     email: raw.email ?? "",
     avatarUrl: raw.avatarUrl ?? raw.avatar_url ?? "",
-    tokenExpiresAt: raw.tokenExpiresAt ?? null,
   };
 }
 
-export async function refreshToken(accountId: string): Promise<void> {
-  return invoke("refresh_token", { accountId });
+export interface TokenValidation {
+  valid: boolean;
+  canPush: boolean;
+  reason?: string;
+}
+
+export async function validateToken(accountId: string, repoPath?: string): Promise<TokenValidation> {
+  return invoke("validate_token", { accountId, repoPath: repoPath ?? null });
 }
 
 // Diff — backend returns `kind` ("addition"/"deletion"/"context") but

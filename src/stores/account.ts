@@ -10,6 +10,7 @@ interface AccountState {
   setActiveAccount: (id: string | null) => void;
   addAccount: (account: GitHubAccount) => void;
   removeAccount: (id: string) => void;
+  logout: (id: string) => void;
 }
 
 export const useAccountStore = create<AccountState>()(
@@ -39,6 +40,17 @@ export const useAccountStore = create<AccountState>()(
           const activeAccountId =
             state.activeAccountId === id ? null : state.activeAccountId;
           return { accounts, activeAccountId, isAuthenticated: accounts.length > 0 };
+        }),
+
+      logout: (id) =>
+        set((state) => {
+          const accounts = state.accounts.filter((a) => a.id !== id);
+          const nextAccount = accounts.length > 0 ? accounts[0] : null;
+          return {
+            accounts,
+            activeAccountId: nextAccount?.id ?? null,
+            isAuthenticated: accounts.length > 0,
+          };
         }),
     }),
     {

@@ -10,6 +10,8 @@ export function MainLayout() {
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
   const activeTab = useUIStore((s) => s.activeTab);
+  const repoListOpen = useUIStore((s) => s.repoListOpen);
+  const setRepoListOpen = useUIStore((s) => s.setRepoListOpen);
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedFileStaged, setSelectedFileStaged] = useState(false);
@@ -73,13 +75,19 @@ export function MainLayout() {
       />
 
       {/* Right panel — Branch header + Diff viewer */}
-      <div className="flex-1 overflow-hidden bg-white dark:bg-zinc-900">
+      <div className="relative flex-1 overflow-hidden bg-white dark:bg-zinc-900">
         <ContentArea
           activeTab={activeTab}
           selectedFile={selectedFile}
           selectedFileStaged={selectedFileStaged}
           selectedCommitId={selectedCommitId}
         />
+        {repoListOpen && (
+          <div
+            className="absolute inset-0 bg-black/30 z-40 transition-opacity"
+            onClick={() => setRepoListOpen(false)}
+          />
+        )}
       </div>
     </div>
   );

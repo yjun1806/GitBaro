@@ -88,7 +88,7 @@ function RepoDropdown({
   return (
     <div
       ref={ref}
-      className="absolute left-0 top-full mt-1 w-80 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 overflow-hidden"
+      className="absolute left-0 ml-2 top-full mt-2 w-80 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 overflow-hidden"
     >
       {/* Action buttons */}
       <div className="p-2 border-b border-border flex gap-1">
@@ -190,7 +190,7 @@ function BranchDropdown({
   return (
     <div
       ref={ref}
-      className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1 max-h-80 overflow-y-auto"
+      className="absolute left-0 ml-2 top-full mt-2 w-64 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1 max-h-80 overflow-y-auto"
     >
       {branches.length === 0 ? (
         <p className="text-sm text-muted text-center py-3">No branches</p>
@@ -232,7 +232,7 @@ function AccountDropdown({ onClose }: { onClose: () => void }) {
   return (
     <div
       ref={ref}
-      className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1"
+      className="absolute left-0 ml-2 top-full mt-2 w-64 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1"
     >
       {accounts.length === 0 ? (
         <p className="text-sm text-muted text-center py-3">No accounts</p>

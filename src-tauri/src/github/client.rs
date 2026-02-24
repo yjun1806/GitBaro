@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::error::AppError;
 use serde_json::Value;
 
@@ -145,6 +147,40 @@ impl GitHubClient {
     ) -> Result<Value, AppError> {
         let path = format!("/repos/{}/{}", owner, repo);
         self.get(token, &path).await
+    }
+
+    /// Fetch commit author avatars from `/repos/{owner}/{repo}/commits`.
+    /// Returns a map of lowercase email → avatar_url.
+    pub async fn get_commit_author_avatars(
+        &self,
+        token: &str,
+        owner: &str,
+        repo: &str,
+    ) -> Result<HashMap<String, String>, AppError> {
+        let path = format!("/repos/{}/{}/commits", owner, repo);
+        let body = self
+            .get_with_query(token, &path, &[("per_page", "100")])
+            .await?;
+
+        let mut map = HashMap::new();
+        if let Some(commits) = body.as_array() {
+            for item in commits {
+                let email = item["commit"]["author"]["email"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_lowercase();
+                let avatar_url = item["author"]["avatar_url"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string();
+
+                if !email.is_empty() && !avatar_url.is_empty() && !map.contains_key(&email) {
+                    map.insert(email, avatar_url);
+                }
+            }
+        }
+
+        Ok(map)
     }
 }
 

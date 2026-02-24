@@ -11,6 +11,9 @@ export interface AppError {
     | "Io"
     | "Serde"
     | "GitCliNotFound"
+    | "GhCliNotFound"
+    | "GhCli"
+    | "GhVersionTooOld"
     | "Channel"
     | "RepoNotFound";
   message: string;
@@ -21,7 +24,14 @@ export interface GitHubAccount {
   username: string;
   email: string;
   avatarUrl: string;
-  tokenExpiresAt: number | null;
+}
+
+export interface GhStatus {
+  installed: boolean;
+  version: string | null;
+  loggedIn: boolean;
+  accounts: { username: string; active: boolean }[];
+  versionError?: boolean;
 }
 
 export interface RepoAccountMapping {

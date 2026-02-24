@@ -2,6 +2,7 @@ use crate::commands::auth::resolve_token;
 use crate::error::AppError;
 use crate::git::cli::GitCliEngine;
 use crate::git::engine::GitRemoteEngine;
+use crate::state::TokenStore;
 use serde_json::{json, Value};
 
 #[tauri::command]
@@ -80,9 +81,16 @@ pub async fn stage_files(repo_path: String, paths: Vec<String>) -> Result<(), Ap
     tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
         let mut index = repo.index()?;
+        let workdir = repo.workdir()
+            .ok_or_else(|| AppError::Channel("bare repository".to_string()))?;
 
         for path in &paths {
-            index.add_path(std::path::Path::new(path))?;
+            let full = workdir.join(path);
+            if full.exists() {
+                index.add_path(std::path::Path::new(path))?;
+            } else {
+                index.remove_path(std::path::Path::new(path))?;
+            }
         }
 
         index.write()?;
@@ -136,21 +144,13 @@ pub async fn create_commit(
 ) -> Result<String, AppError> {
     // If an account is provided, look up its name/email for the commit signature
     let account_info: Option<(String, String)> = if let Some(ref id) = account_id {
-        let registry = crate::commands::auth::load_account_registry().await?;
-        registry.as_array().and_then(|arr| {
-            arr.iter().find(|a| a["id"].as_str() == Some(id)).map(|a| {
-                let name = a
-                    .get("username")
-                    .or_else(|| a.get("login"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Unknown")
-                    .to_string();
-                let email = a["email"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string();
-                (name, email)
-            })
+        let cache = crate::commands::auth::load_accounts_cache()
+            .await
+            .unwrap_or_default();
+        cache.iter().find(|a| a["id"].as_str() == Some(id.as_str())).map(|a| {
+            let name = a["username"].as_str().unwrap_or("Unknown").to_string();
+            let email = a["email"].as_str().unwrap_or("").to_string();
+            (name, email)
         })
     } else {
         None
@@ -268,13 +268,44 @@ pub async fn discard_changes(repo_path: String, paths: Vec<String>) -> Result<()
     Ok(())
 }
 
+/// Check if a git CLI error is an authentication failure.
+fn is_auth_error(err: &AppError) -> bool {
+    match err {
+        AppError::GitCli { message, .. } => {
+            let msg = message.to_lowercase();
+            msg.contains("authentication failed")
+                || msg.contains("could not read username")
+                || msg.contains("invalid credentials")
+                || msg.contains("401")
+                || msg.contains("403")
+        }
+        _ => false,
+    }
+}
+
 #[tauri::command]
-pub async fn git_fetch(repo_path: String, account_id: String) -> Result<(), AppError> {
-    let token = resolve_token(&account_id).await?;
+pub async fn git_fetch(
+    repo_path: String,
+    account_id: String,
+    token_store: tauri::State<'_, TokenStore>,
+) -> Result<(), AppError> {
+    let token = resolve_token(&token_store, &account_id).await?;
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
-    engine.fetch("origin", &token).await?;
-    tracing::info!("Fetched origin for {}", repo_path);
-    Ok(())
+
+    match engine.fetch("origin", &token).await {
+        Ok(()) => {
+            tracing::info!("Fetched origin for {}", repo_path);
+            Ok(())
+        }
+        Err(e) if is_auth_error(&e) => {
+            tracing::warn!("Fetch auth failed, refreshing token for {}", account_id);
+            let new_token = token_store.refresh_token(&account_id).await?;
+            engine.fetch("origin", &new_token).await?;
+            tracing::info!("Fetched origin for {} (after token refresh)", repo_path);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[tauri::command]
@@ -282,8 +313,9 @@ pub async fn git_push(
     repo_path: String,
     account_id: String,
     force: Option<bool>,
+    token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
-    let token = resolve_token(&account_id).await?;
+    let token = resolve_token(&token_store, &account_id).await?;
     let branch = tokio::task::spawn_blocking({
         let rp = repo_path.clone();
         move || -> Result<String, AppError> {
@@ -303,9 +335,22 @@ pub async fn git_push(
     .map_err(|e| AppError::Channel(e.to_string()))??;
 
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
-    engine.push("origin", &branch, &token, force.unwrap_or(false)).await?;
-    tracing::info!("Pushed {} to origin for {}", branch, repo_path);
-    Ok(())
+    let force_flag = force.unwrap_or(false);
+
+    match engine.push("origin", &branch, &token, force_flag).await {
+        Ok(()) => {
+            tracing::info!("Pushed {} to origin for {}", branch, repo_path);
+            Ok(())
+        }
+        Err(e) if is_auth_error(&e) => {
+            tracing::warn!("Push auth failed, refreshing token for {}", account_id);
+            let new_token = token_store.refresh_token(&account_id).await?;
+            engine.push("origin", &branch, &new_token, force_flag).await?;
+            tracing::info!("Pushed {} to origin for {} (after token refresh)", branch, repo_path);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[tauri::command]
@@ -313,8 +358,9 @@ pub async fn git_pull(
     repo_path: String,
     account_id: String,
     rebase: Option<bool>,
+    token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
-    let token = resolve_token(&account_id).await?;
+    let token = resolve_token(&token_store, &account_id).await?;
     let branch = tokio::task::spawn_blocking({
         let rp = repo_path.clone();
         move || -> Result<String, AppError> {
@@ -334,8 +380,20 @@ pub async fn git_pull(
     .map_err(|e| AppError::Channel(e.to_string()))??;
 
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
-    engine.pull("origin", &branch, &token, rebase.unwrap_or(false)).await?;
-    tracing::info!("Pulled {} from origin for {}", branch, repo_path);
-    Ok(())
-}
+    let rebase_flag = rebase.unwrap_or(false);
 
+    match engine.pull("origin", &branch, &token, rebase_flag).await {
+        Ok(()) => {
+            tracing::info!("Pulled {} from origin for {}", branch, repo_path);
+            Ok(())
+        }
+        Err(e) if is_auth_error(&e) => {
+            tracing::warn!("Pull auth failed, refreshing token for {}", account_id);
+            let new_token = token_store.refresh_token(&account_id).await?;
+            engine.pull("origin", &branch, &new_token, rebase_flag).await?;
+            tracing::info!("Pulled {} from origin for {} (after token refresh)", branch, repo_path);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}

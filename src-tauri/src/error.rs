@@ -38,6 +38,15 @@ pub enum AppError {
     #[error("Git CLI not found. Install Xcode Command Line Tools.")]
     GitCliNotFound,
 
+    #[error("GitHub CLI (gh) not found. Install with: brew install gh")]
+    GhCliNotFound,
+
+    #[error("GitHub CLI error: {0}")]
+    GhCli(String),
+
+    #[error("GitHub CLI version too old: {0}")]
+    GhVersionTooOld(String),
+
     #[error("Channel error: {0}")]
     Channel(String),
 
@@ -76,6 +85,9 @@ impl serde::Serialize for AppError {
             AppError::Io(e) => ("Io", e.to_string()),
             AppError::Serde(e) => ("Serde", e.to_string()),
             AppError::GitCliNotFound => ("GitCliNotFound", self.to_string()),
+            AppError::GhCliNotFound => ("GhCliNotFound", self.to_string()),
+            AppError::GhCli(msg) => ("GhCli", msg.clone()),
+            AppError::GhVersionTooOld(msg) => ("GhVersionTooOld", msg.clone()),
             AppError::Channel(msg) => ("Channel", msg.clone()),
             AppError::RepoNotFound(path) => ("RepoNotFound", path.clone()),
         };

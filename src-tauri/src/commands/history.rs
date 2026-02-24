@@ -1,4 +1,10 @@
+use std::collections::HashMap;
+
 use crate::error::AppError;
+use crate::gh::cli;
+use crate::git::remote::parse_github_url;
+use crate::github::client::GitHubClient;
+use crate::state::TokenStore;
 use serde_json::{json, Value};
 
 fn gravatar_url(email: &str) -> String {
@@ -145,4 +151,54 @@ pub async fn get_commit_detail(repo_path: String, oid: String) -> Result<Value, 
     .map_err(|e| AppError::Channel(e.to_string()))??;
 
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn resolve_commit_avatars(
+    repo_path: String,
+    token_store: tauri::State<'_, TokenStore>,
+) -> Result<HashMap<String, String>, AppError> {
+    // 1. Open repo and get origin remote URL
+    let remote_url = tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&repo_path)?;
+        let remote = repo.find_remote("origin")?;
+        let url = remote.url().unwrap_or("").to_string();
+        Ok::<_, AppError>(url)
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+
+    // 2. Parse GitHub owner/repo — not a GitHub repo → return empty
+    let (owner, repo_name) = match parse_github_url(&remote_url) {
+        Some(pair) => pair,
+        None => return Ok(HashMap::new()),
+    };
+
+    // 3. Pick the best account: prefer owner-matching account, then active, then first
+    let accounts = cli::gh_auth_status().await.unwrap_or_default();
+    let owner_lower = owner.to_lowercase();
+    let username = accounts
+        .iter()
+        .find(|a| a.username.to_lowercase() == owner_lower)
+        .or_else(|| accounts.iter().find(|a| a.active))
+        .or(accounts.first())
+        .map(|a| a.username.clone());
+    let username = match username {
+        Some(u) => u,
+        None => return Ok(HashMap::new()),
+    };
+    let token = match token_store.get_token(&username).await {
+        Ok(t) => t,
+        Err(_) => return Ok(HashMap::new()),
+    };
+
+    // 4. Fetch avatars from GitHub API — any error → return empty
+    let client = GitHubClient::new();
+    match client
+        .get_commit_author_avatars(&token, &owner, &repo_name)
+        .await
+    {
+        Ok(map) => Ok(map),
+        Err(_) => Ok(HashMap::new()),
+    }
 }

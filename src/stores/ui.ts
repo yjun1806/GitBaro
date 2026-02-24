@@ -6,10 +6,12 @@ interface UIState {
   activeTab: "changes" | "history";
   sidebarWidth: number;
   isSidebarCollapsed: boolean;
+  repoListOpen: boolean;
   setTheme: (theme: Theme) => void;
   setActiveTab: (tab: "changes" | "history") => void;
   setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
+  setRepoListOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -17,6 +19,7 @@ export const useUIStore = create<UIState>((set) => ({
   activeTab: "changes",
   sidebarWidth: 500,
   isSidebarCollapsed: false,
+  repoListOpen: false,
 
   setTheme: (theme) => set({ theme }),
 
@@ -26,4 +29,6 @@ export const useUIStore = create<UIState>((set) => ({
 
   toggleSidebar: () =>
     set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
+
+  setRepoListOpen: (open) => set({ repoListOpen: open }),
 }));
