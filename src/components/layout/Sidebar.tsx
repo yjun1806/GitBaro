@@ -462,6 +462,8 @@ function ChangesView({
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const currentBranch = useBranchStore((s) => s.currentBranch);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  const accounts = useAccountStore((s) => s.accounts);
+  const activeAccount = accounts.find((a) => a.id === activeAccountId);
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
   const queryClient = useQueryClient();
 
@@ -640,6 +642,25 @@ function ChangesView({
             "focus:border-primary transition-colors",
           )}
         />
+        {activeAccount && (
+          <div className="flex items-center gap-1.5 px-1">
+            {activeAccount.avatarUrl ? (
+              <img
+                src={activeAccount.avatarUrl}
+                alt={activeAccount.username}
+                className="w-4 h-4 rounded-full shrink-0 object-cover"
+              />
+            ) : (
+              <div className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-bold shrink-0">
+                {activeAccount.username[0]?.toUpperCase() ?? "?"}
+              </div>
+            )}
+            <span className="text-[11px] text-muted truncate">
+              {activeAccount.username}
+              {activeAccount.email ? ` <${activeAccount.email}>` : ""}
+            </span>
+          </div>
+        )}
         <button
           onClick={handleCommit}
           className={cn(
