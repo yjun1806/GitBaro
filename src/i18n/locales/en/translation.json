@@ -143,7 +143,13 @@
     "unlinkAccount": "Unlink account",
     "setAccount": "Set account",
     "default": "Default",
-    "failedToAdd": "Failed to add repository: {{error}}"
+    "failedToAdd": "Failed to add repository: {{error}}",
+    "accountNoAccess": "This account cannot access the repository",
+    "accountReadOnly": "Read-only — no push permission for this account",
+    "removeFromList": "Remove from List",
+    "favorite": "Favorite",
+    "unfavorite": "Unfavorite",
+    "favorites": "Favorites"
   },
   "settings": {
     "title": "Settings",

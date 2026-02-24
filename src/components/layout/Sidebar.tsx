@@ -10,7 +10,10 @@ import {
   FolderPlus,
   Circle,
   ArrowUp,
+  EllipsisVertical,
   Globe,
+  Star,
+  Trash2,
   HardDrive,
   Plus,
   Loader2,
@@ -19,6 +22,8 @@ import {
   Archive,
   Building2,
   User,
+  ShieldAlert,
+  ShieldX,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useUIStore } from "@/stores/ui";
@@ -26,7 +31,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useBranchStore } from "@/stores/branch";
 import { useStatus, useCommitHistory, useCommitAvatars, useBranches } from "@/api/queries";
-import { addLocalRepository, cloneRepository, createCommit, stageFiles, unstageFiles, gitFetch, openInEditor, getRepoVisibility, getOwnerType } from "@/api/commands";
+import { addLocalRepository, cloneRepository, createCommit, stageFiles, unstageFiles, gitFetch, openInEditor, getRepoVisibility, getOwnerType, validateToken } from "@/api/commands";
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
@@ -126,15 +131,21 @@ function groupReposByOwner(
   }));
 }
 
-function RepoAccountPicker({
+function RepoContextMenu({
   accounts,
   currentAccountId,
+  isFavorite,
   onSelect,
+  onToggleFavorite,
+  onRemoveRepo,
   onClose,
 }: {
   accounts: { id: string; username: string; avatarUrl: string }[];
   currentAccountId: string | null;
+  isFavorite: boolean;
   onSelect: (accountId: string | null) => void;
+  onToggleFavorite: () => void;
+  onRemoveRepo: () => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -180,19 +191,39 @@ function RepoAccountPicker({
         </button>
       ))}
       {currentAccountId && (
-        <>
-          <div className="border-t border-border my-1" />
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect(null);
-            }}
-            className="w-full px-3 py-1.5 text-sm text-danger hover:bg-accent transition-colors text-left"
-          >
-            {t("repo.unlinkAccount")}
-          </button>
-        </>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(null);
+          }}
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent transition-colors text-left"
+        >
+          <CloudOff className="w-3.5 h-3.5 shrink-0" />
+          {t("repo.unlinkAccount")}
+        </button>
       )}
+      <div className="border-t border-border my-1" />
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleFavorite();
+          onClose();
+        }}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors text-left"
+      >
+        <Star className={cn("w-3.5 h-3.5 shrink-0", isFavorite ? "fill-amber-400 text-amber-400" : "text-muted-foreground")} />
+        {isFavorite ? t("repo.unfavorite") : t("repo.favorite")}
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemoveRepo();
+        }}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-danger hover:bg-accent transition-colors text-left"
+      >
+        <Trash2 className="w-3.5 h-3.5 shrink-0" />
+        {t("repo.removeFromList")}
+      </button>
     </div>
   );
 }
@@ -209,6 +240,7 @@ function RepoListView({
   const inputRef = useRef<HTMLInputElement>(null);
   const repos = useRepositoryStore((s) => s.repos);
   const addRepo = useRepositoryStore((s) => s.addRepo);
+  const removeRepo = useRepositoryStore((s) => s.removeRepo);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const updateRepoAccount = useRepositoryStore((s) => s.updateRepoAccount);
   const repoVisibility = useRepositoryStore((s) => s.repoVisibility);
@@ -216,10 +248,17 @@ function RepoListView({
   const accounts = useAccountStore((s) => s.accounts);
   const [accountPickerRepo, setAccountPickerRepo] = useState<string | null>(null);
 
+  const repoPermissions = useRepositoryStore((s) => s.repoPermissions);
+  const setRepoPermission = useRepositoryStore((s) => s.setRepoPermission);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
   const addToast = useToastStore((s) => s.addToast);
   const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [validatingRepo, setValidatingRepo] = useState<string | null>(null);
+  const collapsedGroups = useRepositoryStore((s) => s.collapsedGroups);
+  const toggleGroupCollapsed = useRepositoryStore((s) => s.toggleGroupCollapsed);
+  const favoriteRepos = useRepositoryStore((s) => s.favoriteRepos);
+  const toggleFavorite = useRepositoryStore((s) => s.toggleFavorite);
 
   const handleClone = useCallback(async (params: { url: string; localPath: string; accountId: string | null }) => {
     const repoInfo = await cloneRepository(params.url, params.localPath, params.accountId ?? undefined);
@@ -261,7 +300,13 @@ function RepoListView({
   const filtered = repos.filter((r) =>
     r.name.toLowerCase().includes(filter.toLowerCase()),
   );
-  const groups = groupReposByOwner(filtered, accounts);
+  const favRepos = filtered.filter((r) => favoriteRepos.includes(r.path));
+  const nonFavFiltered = filtered.filter((r) => !favoriteRepos.includes(r.path));
+  const ownerGroups = groupReposByOwner(nonFavFiltered, accounts);
+
+  const groups: GroupedRepos[] = favRepos.length > 0
+    ? [{ label: t("repo.favorites"), repos: favRepos }, ...ownerGroups]
+    : ownerGroups;
 
   // Fetch GitHub visibility for repos with remotes + linked accounts
   useEffect(() => {
@@ -363,8 +408,18 @@ function RepoListView({
           groups.map((group, groupIndex) => (
             <div key={group.label} className={cn(groupIndex > 0 && "mt-3")}>
               {/* Group header */}
-              <div className="flex items-center gap-2 px-2 py-1.5">
+              <button
+                onClick={() => toggleGroupCollapsed(group.label)}
+                className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-md transition-colors"
+              >
+                <ChevronDown className={cn(
+                  "w-3 h-3 text-muted-foreground shrink-0 transition-transform",
+                  collapsedGroups.includes(group.label) && "-rotate-90",
+                )} />
                 {(() => {
+                  if (group.label === t("repo.favorites")) {
+                    return <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0" />;
+                  }
                   if (group.label === "Local") {
                     return <HardDrive className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
                   }
@@ -375,18 +430,17 @@ function RepoListView({
                   if (ot === "User") {
                     return <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
                   }
-                  // Not loaded yet — show neutral icon
                   return <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
                 })()}
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex-1 truncate">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex-1 truncate text-left">
                   {group.label}
                 </span>
                 <span className="text-[11px] text-muted-foreground/60 tabular-nums">
                   {group.repos.length}
                 </span>
-              </div>
+              </button>
               {/* Repo items — indented under group header */}
-              <div className="flex flex-col gap-0.5 pl-2">
+              {!collapsedGroups.includes(group.label) && <div className="flex flex-col gap-0.5 ml-3 pl-3 border-l border-border/50">
                 {group.repos.map((repo) => {
                   const isActive = repo.path === activeRepoPath;
                   const linkedAccount = repo.accountId
@@ -395,6 +449,15 @@ function RepoListView({
                   const isPickerOpen = accountPickerRepo === repo.path;
                   const hasRemote = repo.remotes.length > 0;
                   const visibility = repoVisibility[repo.path];
+                  const permission = repoPermissions[repo.path];
+                  const isValidating = validatingRepo === repo.path;
+                  const isFavGroup = group.label === t("repo.favorites");
+                  const repoOwner = isFavGroup
+                    ? (() => {
+                        const origin = repo.remotes.find((r) => r.name === "origin");
+                        return origin ? extractOwnerFromRemoteUrl(origin.url) : null;
+                      })()
+                    : null;
                   // Icon: Lock=private, GitFork=fork, Globe=public, HardDrive=local
                   const RepoIcon = !hasRemote
                     ? HardDrive
@@ -414,96 +477,159 @@ function RepoListView({
                             : "hover:bg-accent",
                         )}
                       >
-                        <RepoIcon
-                          className={cn(
-                            "w-4 h-4 shrink-0",
-                            isActive ? "opacity-70" : "opacity-40",
-                          )}
-                        />
+                        <div className={cn(
+                          "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
+                          isActive
+                            ? "bg-primary-foreground/15"
+                            : !hasRemote
+                              ? "bg-muted"
+                              : visibility?.isPrivate
+                                ? "bg-amber-500/10"
+                                : visibility?.isFork
+                                  ? "bg-blue-500/10"
+                                  : "bg-emerald-500/10",
+                        )}>
+                          <RepoIcon
+                            className={cn(
+                              "w-3.5 h-3.5",
+                              isActive
+                                ? "text-primary-foreground/70"
+                                : !hasRemote
+                                  ? "text-muted-foreground"
+                                  : visibility?.isPrivate
+                                    ? "text-amber-600 dark:text-amber-400"
+                                    : visibility?.isFork
+                                      ? "text-blue-600 dark:text-blue-400"
+                                      : "text-emerald-600 dark:text-emerald-400",
+                            )}
+                          />
+                        </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{repo.name}</p>
+                          <p className="text-sm font-medium truncate leading-tight">
+                            {repoOwner ? `${repoOwner}/${repo.name}` : repo.name}
+                          </p>
                           {repo.currentBranch && (
                             <div className="flex items-center gap-1 mt-0.5">
                               <GitBranch className={cn(
                                 "w-3 h-3 shrink-0",
-                                isActive ? "text-primary-foreground/60" : "text-muted-foreground",
+                                isActive ? "text-primary-foreground/50" : "text-muted-foreground/70",
                               )} />
                               <span className={cn(
-                                "text-[11px] truncate",
-                                isActive ? "text-primary-foreground/60" : "text-muted-foreground",
+                                "text-[11px] truncate leading-tight",
+                                isActive ? "text-primary-foreground/50" : "text-muted-foreground/70",
                               )}>
                                 {repo.currentBranch}
                               </span>
                             </div>
                           )}
-                        </div>
-                        {/* State indicators */}
-                        {repo.isDirty && (
-                          <Circle
-                            className={cn(
-                              "w-2 h-2 fill-current shrink-0",
-                              isActive ? "text-amber-300" : "text-amber-500",
-                            )}
-                          />
-                        )}
-                        {visibility?.isArchived && (
-                          <Archive
-                            className={cn(
-                              "w-3.5 h-3.5 shrink-0",
-                              isActive ? "text-primary-foreground/50" : "text-muted-foreground/60",
-                            )}
-                          />
-                        )}
-                        {hasRemote && !repo.accountId && (
-                          <CloudOff
-                            className={cn(
-                              "w-3.5 h-3.5 shrink-0",
-                              isActive ? "text-primary-foreground/40" : "text-muted-foreground/50",
-                            )}
-                          />
-                        )}
-                        {/* Account avatar button */}
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAccountPickerRepo(isPickerOpen ? null : repo.path);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.stopPropagation();
-                              setAccountPickerRepo(isPickerOpen ? null : repo.path);
-                            }
-                          }}
-                          className={cn(
-                            "shrink-0 rounded-full transition-opacity",
-                            isActive ? "hover:opacity-80" : "hover:opacity-70",
+                          {/* Permission warning */}
+                          {isValidating && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <Loader2 className="w-3 h-3 shrink-0 text-muted-foreground animate-spin" />
+                              <span className="text-[11px] text-muted-foreground">{t("common.loading")}</span>
+                            </div>
                           )}
-                          title={linkedAccount ? linkedAccount.username : t("repo.setAccount")}
-                        >
-                          {linkedAccount ? (
-                            <AccountAvatar account={linkedAccount} size="xs" />
-                          ) : (
-                            <div className={cn(
-                              "w-5 h-5 rounded-full border-2 border-dashed flex items-center justify-center",
-                              isActive
-                                ? "border-primary-foreground/40 text-primary-foreground/40"
-                                : "border-muted-foreground/40 text-muted-foreground/40",
-                            )}>
-                              <Plus className="w-2.5 h-2.5" />
+                          {!isValidating && permission && !permission.valid && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <ShieldX className={cn("w-3 h-3 shrink-0", isActive ? "text-red-300" : "text-danger")} />
+                              <span className={cn("text-[11px] font-medium", isActive ? "text-red-300" : "text-danger")}>
+                                {t("repo.accountNoAccess")}
+                              </span>
+                            </div>
+                          )}
+                          {!isValidating && permission && permission.valid && !permission.canPush && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <ShieldAlert className={cn("w-3 h-3 shrink-0", isActive ? "text-amber-300" : "text-amber-500")} />
+                              <span className={cn("text-[11px] font-medium", isActive ? "text-amber-300" : "text-amber-500")}>
+                                {t("repo.accountReadOnly")}
+                              </span>
                             </div>
                           )}
                         </div>
+                        {/* State indicators + actions */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {repo.isDirty && (
+                            <Circle
+                              className={cn(
+                                "w-2 h-2 fill-current shrink-0",
+                                isActive ? "text-amber-300" : "text-amber-500",
+                              )}
+                            />
+                          )}
+                          {visibility?.isArchived && (
+                            <Archive
+                              className={cn(
+                                "w-3.5 h-3.5 shrink-0",
+                                isActive ? "text-primary-foreground/50" : "text-muted-foreground/60",
+                              )}
+                            />
+                          )}
+                          {hasRemote && !repo.accountId && (
+                            <CloudOff
+                              className={cn(
+                                "w-3.5 h-3.5 shrink-0",
+                                isActive ? "text-primary-foreground/40" : "text-muted-foreground/50",
+                              )}
+                            />
+                          )}
+                          {/* Account avatar (passive) */}
+                          {linkedAccount && (
+                            <div className="shrink-0 flex items-center" title={linkedAccount.username}>
+                              <AccountAvatar account={linkedAccount} size="xs" />
+                            </div>
+                          )}
+                          {/* Context menu trigger */}
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAccountPickerRepo(isPickerOpen ? null : repo.path);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.stopPropagation();
+                                setAccountPickerRepo(isPickerOpen ? null : repo.path);
+                              }
+                            }}
+                            className={cn(
+                              "shrink-0 w-5 h-5 flex items-center justify-center rounded cursor-pointer transition-colors",
+                              isActive
+                                ? "text-primary-foreground/60 hover:text-primary-foreground"
+                                : "text-muted-foreground/50 hover:text-foreground hover:bg-accent",
+                            )}
+                          >
+                            <EllipsisVertical className="w-3.5 h-3.5" />
+                          </div>
+                        </div>
                       </button>
-                      {/* Account picker dropdown */}
+                      {/* Context menu dropdown */}
                       {isPickerOpen && (
-                        <RepoAccountPicker
+                        <RepoContextMenu
                           accounts={accounts}
                           currentAccountId={repo.accountId}
-                          onSelect={(accountId) => {
+                          isFavorite={favoriteRepos.includes(repo.path)}
+                          onToggleFavorite={() => toggleFavorite(repo.path)}
+                          onSelect={async (accountId: string | null) => {
                             updateRepoAccount(repo.path, accountId);
                             setAccountPickerRepo(null);
+                            if (accountId) {
+                              setValidatingRepo(repo.path);
+                              try {
+                                const result = await validateToken(accountId, repo.path);
+                                setRepoPermission(repo.path, { valid: result.valid, canPush: result.canPush, reason: result.reason });
+                              } catch {
+                                // validation failure is non-critical
+                              } finally {
+                                setValidatingRepo(null);
+                              }
+                            } else {
+                              setRepoPermission(repo.path, null);
+                            }
+                          }}
+                          onRemoveRepo={() => {
+                            setAccountPickerRepo(null);
+                            removeRepo(repo.path);
                           }}
                           onClose={() => setAccountPickerRepo(null)}
                         />
@@ -511,7 +637,7 @@ function RepoListView({
                     </div>
                   );
                 })}
-              </div>
+              </div>}
             </div>
           ))
         )}
@@ -924,12 +1050,25 @@ export function Sidebar({
   const setActiveTab = useUIStore((s) => s.setActiveTab);
   const activeRepo = useRepositoryStore((s) => s.activeRepo);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const repoVisibility = useRepositoryStore((s) => s.repoVisibility);
   const setActiveRepo = useRepositoryStore((s) => s.setActiveRepo);
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
   const changesCount = statusEntries.length;
   const queryClient = useQueryClient();
   const [isFetching, setIsFetching] = useState(false);
+
+  const hasRemote = activeRepo ? activeRepo.remotes.length > 0 : false;
+  const activeVisibility = activeRepoPath ? repoVisibility[activeRepoPath] : undefined;
+  const RepoHeaderIcon = !activeRepo
+    ? GitFork
+    : !hasRemote
+      ? HardDrive
+      : activeVisibility?.isPrivate
+        ? Lock
+        : activeVisibility?.isFork
+          ? GitFork
+          : Globe;
 
   const handleSelectRepo = (path: string) => {
     // 레포 전환
@@ -970,7 +1109,7 @@ export function Sidebar({
         className="flex items-center gap-2 px-4 h-[52px] shrink-0 border-b border-border hover:bg-accent transition-colors text-left"
         data-tauri-drag-region
       >
-        <GitFork className="w-4 h-4 shrink-0 opacity-50" />
+        <RepoHeaderIcon className="w-4 h-4 shrink-0 opacity-50" />
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-muted-foreground leading-tight">{t("repo.currentRepo")}</p>
           <div className="flex items-center gap-1.5">

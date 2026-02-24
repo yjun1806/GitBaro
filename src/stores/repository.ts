@@ -3,6 +3,12 @@ import { persist } from "zustand/middleware";
 import type { RepoInfo, StatusEntry } from "@/types";
 import type { RepoVisibility } from "@/api/commands";
 
+export interface RepoPermission {
+  valid: boolean;
+  canPush: boolean;
+  reason?: string;
+}
+
 interface RepositoryState {
   repos: RepoInfo[];
   activeRepoPath: string | null;
@@ -13,6 +19,12 @@ interface RepositoryState {
   repoVisibility: Record<string, RepoVisibility>;
   /** Cached owner type: "User" | "Organization" per owner name */
   ownerTypes: Record<string, "User" | "Organization">;
+  /** Cached token permission per repo path */
+  repoPermissions: Record<string, RepoPermission>;
+  /** Collapsed group labels in repo list */
+  collapsedGroups: string[];
+  /** Favorite repo paths */
+  favoriteRepos: string[];
   setActiveRepo: (path: string) => void;
   addRepo: (repo: RepoInfo) => void;
   removeRepo: (path: string) => void;
@@ -20,6 +32,9 @@ interface RepositoryState {
   updateRepoAccount: (repoPath: string, accountId: string | null) => void;
   setRepoVisibility: (repoPath: string, visibility: RepoVisibility) => void;
   setOwnerType: (owner: string, type: "User" | "Organization") => void;
+  setRepoPermission: (repoPath: string, permission: RepoPermission | null) => void;
+  toggleGroupCollapsed: (label: string) => void;
+  toggleFavorite: (path: string) => void;
   setStatusEntries: (entries: StatusEntry[]) => void;
   setLoading: (loading: boolean) => void;
 }
@@ -34,6 +49,9 @@ export const useRepositoryStore = create<RepositoryState>()(
       isLoading: false,
       repoVisibility: {},
       ownerTypes: {},
+      repoPermissions: {},
+      collapsedGroups: [],
+      favoriteRepos: [],
 
       setActiveRepo: (path) => {
         const repo = get().repos.find((r) => r.path === path) ?? null;
@@ -87,6 +105,35 @@ export const useRepositoryStore = create<RepositoryState>()(
           ownerTypes: { ...state.ownerTypes, [owner]: ownerType },
         })),
 
+      setRepoPermission: (repoPath, permission) =>
+        set((state) => {
+          if (permission === null) {
+            const { [repoPath]: _, ...rest } = state.repoPermissions;
+            return { repoPermissions: rest };
+          }
+          return { repoPermissions: { ...state.repoPermissions, [repoPath]: permission } };
+        }),
+
+      toggleGroupCollapsed: (label) =>
+        set((state) => {
+          const isCollapsed = state.collapsedGroups.includes(label);
+          return {
+            collapsedGroups: isCollapsed
+              ? state.collapsedGroups.filter((g) => g !== label)
+              : [...state.collapsedGroups, label],
+          };
+        }),
+
+      toggleFavorite: (path) =>
+        set((state) => {
+          const isFav = state.favoriteRepos.includes(path);
+          return {
+            favoriteRepos: isFav
+              ? state.favoriteRepos.filter((p) => p !== path)
+              : [...state.favoriteRepos, path],
+          };
+        }),
+
       setStatusEntries: (entries) => set({ statusEntries: entries }),
 
       setLoading: (loading) => set({ isLoading: loading }),
@@ -98,6 +145,8 @@ export const useRepositoryStore = create<RepositoryState>()(
         activeRepoPath: state.activeRepoPath,
         repoVisibility: state.repoVisibility,
         ownerTypes: state.ownerTypes,
+        collapsedGroups: state.collapsedGroups,
+        favoriteRepos: state.favoriteRepos,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;

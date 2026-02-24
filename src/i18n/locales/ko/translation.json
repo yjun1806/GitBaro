@@ -143,7 +143,13 @@
     "unlinkAccount": "계정 연결 해제",
     "setAccount": "계정 설정",
     "default": "기본",
-    "failedToAdd": "저장소 추가 실패: {{error}}"
+    "failedToAdd": "저장소 추가 실패: {{error}}",
+    "accountNoAccess": "이 계정으로 해당 저장소에 접근할 수 없습니다",
+    "accountReadOnly": "읽기 전용 — 이 계정에 Push 권한이 없습니다",
+    "removeFromList": "목록에서 제거",
+    "favorite": "즐겨찾기 추가",
+    "unfavorite": "즐겨찾기 해제",
+    "favorites": "즐겨찾기"
   },
   "settings": {
     "title": "설정",
