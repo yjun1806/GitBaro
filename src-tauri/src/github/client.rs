@@ -118,6 +118,11 @@ impl GitHubClient {
         self.get(token, "/user").await
     }
 
+    pub async fn get_user_by_login(&self, token: &str, login: &str) -> Result<Value, AppError> {
+        let path = format!("/users/{}", login);
+        self.get(token, &path).await
+    }
+
     pub async fn get_user_emails(&self, token: &str) -> Result<Vec<Value>, AppError> {
         let body = self.get(token, "/user/emails").await?;
         Ok(body.as_array().cloned().unwrap_or_default())

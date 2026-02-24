@@ -118,6 +118,29 @@ export async function addLocalRepository(path: string): Promise<RepoInfo> {
   return invoke("add_local_repository", { path });
 }
 
+// Repository visibility
+export interface RepoVisibility {
+  isPrivate: boolean;
+  isFork: boolean;
+  isArchived: boolean;
+  ownerType: "User" | "Organization";
+}
+
+export async function getRepoVisibility(
+  repoPath: string,
+  accountId: string,
+): Promise<RepoVisibility> {
+  return invoke("get_repo_visibility", { repoPath, accountId });
+}
+
+// Owner type (org vs user)
+export async function getOwnerType(
+  owner: string,
+  accountId: string,
+): Promise<{ ownerType: "User" | "Organization" }> {
+  return invoke("get_owner_type", { owner, accountId });
+}
+
 // Branches
 export async function getBranches(repoPath: string): Promise<BranchInfo[]> {
   return invoke("get_branches", { repoPath });

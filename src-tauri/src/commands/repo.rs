@@ -115,6 +115,71 @@ pub async fn clone_repository(
 }
 
 #[tauri::command]
+pub async fn get_repo_visibility(
+    repo_path: String,
+    account_id: String,
+    token_store: tauri::State<'_, TokenStore>,
+) -> Result<Value, AppError> {
+    // 1. Get remote origin URL
+    let rp = repo_path.clone();
+    let origin_url = tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&rp)?;
+        let remote = repo.find_remote("origin").map_err(|e| {
+            AppError::RepoNotFound(format!("No origin remote: {}", e))
+        })?;
+        Ok::<String, AppError>(remote.url().unwrap_or("").to_string())
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+
+    // 2. Parse owner/repo from URL
+    let (owner, repo_name) = crate::git::remote::parse_github_url(&origin_url)
+        .ok_or_else(|| AppError::RepoNotFound("Not a GitHub repository URL".to_string()))?;
+
+    // 3. Resolve token for the linked account
+    let token = crate::commands::auth::resolve_token(&token_store, &account_id).await?;
+
+    // 4. Call GitHub API
+    let client = crate::github::client::GitHubClient::new();
+    let repo_info = client.get_repo(&token, &owner, &repo_name).await?;
+
+    let is_private = repo_info["private"].as_bool().unwrap_or(false);
+    let is_fork = repo_info["fork"].as_bool().unwrap_or(false);
+    let is_archived = repo_info["archived"].as_bool().unwrap_or(false);
+    let owner_type = repo_info["owner"]["type"]
+        .as_str()
+        .unwrap_or("User")
+        .to_string();
+
+    Ok(json!({
+        "isPrivate": is_private,
+        "isFork": is_fork,
+        "isArchived": is_archived,
+        "ownerType": owner_type,
+    }))
+}
+
+/// Check if a GitHub owner (user/org name) is an Organization or User.
+#[tauri::command]
+pub async fn get_owner_type(
+    owner: String,
+    account_id: String,
+    token_store: tauri::State<'_, TokenStore>,
+) -> Result<Value, AppError> {
+    let token = crate::commands::auth::resolve_token(&token_store, &account_id).await?;
+
+    let client = crate::github::client::GitHubClient::new();
+    let user_info = client.get_user_by_login(&token, &owner).await?;
+
+    let owner_type = user_info["type"]
+        .as_str()
+        .unwrap_or("User")
+        .to_string();
+
+    Ok(json!({ "ownerType": owner_type }))
+}
+
+#[tauri::command]
 pub async fn get_open_repos() -> Result<Vec<Value>, AppError> {
     // This returns an empty list as a stub — real state management would track open repos
     // The actual state is managed by the frontend or a state module

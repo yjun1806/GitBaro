@@ -14,6 +14,11 @@ import {
   HardDrive,
   Plus,
   Loader2,
+  Lock,
+  CloudOff,
+  Archive,
+  Building2,
+  User,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useUIStore } from "@/stores/ui";
@@ -21,7 +26,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useBranchStore } from "@/stores/branch";
 import { useStatus, useCommitHistory, useCommitAvatars, useBranches } from "@/api/queries";
-import { addLocalRepository, createCommit, stageFiles, unstageFiles, gitFetch, openInEditor } from "@/api/commands";
+import { addLocalRepository, createCommit, stageFiles, unstageFiles, gitFetch, openInEditor, getRepoVisibility, getOwnerType } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { FileStatusBadge } from "@/lib/file-status";
@@ -205,6 +210,8 @@ function RepoListView({
   const addRepo = useRepositoryStore((s) => s.addRepo);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const updateRepoAccount = useRepositoryStore((s) => s.updateRepoAccount);
+  const repoVisibility = useRepositoryStore((s) => s.repoVisibility);
+  const ownerTypes = useRepositoryStore((s) => s.ownerTypes);
   const accounts = useAccountStore((s) => s.accounts);
   const [accountPickerRepo, setAccountPickerRepo] = useState<string | null>(null);
 
@@ -242,6 +249,42 @@ function RepoListView({
     r.name.toLowerCase().includes(filter.toLowerCase()),
   );
   const groups = groupReposByOwner(filtered, accounts);
+
+  // Fetch GitHub visibility for repos with remotes + linked accounts
+  useEffect(() => {
+    const state = useRepositoryStore.getState();
+    for (const repo of repos) {
+      const hasRemote = repo.remotes.length > 0;
+      if (hasRemote && repo.accountId && !state.repoVisibility[repo.path]) {
+        getRepoVisibility(repo.path, repo.accountId)
+          .then((v) => {
+            useRepositoryStore.getState().setRepoVisibility(repo.path, v);
+          })
+          .catch((err) => {
+            console.warn(`[visibility] ${repo.name}:`, err);
+          });
+      }
+    }
+  }, [repos]);
+
+  // Fetch owner type (org vs user) for each group label
+  useEffect(() => {
+    const state = useRepositoryStore.getState();
+    // Find any accountId to use as auth
+    const anyAccountId = accounts[0]?.id;
+    if (!anyAccountId) return;
+
+    for (const group of groups) {
+      if (group.label === "Local" || state.ownerTypes[group.label]) continue;
+      getOwnerType(group.label, anyAccountId)
+        .then((res) => {
+          useRepositoryStore.getState().setOwnerType(group.label, res.ownerType);
+        })
+        .catch((err) => {
+          console.warn(`[ownerType] ${group.label}:`, err);
+        });
+    }
+  }, [groups, accounts]);
 
   return (
     <div className="flex flex-col h-full min-w-0 overflow-hidden">
@@ -308,11 +351,20 @@ function RepoListView({
             <div key={group.label} className={cn(groupIndex > 0 && "mt-3")}>
               {/* Group header */}
               <div className="flex items-center gap-2 px-2 py-1.5">
-                {group.label === "Local" ? (
-                  <HardDrive className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                ) : (
-                  <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                )}
+                {(() => {
+                  if (group.label === "Local") {
+                    return <HardDrive className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
+                  }
+                  const ot = ownerTypes[group.label];
+                  if (ot === "Organization") {
+                    return <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
+                  }
+                  if (ot === "User") {
+                    return <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
+                  }
+                  // Not loaded yet — show neutral icon
+                  return <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
+                })()}
                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex-1 truncate">
                   {group.label}
                 </span>
@@ -320,14 +372,24 @@ function RepoListView({
                   {group.repos.length}
                 </span>
               </div>
-              {/* Repo items */}
-              <div className="flex flex-col gap-0.5">
+              {/* Repo items — indented under group header */}
+              <div className="flex flex-col gap-0.5 pl-2">
                 {group.repos.map((repo) => {
                   const isActive = repo.path === activeRepoPath;
                   const linkedAccount = repo.accountId
                     ? accounts.find((a) => a.id === repo.accountId)
                     : null;
                   const isPickerOpen = accountPickerRepo === repo.path;
+                  const hasRemote = repo.remotes.length > 0;
+                  const visibility = repoVisibility[repo.path];
+                  // Icon: Lock=private, GitFork=fork, Globe=public, HardDrive=local
+                  const RepoIcon = !hasRemote
+                    ? HardDrive
+                    : visibility?.isPrivate
+                      ? Lock
+                      : visibility?.isFork
+                        ? GitFork
+                        : Globe;
                   return (
                     <div key={repo.path} className="relative">
                       <button
@@ -339,10 +401,12 @@ function RepoListView({
                             : "hover:bg-accent",
                         )}
                       >
-                        <GitFork className={cn(
-                          "w-4 h-4 shrink-0",
-                          isActive ? "opacity-70" : "opacity-40",
-                        )} />
+                        <RepoIcon
+                          className={cn(
+                            "w-4 h-4 shrink-0",
+                            isActive ? "opacity-70" : "opacity-40",
+                          )}
+                        />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{repo.name}</p>
                           {repo.currentBranch && (
@@ -360,11 +424,28 @@ function RepoListView({
                             </div>
                           )}
                         </div>
+                        {/* State indicators */}
                         {repo.isDirty && (
                           <Circle
                             className={cn(
                               "w-2 h-2 fill-current shrink-0",
-                              isActive ? "text-primary-foreground/70" : "text-primary",
+                              isActive ? "text-amber-300" : "text-amber-500",
+                            )}
+                          />
+                        )}
+                        {visibility?.isArchived && (
+                          <Archive
+                            className={cn(
+                              "w-3.5 h-3.5 shrink-0",
+                              isActive ? "text-primary-foreground/50" : "text-muted-foreground/60",
+                            )}
+                          />
+                        )}
+                        {hasRemote && !repo.accountId && (
+                          <CloudOff
+                            className={cn(
+                              "w-3.5 h-3.5 shrink-0",
+                              isActive ? "text-primary-foreground/40" : "text-muted-foreground/50",
                             )}
                           />
                         )}

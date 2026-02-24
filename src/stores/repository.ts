@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { RepoInfo, StatusEntry } from "@/types";
+import type { RepoVisibility } from "@/api/commands";
 
 interface RepositoryState {
   repos: RepoInfo[];
@@ -8,11 +9,17 @@ interface RepositoryState {
   activeRepo: RepoInfo | null;
   statusEntries: StatusEntry[];
   isLoading: boolean;
+  /** Cached GitHub visibility info per repo path */
+  repoVisibility: Record<string, RepoVisibility>;
+  /** Cached owner type: "User" | "Organization" per owner name */
+  ownerTypes: Record<string, "User" | "Organization">;
   setActiveRepo: (path: string) => void;
   addRepo: (repo: RepoInfo) => void;
   removeRepo: (path: string) => void;
   setRepos: (repos: RepoInfo[]) => void;
   updateRepoAccount: (repoPath: string, accountId: string | null) => void;
+  setRepoVisibility: (repoPath: string, visibility: RepoVisibility) => void;
+  setOwnerType: (owner: string, type: "User" | "Organization") => void;
   setStatusEntries: (entries: StatusEntry[]) => void;
   setLoading: (loading: boolean) => void;
 }
@@ -25,6 +32,8 @@ export const useRepositoryStore = create<RepositoryState>()(
       activeRepo: null,
       statusEntries: [],
       isLoading: false,
+      repoVisibility: {},
+      ownerTypes: {},
 
       setActiveRepo: (path) => {
         const repo = get().repos.find((r) => r.path === path) ?? null;
@@ -68,6 +77,16 @@ export const useRepositoryStore = create<RepositoryState>()(
           return { repos, activeRepo };
         }),
 
+      setRepoVisibility: (repoPath, visibility) =>
+        set((state) => ({
+          repoVisibility: { ...state.repoVisibility, [repoPath]: visibility },
+        })),
+
+      setOwnerType: (owner, ownerType) =>
+        set((state) => ({
+          ownerTypes: { ...state.ownerTypes, [owner]: ownerType },
+        })),
+
       setStatusEntries: (entries) => set({ statusEntries: entries }),
 
       setLoading: (loading) => set({ isLoading: loading }),
@@ -77,6 +96,8 @@ export const useRepositoryStore = create<RepositoryState>()(
       partialize: (state) => ({
         repos: state.repos,
         activeRepoPath: state.activeRepoPath,
+        repoVisibility: state.repoVisibility,
+        ownerTypes: state.ownerTypes,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
