@@ -1,45 +1,179 @@
 @import "tailwindcss";
 
+/* ── Dark mode: .dark 클래스 기반 ── */
+@custom-variant dark (&:is(.dark *));
+
+/* ── 폰트 ── */
+@font-face {
+  font-family: 'Pretendard';
+  src: url('../assets/fonts/PretendardVariable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../assets/fonts/JetBrainsMono-Variable.woff2') format('woff2');
+  font-weight: 100 800;
+  font-display: swap;
+}
+
+/* ── 디자인 토큰 (Tailwind @theme) ── */
 @theme {
-  --color-primary: #0969da;
-  --color-primary-hover: #0550ae;
-  --color-success: #1a7f37;
-  --color-warning: #9a6700;
-  --color-danger: #cf222e;
-  --color-muted: #656d76;
-  --color-border: #d0d7de;
-  --color-surface: #f6f8fa;
+  --font-sans: 'Pretendard', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Menlo', 'Consolas', monospace;
+
+  /* 타이포그래피 스케일 (데스크톱 앱에 맞게 컴팩트하게 조정) */
+  --text-xs: 0.6875rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+
+  /* 시맨틱 컬러 토큰 */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-diff-add: var(--diff-add);
+  --color-diff-add-fg: var(--diff-add-fg);
+  --color-diff-del: var(--diff-del);
+  --color-diff-del-fg: var(--diff-del-fg);
+  --color-diff-hunk: var(--diff-hunk);
+  --color-diff-hunk-fg: var(--diff-hunk-fg);
+  --color-scrollbar-track: var(--scrollbar-track);
+  --color-scrollbar-thumb: var(--scrollbar-thumb);
+  --color-scrollbar-thumb-hover: var(--scrollbar-thumb-hover);
 }
 
-/* Scrollbar - slim & visible (placed after Tailwind to ensure priority) */
-html *::-webkit-scrollbar {
-  width: 8px !important;
-  height: 8px !important;
+/* ── Light 테마 ── */
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  --primary: #84CC16;
+  --primary-foreground: #1a2e05;
+  --primary-hover: #65a30d;
+
+  --secondary: #f1f5f9;
+  --secondary-foreground: #475569;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #0f172a;
+  --danger: #dc2626;
+  --danger-foreground: #ffffff;
+  --info: #0284c7;
+  --info-foreground: #ffffff;
+
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #84CC16;
+  --surface: #f8fafc;
+
+  --diff-add: #f0fdf4;
+  --diff-add-fg: #166534;
+  --diff-del: #fef2f2;
+  --diff-del-fg: #991b1b;
+  --diff-hunk: #eff6ff;
+  --diff-hunk-fg: #3b82f6;
+
+  --scrollbar-track: #f3f3f3;
+  --scrollbar-thumb: #aaaaaa;
+  --scrollbar-thumb-hover: #888888;
 }
 
-html *::-webkit-scrollbar-track {
-  background: #f3f3f3 !important;
+/* ── Dark 테마 ── */
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --card: #1e293b;
+  --card-foreground: #f1f5f9;
+  --popover: #1e293b;
+  --popover-foreground: #f1f5f9;
+
+  --primary: #84CC16;
+  --primary-foreground: #1a2e05;
+  --primary-hover: #a3e635;
+
+  --secondary: #334155;
+  --secondary-foreground: #e2e8f0;
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  --accent: #334155;
+  --accent-foreground: #f1f5f9;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --success: #4ade80;
+  --success-foreground: #0f172a;
+  --warning: #fbbf24;
+  --warning-foreground: #0f172a;
+  --danger: #ef4444;
+  --danger-foreground: #ffffff;
+  --info: #38bdf8;
+  --info-foreground: #0f172a;
+
+  --border: #334155;
+  --input: #334155;
+  --ring: #84CC16;
+  --surface: #1e293b;
+
+  --diff-add: rgba(22, 101, 52, 0.2);
+  --diff-add-fg: #86efac;
+  --diff-del: rgba(153, 27, 27, 0.2);
+  --diff-del-fg: #fca5a5;
+  --diff-hunk: rgba(59, 130, 246, 0.15);
+  --diff-hunk-fg: #93c5fd;
+
+  --scrollbar-track: #2a2a2a;
+  --scrollbar-thumb: #555555;
+  --scrollbar-thumb-hover: #777777;
 }
 
-html *::-webkit-scrollbar-thumb {
-  background: #aaa !important;
-  border-radius: 4px;
-}
+/* ── 스크롤바 (시맨틱 토큰 사용) ── */
+html *::-webkit-scrollbar { width: 8px !important; height: 8px !important; }
+html *::-webkit-scrollbar-track { background: var(--scrollbar-track) !important; }
+html *::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb) !important; border-radius: 4px; }
+html *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover) !important; }
 
-html *::-webkit-scrollbar-thumb:hover {
-  background: #888 !important;
-}
-
-@media (prefers-color-scheme: dark) {
-  html *::-webkit-scrollbar-track {
-    background: #2a2a2a !important;
-  }
-
-  html *::-webkit-scrollbar-thumb {
-    background: #555 !important;
-  }
-
-  html *::-webkit-scrollbar-thumb:hover {
-    background: #777 !important;
-  }
+/* ── 기본 스타일 ── */
+@layer base {
+  body { @apply bg-background text-foreground font-sans antialiased; }
 }

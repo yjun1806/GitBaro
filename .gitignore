@@ -22,3 +22,6 @@ src-tauri/target/
 # Claude / OMC
 .claude/
 .omc/
+/.agent
+/.agents
+/.kiro

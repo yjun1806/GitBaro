@@ -20,14 +20,14 @@ function OptionCard({ icon, title, description, onClick }: OptionCardProps) {
   return (
     <button
       onClick={onClick}
-      className="flex items-start gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-left transition-all"
+      className="flex items-start gap-4 p-4 rounded-xl border border-border hover:border-primary hover:bg-primary/10 text-left transition-all"
     >
-      <span className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 shrink-0 mt-0.5">
+      <span className="p-2 rounded-lg bg-muted text-muted-foreground shrink-0 mt-0.5">
         {icon}
       </span>
       <div>
-        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
       </div>
     </button>
   );
@@ -43,14 +43,14 @@ export function AddRepoDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">
+      <div className="bg-card rounded-xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">
             Add Repository
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors"
+            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

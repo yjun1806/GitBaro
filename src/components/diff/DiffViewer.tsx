@@ -31,7 +31,7 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
 
   if (!diff) {
     return (
-      <div className="flex-1 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
+      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
         {t("diff.noSelection")}
       </div>
     );
@@ -48,7 +48,7 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
           viewMode={viewMode}
           onToggleView={toggleView}
         />
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
+        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
           {t("diff.binary")}
         </div>
       </div>
@@ -83,14 +83,14 @@ function UnifiedView({ diff }: { diff: DiffOutput }) {
       <tbody>
         {diff.hunks.map((hunk, hi) => (
           <Fragment key={`hunk-${hi}`}>
-            <tr className="bg-blue-50 dark:bg-blue-950/30">
-              <td className="px-2 py-0.5 text-blue-400 select-none w-10 text-right border-r border-blue-100 dark:border-blue-900">
+            <tr className="bg-diff-hunk">
+              <td className="px-2 py-0.5 text-diff-hunk-fg select-none w-10 text-right border-r border-diff-hunk/30">
                 ...
               </td>
-              <td className="px-2 py-0.5 text-blue-400 select-none w-10 text-right border-r border-blue-100 dark:border-blue-900">
+              <td className="px-2 py-0.5 text-diff-hunk-fg select-none w-10 text-right border-r border-diff-hunk/30">
                 ...
               </td>
-              <td className="px-4 py-0.5 text-blue-500 dark:text-blue-400 font-normal">
+              <td className="px-4 py-0.5 text-diff-hunk-fg font-normal">
                 {hunk.header}
               </td>
             </tr>
@@ -98,25 +98,25 @@ function UnifiedView({ diff }: { diff: DiffOutput }) {
               <tr
                 key={`line-${hi}-${li}`}
                 className={clsx(
-                  line.lineType === "add" && "bg-green-50 dark:bg-green-950/30",
-                  line.lineType === "delete" && "bg-red-50 dark:bg-red-950/30"
+                  line.lineType === "add" && "bg-diff-add",
+                  line.lineType === "delete" && "bg-diff-del"
                 )}
               >
-                <td className="px-2 py-0 text-gray-400 select-none w-10 text-right border-r border-gray-100 dark:border-gray-800">
+                <td className="px-2 py-0 text-muted-foreground select-none w-10 text-right border-r border-border">
                   {line.oldLineNo ?? ""}
                 </td>
-                <td className="px-2 py-0 text-gray-400 select-none w-10 text-right border-r border-gray-100 dark:border-gray-800">
+                <td className="px-2 py-0 text-muted-foreground select-none w-10 text-right border-r border-border">
                   {line.newLineNo ?? ""}
                 </td>
                 <td
                   className={clsx(
                     "px-4 py-0 whitespace-pre",
-                    line.lineType === "add" && "text-green-800 dark:text-green-300",
-                    line.lineType === "delete" && "text-red-700 dark:text-red-300",
-                    line.lineType === "context" && "text-gray-700 dark:text-gray-300"
+                    line.lineType === "add" && "text-diff-add-fg",
+                    line.lineType === "delete" && "text-diff-del-fg",
+                    line.lineType === "context" && "text-foreground"
                   )}
                 >
-                  <span className="mr-2 select-none text-gray-300 dark:text-gray-600">
+                  <span className="mr-2 select-none text-muted-foreground/50">
                     {line.lineType === "add" ? "+" : line.lineType === "delete" ? "-" : " "}
                   </span>
                   {line.content}
@@ -134,15 +134,15 @@ function SplitView({ diff }: { diff: DiffOutput }) {
   return (
     <div className="flex">
       {/* Left (old) */}
-      <table className="w-1/2 border-collapse border-r border-gray-200 dark:border-gray-800">
+      <table className="w-1/2 border-collapse border-r border-border">
         <tbody>
           {diff.hunks.map((hunk, hi) => (
             <Fragment key={`left-hunk-${hi}`}>
-              <tr className="bg-blue-50 dark:bg-blue-950/30">
-                <td className="px-2 py-0.5 text-blue-400 select-none w-10 text-right border-r border-blue-100 dark:border-blue-900">
+              <tr className="bg-diff-hunk">
+                <td className="px-2 py-0.5 text-diff-hunk-fg select-none w-10 text-right border-r border-diff-hunk/30">
                   ...
                 </td>
-                <td className="px-4 py-0.5 text-blue-500 dark:text-blue-400">
+                <td className="px-4 py-0.5 text-diff-hunk-fg">
                   {hunk.header}
                 </td>
               </tr>
@@ -152,18 +152,18 @@ function SplitView({ diff }: { diff: DiffOutput }) {
                   <tr
                     key={`left-line-${hi}-${li}`}
                     className={
-                      line.lineType === "delete" ? "bg-red-50 dark:bg-red-950/30" : ""
+                      line.lineType === "delete" ? "bg-diff-del" : ""
                     }
                   >
-                    <td className="px-2 py-0 text-gray-400 select-none w-10 text-right border-r border-gray-100 dark:border-gray-800">
+                    <td className="px-2 py-0 text-muted-foreground select-none w-10 text-right border-r border-border">
                       {line.oldLineNo ?? ""}
                     </td>
                     <td
                       className={clsx(
                         "px-4 py-0 whitespace-pre",
                         line.lineType === "delete"
-                          ? "text-red-700 dark:text-red-300"
-                          : "text-gray-700 dark:text-gray-300"
+                          ? "text-diff-del-fg"
+                          : "text-foreground"
                       )}
                     >
                       {line.content}
@@ -180,11 +180,11 @@ function SplitView({ diff }: { diff: DiffOutput }) {
         <tbody>
           {diff.hunks.map((hunk, hi) => (
             <Fragment key={`right-hunk-${hi}`}>
-              <tr className="bg-blue-50 dark:bg-blue-950/30">
-                <td className="px-2 py-0.5 text-blue-400 select-none w-10 text-right border-r border-blue-100 dark:border-blue-900">
+              <tr className="bg-diff-hunk">
+                <td className="px-2 py-0.5 text-diff-hunk-fg select-none w-10 text-right border-r border-diff-hunk/30">
                   ...
                 </td>
-                <td className="px-4 py-0.5 text-blue-500 dark:text-blue-400">
+                <td className="px-4 py-0.5 text-diff-hunk-fg">
                   {hunk.header}
                 </td>
               </tr>
@@ -194,18 +194,18 @@ function SplitView({ diff }: { diff: DiffOutput }) {
                   <tr
                     key={`right-line-${hi}-${li}`}
                     className={
-                      line.lineType === "add" ? "bg-green-50 dark:bg-green-950/30" : ""
+                      line.lineType === "add" ? "bg-diff-add" : ""
                     }
                   >
-                    <td className="px-2 py-0 text-gray-400 select-none w-10 text-right border-r border-gray-100 dark:border-gray-800">
+                    <td className="px-2 py-0 text-muted-foreground select-none w-10 text-right border-r border-border">
                       {line.newLineNo ?? ""}
                     </td>
                     <td
                       className={clsx(
                         "px-4 py-0 whitespace-pre",
                         line.lineType === "add"
-                          ? "text-green-800 dark:text-green-300"
-                          : "text-gray-700 dark:text-gray-300"
+                          ? "text-diff-add-fg"
+                          : "text-foreground"
                       )}
                     >
                       {line.content}

@@ -31,7 +31,7 @@ export function AccountAvatar({
       className={clsx(
         "relative inline-flex shrink-0 items-center justify-center rounded-full overflow-hidden",
         sizeMap[size],
-        isActive && "ring-2 ring-blue-500 ring-offset-1",
+        isActive && "ring-2 ring-primary ring-offset-1",
         className
       )}
     >
@@ -43,7 +43,7 @@ export function AccountAvatar({
           onError={() => setImgError(true)}
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-medium">
+        <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-medium">
           {fallbackLetter}
         </div>
       )}

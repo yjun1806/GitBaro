@@ -51,7 +51,7 @@ export function MainLayout() {
   );
 
   return (
-    <div className="flex h-screen bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 overflow-hidden">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {/* Left panel — Repo header + Changes/History or Repo list */}
       <div
         style={{ width: sidebarWidth }}
@@ -75,7 +75,7 @@ export function MainLayout() {
       />
 
       {/* Right panel — Branch header + Diff viewer */}
-      <div className="relative flex-1 overflow-hidden bg-white dark:bg-zinc-900">
+      <div className="relative flex-1 overflow-hidden bg-background">
         <ContentArea
           activeTab={activeTab}
           selectedFile={selectedFile}

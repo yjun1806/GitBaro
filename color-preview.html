@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>GitBaro - Key Color Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #e6edf3; padding: 40px; }
+  h1 { text-align: center; margin-bottom: 8px; font-size: 28px; }
+  .subtitle { text-align: center; color: #8b949e; margin-bottom: 48px; font-size: 14px; }
+  .current { text-align: center; margin-bottom: 40px; padding: 16px; border: 1px solid #30363d; border-radius: 12px; background: #161b22; }
+  .current-label { font-size: 12px; color: #8b949e; margin-bottom: 8px; }
+  .current-swatch { display: inline-block; width: 48px; height: 48px; border-radius: 10px; background: #0969da; margin-right: 12px; vertical-align: middle; }
+  .current-text { display: inline-block; vertical-align: middle; text-align: left; }
+  .current-text strong { font-size: 18px; }
+  .current-text span { display: block; color: #8b949e; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px; max-width: 1200px; margin: 0 auto; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 16px; overflow: hidden; transition: transform 0.2s; }
+  .card:hover { transform: translateY(-4px); }
+  .card-header { padding: 24px 24px 16px; display: flex; align-items: center; gap: 16px; }
+  .swatch { width: 56px; height: 56px; border-radius: 14px; flex-shrink: 0; }
+  .card-title { font-size: 20px; font-weight: 700; }
+  .card-hex { font-size: 13px; color: #8b949e; font-family: monospace; }
+  .card-desc { padding: 0 24px 16px; color: #8b949e; font-size: 13px; line-height: 1.5; }
+  .card-tags { padding: 0 24px 20px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag { font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid #30363d; color: #8b949e; }
+  .mini-ui { margin: 0 24px 24px; background: #0d1117; border-radius: 12px; padding: 16px; border: 1px solid #30363d; }
+  .mini-ui-title { font-size: 11px; color: #8b949e; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .mini-btn { display: inline-block; padding: 8px 20px; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 600; margin-right: 8px; margin-bottom: 8px; }
+  .mini-btn.outline { background: transparent; border: 1px solid; }
+  .mini-sidebar { display: flex; gap: 8px; margin-top: 10px; }
+  .mini-sidebar-item { padding: 6px 12px; border-radius: 6px; font-size: 12px; color: #e6edf3; }
+  .mini-sidebar-item.active { color: #fff; }
+  .mini-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; color: #fff; margin-left: 6px; }
+  .comparison { display: flex; gap: 4px; margin: 12px 0 0; }
+  .comparison div { height: 6px; border-radius: 3px; flex: 1; }
+</style>
+</head>
+<body>
+
+<h1>GitBaro Key Color Preview</h1>
+<p class="subtitle">macOS Git Client - Brand Color Candidates</p>
+
+<div class="current">
+  <div class="current-label">CURRENT KEY COLOR</div>
+  <div class="current-swatch"></div>
+  <div class="current-text">
+    <strong>GitHub Blue</strong>
+    <span>#0969da &middot; Primary</span>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- Emerald Green -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #059669;"></div>
+      <div>
+        <div class="card-title">Emerald Green</div>
+        <div class="card-hex">#059669 &rarr; hover: #047857</div>
+      </div>
+    </div>
+    <div class="card-desc">Git의 branch/merge 아이콘과 자연스럽게 어울리며, "코드가 성장하다"는 메타포를 전달합니다. GitHub(파랑), GitLab(보라)과 확실히 차별화됩니다.</div>
+    <div class="card-tags">
+      <span class="tag">성장</span><span class="tag">신뢰</span><span class="tag">차별화 ★★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#059669;">Commit</span>
+      <span class="mini-btn" style="background:#059669;">Push</span>
+      <span class="mini-btn outline" style="border-color:#059669; color:#059669;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#059669;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#059669"></div><div style="background:#047857"></div><div style="background:#065f46"></div><div style="background:#064e3b"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Violet Purple -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #7C3AED;"></div>
+      <div>
+        <div class="card-title">Violet Purple</div>
+        <div class="card-hex">#7C3AED &rarr; hover: #6D28D9</div>
+      </div>
+    </div>
+    <div class="card-desc">개발 도구 트렌드 컬러. Figma, Vercel 등의 톤과 비슷하며 고급스럽고 프리미엄한 macOS 앱 느낌을 줍니다.</div>
+    <div class="card-tags">
+      <span class="tag">창의</span><span class="tag">프리미엄</span><span class="tag">차별화 ★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#7C3AED;">Commit</span>
+      <span class="mini-btn" style="background:#7C3AED;">Push</span>
+      <span class="mini-btn outline" style="border-color:#7C3AED; color:#7C3AED;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#7C3AED;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#7C3AED"></div><div style="background:#6D28D9"></div><div style="background:#5B21B6"></div><div style="background:#4C1D95"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Teal -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #0D9488;"></div>
+      <div>
+        <div class="card-title">Teal</div>
+        <div class="card-hex">#0D9488 &rarr; hover: #0F766E</div>
+      </div>
+    </div>
+    <div class="card-desc">파란색에서 크게 벗어나지 않으면서도 독자적인 청록색. 기술적 신뢰감과 친근함을 동시에 전달합니다.</div>
+    <div class="card-tags">
+      <span class="tag">균형</span><span class="tag">안정</span><span class="tag">차별화 ★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#0D9488;">Commit</span>
+      <span class="mini-btn" style="background:#0D9488;">Push</span>
+      <span class="mini-btn outline" style="border-color:#0D9488; color:#0D9488;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#0D9488;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#0D9488"></div><div style="background:#0F766E"></div><div style="background:#115E59"></div><div style="background:#134E4A"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Warm Orange -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #EA580C;"></div>
+      <div>
+        <div class="card-title">Warm Orange</div>
+        <div class="card-hex">#EA580C &rarr; hover: #C2410C</div>
+      </div>
+    </div>
+    <div class="card-desc">"바로(Baro)" = 빠름, 즉시. 에너지와 속도를 직관적으로 전달하며, Git 클라이언트 중 가장 독특한 아이덴티티입니다.</div>
+    <div class="card-tags">
+      <span class="tag">속도</span><span class="tag">에너지</span><span class="tag">차별화 ★★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#EA580C;">Commit</span>
+      <span class="mini-btn" style="background:#EA580C;">Push</span>
+      <span class="mini-btn outline" style="border-color:#EA580C; color:#EA580C;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#EA580C;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#EA580C"></div><div style="background:#C2410C"></div><div style="background:#9A3412"></div><div style="background:#7C2D12"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Indigo -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #4F46E5;"></div>
+      <div>
+        <div class="card-title">Indigo</div>
+        <div class="card-hex">#4F46E5 &rarr; hover: #4338CA</div>
+      </div>
+    </div>
+    <div class="card-desc">현재 파란색에서 가장 자연스러운 전환. 더 깊고 세련된 느낌으로, 기존 UI와의 호환성이 가장 높습니다.</div>
+    <div class="card-tags">
+      <span class="tag">깊이</span><span class="tag">전문성</span><span class="tag">마이그레이션 ★★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#4F46E5;">Commit</span>
+      <span class="mini-btn" style="background:#4F46E5;">Push</span>
+      <span class="mini-btn outline" style="border-color:#4F46E5; color:#4F46E5;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#4F46E5;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#4F46E5"></div><div style="background:#4338CA"></div><div style="background:#3730A3"></div><div style="background:#312E81"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<h2 style="text-align:center; margin: 56px 0 8px; font-size: 22px;">Additional Picks</h2>
+<p class="subtitle" style="margin-bottom: 32px;">5 more alternatives</p>
+
+<div class="grid">
+
+  <!-- Rose Pink -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #E11D48;"></div>
+      <div>
+        <div class="card-title">Rose Pink</div>
+        <div class="card-hex">#E11D48 &rarr; hover: #BE123C</div>
+      </div>
+    </div>
+    <div class="card-desc">대담하고 현대적인 느낌. Linear, Raycast 등 최신 개발 도구들이 채택하는 톤으로, 강렬한 첫인상을 줍니다. danger(빨강)보다 핑크 쪽이라 구분됩니다.</div>
+    <div class="card-tags">
+      <span class="tag">대담</span><span class="tag">모던</span><span class="tag">차별화 ★★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#E11D48;">Commit</span>
+      <span class="mini-btn" style="background:#E11D48;">Push</span>
+      <span class="mini-btn outline" style="border-color:#E11D48; color:#E11D48;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#E11D48;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#E11D48"></div><div style="background:#BE123C"></div><div style="background:#9F1239"></div><div style="background:#881337"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sky Blue -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #0EA5E9;"></div>
+      <div>
+        <div class="card-title">Sky Blue</div>
+        <div class="card-hex">#0EA5E9 &rarr; hover: #0284C7</div>
+      </div>
+    </div>
+    <div class="card-desc">현재 GitHub 블루보다 밝고 경쾌한 하늘색. 친근하고 접근성 높은 느낌으로, macOS의 기본 악센트 컬러와도 잘 어울립니다.</div>
+    <div class="card-tags">
+      <span class="tag">경쾌</span><span class="tag">친근</span><span class="tag">마이그레이션 ★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#0EA5E9;">Commit</span>
+      <span class="mini-btn" style="background:#0EA5E9;">Push</span>
+      <span class="mini-btn outline" style="border-color:#0EA5E9; color:#0EA5E9;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#0EA5E9;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#0EA5E9"></div><div style="background:#0284C7"></div><div style="background:#0369A1"></div><div style="background:#075985"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Amber Gold -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #D97706;"></div>
+      <div>
+        <div class="card-title">Amber Gold</div>
+        <div class="card-hex">#D97706 &rarr; hover: #B45309</div>
+      </div>
+    </div>
+    <div class="card-desc">따뜻하고 고급스러운 골드톤. 프리미엄 데스크톱 앱의 느낌을 주며, 다크모드에서 특히 돋보입니다. warning 컬러와 톤 차이를 두면 충돌 없음.</div>
+    <div class="card-tags">
+      <span class="tag">프리미엄</span><span class="tag">따뜻함</span><span class="tag">차별화 ★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#D97706;">Commit</span>
+      <span class="mini-btn" style="background:#D97706;">Push</span>
+      <span class="mini-btn outline" style="border-color:#D97706; color:#D97706;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#D97706;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#D97706"></div><div style="background:#B45309"></div><div style="background:#92400E"></div><div style="background:#78350F"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Coral -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #F97316;"></div>
+      <div>
+        <div class="card-title">Coral</div>
+        <div class="card-hex">#F97316 &rarr; hover: #EA580C</div>
+      </div>
+    </div>
+    <div class="card-desc">Warm Orange보다 밝고 활기찬 코랄톤. 에너지 넘치면서도 위험 신호와는 구분되는 따뜻한 오렌지. Rust 언어 로고와 비슷한 생동감.</div>
+    <div class="card-tags">
+      <span class="tag">활기</span><span class="tag">친근</span><span class="tag">차별화 ★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#F97316;">Commit</span>
+      <span class="mini-btn" style="background:#F97316;">Push</span>
+      <span class="mini-btn outline" style="border-color:#F97316; color:#F97316;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#F97316;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#F97316"></div><div style="background:#EA580C"></div><div style="background:#C2410C"></div><div style="background:#9A3412"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fuchsia -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #C026D3;"></div>
+      <div>
+        <div class="card-title">Fuchsia</div>
+        <div class="card-hex">#C026D3 &rarr; hover: #A21CAF</div>
+      </div>
+    </div>
+    <div class="card-desc">가장 과감한 선택. Git 클라이언트 시장에서 절대 볼 수 없는 컬러로, 강렬한 브랜드 기억도를 남깁니다. 호불호가 갈리지만 임팩트는 최고.</div>
+    <div class="card-tags">
+      <span class="tag">임팩트</span><span class="tag">과감</span><span class="tag">차별화 ★★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#C026D3;">Commit</span>
+      <span class="mini-btn" style="background:#C026D3;">Push</span>
+      <span class="mini-btn outline" style="border-color:#C026D3; color:#C026D3;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#C026D3;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#C026D3"></div><div style="background:#A21CAF"></div><div style="background:#86198F"></div><div style="background:#701A75"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<h2 style="text-align:center; margin: 56px 0 8px; font-size: 22px;">Unique Picks</h2>
+<p class="subtitle" style="margin-bottom: 32px;">5 unconventional choices</p>
+
+<div class="grid">
+
+  <!-- Acid Lime -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #84CC16;"></div>
+      <div>
+        <div class="card-title">Acid Lime</div>
+        <div class="card-hex">#84CC16 &rarr; hover: #65A30D</div>
+      </div>
+    </div>
+    <div class="card-desc">터미널 해커 감성의 네온 라임. 개발자 DNA를 직관적으로 전달하며, 어떤 Git 클라이언트도 쓰지 않는 컬러. 다크모드에서 강렬하게 빛납니다.</div>
+    <div class="card-tags">
+      <span class="tag">해커</span><span class="tag">네온</span><span class="tag">유니크 ★★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#84CC16; color:#1a1a1a;">Commit</span>
+      <span class="mini-btn" style="background:#84CC16; color:#1a1a1a;">Push</span>
+      <span class="mini-btn outline" style="border-color:#84CC16; color:#84CC16;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#84CC16; color:#1a1a1a;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#A3E635"></div><div style="background:#84CC16"></div><div style="background:#65A30D"></div><div style="background:#4D7C0F"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Electric Cyan -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #22D3EE;"></div>
+      <div>
+        <div class="card-title">Electric Cyan</div>
+        <div class="card-hex">#22D3EE &rarr; hover: #06B6D4</div>
+      </div>
+    </div>
+    <div class="card-desc">사이버펑크/트론 느낌의 일렉트릭 시안. 미래적이고 테크니컬한 이미지. 다크 UI에서 네온사인처럼 빛나는 효과가 일품입니다.</div>
+    <div class="card-tags">
+      <span class="tag">사이버펑크</span><span class="tag">미래적</span><span class="tag">유니크 ★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#22D3EE; color:#1a1a1a;">Commit</span>
+      <span class="mini-btn" style="background:#22D3EE; color:#1a1a1a;">Push</span>
+      <span class="mini-btn outline" style="border-color:#22D3EE; color:#22D3EE;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#22D3EE; color:#1a1a1a;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#67E8F9"></div><div style="background:#22D3EE"></div><div style="background:#06B6D4"></div><div style="background:#0891B2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lavender -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #A78BFA;"></div>
+      <div>
+        <div class="card-title">Lavender</div>
+        <div class="card-hex">#A78BFA &rarr; hover: #8B5CF6</div>
+      </div>
+    </div>
+    <div class="card-desc">부드럽고 차분한 라벤더. Violet보다 연하고 뉴트럴해서 눈이 편안합니다. 젠더리스하고 감성적인 브랜딩에 적합하며, 장시간 사용해도 피로감이 적습니다.</div>
+    <div class="card-tags">
+      <span class="tag">감성</span><span class="tag">편안</span><span class="tag">유니크 ★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#A78BFA; color:#1a1a1a;">Commit</span>
+      <span class="mini-btn" style="background:#A78BFA; color:#1a1a1a;">Push</span>
+      <span class="mini-btn outline" style="border-color:#A78BFA; color:#A78BFA;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#A78BFA; color:#1a1a1a;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#C4B5FD"></div><div style="background:#A78BFA"></div><div style="background:#8B5CF6"></div><div style="background:#7C3AED"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mint Aqua -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #2DD4BF;"></div>
+      <div>
+        <div class="card-title">Mint Aqua</div>
+        <div class="card-hex">#2DD4BF &rarr; hover: #14B8A6</div>
+      </div>
+    </div>
+    <div class="card-desc">청량한 민트 아쿠아. Teal보다 밝고 상쾌하며, 스타벅스/Notion 같은 클린한 브랜드 이미지를 연상시킵니다. 라이트/다크 모두에서 시원한 느낌.</div>
+    <div class="card-tags">
+      <span class="tag">청량</span><span class="tag">상쾌</span><span class="tag">유니크 ★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#2DD4BF; color:#1a1a1a;">Commit</span>
+      <span class="mini-btn" style="background:#2DD4BF; color:#1a1a1a;">Push</span>
+      <span class="mini-btn outline" style="border-color:#2DD4BF; color:#2DD4BF;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#2DD4BF; color:#1a1a1a;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#5EEAD4"></div><div style="background:#2DD4BF"></div><div style="background:#14B8A6"></div><div style="background:#0D9488"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dusty Rose -->
+  <div class="card">
+    <div class="card-header">
+      <div class="swatch" style="background: #FB7185;"></div>
+      <div>
+        <div class="card-title">Dusty Rose</div>
+        <div class="card-hex">#FB7185 &rarr; hover: #F43F5E</div>
+      </div>
+    </div>
+    <div class="card-desc">소프트한 더스티 로즈. Rose Pink보다 부드럽고 따뜻하며, 개발 도구에서 거의 볼 수 없는 톤. 무채색 UI와 조합하면 세련된 악센트가 됩니다.</div>
+    <div class="card-tags">
+      <span class="tag">소프트</span><span class="tag">세련</span><span class="tag">유니크 ★★★★★</span>
+    </div>
+    <div class="mini-ui">
+      <div class="mini-ui-title">UI Preview</div>
+      <span class="mini-btn" style="background:#FB7185; color:#1a1a1a;">Commit</span>
+      <span class="mini-btn" style="background:#FB7185; color:#1a1a1a;">Push</span>
+      <span class="mini-btn outline" style="border-color:#FB7185; color:#FB7185;">Cancel</span>
+      <div class="mini-sidebar">
+        <span class="mini-sidebar-item active" style="background:#FB7185; color:#1a1a1a;">main</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">develop</span>
+        <span class="mini-sidebar-item" style="background:#21262d;">feature/auth</span>
+      </div>
+      <div class="comparison">
+        <div style="background:#FDA4AF"></div><div style="background:#FB7185"></div><div style="background:#F43F5E"></div><div style="background:#E11D48"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

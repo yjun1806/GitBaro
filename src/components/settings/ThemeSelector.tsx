@@ -33,8 +33,8 @@ export function ThemeSelector({ value, onChange }: ThemeSelectorProps) {
           className={clsx(
             "flex flex-col items-center gap-2 px-5 py-3 rounded-xl border text-sm font-medium transition-all",
             value === opt.value
-              ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-              : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-border text-muted-foreground hover:border-border hover:bg-accent"
           )}
         >
           {opt.icon}

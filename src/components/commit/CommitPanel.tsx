@@ -27,7 +27,7 @@ export function CommitPanel({ currentBranch, stagedCount, onCommit }: CommitPane
   };
 
   return (
-    <div className="flex flex-col gap-3 p-3 border-t border-gray-200 dark:border-gray-800">
+    <div className="flex flex-col gap-3 p-3 border-t border-border">
       {/* Summary input */}
       <CommitMessage
         value={summary}
@@ -41,11 +41,11 @@ export function CommitPanel({ currentBranch, stagedCount, onCommit }: CommitPane
         onChange={(e) => setDescription(e.target.value)}
         placeholder={t("commit.description")}
         rows={3}
-        className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-transparent text-gray-700 dark:text-gray-200 placeholder-gray-400 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+        className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-transparent text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring focus:border-primary resize-none"
       />
 
       {/* Co-authors placeholder */}
-      <div className="text-xs text-gray-300 dark:text-gray-600 italic px-1">
+      <div className="text-xs text-muted-foreground/50 italic px-1">
         Co-authors — coming soon
       </div>
 
@@ -55,9 +55,9 @@ export function CommitPanel({ currentBranch, stagedCount, onCommit }: CommitPane
           type="checkbox"
           checked={amend}
           onChange={(e) => setAmend(e.target.checked)}
-          className="w-3.5 h-3.5 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+          className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-ring"
         />
-        <span className="text-xs text-gray-500 dark:text-gray-400">
+        <span className="text-xs text-muted-foreground">
           {t("commit.amend")}
         </span>
       </label>
@@ -69,8 +69,8 @@ export function CommitPanel({ currentBranch, stagedCount, onCommit }: CommitPane
         className={clsx(
           "flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors",
           canCommit
-            ? "bg-blue-600 hover:bg-blue-700 text-white"
-            : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+            ? "bg-primary hover:bg-primary-hover text-primary-foreground"
+            : "bg-muted text-muted-foreground cursor-not-allowed"
         )}
       >
         <GitCommit className="w-4 h-4" />

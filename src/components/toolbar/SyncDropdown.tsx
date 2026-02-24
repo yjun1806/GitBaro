@@ -1,0 +1,141 @@
+import { useRef } from "react";
+import { RefreshCw, ArrowDown, ArrowUp } from "lucide-react";
+import { cn, formatRelativeTime } from "@/lib/utils";
+import { useClickOutside } from "./useToolbarDropdown";
+
+interface SyncDropdownProps {
+  ahead: number;
+  behind: number;
+  lastFetchedAt: number | null;
+  disabled: boolean;
+  onFetch: () => void;
+  onPull: (rebase?: boolean) => void;
+  onPush: (force?: boolean) => void;
+  onClose: () => void;
+}
+
+interface MenuItemProps {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  badge?: number;
+  danger?: boolean;
+  highlighted?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}
+
+function MenuItem({ icon, label, description, badge, danger, highlighted, disabled, onClick }: MenuItemProps) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors",
+        "hover:bg-accent",
+        "disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent",
+        highlighted && "bg-primary/5",
+      )}
+    >
+      <span className={cn(
+        "mt-0.5 shrink-0",
+        danger ? "text-danger" : highlighted ? "text-primary" : "text-muted-foreground",
+      )}>
+        {icon}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className={cn(
+          "text-sm font-medium leading-tight",
+          danger && "text-danger",
+        )}>
+          {label}
+        </p>
+        <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">{description}</p>
+      </div>
+      {badge !== undefined && badge > 0 && (
+        <span className={cn(
+          "mt-0.5 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 tabular-nums leading-none",
+          "bg-primary/10 text-primary",
+        )}>
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
+export function SyncDropdown({
+  ahead,
+  behind,
+  lastFetchedAt,
+  disabled,
+  onFetch,
+  onPull,
+  onPush,
+  onClose,
+}: SyncDropdownProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, onClose);
+
+  const exec = (fn: () => void) => {
+    fn();
+    onClose();
+  };
+
+  return (
+    <div
+      ref={ref}
+      className="absolute right-0 top-full mt-2 w-72 bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
+    >
+      {/* Fetch */}
+      <div className="py-1">
+        <MenuItem
+          icon={<RefreshCw className="w-4 h-4" />}
+          label="Fetch origin"
+          description="Download objects and refs from remote"
+          disabled={disabled}
+          onClick={() => exec(onFetch)}
+        />
+      </div>
+
+      <div className="border-t border-border" />
+
+      {/* Pull section */}
+      <div className="py-1">
+        <MenuItem
+          icon={<ArrowDown className="w-4 h-4" />}
+          label="Pull origin"
+          description={behind > 0 ? "Fetch and merge remote changes" : "No remote changes to pull"}
+          badge={behind}
+          highlighted={behind > 0}
+          disabled={disabled || behind === 0}
+          onClick={() => exec(() => onPull(false))}
+        />
+      </div>
+
+      <div className="border-t border-border" />
+
+      {/* Push section */}
+      <div className="py-1">
+        <MenuItem
+          icon={<ArrowUp className="w-4 h-4" />}
+          label="Push origin"
+          description={ahead > 0 ? "Upload local commits to remote" : "No local commits to push"}
+          badge={ahead}
+          highlighted={ahead > 0}
+          disabled={disabled || ahead === 0}
+          onClick={() => exec(() => onPush(false))}
+        />
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-border bg-surface/50 px-3 py-2">
+        <p className="text-[11px] text-muted-foreground">
+          {lastFetchedAt
+            ? `Last fetched ${formatRelativeTime(lastFetchedAt)}`
+            : "Never fetched"}
+        </p>
+      </div>
+    </div>
+  );
+}

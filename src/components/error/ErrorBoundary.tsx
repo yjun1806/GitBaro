@@ -36,22 +36,22 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
       return (
         <div className="flex flex-col items-center justify-center min-h-64 gap-4 p-8 text-center">
-          <div className="p-3 rounded-full bg-red-100 dark:bg-red-900/30">
-            <AlertTriangle className="w-6 h-6 text-red-500" />
+          <div className="p-3 rounded-full bg-destructive/10">
+            <AlertTriangle className="w-6 h-6 text-destructive" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+            <p className="text-sm font-semibold text-foreground">
               Something went wrong
             </p>
             {this.state.error && (
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 max-w-sm font-mono">
+              <p className="mt-1 text-xs text-muted-foreground max-w-sm font-mono">
                 {this.state.error.message}
               </p>
             )}
           </div>
           <button
             onClick={this.handleReload}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             Reload

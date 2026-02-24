@@ -37,14 +37,14 @@ export function CreateBranchDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-sm">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">
+      <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">
             {t("branch.create")}
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors"
+            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -53,18 +53,18 @@ export function CreateBranchDialog({
         <div className="px-5 py-5 flex flex-col gap-4">
           {/* Branch name */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            <label className="text-xs font-medium text-muted-foreground">
               {t("branch.name")}
             </label>
             <div
               className={clsx(
                 "flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors",
                 error
-                  ? "border-red-400 dark:border-red-500 focus-within:ring-2 focus-within:ring-red-300"
-                  : "border-gray-200 dark:border-gray-700 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500"
+                  ? "border-destructive focus-within:ring-2 focus-within:ring-destructive/30"
+                  : "border-border focus-within:ring-2 focus-within:ring-ring focus-within:border-primary"
               )}
             >
-              <GitBranch className="w-4 h-4 text-gray-400 shrink-0" />
+              <GitBranch className="w-4 h-4 text-muted-foreground shrink-0" />
               <input
                 autoFocus
                 type="text"
@@ -72,23 +72,23 @@ export function CreateBranchDialog({
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                 placeholder="feature/my-feature"
-                className="flex-1 text-sm bg-transparent text-gray-700 dark:text-gray-200 placeholder-gray-400 outline-none"
+                className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
               />
             </div>
             {error && (
-              <p className="text-xs text-red-500">{error}</p>
+              <p className="text-xs text-destructive">{error}</p>
             )}
           </div>
 
           {/* From branch */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            <label className="text-xs font-medium text-muted-foreground">
               {t("branch.from")}
             </label>
             <select
               value={fromBranch}
               onChange={(e) => setFromBranch(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground outline-none focus:ring-2 focus:ring-ring"
             >
               {localBranches.map((b) => (
                 <option key={b.name} value={b.name}>
@@ -100,17 +100,17 @@ export function CreateBranchDialog({
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex justify-end gap-3 px-5 py-4 border-t border-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleCreate}
             disabled={!valid}
-            className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors"
           >
             Create Branch
           </button>

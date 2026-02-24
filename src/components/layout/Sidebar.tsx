@@ -23,33 +23,11 @@ import { useStatus, useCommitHistory, useCommitAvatars, useBranches } from "@/ap
 import { addLocalRepository, createCommit, stageFiles, unstageFiles, gitFetch } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
+import { FileStatusBadge } from "@/lib/file-status";
 import { useToastStore } from "@/stores/toast";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import type { CommitInfo, RepoInfo } from "@/types";
-
-/* ─── Status helpers ─── */
-
-const statusColors: Record<string, string> = {
-  modified: "text-warning",
-  added: "text-success",
-  deleted: "text-danger",
-  renamed: "text-primary",
-  copied: "text-primary",
-  untracked: "text-success",
-  conflicted: "text-danger",
-  ignored: "text-muted",
-};
-
-const statusLabels: Record<string, string> = {
-  modified: "M",
-  added: "A",
-  deleted: "D",
-  renamed: "R",
-  copied: "C",
-  untracked: "U",
-  conflicted: "!",
-  ignored: "I",
-};
+import type { FileStatus } from "@/types";
 
 /* ─── File Entry ─── */
 
@@ -64,9 +42,6 @@ function FileEntry({
   onClick: () => void;
   onToggleStage: () => void;
 }) {
-  const colorClass = statusColors[entry.status] ?? "text-muted";
-  const label = statusLabels[entry.status] ?? "?";
-
   return (
     <div
       onClick={(e) => {
@@ -76,8 +51,8 @@ function FileEntry({
       className={cn(
         "flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors select-none border-b border-border",
         isSelected
-          ? "bg-primary text-white"
-          : "hover:bg-black/5 dark:hover:bg-white/10",
+          ? "bg-primary text-primary-foreground"
+          : "hover:bg-accent",
       )}
     >
       <input
@@ -90,14 +65,7 @@ function FileEntry({
         }}
       />
       <span className="text-sm truncate flex-1">{entry.path}</span>
-      <span
-        className={cn(
-          "text-xs font-bold w-4 text-right shrink-0",
-          isSelected ? "text-white" : colorClass,
-        )}
-      >
-        {label}
-      </span>
+      <FileStatusBadge status={entry.status as FileStatus} />
     </div>
   );
 }
@@ -171,9 +139,9 @@ function RepoAccountPicker({
   return (
     <div
       ref={ref}
-      className="absolute right-1 top-full mt-1 w-48 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1"
+      className="absolute right-1 top-full mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50 py-1"
     >
-      <p className="px-3 py-1.5 text-[11px] font-semibold text-muted uppercase tracking-wider">
+      <p className="px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
         Link Account
       </p>
       {accounts.map((account) => (
@@ -187,7 +155,7 @@ function RepoAccountPicker({
             "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors text-left",
             account.id === currentAccountId
               ? "bg-primary/10 text-primary"
-              : "hover:bg-black/5 dark:hover:bg-white/10",
+              : "hover:bg-accent",
           )}
         >
           <AccountAvatar account={account as any} size="xs" />
@@ -205,7 +173,7 @@ function RepoAccountPicker({
               e.stopPropagation();
               onSelect(null);
             }}
-            className="w-full px-3 py-1.5 text-sm text-danger hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-left"
+            className="w-full px-3 py-1.5 text-sm text-danger hover:bg-accent transition-colors text-left"
           >
             Unlink account
           </button>
@@ -270,46 +238,46 @@ function RepoListView({
     <div className="flex flex-col h-full min-w-0 overflow-hidden">
       {/* Filter + Add */}
       <div className="flex items-center gap-2 p-2 min-w-0">
-        <div className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-white dark:bg-black/20 border border-border">
-          <Search className="w-3.5 h-3.5 text-muted shrink-0" />
+        <div className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-card border border-border">
+          <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           <input
             ref={inputRef}
             type="text"
             placeholder="Filter"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="flex-1 min-w-0 text-sm bg-transparent outline-none placeholder:text-muted"
+            className="flex-1 min-w-0 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
           />
         </div>
         <div className="relative shrink-0" ref={addRef}>
           <button
             onClick={() => setAddMenuOpen((v) => !v)}
-            className="flex items-center justify-center w-8 h-8 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            className="flex items-center justify-center w-8 h-8 rounded-md hover:bg-accent transition-colors"
             title="Add repository"
           >
             <Plus className="w-4 h-4" />
           </button>
           {addMenuOpen && (
-            <div className="absolute right-0 top-full mt-1 min-w-48 bg-white dark:bg-zinc-800 border border-border rounded-lg shadow-lg z-50 py-1">
+            <div className="absolute right-0 top-full mt-1 min-w-48 bg-popover border border-border rounded-lg shadow-lg z-50 py-1">
               <button
                 onClick={handleAddLocal}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-left whitespace-nowrap"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
               >
-                <FolderOpen className="w-4 h-4 text-muted shrink-0" />
+                <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" />
                 Add Local Repository...
               </button>
               <button
                 onClick={() => setAddMenuOpen(false)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-left whitespace-nowrap"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
               >
-                <GitFork className="w-4 h-4 text-muted shrink-0" />
+                <GitFork className="w-4 h-4 text-muted-foreground shrink-0" />
                 Clone Repository...
               </button>
               <button
                 onClick={() => setAddMenuOpen(false)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-left whitespace-nowrap"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
               >
-                <FolderPlus className="w-4 h-4 text-muted shrink-0" />
+                <FolderPlus className="w-4 h-4 text-muted-foreground shrink-0" />
                 Create New Repository...
               </button>
             </div>
@@ -320,7 +288,7 @@ function RepoListView({
       {/* Grouped repo list */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-1">
         {groups.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-muted gap-2">
+          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
             <Search className="w-6 h-6 opacity-40" />
             <p className="text-sm">
               {repos.length === 0 ? "No repositories" : "No matches"}
@@ -332,14 +300,14 @@ function RepoListView({
               {/* Group header */}
               <div className="flex items-center gap-2 px-2 py-1.5">
                 {group.label === "Local" ? (
-                  <HardDrive className="w-3.5 h-3.5 text-muted shrink-0" />
+                  <HardDrive className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 ) : (
-                  <Globe className="w-3.5 h-3.5 text-muted shrink-0" />
+                  <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 )}
-                <span className="text-[11px] font-semibold text-muted uppercase tracking-wider flex-1 truncate">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex-1 truncate">
                   {group.label}
                 </span>
-                <span className="text-[11px] text-muted/60 tabular-nums">
+                <span className="text-[11px] text-muted-foreground/60 tabular-nums">
                   {group.repos.length}
                 </span>
               </div>
@@ -358,8 +326,8 @@ function RepoListView({
                         className={cn(
                           "w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-colors min-w-0 rounded-md",
                           isActive
-                            ? "bg-primary text-white"
-                            : "hover:bg-black/5 dark:hover:bg-white/10",
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent",
                         )}
                       >
                         <GitFork className={cn(
@@ -372,11 +340,11 @@ function RepoListView({
                             <div className="flex items-center gap-1 mt-0.5">
                               <GitBranch className={cn(
                                 "w-3 h-3 shrink-0",
-                                isActive ? "text-white/60" : "text-muted",
+                                isActive ? "text-primary-foreground/60" : "text-muted-foreground",
                               )} />
                               <span className={cn(
                                 "text-[11px] truncate",
-                                isActive ? "text-white/60" : "text-muted",
+                                isActive ? "text-primary-foreground/60" : "text-muted-foreground",
                               )}>
                                 {repo.currentBranch}
                               </span>
@@ -387,7 +355,7 @@ function RepoListView({
                           <Circle
                             className={cn(
                               "w-2 h-2 fill-current shrink-0",
-                              isActive ? "text-white/70" : "text-primary",
+                              isActive ? "text-primary-foreground/70" : "text-primary",
                             )}
                           />
                         )}
@@ -417,8 +385,8 @@ function RepoListView({
                             <div className={cn(
                               "w-5 h-5 rounded-full border-2 border-dashed flex items-center justify-center",
                               isActive
-                                ? "border-white/40 text-white/40"
-                                : "border-muted/40 text-muted/40",
+                                ? "border-primary-foreground/40 text-primary-foreground/40"
+                                : "border-muted-foreground/40 text-muted-foreground/40",
                             )}>
                               <Plus className="w-2.5 h-2.5" />
                             </div>
@@ -526,93 +494,89 @@ function ChangesView({
   return (
     <div className="flex flex-col h-full">
       {/* File list */}
-      <div className="flex-1 overflow-y-auto bg-white dark:bg-zinc-900">
+      <div className="flex-1 overflow-y-auto bg-background">
         {statusEntries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted gap-2">
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
             <p className="text-sm">No local changes</p>
           </div>
         ) : (
           <>
-            {/* Staged Changes */}
+            {/* Staged Changes header */}
             {stagedFiles.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border-b border-border">
-                  <input
-                    type="checkbox"
-                    className="w-3.5 h-3.5 shrink-0 cursor-pointer"
-                    checked={true}
-                    onChange={handleUnstageAll}
-                  />
-                  <span className="text-xs font-bold text-foreground flex-1">
-                    Staged Changes
-                  </span>
-                  <span className="text-xs text-muted">{stagedFiles.length}</span>
-                </div>
-                {stagedFiles.map((entry) => (
-                  <FileEntry
-                    key={`${entry.path}-staged`}
-                    entry={entry}
-                    isSelected={selectedFile === entry.path}
-                    onClick={() => onSelectFile(entry.path, entry.staged)}
-                    onToggleStage={async () => {
-                      if (!activeRepoPath) return;
-                      try {
-                        await unstageFiles(activeRepoPath, [entry.path]);
-                        await Promise.all([
-                          queryClient.invalidateQueries({ queryKey: ["status"] }),
-                          queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-                        ]);
-                      } catch (err) {
-                        addToast(`Unstage failed: ${getErrorMessage(err)}`, "error");
-                      }
-                    }}
-                  />
-                ))}
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border-b border-border sticky top-0 z-10">
+                <input
+                  type="checkbox"
+                  className="w-3.5 h-3.5 shrink-0 cursor-pointer"
+                  checked={true}
+                  onChange={handleUnstageAll}
+                />
+                <span className="text-xs font-bold text-foreground flex-1">
+                  Staged Changes
+                </span>
+                <span className="text-xs text-muted-foreground">{stagedFiles.length}</span>
               </div>
             )}
+            {/* Staged file entries */}
+            {stagedFiles.map((entry) => (
+              <FileEntry
+                key={`${entry.path}-staged`}
+                entry={entry}
+                isSelected={selectedFile === entry.path}
+                onClick={() => onSelectFile(entry.path, entry.staged)}
+                onToggleStage={async () => {
+                  if (!activeRepoPath) return;
+                  try {
+                    await unstageFiles(activeRepoPath, [entry.path]);
+                    await Promise.all([
+                      queryClient.invalidateQueries({ queryKey: ["status"] }),
+                      queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+                    ]);
+                  } catch (err) {
+                    addToast(`Unstage failed: ${getErrorMessage(err)}`, "error");
+                  }
+                }}
+              />
+            ))}
 
-            {/* Divider */}
-            {stagedFiles.length > 0 && unstagedFiles.length > 0 && (
-              <div className="border-b-2 border-border" />
-            )}
-
-            {/* Unstaged Changes */}
+            {/* Changes header */}
             {unstagedFiles.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border-b border-border">
-                  <input
-                    type="checkbox"
-                    className="w-3.5 h-3.5 shrink-0 cursor-pointer"
-                    checked={false}
-                    onChange={handleStageAll}
-                  />
-                  <span className="text-xs font-bold text-foreground flex-1">
-                    Changes
-                  </span>
-                  <span className="text-xs text-muted">{unstagedFiles.length}</span>
-                </div>
-                {unstagedFiles.map((entry) => (
-                  <FileEntry
-                    key={`${entry.path}-unstaged`}
-                    entry={entry}
-                    isSelected={selectedFile === entry.path}
-                    onClick={() => onSelectFile(entry.path, entry.staged)}
-                    onToggleStage={async () => {
-                      if (!activeRepoPath) return;
-                      try {
-                        await stageFiles(activeRepoPath, [entry.path]);
-                        await Promise.all([
-                          queryClient.invalidateQueries({ queryKey: ["status"] }),
-                          queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-                        ]);
-                      } catch (err) {
-                        addToast(`Stage failed: ${getErrorMessage(err)}`, "error");
-                      }
-                    }}
-                  />
-                ))}
+              <div className={cn(
+                "flex items-center gap-2 px-3 py-1.5 bg-surface border-b border-border sticky bottom-0 z-10",
+                stagedFiles.length > 0 ? "top-[29px]" : "top-0",
+              )}>
+                <input
+                  type="checkbox"
+                  className="w-3.5 h-3.5 shrink-0 cursor-pointer"
+                  checked={false}
+                  onChange={handleStageAll}
+                />
+                <span className="text-xs font-bold text-foreground flex-1">
+                  Changes
+                </span>
+                <span className="text-xs text-muted-foreground">{unstagedFiles.length}</span>
               </div>
             )}
+            {/* Unstaged file entries */}
+            {unstagedFiles.map((entry) => (
+              <FileEntry
+                key={`${entry.path}-unstaged`}
+                entry={entry}
+                isSelected={selectedFile === entry.path}
+                onClick={() => onSelectFile(entry.path, entry.staged)}
+                onToggleStage={async () => {
+                  if (!activeRepoPath) return;
+                  try {
+                    await stageFiles(activeRepoPath, [entry.path]);
+                    await Promise.all([
+                      queryClient.invalidateQueries({ queryKey: ["status"] }),
+                      queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+                    ]);
+                  } catch (err) {
+                    addToast(`Stage failed: ${getErrorMessage(err)}`, "error");
+                  }
+                }}
+              />
+            ))}
           </>
         )}
       </div>
@@ -626,7 +590,7 @@ function ChangesView({
           onChange={(e) => setCommitSummary(e.target.value)}
           className={cn(
             "w-full px-3 py-2 text-sm rounded-md border border-border",
-            "bg-white dark:bg-black/20 outline-none",
+            "bg-card outline-none",
             "focus:border-primary transition-colors",
           )}
         />
@@ -637,7 +601,7 @@ function ChangesView({
           onChange={(e) => setCommitDescription(e.target.value)}
           className={cn(
             "w-full px-3 py-2 text-sm rounded-md border border-border",
-            "bg-white dark:bg-black/20 outline-none resize-none",
+            "bg-card outline-none resize-none",
             "focus:border-primary transition-colors",
           )}
         />
@@ -654,7 +618,7 @@ function ChangesView({
                 {activeAccount.username[0]?.toUpperCase() ?? "?"}
               </div>
             )}
-            <span className="text-[11px] text-muted truncate">
+            <span className="text-[11px] text-muted-foreground truncate">
               {activeAccount.username}
               {activeAccount.email ? ` <${activeAccount.email}>` : ""}
             </span>
@@ -664,7 +628,7 @@ function ChangesView({
           onClick={handleCommit}
           className={cn(
             "w-full py-2 rounded-md text-sm font-medium",
-            "bg-primary text-white hover:bg-primary-hover transition-colors",
+            "bg-primary text-primary-foreground hover:bg-primary-hover transition-colors",
             (stagedFiles.length === 0 || !commitSummary.trim() || isCommitting) &&
               "opacity-50 cursor-not-allowed",
           )}
@@ -703,7 +667,7 @@ function HistoryView({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-muted">
+      <div className="flex items-center justify-center h-full text-muted-foreground">
         <p className="text-sm">Loading history...</p>
       </div>
     );
@@ -711,14 +675,14 @@ function HistoryView({
 
   if (commits.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-muted">
+      <div className="flex items-center justify-center h-full text-muted-foreground">
         <p className="text-sm">No commits yet</p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white dark:bg-zinc-900">
+    <div className="flex-1 overflow-y-auto bg-background">
       {commits.map((commit: CommitInfo, index: number) => {
         const isActive = selectedCommitId === commit.id;
         const isUnpushed = index < ahead;
@@ -738,8 +702,8 @@ function HistoryView({
               "flex items-start gap-3 px-3 py-2.5 border-b border-border cursor-pointer transition-colors select-none",
               "focus:outline-none",
               isActive
-                ? "bg-primary text-white"
-                : "hover:bg-black/5 dark:hover:bg-white/5",
+                ? "bg-primary text-primary-foreground"
+                : "hover:bg-accent",
             )}
           >
             <div className="flex-1 min-w-0">
@@ -763,7 +727,7 @@ function HistoryView({
                         "w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0",
                         "text-[8px] font-bold",
                         isActive
-                          ? "bg-white/20 text-white"
+                          ? "bg-primary-foreground/20 text-primary-foreground"
                           : "bg-primary/10 text-primary",
                       )}
                     >
@@ -771,13 +735,13 @@ function HistoryView({
                     </div>
                   );
                 })()}
-                <span className={cn("text-[11px] truncate", isActive ? "text-white/70" : "text-muted")}>
+                <span className={cn("text-[11px] truncate", isActive ? "text-primary-foreground/70" : "text-muted-foreground")}>
                   {commit.author.name}
                 </span>
-                <span className={cn("text-[11px] shrink-0 leading-none", isActive ? "text-white/50" : "text-zinc-400 dark:text-zinc-500")}>
+                <span className={cn("text-[11px] shrink-0 leading-none", isActive ? "text-primary-foreground/50" : "text-muted-foreground")}>
                   •
                 </span>
-                <span className={cn("text-[11px] shrink-0", isActive ? "text-white/70" : "text-muted")}>
+                <span className={cn("text-[11px] shrink-0", isActive ? "text-primary-foreground/70" : "text-muted-foreground")}>
                   {formatRelativeTime(commit.timestamp)}
                 </span>
               </div>
@@ -787,7 +751,7 @@ function HistoryView({
                 className={cn(
                   "shrink-0 self-center flex items-center justify-center w-5 h-5 rounded-full",
                   isActive
-                    ? "bg-white/20"
+                    ? "bg-primary-foreground/20"
                     : "bg-primary/10",
                 )}
               >
@@ -795,7 +759,7 @@ function HistoryView({
                   strokeWidth={3}
                   className={cn(
                     "w-3 h-3",
-                    isActive ? "text-white" : "text-primary",
+                    isActive ? "text-primary-foreground" : "text-primary",
                   )}
                 />
               </div>
@@ -872,12 +836,12 @@ export function Sidebar({
       {/* Repo header — toggles repo list */}
       <button
         onClick={() => setRepoListOpen(!repoListOpen)}
-        className="flex items-center gap-2 px-4 h-[52px] shrink-0 border-b border-border hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-left"
+        className="flex items-center gap-2 px-4 h-[52px] shrink-0 border-b border-border hover:bg-accent transition-colors text-left"
         data-tauri-drag-region
       >
         <GitFork className="w-4 h-4 shrink-0 opacity-50" />
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] text-muted leading-tight">Current Repository</p>
+          <p className="text-[11px] text-muted-foreground leading-tight">Current Repository</p>
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-semibold truncate">
               {activeRepo?.name ?? "Select a repository"}
@@ -888,9 +852,9 @@ export function Sidebar({
           </div>
         </div>
         {repoListOpen ? (
-          <ChevronUp className="w-4 h-4 text-muted shrink-0" />
+          <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+          <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
         )}
       </button>
 
@@ -910,7 +874,7 @@ export function Sidebar({
                   "flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors",
                   activeTab === tab
                     ? "text-foreground border-b-2 border-primary"
-                    : "text-muted hover:text-foreground",
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <span>{tab === "changes" ? "Changes" : "History"}</span>

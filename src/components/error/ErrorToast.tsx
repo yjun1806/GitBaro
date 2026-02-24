@@ -9,27 +9,27 @@ const toastConfig: Record<
 > = {
   error: {
     icon: <AlertCircle className="w-4 h-4 shrink-0" />,
-    bg: "bg-red-50 dark:bg-red-950",
-    border: "border-red-200 dark:border-red-800",
-    text: "text-red-700 dark:text-red-300",
+    bg: "bg-destructive/5",
+    border: "border-destructive/30",
+    text: "text-destructive",
   },
   warning: {
     icon: <AlertTriangle className="w-4 h-4 shrink-0" />,
-    bg: "bg-amber-50 dark:bg-amber-950",
-    border: "border-amber-200 dark:border-amber-800",
-    text: "text-amber-700 dark:text-amber-300",
+    bg: "bg-warning/5",
+    border: "border-warning/30",
+    text: "text-warning",
   },
   info: {
     icon: <Info className="w-4 h-4 shrink-0" />,
-    bg: "bg-blue-50 dark:bg-blue-950",
-    border: "border-blue-200 dark:border-blue-800",
-    text: "text-blue-700 dark:text-blue-300",
+    bg: "bg-info/5",
+    border: "border-info/30",
+    text: "text-info",
   },
   success: {
     icon: <CheckCircle className="w-4 h-4 shrink-0" />,
-    bg: "bg-green-50 dark:bg-green-950",
-    border: "border-green-200 dark:border-green-800",
-    text: "text-green-700 dark:text-green-300",
+    bg: "bg-success/5",
+    border: "border-success/30",
+    text: "text-success",
   },
 };
 

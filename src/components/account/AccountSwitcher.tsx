@@ -40,30 +40,30 @@ export function AccountSwitcher({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent transition-colors"
       >
         {currentAccount ? (
           <>
             <AccountAvatar account={currentAccount} size="sm" isActive />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            <span className="text-sm font-medium text-foreground">
               {currentAccount.username}
             </span>
           </>
         ) : (
-          <span className="text-sm text-gray-500 dark:text-gray-400">
+          <span className="text-sm text-muted-foreground">
             {t("account.switch")}
           </span>
         )}
         {accounts.length > 1 && (
-          <span className="ml-0.5 flex items-center justify-center w-4 h-4 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+          <span className="ml-0.5 flex items-center justify-center w-4 h-4 text-xs rounded-full bg-muted text-muted-foreground">
             {accounts.length}
           </span>
         )}
-        <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1">
+        <div className="absolute right-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50 py-1">
           {accounts.map((account) => (
             <button
               key={account.id}
@@ -71,28 +71,28 @@ export function AccountSwitcher({
                 onSwitch(account.id);
                 setOpen(false);
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent transition-colors"
             >
               <AccountAvatar account={account} size="sm" />
-              <span className="flex-1 text-sm text-left text-gray-700 dark:text-gray-200">
+              <span className="flex-1 text-sm text-left text-foreground">
                 {account.username}
               </span>
               {account.id === currentAccountId && (
-                <Check className="w-4 h-4 text-blue-500" />
+                <Check className="w-4 h-4 text-primary" />
               )}
             </button>
           ))}
 
-          <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
+          <div className="my-1 border-t border-border" />
 
           <button
             onClick={() => {
               onAddAccount();
               setOpen(false);
             }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm text-gray-700 dark:text-gray-200"
+            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent transition-colors text-sm text-foreground"
           >
-            <Plus className="w-4 h-4 text-gray-400" />
+            <Plus className="w-4 h-4 text-muted-foreground" />
             {t("account.add")}
           </button>
 
@@ -103,11 +103,11 @@ export function AccountSwitcher({
             }}
             className={clsx(
               "w-full flex items-center gap-2.5 px-3 py-2",
-              "hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors",
-              "text-sm text-gray-700 dark:text-gray-200"
+              "hover:bg-accent transition-colors",
+              "text-sm text-foreground"
             )}
           >
-            <Settings className="w-4 h-4 text-gray-400" />
+            <Settings className="w-4 h-4 text-muted-foreground" />
             {t("account.manage")}
           </button>
         </div>

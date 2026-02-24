@@ -35,22 +35,22 @@ export function CloneDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg">
+      <div className="bg-card rounded-xl shadow-2xl w-full max-w-lg">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">
             {t("repo.clone")}
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors"
+            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700 px-6">
+        <div className="flex border-b border-border px-6">
           {(["github", "url"] as Tab[]).map((t_) => (
             <button
               key={t_}
@@ -58,8 +58,8 @@ export function CloneDialog({
               className={clsx(
                 "px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors",
                 tab === t_
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
               {t_ === "github" ? "GitHub.com" : "URL"}
@@ -72,13 +72,13 @@ export function CloneDialog({
             <>
               {/* Account selector */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                <label className="text-xs font-medium text-muted-foreground">
                   Account
                 </label>
                 <select
                   value={selectedAccountId ?? ""}
                   onChange={(e) => onAccountChange(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">Select account...</option>
                   {accounts.map((a) => (
@@ -91,17 +91,17 @@ export function CloneDialog({
 
               {/* Repo search */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                <label className="text-xs font-medium text-muted-foreground">
                   Repository
                 </label>
-                <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg">
-                  <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                <div className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg">
+                  <Search className="w-4 h-4 text-muted-foreground shrink-0" />
                   <input
                     type="text"
                     value={repoSearch}
                     onChange={(e) => setRepoSearch(e.target.value)}
                     placeholder="Search repositories..."
-                    className="flex-1 text-sm bg-transparent text-gray-700 dark:text-gray-200 placeholder-gray-400 outline-none"
+                    className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
                   />
                 </div>
               </div>
@@ -110,7 +110,7 @@ export function CloneDialog({
 
           {tab === "url" && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+              <label className="text-xs font-medium text-muted-foreground">
                 Repository URL
               </label>
               <input
@@ -118,14 +118,14 @@ export function CloneDialog({
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://github.com/owner/repo.git"
-                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 placeholder-gray-400 outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
           )}
 
           {/* Local path */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            <label className="text-xs font-medium text-muted-foreground">
               Local Path
             </label>
             <div className="flex gap-2">
@@ -134,9 +134,9 @@ export function CloneDialog({
                 value={localPath}
                 onChange={(e) => setLocalPath(e.target.value)}
                 placeholder="~/Projects/..."
-                className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 placeholder-gray-400 outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring"
               />
-              <button className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors">
+              <button className="flex items-center gap-1.5 px-3 py-2 text-sm border border-border rounded-lg hover:bg-accent text-muted-foreground transition-colors">
                 <FolderOpen className="w-4 h-4" />
                 Browse
               </button>
@@ -145,16 +145,16 @@ export function CloneDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleClone}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg transition-colors"
           >
             <Download className="w-4 h-4" />
             Clone

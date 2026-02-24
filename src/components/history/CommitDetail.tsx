@@ -30,15 +30,15 @@ export function CommitDetail({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Commit metadata */}
-      <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex flex-col gap-3">
+      <div className="px-5 py-4 border-b border-border flex flex-col gap-3">
         <div className="flex items-start gap-2">
-          <GitCommit className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+          <GitCommit className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-snug">
+            <p className="text-sm font-semibold text-foreground leading-snug">
               {commit.summary}
             </p>
             {commit.message !== commit.summary && (
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap">
+              <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">
                 {commit.message.slice(commit.summary.length).trim()}
               </p>
             )}
@@ -70,8 +70,8 @@ export function CommitDetail({
       {/* Changed files */}
       <div className="flex h-0 flex-1">
         {/* File list */}
-        <div className="w-52 shrink-0 border-r border-gray-200 dark:border-gray-800 overflow-y-auto">
-          <p className="px-3 py-1.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800">
+        <div className="w-52 shrink-0 border-r border-border overflow-y-auto">
+          <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-b border-border">
             Changed Files ({changedFiles.length})
           </p>
           {changedFiles.map((f) => (
@@ -80,8 +80,8 @@ export function CommitDetail({
               onClick={() => handleFileClick(f.path)}
               className={`w-full px-3 py-1.5 text-xs text-left truncate transition-colors ${
                 selectedPath === f.path
-                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  ? "bg-primary/10 text-primary"
+                  : "text-foreground hover:bg-accent"
               }`}
             >
               {f.path}
@@ -112,9 +112,9 @@ interface MetaRowProps {
 function MetaRow({ icon, label, children }: MetaRowProps) {
   return (
     <div className="flex items-start gap-2">
-      <span className="text-gray-400 mt-0.5 shrink-0">{icon}</span>
-      <span className="text-xs text-gray-400 w-12 shrink-0">{label}</span>
-      <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 min-w-0 break-all">
+      <span className="text-muted-foreground mt-0.5 shrink-0">{icon}</span>
+      <span className="text-xs text-muted-foreground w-12 shrink-0">{label}</span>
+      <span className="text-xs text-foreground flex-1 min-w-0 break-all">
         {children}
       </span>
     </div>

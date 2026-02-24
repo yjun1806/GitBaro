@@ -33,16 +33,16 @@ export function BranchList({ branches, currentBranch, onDelete }: BranchListProp
           className={clsx(
             "relative flex items-center gap-2 px-3 py-2 rounded-lg",
             branch.name === currentBranch
-              ? "bg-blue-50 dark:bg-blue-900/30"
-              : "hover:bg-gray-50 dark:hover:bg-gray-800"
+              ? "bg-primary/10"
+              : "hover:bg-accent"
           )}
         >
           <GitBranch
             className={clsx(
               "w-4 h-4 shrink-0",
               branch.name === currentBranch
-                ? "text-blue-500"
-                : "text-gray-400"
+                ? "text-primary"
+                : "text-muted-foreground"
             )}
           />
           <div className="flex-1 min-w-0">
@@ -50,27 +50,27 @@ export function BranchList({ branches, currentBranch, onDelete }: BranchListProp
               className={clsx(
                 "text-sm font-medium truncate",
                 branch.name === currentBranch
-                  ? "text-blue-700 dark:text-blue-300"
-                  : "text-gray-700 dark:text-gray-200"
+                  ? "text-primary"
+                  : "text-foreground"
               )}
             >
               {branch.name}
               {branch.isHead && (
-                <span className="ml-2 text-xs text-blue-500 dark:text-blue-400">HEAD</span>
+                <span className="ml-2 text-xs text-primary">HEAD</span>
               )}
             </p>
             {branch.upstream && (
-              <p className="text-xs text-gray-400 truncate">{branch.upstream}</p>
+              <p className="text-xs text-muted-foreground truncate">{branch.upstream}</p>
             )}
           </div>
 
           {branch.aheadBehind && (
             <div className="flex items-center gap-1 text-xs">
               {branch.aheadBehind.ahead > 0 && (
-                <span className="text-green-600 dark:text-green-400">↑{branch.aheadBehind.ahead}</span>
+                <span className="text-success">↑{branch.aheadBehind.ahead}</span>
               )}
               {branch.aheadBehind.behind > 0 && (
-                <span className="text-red-500">↓{branch.aheadBehind.behind}</span>
+                <span className="text-destructive">↓{branch.aheadBehind.behind}</span>
               )}
             </div>
           )}
@@ -78,7 +78,7 @@ export function BranchList({ branches, currentBranch, onDelete }: BranchListProp
           {branch.name !== currentBranch && (
             <button
               onClick={() => handleDeleteClick(branch)}
-              className="p-1 rounded text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
               title={t("branch.delete")}
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -87,20 +87,20 @@ export function BranchList({ branches, currentBranch, onDelete }: BranchListProp
 
           {/* Inline confirm */}
           {confirmDelete === branch.name && (
-            <div className="absolute inset-x-0 bottom-full mb-1 mx-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 z-10">
-              <p className="text-sm text-gray-700 dark:text-gray-200 mb-2">
+            <div className="absolute inset-x-0 bottom-full mb-1 mx-2 bg-card border border-border rounded-lg shadow-lg p-3 z-10">
+              <p className="text-sm text-foreground mb-2">
                 {t("branch.deleteConfirm", { name: branch.name })}
               </p>
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={() => setConfirmDelete(null)}
-                  className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                  className="px-3 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => handleConfirm(branch)}
-                  className="px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                  className="px-3 py-1 text-xs bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded transition-colors"
                 >
                   Delete
                 </button>

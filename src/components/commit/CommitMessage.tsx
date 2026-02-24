@@ -27,10 +27,10 @@ export function CommitMessage({ value, onChange, placeholder }: CommitMessagePro
         className={clsx(
           "flex items-center border rounded-lg px-3 py-2 transition-colors",
           isError
-            ? "border-red-400 dark:border-red-500 focus-within:ring-2 focus-within:ring-red-300"
+            ? "border-destructive focus-within:ring-2 focus-within:ring-destructive/30"
             : isWarning
-            ? "border-amber-400 dark:border-amber-500 focus-within:ring-2 focus-within:ring-amber-300"
-            : "border-gray-200 dark:border-gray-700 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500"
+            ? "border-warning focus-within:ring-2 focus-within:ring-warning/30"
+            : "border-border focus-within:ring-2 focus-within:ring-ring focus-within:border-primary"
         )}
       >
         <input
@@ -39,23 +39,23 @@ export function CommitMessage({ value, onChange, placeholder }: CommitMessagePro
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder ?? "Summary (required)"}
-          className="flex-1 text-sm bg-transparent text-gray-800 dark:text-gray-100 placeholder-gray-400 outline-none"
+          className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
         />
         <span
           className={clsx(
             "ml-2 text-xs tabular-nums shrink-0",
             isError
-              ? "text-red-500"
+              ? "text-destructive"
               : isWarning
               ? "text-amber-500"
-              : "text-gray-400"
+              : "text-muted-foreground"
           )}
         >
           {count}/{ERROR_AT}
         </span>
       </div>
       {isError && (
-        <p className="text-xs text-red-500">
+        <p className="text-xs text-destructive">
           Subject line exceeds {ERROR_AT} characters — consider shortening it.
         </p>
       )}

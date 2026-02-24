@@ -14,7 +14,7 @@ export function StatusBar({ lastFetchTime = null, isOnline = true }: StatusBarPr
   return (
     <div
       className={cn(
-        "flex items-center gap-4 px-3 h-6 text-xs text-muted",
+        "flex items-center gap-4 px-3 h-6 text-xs text-muted-foreground",
         "border-t border-border bg-surface select-none",
       )}
     >

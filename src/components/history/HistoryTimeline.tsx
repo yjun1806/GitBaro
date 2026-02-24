@@ -34,7 +34,7 @@ export function HistoryTimeline({
 
   if (commits.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
+      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
         {t("history.noCommits")}
       </div>
     );
@@ -47,14 +47,14 @@ export function HistoryTimeline({
           key={commit.id}
           onClick={() => onSelectCommit(commit)}
           className={clsx(
-            "flex items-start gap-3 px-4 py-3 text-left transition-colors border-b border-gray-100 dark:border-gray-800",
+            "flex items-start gap-3 px-4 py-3 text-left transition-colors border-b border-border",
             commit.id === selectedOid
-              ? "bg-blue-50 dark:bg-blue-900/30"
-              : "hover:bg-gray-50 dark:hover:bg-gray-800"
+              ? "bg-primary/10"
+              : "hover:bg-accent"
           )}
         >
           {/* Avatar */}
-          <div className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium text-gray-600 dark:text-gray-300 shrink-0 mt-0.5">
+          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground shrink-0 mt-0.5">
             {getInitials(commit.author.name)}
           </div>
 
@@ -64,25 +64,25 @@ export function HistoryTimeline({
               className={clsx(
                 "text-sm font-medium truncate",
                 commit.id === selectedOid
-                  ? "text-blue-700 dark:text-blue-300"
-                  : "text-gray-800 dark:text-gray-100"
+                  ? "text-primary"
+                  : "text-foreground"
               )}
             >
               {commit.summary}
             </p>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+              <span className="text-xs text-muted-foreground truncate">
                 {commit.author.name}
               </span>
-              <span className="text-xs text-gray-300 dark:text-gray-600">·</span>
-              <span className="text-xs text-gray-400 shrink-0">
+              <span className="text-xs text-muted-foreground/50">·</span>
+              <span className="text-xs text-muted-foreground shrink-0">
                 {formatRelativeTime(commit.timestamp)}
               </span>
             </div>
           </div>
 
           {/* Short hash */}
-          <span className="text-xs font-mono text-gray-300 dark:text-gray-600 shrink-0 mt-1">
+          <span className="text-xs font-mono text-muted-foreground/50 shrink-0 mt-1">
             {commit.shortId}
           </span>
         </button>

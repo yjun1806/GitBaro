@@ -38,10 +38,10 @@ class ErrorBoundary extends Component<
       return (
         <div className="flex flex-col items-center justify-center h-screen gap-4 p-8 text-center">
           <p className="text-lg font-semibold text-danger">Something went wrong</p>
-          <p className="text-sm text-muted max-w-md">{this.state.message}</p>
+          <p className="text-sm text-muted-foreground max-w-md">{this.state.message}</p>
           <button
             onClick={() => this.setState({ hasError: false, message: "" })}
-            className="px-4 py-2 rounded-md bg-primary text-white text-sm hover:bg-primary-hover transition-colors"
+            className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary-hover transition-colors"
           >
             Try again
           </button>
@@ -141,7 +141,7 @@ function AppContent() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-pulse text-muted text-sm">Loading...</div>
+        <div className="animate-pulse text-muted-foreground text-sm">Loading...</div>
       </div>
     );
   }
