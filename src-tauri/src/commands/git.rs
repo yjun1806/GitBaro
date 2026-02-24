@@ -150,11 +150,6 @@ pub async fn create_commit(
         cache.iter().find(|a| a["id"].as_str() == Some(id.as_str())).map(|a| {
             let name = a["username"].as_str().unwrap_or("Unknown").to_string();
             let email = a["email"].as_str().unwrap_or("").to_string();
-            let email = if email.is_empty() {
-                format!("{}@users.noreply.github.com", name)
-            } else {
-                email
-            };
             (name, email)
         })
     } else {

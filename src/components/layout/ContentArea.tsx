@@ -9,6 +9,7 @@ import {
   ArrowUp,
   ArrowDown,
   Check,
+  Loader2,
 } from "lucide-react";
 import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
@@ -227,7 +228,8 @@ function RightPanelHeader() {
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncingAction, setSyncingAction] = useState<"fetch" | "push" | "pull" | null>(null);
+  const isSyncing = syncingAction !== null;
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
 
   const { data: tokenStatus, isLoading: isValidating } = useTokenValidation(activeAccountId, activeRepoPath);
@@ -287,12 +289,13 @@ function RightPanelHeader() {
 
   const handleSync = async () => {
     if (!activeRepoPath || !activeAccountId || isSyncing) return;
-    setIsSyncing(true);
+    const action = behind > 0 ? "pull" : ahead > 0 ? "push" : "fetch";
+    setSyncingAction(action);
     try {
-      if (behind > 0) {
+      if (action === "pull") {
         await gitPull(activeRepoPath, activeAccountId);
         addToast("Pull completed successfully", "success");
-      } else if (ahead > 0) {
+      } else if (action === "push") {
         await gitPush(activeRepoPath, activeAccountId);
         addToast("Push completed successfully", "success");
       } else {
@@ -310,13 +313,13 @@ function RightPanelHeader() {
       const action = behind > 0 ? "Pull" : ahead > 0 ? "Push" : "Fetch";
       addToast(`${action} failed: ${getErrorMessage(err)}`, "error");
     } finally {
-      setIsSyncing(false);
+      setSyncingAction(null);
     }
   };
 
   const handleFetch = async () => {
     if (!activeRepoPath || !activeAccountId || isSyncing) return;
-    setIsSyncing(true);
+    setSyncingAction("fetch");
     try {
       await gitFetch(activeRepoPath, activeAccountId);
       setLastFetchedAt(Math.floor(Date.now() / 1000));
@@ -330,7 +333,7 @@ function RightPanelHeader() {
     } catch (err) {
       addToast(`Fetch failed: ${getErrorMessage(err)}`, "error");
     } finally {
-      setIsSyncing(false);
+      setSyncingAction(null);
     }
   };
 
@@ -374,25 +377,33 @@ function RightPanelHeader() {
       <div className="shrink-0 flex items-center border-l border-border">
         {/* Main sync button */}
         <button
-          onClick={handleSync}
-          disabled={syncDisabled}
-          title={syncError ? `${syncError.title}: ${syncError.description}` : undefined}
-          className="flex items-center gap-2.5 px-6 h-[52px] min-w-[180px] hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {behind > 0 ? (
-            <ArrowDown className={cn("w-4 h-4 shrink-0", isSyncing && "animate-pulse")} />
-          ) : ahead > 0 ? (
-            <ArrowUp className={cn("w-4 h-4 shrink-0", isSyncing && "animate-pulse")} />
-          ) : (
-            <RefreshCw className={cn("w-4 h-4 shrink-0", isSyncing && "animate-spin")} />
+          onClick={syncError ? () => addToast(`${syncError.title}: ${syncError.description}`, "error") : handleSync}
+          disabled={!syncError && syncDisabled}
+          className={cn(
+            "relative flex items-center gap-2.5 px-5 h-[52px] w-[220px] shrink-0 transition-colors",
+            syncError
+              ? "cursor-pointer hover:bg-black/5 dark:hover:bg-white/10"
+              : "hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed",
           )}
-          <div className="min-w-0">
-            <p className="text-sm font-semibold whitespace-nowrap">
+        >
+          {isSyncing ? (
+            <Loader2 className="w-4 h-4 shrink-0 animate-spin text-primary" />
+          ) : syncError ? (
+            <RefreshCw className="w-4 h-4 shrink-0 text-danger" />
+          ) : behind > 0 ? (
+            <ArrowDown className="w-4 h-4 shrink-0" />
+          ) : ahead > 0 ? (
+            <ArrowUp className="w-4 h-4 shrink-0" />
+          ) : (
+            <RefreshCw className="w-4 h-4 shrink-0" />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold whitespace-nowrap truncate">
               {syncError
                 ? syncError.title
                 : behind > 0 ? "Pull origin" : ahead > 0 ? "Push origin" : "Fetch origin"}
             </p>
-            <p className="text-[11px] text-muted leading-tight whitespace-nowrap">
+            <p className="text-[11px] text-muted leading-tight whitespace-nowrap truncate">
               {syncError
                 ? syncError.description
                 : lastFetchedAt
@@ -401,49 +412,45 @@ function RightPanelHeader() {
             </p>
           </div>
           {(ahead > 0 || behind > 0) && (
-            <span className="flex items-center gap-0.5 bg-zinc-500/20 dark:bg-zinc-500/30 text-xs font-medium rounded-full px-2 py-0.5 leading-none">
+            <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-medium rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
               {behind > 0 ? behind : ahead}
-              {behind > 0 ? (
-                <ArrowDown className="w-3 h-3" />
-              ) : (
-                <ArrowUp className="w-3 h-3" />
-              )}
             </span>
           )}
         </button>
 
-        {/* Fetch dropdown toggle — only show when Push/Pull is active */}
-        {(ahead > 0 || behind > 0) && (
-          <div className="relative border-l border-border">
-            <button
-              onClick={() => {
-                setFetchDropdownOpen((v) => !v);
-                setBranchDropdownOpen(false);
-                setAccountDropdownOpen(false);
-              }}
-              disabled={syncDisabled}
-              className="flex items-center justify-center w-10 h-[52px] hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-50"
-            >
-              <ChevronDown className="w-3.5 h-3.5 text-muted" />
-            </button>
-            {fetchDropdownOpen && (
-              <FetchDropdown
-                onFetch={handleFetch}
-                onClose={() => setFetchDropdownOpen(false)}
-              />
-            )}
-          </div>
-        )}
+        {/* Fetch dropdown toggle — always rendered for layout stability */}
+        <div className={cn(
+          "relative border-l border-border",
+          !(ahead > 0 || behind > 0) && "invisible",
+        )}>
+          <button
+            onClick={() => {
+              setFetchDropdownOpen((v) => !v);
+              setBranchDropdownOpen(false);
+              setAccountDropdownOpen(false);
+            }}
+            disabled={syncDisabled}
+            className="flex items-center justify-center w-10 h-[52px] hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-50"
+          >
+            <ChevronDown className="w-3.5 h-3.5 text-muted" />
+          </button>
+          {fetchDropdownOpen && (
+            <FetchDropdown
+              onFetch={handleFetch}
+              onClose={() => setFetchDropdownOpen(false)}
+            />
+          )}
+        </div>
       </div>
 
       {/* Account */}
-      <div className="relative shrink-0 border-l border-border">
+      <div className="relative shrink-0 border-l border-border min-w-[100px] max-w-[160px]">
         <button
           onClick={() => {
             setAccountDropdownOpen((v) => !v);
             setBranchDropdownOpen(false);
           }}
-          className="flex flex-col justify-center px-4 py-1.5 h-[52px] hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+          className="flex flex-col justify-center px-4 py-1.5 h-[52px] w-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
         >
           <span className="text-[11px] text-muted leading-tight">Current Account</span>
           <div className="flex items-center gap-1.5 min-w-0">

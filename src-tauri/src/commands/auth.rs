@@ -125,6 +125,11 @@ async fn get_accounts_internal(
             Some(info) => (info.email, info.avatar_url),
             None => (String::new(), String::new()),
         };
+        let email = if email.is_empty() {
+            format!("{}@users.noreply.github.com", gh_acc.username)
+        } else {
+            email
+        };
 
         accounts.push(json!({
             "id": gh_acc.username,

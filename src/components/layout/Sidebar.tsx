@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   ChevronDown,
   ChevronUp,
-  Lock,
   Search,
   FolderOpen,
   GitFork,
@@ -363,7 +362,7 @@ function RepoListView({
                             : "hover:bg-black/5 dark:hover:bg-white/10",
                         )}
                       >
-                        <Lock className={cn(
+                        <GitFork className={cn(
                           "w-4 h-4 shrink-0",
                           isActive ? "opacity-70" : "opacity-40",
                         )} />
@@ -876,7 +875,7 @@ export function Sidebar({
         className="flex items-center gap-2 px-4 h-[52px] shrink-0 border-b border-border hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-left"
         data-tauri-drag-region
       >
-        <Lock className="w-4 h-4 shrink-0 opacity-50" />
+        <GitFork className="w-4 h-4 shrink-0 opacity-50" />
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-muted leading-tight">Current Repository</p>
           <div className="flex items-center gap-1.5">
