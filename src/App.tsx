@@ -5,7 +5,8 @@ import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { applyTheme, watchSystemTheme } from "@/lib/theme";
-import { addLocalRepository, getAccounts, getSettings, openRepository } from "@/api/commands";
+import { addLocalRepository, cloneRepository, getAccounts, getSettings, openRepository } from "@/api/commands";
+import { CloneDialog } from "@/components/repository/CloneDialog";
 import i18n from "@/i18n/config";
 import { getErrorMessage } from "@/lib/utils";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -66,8 +67,10 @@ function AppContent() {
   const setActiveRepo = useRepositoryStore((s) => s.setActiveRepo);
   const theme = useUIStore((s) => s.theme);
 
+  const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const addToast = useToastStore((s) => s.addToast);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
+  const [showCloneDialog, setShowCloneDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Reusable: load accounts from gh CLI and update store
@@ -138,6 +141,18 @@ function AppContent() {
     refreshAccounts();
   }, [refreshAccounts]);
 
+  const handleClone = useCallback(async (params: { url: string; localPath: string; accountId: string | null }) => {
+    const repoInfo = await cloneRepository(params.url, params.localPath, params.accountId ?? undefined);
+    const repoWithAccount = params.accountId ? { ...repoInfo, accountId: params.accountId } : repoInfo;
+    addRepo(repoWithAccount);
+    setActiveRepo(repoInfo.path);
+    if (params.accountId) {
+      setActiveAccount(params.accountId);
+    }
+    setShowCloneDialog(false);
+    addToast(t("clone.success"), "success");
+  }, [addRepo, setActiveRepo, setActiveAccount, addToast, t]);
+
   const handleOpenLocal = useCallback(async () => {
     try {
       const selected = await open({ directory: true, multiple: false });
@@ -166,11 +181,9 @@ function AppContent() {
     <>
       {showWelcome ? (
         <WelcomeScreen
-          isSignedIn={false}
+          isSignedIn={accounts.length > 0}
           onSignIn={handleSignIn}
-          onClone={() => {
-            // Clone requires auth first — disabled in UI
-          }}
+          onClone={() => setShowCloneDialog(true)}
           onOpenLocal={handleOpenLocal}
         />
       ) : (
@@ -181,6 +194,15 @@ function AppContent() {
         <GhLoginDialog
           onClose={() => setShowLoginDialog(false)}
           onSuccess={handleLoginSuccess}
+        />
+      )}
+      {showCloneDialog && (
+        <CloneDialog
+          accounts={accounts}
+          selectedAccountId={activeAccountId}
+          onAccountChange={setActiveAccount}
+          onClone={handleClone}
+          onClose={() => setShowCloneDialog(false)}
         />
       )}
     </>

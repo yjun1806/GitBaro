@@ -85,7 +85,12 @@
     "repositoryUrl": "저장소 URL",
     "localPath": "로컬 경로",
     "searchRepos": "저장소 검색...",
-    "clone": "Clone"
+    "clone": "Clone",
+    "cloning": "Clone 중...",
+    "success": "저장소 Clone 완료",
+    "searching": "검색 중...",
+    "noResults": "저장소를 찾을 수 없습니다",
+    "selectRepo": "저장소를 선택하세요"
   },
   "account": {
     "switch": "계정 전환",

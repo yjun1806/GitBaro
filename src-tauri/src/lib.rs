@@ -33,6 +33,7 @@ pub fn run() {
             commands::repo::get_open_repos,
             commands::repo::close_repository,
             commands::repo::add_local_repository,
+            commands::repo::search_github_repos,
             commands::repo::get_repo_visibility,
             commands::repo::get_owner_type,
             commands::branch::get_branches,

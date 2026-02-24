@@ -3,6 +3,7 @@ import { X, Users, Palette, Code, Terminal, Check, Loader2 } from "lucide-react"
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import type { AppSettings, GitHubAccount, EditorInfo } from "@/types";
+import { Select } from "@/components/ui/Select";
 import { detectInstalledEditors } from "@/api/commands";
 import { ThemeSelector } from "./ThemeSelector";
 import { AccountSettings } from "./AccountSettings";
@@ -127,16 +128,15 @@ export function SettingsPanel({
                   <label className="text-xs font-medium text-muted-foreground">
                     {t("settings.language")}
                   </label>
-                  <select
+                  <Select
                     value={settings.language}
-                    onChange={(e) =>
-                      onUpdateSettings({ language: e.target.value })
-                    }
-                    className="w-full max-w-xs px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="en">English</option>
-                    <option value="ko">한국어</option>
-                  </select>
+                    options={[
+                      { value: "en", label: "English" },
+                      { value: "ko", label: "한국어" },
+                    ]}
+                    onChange={(val) => onUpdateSettings({ language: val })}
+                    className="max-w-xs"
+                  />
                 </div>
               </div>
             )}

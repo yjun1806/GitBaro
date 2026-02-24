@@ -85,7 +85,12 @@
     "repositoryUrl": "Repository URL",
     "localPath": "Local Path",
     "searchRepos": "Search repositories...",
-    "clone": "Clone"
+    "clone": "Clone",
+    "cloning": "Cloning...",
+    "success": "Repository cloned successfully",
+    "searching": "Searching...",
+    "noResults": "No repositories found",
+    "selectRepo": "Select a repository"
   },
   "account": {
     "switch": "Switch Account",

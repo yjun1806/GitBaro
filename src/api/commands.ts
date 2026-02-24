@@ -106,6 +106,22 @@ export async function cloneRepository(
   return invoke("clone_repository", { url, path, accountId: accountId ?? null });
 }
 
+// GitHub repo search
+export interface GitHubRepoSearchResult {
+  fullName: string;
+  cloneUrl: string;
+  description: string | null;
+  isPrivate: boolean;
+  isFork: boolean;
+}
+
+export async function searchGithubRepos(
+  accountId: string,
+  query: string,
+): Promise<GitHubRepoSearchResult[]> {
+  return invoke("search_github_repos", { accountId, query });
+}
+
 export async function getOpenRepos(): Promise<RepoInfo[]> {
   return invoke("get_open_repos");
 }

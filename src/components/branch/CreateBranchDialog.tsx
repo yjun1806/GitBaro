@@ -3,6 +3,7 @@ import { X, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import type { BranchInfo } from "@/types";
+import { Select } from "@/components/ui/Select";
 
 interface CreateBranchDialogProps {
   branches: BranchInfo[];
@@ -85,18 +86,14 @@ export function CreateBranchDialog({
             <label className="text-xs font-medium text-muted-foreground">
               {t("branch.from")}
             </label>
-            <select
+            <Select
               value={fromBranch}
-              onChange={(e) => setFromBranch(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground outline-none focus:ring-2 focus:ring-ring"
-            >
-              {localBranches.map((b) => (
-                <option key={b.name} value={b.name}>
-                  {b.name}
-                  {b.isHead ? ` ${t("branch.currentTag")}` : ""}
-                </option>
-              ))}
-            </select>
+              options={localBranches.map((b) => ({
+                value: b.name,
+                label: `${b.name}${b.isHead ? ` ${t("branch.currentTag")}` : ""}`,
+              }))}
+              onChange={setFromBranch}
+            />
           </div>
         </div>
 

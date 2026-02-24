@@ -115,6 +115,40 @@ pub async fn clone_repository(
 }
 
 #[tauri::command]
+pub async fn search_github_repos(
+    account_id: String,
+    query: String,
+    token_store: tauri::State<'_, TokenStore>,
+) -> Result<Value, AppError> {
+    let token = resolve_token(&token_store, &account_id).await?;
+    let client = crate::github::client::GitHubClient::new();
+    let repos = client.list_repos(&token, 1).await?;
+
+    let query_lower = query.to_lowercase();
+    let filtered: Vec<Value> = repos
+        .into_iter()
+        .filter(|repo| {
+            if query_lower.is_empty() {
+                return true;
+            }
+            let full_name = repo["full_name"].as_str().unwrap_or("").to_lowercase();
+            full_name.contains(&query_lower)
+        })
+        .map(|repo| {
+            json!({
+                "fullName": repo["full_name"].as_str().unwrap_or(""),
+                "cloneUrl": repo["clone_url"].as_str().unwrap_or(""),
+                "description": repo["description"].as_str(),
+                "isPrivate": repo["private"].as_bool().unwrap_or(false),
+                "isFork": repo["fork"].as_bool().unwrap_or(false),
+            })
+        })
+        .collect();
+
+    Ok(json!(filtered))
+}
+
+#[tauri::command]
 pub async fn get_repo_visibility(
     repo_path: String,
     account_id: String,

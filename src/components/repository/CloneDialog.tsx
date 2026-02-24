@@ -1,8 +1,11 @@
-import { useState } from "react";
-import { X, FolderOpen, Search, Download } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { X, FolderOpen, Search, Download, Lock, GitFork, Loader2, ChevronDown, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import clsx from "clsx";
+import { open } from "@tauri-apps/plugin-dialog";
 import type { GitHubAccount } from "@/types";
+import { searchGithubRepos, type GitHubRepoSearchResult } from "@/api/commands";
+import { cn, getErrorMessage } from "@/lib/utils";
+import { AccountAvatar } from "@/components/account/AccountAvatar";
 
 type Tab = "github" | "url";
 
@@ -10,7 +13,7 @@ interface CloneDialogProps {
   accounts: GitHubAccount[];
   selectedAccountId: string | null;
   onAccountChange: (accountId: string) => void;
-  onClone: (params: { url: string; localPath: string; accountId: string | null }) => void;
+  onClone: (params: { url: string; localPath: string; accountId: string | null }) => Promise<void>;
   onClose: () => void;
 }
 
@@ -22,16 +25,105 @@ export function CloneDialog({
   onClose,
 }: CloneDialogProps) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>("github");
+  const [tab, setTab] = useState<Tab>(accounts.length > 0 ? "github" : "url");
   const [repoSearch, setRepoSearch] = useState("");
   const [url, setUrl] = useState("");
   const [localPath, setLocalPath] = useState("");
+  const [isCloning, setIsCloning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleClone = () => {
-    const cloneUrl = tab === "url" ? url : "";
-    if (!cloneUrl && tab === "url") return;
-    onClone({ url: cloneUrl, localPath, accountId: selectedAccountId });
+  // GitHub tab state
+  const [searchResults, setSearchResults] = useState<GitHubRepoSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedRepo, setSelectedRepo] = useState<GitHubRepoSearchResult | null>(null);
+  const selectedAccount = accounts.find((a) => a.id === selectedAccountId) ?? null;
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const accountPickerRef = useRef<HTMLDivElement>(null);
+
+  // Close account picker on outside click
+  useEffect(() => {
+    if (!accountPickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (accountPickerRef.current && !accountPickerRef.current.contains(e.target as Node)) {
+        setAccountPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [accountPickerOpen]);
+
+  // Debounced GitHub repo search
+  useEffect(() => {
+    if (!selectedAccountId || tab !== "github") return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    setIsSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const results = await searchGithubRepos(selectedAccountId, repoSearch);
+        setSearchResults(results);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [selectedAccountId, repoSearch, tab]);
+
+  const handleBrowse = useCallback(async () => {
+    const selected = await open({ directory: true, multiple: false });
+    if (!selected) return;
+    const dir = typeof selected === "string" ? selected : selected;
+
+    if (tab === "github" && selectedRepo) {
+      const repoName = selectedRepo.fullName.split("/").pop() ?? "";
+      setLocalPath(`${dir}/${repoName}`);
+    } else if (tab === "url" && url) {
+      const match = url.match(/\/([^/]+?)(?:\.git)?$/);
+      const repoName = match?.[1] ?? "";
+      setLocalPath(repoName ? `${dir}/${repoName}` : dir);
+    } else {
+      setLocalPath(dir);
+    }
+  }, [tab, selectedRepo, url]);
+
+  const handleSelectRepo = useCallback((repo: GitHubRepoSearchResult) => {
+    setSelectedRepo(repo);
+    setError(null);
+    const repoName = repo.fullName.split("/").pop() ?? "";
+    setLocalPath((prev) => {
+      if (!prev) return "";
+      const lastSlash = prev.lastIndexOf("/");
+      const base = lastSlash >= 0 ? prev.substring(0, lastSlash) : prev;
+      return `${base}/${repoName}`;
+    });
+  }, []);
+
+  const handleClone = async () => {
+    const cloneUrl = tab === "url" ? url.trim() : selectedRepo?.cloneUrl ?? "";
+    if (!cloneUrl || !localPath.trim()) return;
+
+    setError(null);
+    setIsCloning(true);
+    try {
+      await onClone({ url: cloneUrl, localPath: localPath.trim(), accountId: selectedAccountId });
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsCloning(false);
+    }
   };
+
+  const canClone =
+    !isCloning &&
+    localPath.trim().length > 0 &&
+    (tab === "url" ? url.trim().length > 0 : selectedRepo !== null);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -43,6 +135,7 @@ export function CloneDialog({
           </h2>
           <button
             onClick={onClose}
+            disabled={isCloning}
             className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
           >
             <X className="w-4 h-4" />
@@ -54,12 +147,13 @@ export function CloneDialog({
           {(["github", "url"] as Tab[]).map((t_) => (
             <button
               key={t_}
-              onClick={() => setTab(t_)}
-              className={clsx(
+              onClick={() => { setTab(t_); setError(null); }}
+              disabled={isCloning}
+              className={cn(
                 "px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors",
                 tab === t_
                   ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
               )}
             >
               {t_ === "github" ? "GitHub.com" : "URL"}
@@ -75,18 +169,63 @@ export function CloneDialog({
                 <label className="text-xs font-medium text-muted-foreground">
                   {t("clone.account")}
                 </label>
-                <select
-                  value={selectedAccountId ?? ""}
-                  onChange={(e) => onAccountChange(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">{t("clone.selectAccount")}</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.username}
-                    </option>
-                  ))}
-                </select>
+                <div ref={accountPickerRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => !isCloning && setAccountPickerOpen(!accountPickerOpen)}
+                    disabled={isCloning}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-2 text-sm",
+                      "border border-border rounded-lg bg-card text-foreground",
+                      "outline-none transition-colors",
+                      accountPickerOpen && "ring-2 ring-ring",
+                      isCloning && "opacity-50 cursor-not-allowed",
+                      !isCloning && !accountPickerOpen && "hover:border-muted-foreground/40",
+                    )}
+                  >
+                    {selectedAccount ? (
+                      <>
+                        <AccountAvatar account={selectedAccount} size="xs" />
+                        <span className="truncate text-left flex-1">{selectedAccount.username}</span>
+                      </>
+                    ) : (
+                      <span className="truncate text-left flex-1 text-muted-foreground">
+                        {t("clone.selectAccount")}
+                      </span>
+                    )}
+                    <ChevronDown className={cn(
+                      "w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform",
+                      accountPickerOpen && "rotate-180",
+                    )} />
+                  </button>
+                  {accountPickerOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 py-1 max-h-48 overflow-y-auto">
+                      {accounts.map((a) => (
+                        <button
+                          key={a.id}
+                          onClick={() => {
+                            onAccountChange(a.id);
+                            setSelectedRepo(null);
+                            setSearchResults([]);
+                            setAccountPickerOpen(false);
+                          }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors",
+                            a.id === selectedAccountId
+                              ? "bg-primary/10 text-primary"
+                              : "text-foreground hover:bg-accent",
+                          )}
+                        >
+                          <AccountAvatar account={a} size="xs" />
+                          <span className="truncate flex-1">{a.username}</span>
+                          {a.id === selectedAccountId && (
+                            <Check className="w-3.5 h-3.5 shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Repo search */}
@@ -101,9 +240,61 @@ export function CloneDialog({
                     value={repoSearch}
                     onChange={(e) => setRepoSearch(e.target.value)}
                     placeholder={t("clone.searchRepos")}
-                    className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
+                    disabled={!selectedAccountId || isCloning}
+                    className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50"
                   />
+                  {isSearching && (
+                    <Loader2 className="w-4 h-4 text-muted-foreground animate-spin shrink-0" />
+                  )}
                 </div>
+
+                {/* Search results list */}
+                {selectedAccountId && (
+                  <div className="max-h-48 overflow-y-auto border border-border rounded-lg">
+                    {isSearching && searchResults.length === 0 ? (
+                      <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                        {t("clone.searching")}
+                      </div>
+                    ) : searchResults.length === 0 ? (
+                      <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                        {selectedAccountId ? t("clone.noResults") : t("clone.selectRepo")}
+                      </div>
+                    ) : (
+                      searchResults.map((repo) => (
+                        <button
+                          key={repo.fullName}
+                          onClick={() => handleSelectRepo(repo)}
+                          disabled={isCloning}
+                          className={cn(
+                            "w-full flex items-start gap-2 px-3 py-2.5 text-left transition-colors border-b border-border last:border-b-0",
+                            selectedRepo?.fullName === repo.fullName
+                              ? "bg-primary/10"
+                              : "hover:bg-accent",
+                          )}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-medium truncate">
+                                {repo.fullName}
+                              </span>
+                              {repo.isPrivate && (
+                                <Lock className="w-3 h-3 text-muted-foreground shrink-0" />
+                              )}
+                              {repo.isFork && (
+                                <GitFork className="w-3 h-3 text-muted-foreground shrink-0" />
+                              )}
+                            </div>
+                            {repo.description && (
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                {repo.description}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -116,9 +307,10 @@ export function CloneDialog({
               <input
                 type="text"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e) => { setUrl(e.target.value); setError(null); }}
+                disabled={isCloning}
                 placeholder="https://github.com/owner/repo.git"
-                className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring"
+                className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
               />
             </div>
           )}
@@ -133,31 +325,52 @@ export function CloneDialog({
                 type="text"
                 value={localPath}
                 onChange={(e) => setLocalPath(e.target.value)}
-                placeholder="~/Projects/..."
-                className="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring"
+                disabled={isCloning}
+                placeholder="/Users/..."
+                className="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
               />
-              <button className="flex items-center gap-1.5 px-3 py-2 text-sm border border-border rounded-lg hover:bg-accent text-muted-foreground transition-colors">
+              <button
+                onClick={handleBrowse}
+                disabled={isCloning}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm border border-border rounded-lg hover:bg-accent text-muted-foreground transition-colors disabled:opacity-50"
+              >
                 <FolderOpen className="w-4 h-4" />
                 {t("common.browse")}
               </button>
             </div>
           </div>
+
+          {/* Error message */}
+          {error && (
+            <div className="px-3 py-2 text-sm text-danger bg-danger/10 rounded-lg">
+              {error}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
           <button
             onClick={onClose}
+            disabled={isCloning}
             className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             {t("common.cancel")}
           </button>
           <button
             onClick={handleClone}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg transition-colors"
+            disabled={!canClone}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg transition-colors",
+              !canClone && "opacity-50 cursor-not-allowed",
+            )}
           >
-            <Download className="w-4 h-4" />
-            {t("clone.clone")}
+            {isCloning ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            {isCloning ? t("clone.cloning") : t("clone.clone")}
           </button>
         </div>
       </div>

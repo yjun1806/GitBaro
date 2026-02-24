@@ -26,7 +26,8 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useBranchStore } from "@/stores/branch";
 import { useStatus, useCommitHistory, useCommitAvatars, useBranches } from "@/api/queries";
-import { addLocalRepository, createCommit, stageFiles, unstageFiles, gitFetch, openInEditor, getRepoVisibility, getOwnerType } from "@/api/commands";
+import { addLocalRepository, cloneRepository, createCommit, stageFiles, unstageFiles, gitFetch, openInEditor, getRepoVisibility, getOwnerType } from "@/api/commands";
+import { CloneDialog } from "@/components/repository/CloneDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { FileStatusBadge } from "@/lib/file-status";
@@ -215,7 +216,19 @@ function RepoListView({
   const accounts = useAccountStore((s) => s.accounts);
   const [accountPickerRepo, setAccountPickerRepo] = useState<string | null>(null);
 
+  const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
   const addToast = useToastStore((s) => s.addToast);
+  const [showCloneDialog, setShowCloneDialog] = useState(false);
+
+  const handleClone = useCallback(async (params: { url: string; localPath: string; accountId: string | null }) => {
+    const repoInfo = await cloneRepository(params.url, params.localPath, params.accountId ?? undefined);
+    const repoWithAccount = params.accountId ? { ...repoInfo, accountId: params.accountId } : repoInfo;
+    addRepo(repoWithAccount);
+    onSelectRepo(repoInfo.path);
+    setShowCloneDialog(false);
+    addToast(t("clone.success"), "success");
+  }, [addRepo, onSelectRepo, addToast, t]);
 
   const handleAddLocal = useCallback(async () => {
     setAddMenuOpen(false);
@@ -319,7 +332,7 @@ function RepoListView({
                 {t("repo.addLocal")}
               </button>
               <button
-                onClick={() => setAddMenuOpen(false)}
+                onClick={() => { setAddMenuOpen(false); setShowCloneDialog(true); }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
               >
                 <GitFork className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -503,6 +516,15 @@ function RepoListView({
           ))
         )}
       </div>
+      {showCloneDialog && (
+        <CloneDialog
+          accounts={accounts}
+          selectedAccountId={activeAccountId}
+          onAccountChange={setActiveAccount}
+          onClone={handleClone}
+          onClose={() => setShowCloneDialog(false)}
+        />
+      )}
     </div>
   );
 }
