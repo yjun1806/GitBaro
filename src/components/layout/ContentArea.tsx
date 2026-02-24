@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { FileText, GitCommit } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
-import { useStatus, useFileDiff } from "@/api/queries";
+import { useStatus, useFileDiff, useCommitDetail, useCommitFileDiff, useCommitAvatars } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
+import { CommitDetail } from "@/components/history/CommitDetail";
 import { ToolbarRoot } from "@/components/toolbar";
 import type { FileStatus } from "@/types";
 
@@ -58,18 +60,34 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
   return <DiffViewer diff={diff ?? null} status={fileStatus} />;
 }
 
-function CommitDetailPlaceholder({ commitId }: { commitId: string }) {
+function CommitDetailView({ commitId }: { commitId: string }) {
   const { t } = useTranslation();
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const { data, isLoading } = useCommitDetail(activeRepoPath, commitId);
+  const { data: avatarMap } = useCommitAvatars(activeRepoPath);
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const { data: fileDiff } = useCommitFileDiff(activeRepoPath, commitId, selectedFilePath);
+
+  if (isLoading || !data) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+        {t("history.loadingHistory")}
+      </div>
+    );
+  }
+
+  // GitHub avatar > gravatar fallback
+  const authorEmail = data.commit.author.email;
+  const resolvedAvatarUrl = avatarMap?.[authorEmail] ?? data.commit.author.avatarUrl;
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface">
-        <GitCommit className="w-4 h-4 text-muted-foreground shrink-0" />
-        <span className="text-sm font-mono">{commitId.slice(0, 8)}</span>
-      </div>
-      <div className="flex-1 overflow-auto flex items-center justify-center text-muted-foreground">
-        <p className="text-sm">{t("diff.commitDetails")}</p>
-      </div>
-    </div>
+    <CommitDetail
+      commit={data.commit}
+      authorAvatarUrl={resolvedAvatarUrl}
+      changedFiles={data.changedFiles.map((f) => ({ path: f.path, status: f.status }))}
+      selectedFileDiff={fileDiff ?? null}
+      onSelectFile={setSelectedFilePath}
+    />
   );
 }
 
@@ -106,7 +124,7 @@ export function ContentArea({
             />
           )
         ) : selectedCommitId ? (
-          <CommitDetailPlaceholder commitId={selectedCommitId} />
+          <CommitDetailView commitId={selectedCommitId} />
         ) : (
           <EmptyState
             icon={GitCommit}

@@ -185,24 +185,55 @@ export async function getCurrentBranch(repoPath: string): Promise<string | null>
 // History — backend returns raw fields (oid, parentCount, etc.)
 // that differ from the frontend CommitInfo type, so we map here.
 
+interface RawAuthor {
+  name: string;
+  email: string;
+  avatarUrl?: string;
+}
+
 interface RawCommitHistory {
   oid: string;
   message: string;
   summary: string;
-  author: { name: string; email: string };
+  author: RawAuthor;
   timestamp: number;
   parentCount: number;
+}
+
+interface RawCommitDetailFile {
+  oldPath: string | null;
+  newPath: string | null;
+  status: string;
+}
+
+interface RawCommitDetailDiff {
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+  files: RawCommitDetailFile[];
 }
 
 interface RawCommitDetail {
   oid: string;
   message: string;
   summary: string;
-  author: { name: string; email: string };
-  committer: { name: string; email: string };
+  author: RawAuthor;
+  committer: RawAuthor;
   timestamp: number;
   parents: string[];
-  diff: unknown;
+  diff: RawCommitDetailDiff;
+}
+
+export interface CommitChangedFile {
+  path: string;
+  oldPath: string | null;
+  status: FileStatus;
+}
+
+export interface CommitDetailResult {
+  commit: CommitInfo;
+  changedFiles: CommitChangedFile[];
+  stats: { filesChanged: number; insertions: number; deletions: number };
 }
 
 export async function getCommitHistory(
@@ -223,20 +254,68 @@ export async function getCommitHistory(
   }));
 }
 
+function mapCommitStatus(raw: string): FileStatus {
+  const lower = raw.toLowerCase();
+  if (lower === "added") return "added";
+  if (lower === "deleted") return "deleted";
+  if (lower === "renamed") return "renamed";
+  if (lower === "copied") return "copied";
+  return "modified";
+}
+
 export async function getCommitDetail(
   repoPath: string,
   oid: string,
-): Promise<CommitInfo> {
+): Promise<CommitDetailResult> {
   const c: RawCommitDetail = await invoke("get_commit_detail", { repoPath, oid });
   return {
-    id: c.oid,
-    shortId: c.oid.slice(0, 7),
-    message: c.message,
-    summary: c.summary,
-    author: c.author,
-    committer: c.committer,
-    timestamp: c.timestamp,
-    parentIds: c.parents,
+    commit: {
+      id: c.oid,
+      shortId: c.oid.slice(0, 7),
+      message: c.message,
+      summary: c.summary,
+      author: c.author,
+      committer: c.committer,
+      timestamp: c.timestamp,
+      parentIds: c.parents,
+    },
+    changedFiles: (c.diff?.files ?? []).map((f) => ({
+      path: f.newPath ?? f.oldPath ?? "",
+      oldPath: f.oldPath,
+      status: mapCommitStatus(f.status),
+    })),
+    stats: {
+      filesChanged: c.diff?.filesChanged ?? 0,
+      insertions: c.diff?.insertions ?? 0,
+      deletions: c.diff?.deletions ?? 0,
+    },
+  };
+}
+
+export async function getCommitFileDiff(
+  repoPath: string,
+  oid: string,
+  filePath: string,
+): Promise<DiffOutput> {
+  const raw: RawFileDiff = await invoke("get_commit_file_diff", { repoPath, oid, filePath });
+  return {
+    filePath: raw.filePath,
+    oldContent: raw.oldContent ?? "",
+    newContent: raw.newContent ?? "",
+    binary: raw.binary ?? false,
+    hunks: raw.hunks.map((h) => ({
+      header: h.header,
+      oldStart: h.oldStart,
+      oldLines: h.lines.filter((l) => l.kind !== "addition").length,
+      newStart: h.newStart,
+      newLines: h.lines.filter((l) => l.kind !== "deletion").length,
+      lines: h.lines.map((l) => ({
+        content: l.content,
+        lineType: mapLineKind(l.kind),
+        oldLineNo: l.oldLineNo,
+        newLineNo: l.newLineNo,
+      })),
+    })),
   };
 }
 

@@ -43,6 +43,7 @@ pub fn run() {
             commands::branch::get_current_branch,
             commands::history::get_commit_history,
             commands::history::get_commit_detail,
+            commands::history::get_commit_file_diff,
             commands::history::resolve_commit_avatars,
             commands::auth::check_gh_status,
             commands::auth::start_gh_login,

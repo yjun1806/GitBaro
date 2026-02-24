@@ -3,6 +3,8 @@ import {
   getStatus,
   getBranches,
   getCommitHistory,
+  getCommitDetail,
+  getCommitFileDiff,
   getAccounts,
   getRepoAccount,
   getSettings,
@@ -75,6 +77,22 @@ export function useTokenValidation(accountId: string | null, repoPath: string | 
     queryFn: () => validateToken(accountId!, repoPath!),
     enabled: accountId !== null && repoPath !== null,
     retry: false,
+  });
+}
+
+export function useCommitDetail(repoPath: string | null, oid: string | null) {
+  return useQuery({
+    queryKey: ["commitDetail", repoPath, oid],
+    queryFn: () => getCommitDetail(repoPath!, oid!),
+    enabled: repoPath !== null && oid !== null,
+  });
+}
+
+export function useCommitFileDiff(repoPath: string | null, oid: string | null, filePath: string | null) {
+  return useQuery({
+    queryKey: ["commitFileDiff", repoPath, oid, filePath],
+    queryFn: () => getCommitFileDiff(repoPath!, oid!, filePath!),
+    enabled: repoPath !== null && oid !== null && filePath !== null,
   });
 }
 

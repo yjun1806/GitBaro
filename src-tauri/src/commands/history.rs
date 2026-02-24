@@ -154,6 +154,125 @@ pub async fn get_commit_detail(repo_path: String, oid: String) -> Result<Value, 
 }
 
 #[tauri::command]
+pub async fn get_commit_file_diff(
+    repo_path: String,
+    oid: String,
+    file_path: String,
+) -> Result<Value, AppError> {
+    let result = tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&repo_path)?;
+        let obj = repo.revparse_single(&oid)?;
+        let commit = obj.peel_to_commit()?;
+
+        let commit_tree = commit.tree()?;
+        let parent_tree = if commit.parent_count() > 0 {
+            Some(commit.parent(0)?.tree()?)
+        } else {
+            None
+        };
+
+        let mut diff_opts = git2::DiffOptions::new();
+        diff_opts.pathspec(&file_path);
+
+        let diff = repo.diff_tree_to_tree(
+            parent_tree.as_ref(),
+            Some(&commit_tree),
+            Some(&mut diff_opts),
+        )?;
+
+        let is_binary = diff.deltas().any(|d| {
+            d.flags().contains(git2::DiffFlags::BINARY)
+                || d.old_file().is_binary()
+                || d.new_file().is_binary()
+        });
+
+        let mut hunks: Vec<Value> = Vec::new();
+        let mut current_hunk_lines: Vec<Value> = Vec::new();
+        let mut current_hunk_header = String::new();
+        let mut current_old_start: u32 = 0;
+        let mut current_new_start: u32 = 0;
+
+        diff.print(git2::DiffFormat::Patch, |_delta, hunk, line| {
+            match line.origin() {
+                'H' => {
+                    if !current_hunk_lines.is_empty() {
+                        hunks.push(json!({
+                            "header": current_hunk_header.clone(),
+                            "oldStart": current_old_start,
+                            "newStart": current_new_start,
+                            "lines": current_hunk_lines.clone(),
+                        }));
+                        current_hunk_lines.clear();
+                    }
+                    if let Some(h) = hunk {
+                        current_hunk_header = String::from_utf8_lossy(h.header()).to_string();
+                        current_old_start = h.old_start();
+                        current_new_start = h.new_start();
+                    }
+                }
+                origin @ ('+' | '-' | ' ') => {
+                    let kind = match origin {
+                        '+' => "addition",
+                        '-' => "deletion",
+                        _ => "context",
+                    };
+                    let content = String::from_utf8_lossy(line.content()).to_string();
+                    current_hunk_lines.push(json!({
+                        "kind": kind,
+                        "content": content,
+                        "oldLineNo": line.old_lineno(),
+                        "newLineNo": line.new_lineno(),
+                    }));
+                }
+                _ => {}
+            }
+            true
+        })?;
+
+        if !current_hunk_lines.is_empty() {
+            hunks.push(json!({
+                "header": current_hunk_header,
+                "oldStart": current_old_start,
+                "newStart": current_new_start,
+                "lines": current_hunk_lines,
+            }));
+        }
+
+        // Read old content from parent tree
+        let old_content = parent_tree
+            .and_then(|tree| tree.get_path(std::path::Path::new(&file_path)).ok())
+            .and_then(|entry| repo.find_blob(entry.id()).ok())
+            .map(|blob| String::from_utf8_lossy(blob.content()).to_string())
+            .unwrap_or_default();
+
+        // Read new content from commit tree
+        let new_content = commit_tree
+            .get_path(std::path::Path::new(&file_path))
+            .ok()
+            .and_then(|entry| repo.find_blob(entry.id()).ok())
+            .map(|blob| String::from_utf8_lossy(blob.content()).to_string())
+            .unwrap_or_default();
+
+        let stats = diff.stats()?;
+
+        Ok::<_, AppError>(json!({
+            "filePath": file_path,
+            "staged": false,
+            "binary": is_binary,
+            "insertions": stats.insertions(),
+            "deletions": stats.deletions(),
+            "hunks": hunks,
+            "oldContent": old_content,
+            "newContent": new_content,
+        }))
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+
+    Ok(result)
+}
+
+#[tauri::command]
 pub async fn resolve_commit_avatars(
     repo_path: String,
     token_store: tauri::State<'_, TokenStore>,

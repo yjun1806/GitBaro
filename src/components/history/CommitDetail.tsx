@@ -1,94 +1,188 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { GitCommit, User, Clock, GitFork } from "lucide-react";
+import { GitCommit, Clock, Copy, Check, ChevronDown } from "lucide-react";
+import { cn, formatDate } from "@/lib/utils";
+import { FileStatusBadge } from "@/lib/file-status";
 import type { CommitInfo, DiffOutput, FileStatus } from "@/types";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 
+function AuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
+  const [imgError, setImgError] = useState(false);
+  const initials = name
+    .split(" ")
+    .slice(0, 2)
+    .map((n) => n.charAt(0).toUpperCase())
+    .join("");
+
+  if (avatarUrl && !imgError) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        className="w-5 h-5 rounded-full shrink-0"
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-medium text-muted-foreground shrink-0">
+      {initials}
+    </div>
+  );
+}
+
 interface CommitDetailProps {
   commit: CommitInfo;
+  authorAvatarUrl?: string;
   changedFiles?: Array<{ path: string; status: FileStatus }>;
   selectedFileDiff?: DiffOutput | null;
   onSelectFile?: (path: string) => void;
 }
 
-function formatDate(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleString();
-}
-
 export function CommitDetail({
   commit,
+  authorAvatarUrl,
   changedFiles = [],
   selectedFileDiff,
   onSelectFile,
 }: CommitDetailProps) {
   const { t } = useTranslation();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [bodyExpanded, setBodyExpanded] = useState(false);
+
+  // Auto-select first file when commit changes
+  useEffect(() => {
+    if (changedFiles.length > 0) {
+      const first = changedFiles[0].path;
+      setSelectedPath(first);
+      onSelectFile?.(first);
+    } else {
+      setSelectedPath(null);
+    }
+  }, [commit.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFileClick = (path: string) => {
     setSelectedPath(path);
     onSelectFile?.(path);
   };
 
+  const handleCopyHash = async () => {
+    await navigator.clipboard.writeText(commit.id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const hasBody = commit.message !== commit.summary;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Commit metadata */}
-      <div className="px-5 py-4 border-b border-border flex flex-col gap-3">
-        <div className="flex items-start gap-2">
-          <GitCommit className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-foreground leading-snug">
-              {commit.summary}
-            </p>
-            {commit.message !== commit.summary && (
-              <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">
-                {commit.message.slice(commit.summary.length).trim()}
+      {/* Compact commit header */}
+      <div className="px-4 py-3 border-b border-border shrink-0">
+        {hasBody ? (
+          <button
+            onClick={() => setBodyExpanded((v) => !v)}
+            className="flex items-start gap-1 text-left w-full group"
+          >
+            <ChevronDown className={cn(
+              "w-3.5 h-3.5 shrink-0 mt-0.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-all",
+              !bodyExpanded && "-rotate-90",
+            )} />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-foreground leading-snug">
+                {commit.summary}
               </p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <MetaRow icon={<User className="w-3.5 h-3.5" />} label={t("history.author")}>
-            {commit.author.name} &lt;{commit.author.email}&gt;
-          </MetaRow>
-          <MetaRow icon={<Clock className="w-3.5 h-3.5" />} label={t("history.date")}>
+              {bodyExpanded && (
+                <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                  {commit.message.slice(commit.summary.length).trim()}
+                </p>
+              )}
+            </div>
+          </button>
+        ) : (
+          <p className="text-[13px] font-semibold text-foreground leading-snug">
+            {commit.summary}
+          </p>
+        )}
+        <div className="flex items-center gap-2.5 mt-2.5">
+          {/* Author avatar + info */}
+          <AuthorAvatar name={commit.author.name} avatarUrl={authorAvatarUrl} />
+          <span className="text-[11px] font-medium text-foreground/80">{commit.author.name}</span>
+          <span className="text-[11px] text-muted-foreground/60">{commit.author.email}</span>
+          <span className="text-[11px] text-muted-foreground/40">·</span>
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Clock className="w-3 h-3" />
             {formatDate(commit.timestamp)}
-          </MetaRow>
-          <MetaRow icon={<GitFork className="w-3.5 h-3.5" />} label={t("history.commitHash")}>
-            <span className="font-mono">{commit.id}</span>
-          </MetaRow>
+          </span>
+          <span className="text-[11px] text-muted-foreground/40">·</span>
+          <button
+            onClick={handleCopyHash}
+            className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <GitCommit className="w-3 h-3" />
+            {commit.shortId}
+            {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+          </button>
           {commit.parentIds.length > 0 && (
-            <MetaRow icon={<GitFork className="w-3.5 h-3.5" />} label={t("history.parents")}>
-              {commit.parentIds.map((id) => (
-                <span key={id} className="font-mono mr-2">
-                  {id.slice(0, 7)}
-                </span>
-              ))}
-            </MetaRow>
+            <>
+              <span className="text-[11px] text-muted-foreground/40">·</span>
+              <span className="text-[11px] font-mono text-muted-foreground">
+                {commit.parentIds.map((id) => id.slice(0, 7)).join(", ")}
+              </span>
+            </>
           )}
         </div>
       </div>
 
-      {/* Changed files */}
+      {/* File list + Diff viewer */}
       <div className="flex h-0 flex-1">
         {/* File list */}
-        <div className="w-52 shrink-0 border-r border-border overflow-y-auto">
-          <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-b border-border">
-            {t("history.changedFiles")} ({changedFiles.length})
-          </p>
-          {changedFiles.map((f) => (
-            <button
-              key={f.path}
-              onClick={() => handleFileClick(f.path)}
-              className={`w-full px-3 py-1.5 text-xs text-left truncate transition-colors ${
-                selectedPath === f.path
-                  ? "bg-primary/10 text-primary"
-                  : "text-foreground hover:bg-accent"
-              }`}
-            >
-              {f.path}
-            </button>
-          ))}
+        <div className="w-56 shrink-0 border-r border-border flex flex-col">
+          <div className="px-3 h-[36px] border-b border-border flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              {t("history.changedFiles")}
+            </span>
+            <span className="text-[11px] text-muted-foreground/60 tabular-nums">
+              {changedFiles.length}
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {changedFiles.map((f) => {
+              const isSelected = selectedPath === f.path;
+              const dir = f.path.includes("/")
+                ? f.path.substring(0, f.path.lastIndexOf("/") + 1)
+                : "";
+              const filename = f.path.includes("/")
+                ? f.path.substring(f.path.lastIndexOf("/") + 1)
+                : f.path;
+              return (
+                <button
+                  key={f.path}
+                  onClick={() => handleFileClick(f.path)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors",
+                    isSelected
+                      ? "bg-primary/10"
+                      : "hover:bg-accent",
+                  )}
+                >
+                  <FileStatusBadge status={f.status} />
+                  <span className="flex-1 min-w-0 truncate">
+                    {dir && (
+                      <span className="text-[11px] text-muted-foreground/60">{dir}</span>
+                    )}
+                    <span className={cn(
+                      "text-[11px] font-medium",
+                      isSelected ? "text-primary" : "text-foreground",
+                    )}>
+                      {filename}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Diff viewer */}
@@ -101,24 +195,6 @@ export function CommitDetail({
           />
         </div>
       </div>
-    </div>
-  );
-}
-
-interface MetaRowProps {
-  icon: ReactNode;
-  label: string;
-  children: ReactNode;
-}
-
-function MetaRow({ icon, label, children }: MetaRowProps) {
-  return (
-    <div className="flex items-start gap-2">
-      <span className="text-muted-foreground mt-0.5 shrink-0">{icon}</span>
-      <span className="text-xs text-muted-foreground w-12 shrink-0">{label}</span>
-      <span className="text-xs text-foreground flex-1 min-w-0 break-all">
-        {children}
-      </span>
     </div>
   );
 }
