@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { RefreshCw, ArrowDown, ArrowUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { useClickOutside } from "./useToolbarDropdown";
 
@@ -74,6 +75,7 @@ export function SyncDropdown({
   onPush,
   onClose,
 }: SyncDropdownProps) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, onClose);
 
@@ -91,8 +93,8 @@ export function SyncDropdown({
       <div className="py-1">
         <MenuItem
           icon={<RefreshCw className="w-4 h-4" />}
-          label="Fetch origin"
-          description="Download objects and refs from remote"
+          label={t("sync.fetchOrigin")}
+          description={t("sync.fetchDescription")}
           disabled={disabled}
           onClick={() => exec(onFetch)}
         />
@@ -104,8 +106,8 @@ export function SyncDropdown({
       <div className="py-1">
         <MenuItem
           icon={<ArrowDown className="w-4 h-4" />}
-          label="Pull origin"
-          description={behind > 0 ? "Fetch and merge remote changes" : "No remote changes to pull"}
+          label={t("sync.pullOrigin")}
+          description={behind > 0 ? t("sync.pullDescription") : t("sync.noRemoteChanges")}
           badge={behind}
           highlighted={behind > 0}
           disabled={disabled || behind === 0}
@@ -119,8 +121,8 @@ export function SyncDropdown({
       <div className="py-1">
         <MenuItem
           icon={<ArrowUp className="w-4 h-4" />}
-          label="Push origin"
-          description={ahead > 0 ? "Upload local commits to remote" : "No local commits to push"}
+          label={t("sync.pushOrigin")}
+          description={ahead > 0 ? t("sync.pushDescription") : t("sync.noLocalCommits")}
           badge={ahead}
           highlighted={ahead > 0}
           disabled={disabled || ahead === 0}
@@ -132,8 +134,8 @@ export function SyncDropdown({
       <div className="border-t border-border bg-surface/50 px-3 py-2">
         <p className="text-[11px] text-muted-foreground">
           {lastFetchedAt
-            ? `Last fetched ${formatRelativeTime(lastFetchedAt)}`
-            : "Never fetched"}
+            ? t("sync.lastFetched", { time: formatRelativeTime(lastFetchedAt) })
+            : t("sync.neverFetched")}
         </p>
       </div>
     </div>

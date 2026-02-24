@@ -130,3 +130,11 @@ export interface AppSettings {
 }
 
 export type Theme = "light" | "dark" | "system";
+
+export interface EditorInfo {
+  id: string;
+  name: string;
+  command: string;
+  installed: boolean;
+  icon: string | null;
+}

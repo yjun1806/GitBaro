@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { GitBranch, ChevronDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useBranches } from "@/api/queries";
 import { switchBranch, createBranch } from "@/api/commands";
@@ -16,6 +17,7 @@ interface BranchZoneProps {
 }
 
 export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
+  const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const { data: branches = [] } = useBranches(activeRepoPath);
   const queryClient = useQueryClient();
@@ -38,9 +40,9 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
         queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
       ]);
-      addToast(`Switched to ${branchName}`, "success");
+      addToast(t("branch.switchedTo", { name: branchName }), "success");
     } catch (err) {
-      addToast(`Failed to switch branch: ${getErrorMessage(err)}`, "error");
+      addToast(t("branch.failedToSwitch", { error: getErrorMessage(err) }), "error");
     }
   };
 
@@ -54,10 +56,10 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         queryClient.invalidateQueries({ queryKey: ["status"] }),
         queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
       ]);
-      addToast(`Created and switched to ${name}`, "success");
+      addToast(t("branch.createdAndSwitched", { name }), "success");
       setShowCreateDialog(false);
     } catch (err) {
-      addToast(`Failed to create branch: ${getErrorMessage(err)}`, "error");
+      addToast(t("branch.failedToCreate", { error: getErrorMessage(err) }), "error");
     }
   };
 
@@ -77,7 +79,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           isOpen ? "text-primary" : "text-muted-foreground",
         )} />
         <span className="text-[13px] font-semibold truncate max-w-[200px]">
-          {currentBranch ?? "No branch"}
+          {currentBranch ?? t("branch.noBranch")}
         </span>
 
         {/* Ahead / Behind pills */}

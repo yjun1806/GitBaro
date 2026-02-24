@@ -10,6 +10,7 @@ import type {
   GhStatus,
   AppSettings,
   Theme,
+  EditorInfo,
 } from "@/types";
 
 // Git operations — backend returns indexStatus/worktreeStatus separately,
@@ -298,9 +299,12 @@ interface RawDiffHunk {
 interface RawFileDiff {
   filePath: string;
   staged: boolean;
+  binary: boolean;
   insertions: number;
   deletions: number;
   hunks: RawDiffHunk[];
+  oldContent: string;
+  newContent: string;
 }
 
 function mapLineKind(kind: string): "add" | "delete" | "context" {
@@ -317,9 +321,9 @@ export async function getFileDiff(
   const raw: RawFileDiff = await invoke("get_file_diff", { repoPath, filePath, staged });
   return {
     filePath: raw.filePath,
-    oldContent: "",
-    newContent: "",
-    binary: false,
+    oldContent: raw.oldContent ?? "",
+    newContent: raw.newContent ?? "",
+    binary: raw.binary ?? false,
     hunks: raw.hunks.map((h) => ({
       header: h.header,
       oldStart: h.oldStart,
@@ -351,4 +355,13 @@ export async function getTheme(): Promise<Theme> {
 
 export async function setTheme(theme: Theme): Promise<void> {
   return invoke("set_theme", { theme });
+}
+
+// Editors
+export async function detectInstalledEditors(): Promise<EditorInfo[]> {
+  return invoke("detect_installed_editors");
+}
+
+export async function openInEditor(repoPath: string, filePath: string): Promise<void> {
+  return invoke("open_in_editor", { repoPath, filePath });
 }

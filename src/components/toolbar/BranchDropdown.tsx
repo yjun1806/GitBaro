@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { GitBranch, Search, Plus, ChevronRight, Check } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useClickOutside } from "./useToolbarDropdown";
 import type { BranchInfo } from "@/types";
@@ -19,6 +20,7 @@ export function BranchDropdown({
   onCreateBranch,
   onClose,
 }: BranchDropdownProps) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [remoteExpanded, setRemoteExpanded] = useState(false);
@@ -47,7 +49,7 @@ export function BranchDropdown({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter branches..."
+            placeholder={t("branch.filterBranches")}
             className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -59,7 +61,7 @@ export function BranchDropdown({
         {local.length > 0 && (
           <div className="py-1">
             <p className="px-3 pt-1.5 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Local
+              {t("branch.local")}
             </p>
             {local.map((branch) => (
               <BranchRow
@@ -90,7 +92,7 @@ export function BranchDropdown({
                   remoteExpanded && "rotate-90",
                 )}
               />
-              Remote ({remote.length})
+              {t("branch.remote")} ({remote.length})
             </button>
             {remoteExpanded &&
               remote.map((branch) => (
@@ -109,7 +111,7 @@ export function BranchDropdown({
 
         {local.length === 0 && remote.length === 0 && (
           <div className="py-6 text-center">
-            <p className="text-sm text-muted-foreground">No branches found</p>
+            <p className="text-sm text-muted-foreground">{t("branch.noBranches")}</p>
           </div>
         )}
       </div>
@@ -124,7 +126,7 @@ export function BranchDropdown({
           className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors"
         >
           <Plus className="w-4 h-4" />
-          New branch...
+          {t("branch.newBranch")}
         </button>
       </div>
     </div>

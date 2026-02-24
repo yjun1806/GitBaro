@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { GitCommit, User, Clock, GitFork } from "lucide-react";
 import type { CommitInfo, DiffOutput, FileStatus } from "@/types";
 import { DiffViewer } from "@/components/diff/DiffViewer";
@@ -20,6 +21,7 @@ export function CommitDetail({
   selectedFileDiff,
   onSelectFile,
 }: CommitDetailProps) {
+  const { t } = useTranslation();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   const handleFileClick = (path: string) => {
@@ -46,17 +48,17 @@ export function CommitDetail({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <MetaRow icon={<User className="w-3.5 h-3.5" />} label="Author">
+          <MetaRow icon={<User className="w-3.5 h-3.5" />} label={t("history.author")}>
             {commit.author.name} &lt;{commit.author.email}&gt;
           </MetaRow>
-          <MetaRow icon={<Clock className="w-3.5 h-3.5" />} label="Date">
+          <MetaRow icon={<Clock className="w-3.5 h-3.5" />} label={t("history.date")}>
             {formatDate(commit.timestamp)}
           </MetaRow>
-          <MetaRow icon={<GitFork className="w-3.5 h-3.5" />} label="Commit">
+          <MetaRow icon={<GitFork className="w-3.5 h-3.5" />} label={t("history.commitHash")}>
             <span className="font-mono">{commit.id}</span>
           </MetaRow>
           {commit.parentIds.length > 0 && (
-            <MetaRow icon={<GitFork className="w-3.5 h-3.5" />} label="Parents">
+            <MetaRow icon={<GitFork className="w-3.5 h-3.5" />} label={t("history.parents")}>
               {commit.parentIds.map((id) => (
                 <span key={id} className="font-mono mr-2">
                   {id.slice(0, 7)}
@@ -72,7 +74,7 @@ export function CommitDetail({
         {/* File list */}
         <div className="w-52 shrink-0 border-r border-border overflow-y-auto">
           <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-b border-border">
-            Changed Files ({changedFiles.length})
+            {t("history.changedFiles")} ({changedFiles.length})
           </p>
           {changedFiles.map((f) => (
             <button

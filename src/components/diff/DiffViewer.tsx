@@ -1,8 +1,38 @@
-import { Fragment, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import clsx from "clsx";
-import type { DiffOutput, FileStatus } from "@/types";
+import { FileQuestion } from "lucide-react";
+import { DiffView, DiffModeEnum } from "@git-diff-view/react";
+import "@git-diff-view/react/styles/diff-view-pure.css";
+import type { DiffOutput, DiffHunk, FileStatus } from "@/types";
 import { DiffHeader } from "./DiffHeader";
+
+const EXT_LANG_MAP: Record<string, string> = {
+  ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
+  py: "python", rs: "rust", go: "go", java: "java", c: "c", cpp: "cpp",
+  css: "css", scss: "scss", html: "html", json: "json", md: "markdown",
+  yaml: "yaml", yml: "yaml", toml: "toml", sh: "bash", sql: "sql",
+  xml: "xml", svg: "xml",
+};
+
+function getFileLang(filePath: string): string {
+  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
+  return EXT_LANG_MAP[ext] ?? ext;
+}
+
+function hunksToUnifiedDiff(filePath: string, hunks: DiffHunk[]): string {
+  const lines: string[] = [
+    `--- a/${filePath}`,
+    `+++ b/${filePath}`,
+  ];
+  for (const hunk of hunks) {
+    lines.push(hunk.header);
+    for (const line of hunk.lines) {
+      const prefix = line.lineType === "add" ? "+" : line.lineType === "delete" ? "-" : " ";
+      lines.push(prefix + line.content.replace(/\n$/, ""));
+    }
+  }
+  return lines.join("\n");
+}
 
 interface DiffViewerProps {
   diff: DiffOutput | null;
@@ -12,6 +42,7 @@ interface DiffViewerProps {
 export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<"unified" | "split">("unified");
+  const isDark = document.documentElement.classList.contains("dark");
 
   const stats = useMemo(() => {
     if (!diff) return { added: 0, removed: 0 };
@@ -24,6 +55,16 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
       }
     }
     return { added, removed };
+  }, [diff]);
+
+  const diffData = useMemo(() => {
+    if (!diff || diff.binary || diff.hunks.length === 0) return null;
+    const lang = getFileLang(diff.filePath);
+    return {
+      oldFile: { fileName: diff.filePath, fileLang: lang, content: diff.oldContent || null },
+      newFile: { fileName: diff.filePath, fileLang: lang, content: diff.newContent || null },
+      hunks: [hunksToUnifiedDiff(diff.filePath, diff.hunks)],
+    };
   }, [diff]);
 
   const toggleView = () =>
@@ -48,8 +89,12 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
           viewMode={viewMode}
           onToggleView={toggleView}
         />
-        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-          {t("diff.binary")}
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+          <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
+            <FileQuestion className="w-6 h-6" />
+          </div>
+          <p className="text-sm font-medium">{t("diff.binary")}</p>
+          <p className="text-xs">{diff.filePath.split(".").pop()?.toUpperCase()}</p>
         </div>
       </div>
     );
@@ -66,156 +111,26 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
         onToggleView={toggleView}
       />
 
-      <div className="flex-1 min-h-0 overflow-auto font-mono text-xs">
-        {viewMode === "unified" ? (
-          <UnifiedView diff={diff} />
+      <div className="flex-1 min-h-0 overflow-auto">
+        {diffData ? (
+          <DiffView
+            data={diffData}
+            diffViewMode={viewMode === "split" ? DiffModeEnum.Split : DiffModeEnum.Unified}
+            diffViewTheme={isDark ? "dark" : "light"}
+            diffViewHighlight
+            diffViewWrap={false}
+            diffViewFontSize={12}
+          />
         ) : (
-          <SplitView diff={diff} />
+          <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
+              <FileQuestion className="w-6 h-6" />
+            </div>
+            <p className="text-sm font-medium">{t("diff.binary")}</p>
+            <p className="text-xs">{diff.filePath.split(".").pop()?.toUpperCase()}</p>
+          </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function UnifiedView({ diff }: { diff: DiffOutput }) {
-  return (
-    <table className="w-full border-collapse">
-      <tbody>
-        {diff.hunks.map((hunk, hi) => (
-          <Fragment key={`hunk-${hi}`}>
-            <tr className="bg-diff-hunk">
-              <td className="px-2 py-0.5 text-diff-hunk-fg select-none w-10 text-right border-r border-diff-hunk/30">
-                ...
-              </td>
-              <td className="px-2 py-0.5 text-diff-hunk-fg select-none w-10 text-right border-r border-diff-hunk/30">
-                ...
-              </td>
-              <td className="px-4 py-0.5 text-diff-hunk-fg font-normal">
-                {hunk.header}
-              </td>
-            </tr>
-            {hunk.lines.map((line, li) => (
-              <tr
-                key={`line-${hi}-${li}`}
-                className={clsx(
-                  line.lineType === "add" && "bg-diff-add",
-                  line.lineType === "delete" && "bg-diff-del"
-                )}
-              >
-                <td className="px-2 py-0 text-muted-foreground select-none w-10 text-right border-r border-border">
-                  {line.oldLineNo ?? ""}
-                </td>
-                <td className="px-2 py-0 text-muted-foreground select-none w-10 text-right border-r border-border">
-                  {line.newLineNo ?? ""}
-                </td>
-                <td
-                  className={clsx(
-                    "px-4 py-0 whitespace-pre",
-                    line.lineType === "add" && "text-diff-add-fg",
-                    line.lineType === "delete" && "text-diff-del-fg",
-                    line.lineType === "context" && "text-foreground"
-                  )}
-                >
-                  <span className="mr-2 select-none text-muted-foreground/50">
-                    {line.lineType === "add" ? "+" : line.lineType === "delete" ? "-" : " "}
-                  </span>
-                  {line.content}
-                </td>
-              </tr>
-            ))}
-          </Fragment>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function SplitView({ diff }: { diff: DiffOutput }) {
-  return (
-    <div className="flex">
-      {/* Left (old) */}
-      <table className="w-1/2 border-collapse border-r border-border">
-        <tbody>
-          {diff.hunks.map((hunk, hi) => (
-            <Fragment key={`left-hunk-${hi}`}>
-              <tr className="bg-diff-hunk">
-                <td className="px-2 py-0.5 text-diff-hunk-fg select-none w-10 text-right border-r border-diff-hunk/30">
-                  ...
-                </td>
-                <td className="px-4 py-0.5 text-diff-hunk-fg">
-                  {hunk.header}
-                </td>
-              </tr>
-              {hunk.lines
-                .filter((l) => l.lineType !== "add")
-                .map((line, li) => (
-                  <tr
-                    key={`left-line-${hi}-${li}`}
-                    className={
-                      line.lineType === "delete" ? "bg-diff-del" : ""
-                    }
-                  >
-                    <td className="px-2 py-0 text-muted-foreground select-none w-10 text-right border-r border-border">
-                      {line.oldLineNo ?? ""}
-                    </td>
-                    <td
-                      className={clsx(
-                        "px-4 py-0 whitespace-pre",
-                        line.lineType === "delete"
-                          ? "text-diff-del-fg"
-                          : "text-foreground"
-                      )}
-                    >
-                      {line.content}
-                    </td>
-                  </tr>
-                ))}
-            </Fragment>
-          ))}
-        </tbody>
-      </table>
-
-      {/* Right (new) */}
-      <table className="w-1/2 border-collapse">
-        <tbody>
-          {diff.hunks.map((hunk, hi) => (
-            <Fragment key={`right-hunk-${hi}`}>
-              <tr className="bg-diff-hunk">
-                <td className="px-2 py-0.5 text-diff-hunk-fg select-none w-10 text-right border-r border-diff-hunk/30">
-                  ...
-                </td>
-                <td className="px-4 py-0.5 text-diff-hunk-fg">
-                  {hunk.header}
-                </td>
-              </tr>
-              {hunk.lines
-                .filter((l) => l.lineType !== "delete")
-                .map((line, li) => (
-                  <tr
-                    key={`right-line-${hi}-${li}`}
-                    className={
-                      line.lineType === "add" ? "bg-diff-add" : ""
-                    }
-                  >
-                    <td className="px-2 py-0 text-muted-foreground select-none w-10 text-right border-r border-border">
-                      {line.newLineNo ?? ""}
-                    </td>
-                    <td
-                      className={clsx(
-                        "px-4 py-0 whitespace-pre",
-                        line.lineType === "add"
-                          ? "text-diff-add-fg"
-                          : "text-foreground"
-                      )}
-                    >
-                      {line.content}
-                    </td>
-                  </tr>
-                ))}
-            </Fragment>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }

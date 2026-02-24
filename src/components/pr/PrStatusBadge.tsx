@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { GitPullRequest, GitMerge, XCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 
 type PrStatus = "open" | "merged" | "closed";
@@ -11,27 +12,28 @@ interface PrStatusBadgeProps {
 
 const config: Record<
   PrStatus,
-  { label: string; icon: ReactNode; classes: string }
+  { labelKey: string; icon: ReactNode; classes: string }
 > = {
   open: {
-    label: "Open",
+    labelKey: "pr.open",
     icon: <GitPullRequest className="w-3 h-3" />,
     classes: "bg-success/10 text-success border-success/30",
   },
   merged: {
-    label: "Merged",
+    labelKey: "pr.merged",
     icon: <GitMerge className="w-3 h-3" />,
     classes: "bg-info/10 text-info border-info/30",
   },
   closed: {
-    label: "Closed",
+    labelKey: "pr.closed",
     icon: <XCircle className="w-3 h-3" />,
     classes: "bg-destructive/10 text-destructive border-destructive/30",
   },
 };
 
 export function PrStatusBadge({ status, className }: PrStatusBadgeProps) {
-  const { label, icon, classes } = config[status];
+  const { t } = useTranslation();
+  const { labelKey, icon, classes } = config[status];
 
   return (
     <span
@@ -42,7 +44,7 @@ export function PrStatusBadge({ status, className }: PrStatusBadgeProps) {
       )}
     >
       {icon}
-      {label}
+      {t(labelKey)}
     </span>
   );
 }

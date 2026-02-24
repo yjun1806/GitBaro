@@ -6,6 +6,7 @@ import {
   Loader2,
   ChevronDown,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useBranches, useTokenValidation } from "@/api/queries";
@@ -22,6 +23,7 @@ interface SyncZoneProps {
 }
 
 export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
+  const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const { data: branches = [] } = useBranches(activeRepoPath);
@@ -45,13 +47,13 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const syncError = (() => {
     if (!activeAccountId || isValidating || canSync) return null;
     if (!tokenStatus?.valid) {
-      if (tokenStatus?.reason === "token_not_found") return { title: "Token missing", description: "Sign in again to continue" };
-      if (tokenStatus?.reason === "network_error") return { title: "Network error", description: "Check your connection" };
-      return { title: "Session expired", description: "Sign in again to sync" };
+      if (tokenStatus?.reason === "token_not_found") return { title: t("sync.tokenMissing"), description: t("sync.tokenMissingDesc") };
+      if (tokenStatus?.reason === "network_error") return { title: t("sync.networkError"), description: t("sync.networkErrorDesc") };
+      return { title: t("sync.sessionExpired"), description: t("sync.sessionExpiredDesc") };
     }
     if (!tokenStatus?.canPush) {
-      if (tokenStatus?.reason === "repo_not_found") return { title: "Repository not found", description: "No access to this repository" };
-      return { title: "Read-only access", description: "No push permission for this repo" };
+      if (tokenStatus?.reason === "repo_not_found") return { title: t("sync.repoNotFound"), description: t("sync.repoNotFoundDesc") };
+      return { title: t("sync.readOnly"), description: t("sync.readOnlyDesc") };
     }
     return null;
   })();
@@ -75,19 +77,19 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
     try {
       if (action === "pull") {
         await gitPull(activeRepoPath, activeAccountId);
-        addToast("Pull completed successfully", "success");
+        addToast(t("sync.pullCompleted"), "success");
       } else if (action === "push") {
         await gitPush(activeRepoPath, activeAccountId);
-        addToast("Push completed successfully", "success");
+        addToast(t("sync.pushCompleted"), "success");
       } else {
         await gitFetch(activeRepoPath, activeAccountId);
-        addToast("Fetch completed", "success");
+        addToast(t("sync.fetchCompleted"), "success");
       }
       setLastFetchedAt(Math.floor(Date.now() / 1000));
       await invalidateAll();
     } catch (err) {
-      const label = behind > 0 ? "Pull" : ahead > 0 ? "Push" : "Fetch";
-      addToast(`${label} failed: ${getErrorMessage(err)}`, "error");
+      const failKey = behind > 0 ? "sync.pullFailed" : ahead > 0 ? "sync.pushFailed" : "sync.fetchFailed";
+      addToast(t(failKey, { error: getErrorMessage(err) }), "error");
     } finally {
       setSyncingAction(null);
     }
@@ -100,9 +102,9 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
       await gitFetch(activeRepoPath, activeAccountId);
       setLastFetchedAt(Math.floor(Date.now() / 1000));
       await invalidateAll();
-      addToast("Fetch completed", "success");
+      addToast(t("sync.fetchCompleted"), "success");
     } catch (err) {
-      addToast(`Fetch failed: ${getErrorMessage(err)}`, "error");
+      addToast(t("sync.fetchFailed", { error: getErrorMessage(err) }), "error");
     } finally {
       setSyncingAction(null);
     }
@@ -115,9 +117,9 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
       await gitPull(activeRepoPath, activeAccountId, rebase);
       setLastFetchedAt(Math.floor(Date.now() / 1000));
       await invalidateAll();
-      addToast(rebase ? "Pull (rebase) completed" : "Pull completed successfully", "success");
+      addToast(rebase ? t("sync.pullRebaseCompleted") : t("sync.pullCompleted"), "success");
     } catch (err) {
-      addToast(`Pull failed: ${getErrorMessage(err)}`, "error");
+      addToast(t("sync.pullFailed", { error: getErrorMessage(err) }), "error");
     } finally {
       setSyncingAction(null);
     }
@@ -126,15 +128,15 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const handlePush = async (force = false) => {
     if (!activeRepoPath || !activeAccountId || isSyncing) return;
     if (force) {
-      addToast("Force pushing...", "info");
+      addToast(t("sync.forcePushing"), "info");
     }
     setSyncingAction("push");
     try {
       await gitPush(activeRepoPath, activeAccountId, force);
       await invalidateAll();
-      addToast(force ? "Force push completed" : "Push completed successfully", "success");
+      addToast(force ? t("sync.forcePushCompleted") : t("sync.pushCompleted"), "success");
     } catch (err) {
-      addToast(`Push failed: ${getErrorMessage(err)}`, "error");
+      addToast(t("sync.pushFailed", { error: getErrorMessage(err) }), "error");
     } finally {
       setSyncingAction(null);
     }
@@ -144,7 +146,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const stateConfig = (() => {
     if (isSyncing) return {
       icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />,
-      label: syncingAction === "pull" ? "Pulling..." : syncingAction === "push" ? "Pushing..." : "Fetching...",
+      label: syncingAction === "pull" ? t("sync.pulling") : syncingAction === "push" ? t("sync.pushing") : t("sync.fetching"),
       accent: "text-primary",
       bg: "bg-primary/5 border-primary/20",
     };
@@ -156,19 +158,19 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
     };
     if (behind > 0) return {
       icon: <ArrowDown className="w-3.5 h-3.5" />,
-      label: "Pull",
+      label: t("toolbar.pull"),
       accent: "text-primary",
       bg: "border-primary/20 hover:bg-primary/5",
     };
     if (ahead > 0) return {
       icon: <ArrowUp className="w-3.5 h-3.5" />,
-      label: "Push",
+      label: t("toolbar.push"),
       accent: "text-primary",
       bg: "border-primary/20 hover:bg-primary/5",
     };
     return {
       icon: <RefreshCw className="w-3.5 h-3.5" />,
-      label: "Fetch",
+      label: t("toolbar.fetch"),
       accent: "text-muted-foreground",
       bg: "border-transparent hover:border-border hover:bg-accent",
     };

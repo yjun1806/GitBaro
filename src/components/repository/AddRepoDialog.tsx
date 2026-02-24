@@ -46,7 +46,7 @@ export function AddRepoDialog({
       <div className="bg-card rounded-xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="text-base font-semibold text-foreground">
-            Add Repository
+            {t("repo.addRepository")}
           </h2>
           <button
             onClick={onClose}
@@ -60,19 +60,19 @@ export function AddRepoDialog({
           <OptionCard
             icon={<Download className="w-5 h-5" />}
             title={t("repo.clone")}
-            description="Clone a repository from GitHub or a remote URL"
+            description={t("repo.cloneDescription")}
             onClick={onClone}
           />
           <OptionCard
             icon={<Plus className="w-5 h-5" />}
             title={t("repo.create")}
-            description="Initialize a new Git repository in a folder"
+            description={t("repo.initDescription")}
             onClick={onCreate}
           />
           <OptionCard
             icon={<FolderOpen className="w-5 h-5" />}
             title={t("repo.add")}
-            description="Add an existing local Git repository"
+            description={t("repo.addDescription")}
             onClick={onAddExisting}
           />
         </div>

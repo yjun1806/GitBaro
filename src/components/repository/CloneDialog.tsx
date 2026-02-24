@@ -73,14 +73,14 @@ export function CloneDialog({
               {/* Account selector */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
-                  Account
+                  {t("clone.account")}
                 </label>
                 <select
                   value={selectedAccountId ?? ""}
                   onChange={(e) => onAccountChange(e.target.value)}
                   className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="">Select account...</option>
+                  <option value="">{t("clone.selectAccount")}</option>
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.username}
@@ -92,7 +92,7 @@ export function CloneDialog({
               {/* Repo search */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
-                  Repository
+                  {t("clone.repository")}
                 </label>
                 <div className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg">
                   <Search className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -100,7 +100,7 @@ export function CloneDialog({
                     type="text"
                     value={repoSearch}
                     onChange={(e) => setRepoSearch(e.target.value)}
-                    placeholder="Search repositories..."
+                    placeholder={t("clone.searchRepos")}
                     className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
                   />
                 </div>
@@ -111,7 +111,7 @@ export function CloneDialog({
           {tab === "url" && (
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-muted-foreground">
-                Repository URL
+                {t("clone.repositoryUrl")}
               </label>
               <input
                 type="text"
@@ -126,7 +126,7 @@ export function CloneDialog({
           {/* Local path */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-muted-foreground">
-              Local Path
+              {t("clone.localPath")}
             </label>
             <div className="flex gap-2">
               <input
@@ -138,7 +138,7 @@ export function CloneDialog({
               />
               <button className="flex items-center gap-1.5 px-3 py-2 text-sm border border-border rounded-lg hover:bg-accent text-muted-foreground transition-colors">
                 <FolderOpen className="w-4 h-4" />
-                Browse
+                {t("common.browse")}
               </button>
             </div>
           </div>
@@ -150,14 +150,14 @@ export function CloneDialog({
             onClick={onClose}
             className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             onClick={handleClone}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg transition-colors"
           >
             <Download className="w-4 h-4" />
-            Clone
+            {t("clone.clone")}
           </button>
         </div>
       </div>

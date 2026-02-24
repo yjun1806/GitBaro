@@ -1,11 +1,23 @@
 {
   "app": { "name": "GitBaro" },
+  "common": {
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "loading": "Loading...",
+    "filter": "Filter",
+    "browse": "Browse",
+    "settings": "Settings"
+  },
   "welcome": {
     "title": "Welcome to GitBaro",
     "description": "A simple Git client with per-repo GitHub account management",
     "signIn": "Sign in with GitHub",
+    "signInDescription": "Connect your GitHub account to get started",
     "clone": "Clone a Repository",
-    "openLocal": "Open a Local Repository"
+    "cloneDescription": "Clone a repository from GitHub or a URL",
+    "openLocal": "Open a Local Repository",
+    "openLocalDescription": "Open an existing local Git repository",
+    "footer": "{{name}} — macOS Git Client"
   },
   "toolbar": {
     "fetch": "Fetch origin",
@@ -24,16 +36,56 @@
     "description": "Description",
     "submit": "Commit to {{branch}}",
     "amend": "Amend previous commit",
-    "noStagedFiles": "No staged files to commit"
+    "noStagedFiles": "No staged files to commit",
+    "stagedChanges": "Staged Changes",
+    "unstaged": "Changes",
+    "stage": "Stage",
+    "unstage": "Unstage",
+    "subjectTooLong": "Subject line exceeds {{max}} characters — consider shortening it.",
+    "coauthors": "Co-authors — coming soon",
+    "commitFailed": "Commit failed: {{error}}",
+    "stageFailed": "Stage failed: {{error}}",
+    "unstageFailed": "Unstage failed: {{error}}"
   },
-  "history": { "title": "History", "noCommits": "No commits yet" },
+  "history": {
+    "title": "History",
+    "noCommits": "No commits yet",
+    "author": "Author",
+    "date": "Date",
+    "commitHash": "Commit",
+    "parents": "Parents",
+    "changedFiles": "Changed Files",
+    "loadingHistory": "Loading history..."
+  },
   "branch": {
     "current": "Current Branch",
     "create": "New Branch",
     "name": "Branch name",
     "from": "Create from",
     "delete": "Delete Branch",
-    "deleteConfirm": "Are you sure you want to delete {{name}}?"
+    "deleteConfirm": "Are you sure you want to delete {{name}}?",
+    "local": "Local",
+    "remote": "Remote",
+    "noBranches": "No branches found",
+    "newBranch": "New branch...",
+    "filterBranches": "Filter branches...",
+    "invalidName": "Invalid branch name",
+    "currentTag": "(current)",
+    "switchedTo": "Switched to {{name}}",
+    "failedToSwitch": "Failed to switch branch: {{error}}",
+    "createdAndSwitched": "Created and switched to {{name}}",
+    "failedToCreate": "Failed to create branch: {{error}}",
+    "noBranch": "No branch",
+    "createBranch": "Create Branch"
+  },
+  "clone": {
+    "account": "Account",
+    "selectAccount": "Select account...",
+    "repository": "Repository",
+    "repositoryUrl": "Repository URL",
+    "localPath": "Local Path",
+    "searchRepos": "Search repositories...",
+    "clone": "Clone"
   },
   "account": {
     "switch": "Switch Account",
@@ -51,7 +103,11 @@
     "waitingAuth": "Waiting for authorization...",
     "completeSignIn": "Complete the sign-in on GitHub",
     "signedInAs": "Signed in as",
-    "continue": "Continue"
+    "continue": "Continue",
+    "noAccountsLinked": "No accounts linked",
+    "signInToGitHub": "Sign in to GitHub",
+    "addAnother": "Add another account",
+    "manageAccounts": "Manage Accounts"
   },
   "gh": {
     "notInstalled": "GitHub CLI is not installed",
@@ -67,7 +123,22 @@
     "create": "Create New Repository",
     "open": "Open Repository",
     "noRepos": "No repositories",
-    "search": "Search repositories..."
+    "search": "Search repositories...",
+    "addRepository": "Add Repository",
+    "addLocal": "Add Local Repository...",
+    "cloneRepo": "Clone Repository...",
+    "createNew": "Create New Repository...",
+    "cloneDescription": "Clone a repository from GitHub or a remote URL",
+    "initDescription": "Initialize a new Git repository in a folder",
+    "addDescription": "Add an existing local Git repository",
+    "noMatches": "No matches",
+    "selectRepo": "Select a repository",
+    "currentRepo": "Current Repository",
+    "linkAccount": "Link Account",
+    "unlinkAccount": "Unlink account",
+    "setAccount": "Set account",
+    "default": "Default",
+    "failedToAdd": "Failed to add repository: {{error}}"
   },
   "settings": {
     "title": "Settings",
@@ -78,6 +149,10 @@
     "dark": "Dark",
     "system": "System",
     "editor": "Default Editor",
+    "editorDescription": "Choose the editor to open files with",
+    "detecting": "Detecting installed editors...",
+    "noEditors": "No installed editors found",
+    "editorNotSet": "No default editor configured. Please select one in Settings.",
     "shell": "Default Shell",
     "language": "Language"
   },
@@ -85,7 +160,73 @@
     "unified": "Unified",
     "split": "Side by Side",
     "noSelection": "Select a file to view changes",
-    "binary": "Binary file changed"
+    "binary": "Binary file changed",
+    "noFileSelected": "No file selected",
+    "selectFile": "Select a changed file to view its diff",
+    "noCommitSelected": "No commit selected",
+    "selectCommit": "Select a commit to view its details",
+    "loadingDiff": "Loading diff...",
+    "failedToLoad": "Failed to load diff",
+    "commitDetails": "Commit details will render here"
+  },
+  "sync": {
+    "fetchOrigin": "Fetch origin",
+    "fetchDescription": "Download objects and refs from remote",
+    "pullOrigin": "Pull origin",
+    "pullDescription": "Fetch and merge remote changes",
+    "pushOrigin": "Push origin",
+    "pushDescription": "Upload local commits to remote",
+    "noRemoteChanges": "No remote changes to pull",
+    "noLocalCommits": "No local commits to push",
+    "lastFetched": "Last fetched {{time}}",
+    "neverFetched": "Never fetched",
+    "pulling": "Pulling...",
+    "pushing": "Pushing...",
+    "fetching": "Fetching...",
+    "pullCompleted": "Pull completed successfully",
+    "pushCompleted": "Push completed successfully",
+    "fetchCompleted": "Fetch completed",
+    "pullRebaseCompleted": "Pull (rebase) completed",
+    "forcePushing": "Force pushing...",
+    "forcePushCompleted": "Force push completed",
+    "pullFailed": "Pull failed: {{error}}",
+    "pushFailed": "Push failed: {{error}}",
+    "fetchFailed": "Fetch failed: {{error}}",
+    "tokenMissing": "Token missing",
+    "tokenMissingDesc": "Sign in again to continue",
+    "networkError": "Network error",
+    "networkErrorDesc": "Check your connection",
+    "sessionExpired": "Session expired",
+    "sessionExpiredDesc": "Sign in again to sync",
+    "repoNotFound": "Repository not found",
+    "repoNotFoundDesc": "No access to this repository",
+    "readOnly": "Read-only access",
+    "readOnlyDesc": "No push permission for this repo"
+  },
+  "time": {
+    "justNow": "just now",
+    "minutesAgo_one": "{{count}} minute ago",
+    "minutesAgo_other": "{{count}} minutes ago",
+    "hoursAgo_one": "{{count}} hour ago",
+    "hoursAgo_other": "{{count}} hours ago",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago",
+    "weeksAgo_one": "{{count}} week ago",
+    "weeksAgo_other": "{{count}} weeks ago",
+    "monthsAgo_one": "{{count}} month ago",
+    "monthsAgo_other": "{{count}} months ago",
+    "yearsAgo_one": "{{count}} year ago",
+    "yearsAgo_other": "{{count}} years ago"
+  },
+  "status": {
+    "online": "Online",
+    "offline": "Offline",
+    "fetched": "Fetched {{time}}"
+  },
+  "pr": {
+    "open": "Open",
+    "merged": "Merged",
+    "closed": "Closed"
   },
   "error": {
     "generic": "Something went wrong",
@@ -94,7 +235,14 @@
     "rateLimit": "Rate limit exceeded. Try again in {{time}}.",
     "gitNotFound": "Git is not installed. Please install Xcode Command Line Tools.",
     "reload": "Reload",
-    "retry": "Retry"
+    "retry": "Retry",
+    "unknownError": "Unknown error",
+    "somethingWentWrong": "Something went wrong",
+    "tryAgain": "Try again",
+    "failedToLoadAccounts": "Failed to load accounts: {{error}}",
+    "failedToOpenRepo": "Failed to open repository: {{error}}",
+    "failedToLogout": "Failed to log out: {{error}}",
+    "failedToUpdateSettings": "Failed to update settings: {{error}}"
   },
   "conflict": {
     "title": "Merge Conflicts",

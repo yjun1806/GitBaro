@@ -78,7 +78,7 @@ export function AccountSettings({
                 onClick={() => setConfirmLogoutId(null)}
                 className="flex-1 py-2 rounded-lg text-sm font-medium border border-border text-muted-foreground hover:bg-accent transition-colors"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 onClick={() => handleLogout(confirmAccount.id)}

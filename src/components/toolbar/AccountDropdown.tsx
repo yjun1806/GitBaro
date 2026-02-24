@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { Check } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useAccountStore } from "@/stores/account";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import { useClickOutside } from "./useToolbarDropdown";
@@ -15,6 +16,7 @@ export function AccountDropdown({
   onSignIn,
   onManageAccounts,
 }: AccountDropdownProps) {
+  const { t } = useTranslation();
   const accounts = useAccountStore((s) => s.accounts);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
@@ -29,7 +31,7 @@ export function AccountDropdown({
     >
       {accounts.length === 0 ? (
         <div className="px-3 py-2">
-          <p className="text-sm text-muted-foreground">No accounts linked</p>
+          <p className="text-sm text-muted-foreground">{t("account.noAccountsLinked")}</p>
           <button
             onClick={() => {
               onClose();
@@ -37,7 +39,7 @@ export function AccountDropdown({
             }}
             className="mt-2 w-full py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
           >
-            Sign in to GitHub
+            {t("account.signInToGitHub")}
           </button>
         </div>
       ) : (
@@ -66,7 +68,7 @@ export function AccountDropdown({
               }}
               className="w-full px-3 py-2 text-sm text-muted-foreground hover:bg-accent transition-colors text-left"
             >
-              Add another account
+              {t("account.addAnother")}
             </button>
             <button
               onClick={() => {
@@ -75,7 +77,7 @@ export function AccountDropdown({
               }}
               className="w-full px-3 py-2 text-sm text-muted-foreground hover:bg-accent transition-colors text-left"
             >
-              Manage Accounts
+              {t("account.manageAccounts")}
             </button>
           </div>
         </>

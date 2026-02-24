@@ -1,4 +1,5 @@
 import { FileText, GitCommit } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useStatus, useFileDiff } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
@@ -30,6 +31,7 @@ function EmptyState({
 }
 
 function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }) {
+  const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const { data: diff, isLoading, isError } = useFileDiff(activeRepoPath, filePath, staged);
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
@@ -40,7 +42,7 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-        Loading diff...
+        {t("diff.loadingDiff")}
       </div>
     );
   }
@@ -48,7 +50,7 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
   if (isError) {
     return (
       <div className="flex-1 flex items-center justify-center text-sm text-danger">
-        Failed to load diff
+        {t("diff.failedToLoad")}
       </div>
     );
   }
@@ -57,6 +59,7 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
 }
 
 function CommitDetailPlaceholder({ commitId }: { commitId: string }) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface">
@@ -64,7 +67,7 @@ function CommitDetailPlaceholder({ commitId }: { commitId: string }) {
         <span className="text-sm font-mono">{commitId.slice(0, 8)}</span>
       </div>
       <div className="flex-1 overflow-auto flex items-center justify-center text-muted-foreground">
-        <p className="text-sm">Commit details will render here</p>
+        <p className="text-sm">{t("diff.commitDetails")}</p>
       </div>
     </div>
   );
@@ -85,6 +88,7 @@ export function ContentArea({
   selectedFileStaged,
   selectedCommitId,
 }: ContentAreaProps) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col h-full">
       <ToolbarRoot />
@@ -97,8 +101,8 @@ export function ContentArea({
           ) : (
             <EmptyState
               icon={FileText}
-              title="No file selected"
-              description="Select a changed file to view its diff"
+              title={t("diff.noFileSelected")}
+              description={t("diff.selectFile")}
             />
           )
         ) : selectedCommitId ? (
@@ -106,8 +110,8 @@ export function ContentArea({
         ) : (
           <EmptyState
             icon={GitCommit}
-            title="No commit selected"
-            description="Select a commit to view its details"
+            title={t("diff.noCommitSelected")}
+            description={t("diff.selectCommit")}
           />
         )}
       </div>

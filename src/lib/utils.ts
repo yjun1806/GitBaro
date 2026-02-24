@@ -1,4 +1,5 @@
 import { clsx } from "clsx";
+import i18n from "@/i18n/config";
 
 export function cn(...classes: (string | undefined | false | null)[]): string {
   return clsx(classes);
@@ -26,13 +27,13 @@ export function formatRelativeTime(timestamp: number): string {
   const diffMonths = Math.floor(diffDays / 30);
   const diffYears = Math.floor(diffDays / 365);
 
-  if (diffSeconds < 60) return "just now";
-  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes !== 1 ? "s" : ""} ago`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
-  if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
-  if (diffWeeks < 4) return `${diffWeeks} week${diffWeeks !== 1 ? "s" : ""} ago`;
-  if (diffMonths < 12) return `${diffMonths} month${diffMonths !== 1 ? "s" : ""} ago`;
-  return `${diffYears} year${diffYears !== 1 ? "s" : ""} ago`;
+  if (diffSeconds < 60) return i18n.t("time.justNow");
+  if (diffMinutes < 60) return i18n.t("time.minutesAgo", { count: diffMinutes });
+  if (diffHours < 24) return i18n.t("time.hoursAgo", { count: diffHours });
+  if (diffDays < 7) return i18n.t("time.daysAgo", { count: diffDays });
+  if (diffWeeks < 4) return i18n.t("time.weeksAgo", { count: diffWeeks });
+  if (diffMonths < 12) return i18n.t("time.monthsAgo", { count: diffMonths });
+  return i18n.t("time.yearsAgo", { count: diffYears });
 }
 
 export function truncateHash(hash: string, length = 7): string {

@@ -24,6 +24,13 @@ pub async fn get_file_diff(
             repo.diff_index_to_workdir(None, Some(&mut diff_opts))?
         };
 
+        // Detect binary files
+        let is_binary = diff.deltas().any(|d| {
+            d.flags().contains(git2::DiffFlags::BINARY)
+                || d.old_file().is_binary()
+                || d.new_file().is_binary()
+        });
+
         let mut hunks: Vec<Value> = Vec::new();
         let mut current_hunk_lines: Vec<Value> = Vec::new();
         let mut current_hunk_header = String::new();
@@ -78,6 +85,35 @@ pub async fn get_file_diff(
             }));
         }
 
+        // Read old/new file contents for hunk expand support
+        let old_content = {
+            let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
+            head_tree
+                .and_then(|tree| tree.get_path(std::path::Path::new(&file_path)).ok())
+                .and_then(|entry| repo.find_blob(entry.id()).ok())
+                .map(|blob| String::from_utf8_lossy(blob.content()).to_string())
+                .unwrap_or_default()
+        };
+
+        let new_content = if staged {
+            // staged: new content is in the index
+            repo.index()
+                .ok()
+                .and_then(|index| {
+                    let entry = index.iter().find(|e| {
+                        let path = String::from_utf8_lossy(&e.path);
+                        path == file_path
+                    })?;
+                    repo.find_blob(entry.id).ok()
+                })
+                .map(|blob| String::from_utf8_lossy(blob.content()).to_string())
+                .unwrap_or_default()
+        } else {
+            // unstaged: new content is on disk
+            let full_path = std::path::Path::new(&repo_path).join(&file_path);
+            std::fs::read_to_string(&full_path).unwrap_or_default()
+        };
+
         let stats = diff.stats()?;
 
         // Fallback for untracked files: git2 may not produce patch lines
@@ -124,9 +160,12 @@ pub async fn get_file_diff(
         Ok::<_, AppError>(json!({
             "filePath": file_path,
             "staged": staged,
+            "binary": is_binary,
             "insertions": total_insertions,
             "deletions": stats.deletions(),
             "hunks": hunks,
+            "oldContent": old_content,
+            "newContent": new_content,
         }))
     })
     .await

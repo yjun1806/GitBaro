@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useUIStore } from "@/stores/ui";
+import { useRepositoryStore } from "@/stores/repository";
 import { Sidebar } from "./Sidebar";
 import { ContentArea } from "./ContentArea";
 
@@ -13,9 +14,18 @@ export function MainLayout() {
   const repoListOpen = useUIStore((s) => s.repoListOpen);
   const setRepoListOpen = useUIStore((s) => s.setRepoListOpen);
 
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedFileStaged, setSelectedFileStaged] = useState(false);
   const [selectedCommitId, setSelectedCommitId] = useState<string | null>(null);
+
+  // 레포 변경 시 선택 상태 초기화
+  useEffect(() => {
+    setSelectedFile(null);
+    setSelectedFileStaged(false);
+    setSelectedCommitId(null);
+  }, [activeRepoPath]);
 
   const isDragging = useRef(false);
   const startX = useRef(0);

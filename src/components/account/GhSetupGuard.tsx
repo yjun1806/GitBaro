@@ -32,7 +32,7 @@ export function GhSetupGuard({ children }: GhSetupGuardProps) {
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-pulse text-muted-foreground text-sm">Loading...</div>
+        <div className="animate-pulse text-muted-foreground text-sm">{t("common.loading")}</div>
       </div>
     );
   }

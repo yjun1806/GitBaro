@@ -30,7 +30,7 @@ export function DiffHeader({
     : filePath;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 bg-surface border-b border-border min-w-0">
+    <div className="flex items-center gap-3 px-4 h-[36px] bg-surface border-b border-border min-w-0">
       <FileStatusBadge status={status} size="md" />
 
       <div className="flex-1 min-w-0 flex items-center gap-0.5">

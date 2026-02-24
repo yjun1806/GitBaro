@@ -46,7 +46,7 @@ export function CommitPanel({ currentBranch, stagedCount, onCommit }: CommitPane
 
       {/* Co-authors placeholder */}
       <div className="text-xs text-muted-foreground/50 italic px-1">
-        Co-authors — coming soon
+        {t("commit.coauthors")}
       </div>
 
       {/* Amend checkbox */}

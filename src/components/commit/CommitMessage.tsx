@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 
 interface CommitMessageProps {
@@ -11,6 +12,7 @@ const WARN_AT = 50;
 const ERROR_AT = 72;
 
 export function CommitMessage({ value, onChange, placeholder }: CommitMessageProps) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export function CommitMessage({ value, onChange, placeholder }: CommitMessagePro
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder ?? "Summary (required)"}
+          placeholder={placeholder ?? t("commit.summary")}
           className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
         />
         <span
@@ -56,7 +58,7 @@ export function CommitMessage({ value, onChange, placeholder }: CommitMessagePro
       </div>
       {isError && (
         <p className="text-xs text-destructive">
-          Subject line exceeds {ERROR_AT} characters — consider shortening it.
+          {t("commit.subjectTooLong", { max: ERROR_AT })}
         </p>
       )}
     </div>

@@ -10,17 +10,10 @@
   font-weight: 100 900;
   font-display: swap;
 }
-@font-face {
-  font-family: 'JetBrains Mono';
-  src: url('../assets/fonts/JetBrainsMono-Variable.woff2') format('woff2');
-  font-weight: 100 800;
-  font-display: swap;
-}
-
 /* ── 디자인 토큰 (Tailwind @theme) ── */
 @theme {
   --font-sans: 'Pretendard', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'Menlo', 'Consolas', monospace;
+  --font-mono: 'Pretendard', ui-sans-serif, system-ui, -apple-system, sans-serif;
 
   /* 타이포그래피 스케일 (데스크톱 앱에 맞게 컴팩트하게 조정) */
   --text-xs: 0.6875rem;
@@ -172,6 +165,11 @@ html *::-webkit-scrollbar { width: 8px !important; height: 8px !important; }
 html *::-webkit-scrollbar-track { background: var(--scrollbar-track) !important; }
 html *::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb) !important; border-radius: 4px; }
 html *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover) !important; }
+
+/* ── Diff 뷰어 스타일 오버라이드 ── */
+[data-component="git-diff-view"] {
+  font-family: 'Pretendard', ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+}
 
 /* ── 기본 스타일 ── */
 @layer base {

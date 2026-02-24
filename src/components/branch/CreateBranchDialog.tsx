@@ -26,7 +26,7 @@ export function CreateBranchDialog({
   const [fromBranch, setFromBranch] = useState(currentBranch ?? "");
 
   const valid = name.length > 0 && isValidBranchName(name);
-  const error = name.length > 0 && !valid ? "Invalid branch name" : null;
+  const error = name.length > 0 && !valid ? t("branch.invalidName") : null;
 
   const localBranches = branches.filter((b) => !b.isRemote);
 
@@ -93,7 +93,7 @@ export function CreateBranchDialog({
               {localBranches.map((b) => (
                 <option key={b.name} value={b.name}>
                   {b.name}
-                  {b.isHead ? " (current)" : ""}
+                  {b.isHead ? ` ${t("branch.currentTag")}` : ""}
                 </option>
               ))}
             </select>
@@ -105,14 +105,14 @@ export function CreateBranchDialog({
             onClick={onClose}
             className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             onClick={handleCreate}
             disabled={!valid}
             className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors"
           >
-            Create Branch
+            {t("branch.createBranch")}
           </button>
         </div>
       </div>

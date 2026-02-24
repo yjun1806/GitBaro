@@ -1,4 +1,5 @@
 import { GitBranch, Wifi, WifiOff, Clock } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useBranchStore } from "@/stores/branch";
 import { formatRelativeTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -9,6 +10,7 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ lastFetchTime = null, isOnline = true }: StatusBarProps) {
+  const { t } = useTranslation();
   const currentBranch = useBranchStore((s) => s.currentBranch);
 
   return (
@@ -28,7 +30,7 @@ export function StatusBar({ lastFetchTime = null, isOnline = true }: StatusBarPr
       {lastFetchTime !== null && (
         <div className="flex items-center gap-1">
           <Clock className="w-3 h-3" />
-          <span>Fetched {formatRelativeTime(lastFetchTime)}</span>
+          <span>{t("status.fetched", { time: formatRelativeTime(lastFetchTime) })}</span>
         </div>
       )}
 
@@ -40,7 +42,7 @@ export function StatusBar({ lastFetchTime = null, isOnline = true }: StatusBarPr
         ) : (
           <WifiOff className="w-3 h-3 text-danger" />
         )}
-        <span>{isOnline ? "Online" : "Offline"}</span>
+        <span>{isOnline ? t("status.online") : t("status.offline")}</span>
       </div>
     </div>
   );

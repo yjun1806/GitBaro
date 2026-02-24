@@ -1,20 +1,12 @@
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import type { CommitInfo } from "@/types";
+import { formatRelativeTime } from "@/lib/utils";
 
 interface HistoryTimelineProps {
   commits: CommitInfo[];
   selectedOid?: string;
   onSelectCommit: (commit: CommitInfo) => void;
-}
-
-function formatRelativeTime(timestamp: number): string {
-  const diff = Date.now() / 1000 - timestamp;
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  return new Date(timestamp * 1000).toLocaleDateString();
 }
 
 function getInitials(name: string): string {

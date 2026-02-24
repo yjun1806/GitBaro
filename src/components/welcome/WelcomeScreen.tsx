@@ -93,7 +93,7 @@ export function WelcomeScreen({
             <ActionCard
               icon={<Github className="w-5 h-5 text-primary-foreground" />}
               title={t("welcome.signIn")}
-              description="Connect your GitHub account to get started"
+              description={t("welcome.signInDescription")}
               onClick={onSignIn}
               primary
             />
@@ -102,7 +102,7 @@ export function WelcomeScreen({
           <ActionCard
             icon={<Download className="w-5 h-5" />}
             title={t("welcome.clone")}
-            description="Clone a repository from GitHub or a URL"
+            description={t("welcome.cloneDescription")}
             onClick={onClone}
             disabled={!isSignedIn}
           />
@@ -110,14 +110,14 @@ export function WelcomeScreen({
           <ActionCard
             icon={<FolderOpen className="w-5 h-5" />}
             title={t("welcome.openLocal")}
-            description="Open an existing local Git repository"
+            description={t("welcome.openLocalDescription")}
             onClick={onOpenLocal}
           />
         </div>
 
         {/* Footer */}
         <p className="text-xs text-muted-foreground/50">
-          {t("app.name")} — macOS Git Client
+          {t("welcome.footer", { name: t("app.name") })}
         </p>
       </div>
     </div>

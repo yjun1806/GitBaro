@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Settings } from "lucide-react";
 import { useAccountStore } from "@/stores/account";
 import {
@@ -29,6 +30,8 @@ export function ToolbarRoot() {
   const logout = useAccountStore((s) => s.logout);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
+  const setTheme = useUIStore((s) => s.setTheme);
+  const { t, i18n } = useTranslation();
 
   const handleOpenSettings = async () => {
     try {
@@ -51,11 +54,9 @@ export function ToolbarRoot() {
       await removeAccountApi(accountId);
       logout(accountId);
     } catch (err) {
-      addToast(`Failed to log out: ${getErrorMessage(err)}`, "error");
+      addToast(t("error.failedToLogout", { error: getErrorMessage(err) }), "error");
     }
   };
-
-  const setTheme = useUIStore((s) => s.setTheme);
 
   const handleUpdateSettings = async (patch: Partial<AppSettings>) => {
     if (!appSettings) return;
@@ -64,10 +65,13 @@ export function ToolbarRoot() {
     if (patch.theme) {
       setTheme(patch.theme);
     }
+    if (patch.language) {
+      i18n.changeLanguage(patch.language);
+    }
     try {
       await updateSettingsApi(updated);
     } catch (err) {
-      addToast(`Failed to update settings: ${getErrorMessage(err)}`, "error");
+      addToast(t("error.failedToUpdateSettings", { error: getErrorMessage(err) }), "error");
     }
   };
 
@@ -125,7 +129,7 @@ export function ToolbarRoot() {
         <button
           onClick={handleOpenSettings}
           className="flex items-center justify-center w-[42px] h-[52px] hover:bg-accent transition-colors text-muted-foreground hover:text-foreground shrink-0"
-          title="Settings"
+          title={t("common.settings")}
         >
           <Settings className="w-4 h-4" />
         </button>

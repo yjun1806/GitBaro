@@ -1,10 +1,12 @@
 import { useState, useCallback, useEffect, Component, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { applyTheme, watchSystemTheme } from "@/lib/theme";
-import { addLocalRepository, getAccounts, openRepository } from "@/api/commands";
+import { addLocalRepository, getAccounts, getSettings, openRepository } from "@/api/commands";
+import i18n from "@/i18n/config";
 import { getErrorMessage } from "@/lib/utils";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { WelcomeScreen } from "@/components/welcome/WelcomeScreen";
@@ -29,7 +31,7 @@ class ErrorBoundary extends Component<
   }
 
   static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const message = error instanceof Error ? error.message : i18n.t("error.unknownError");
     return { hasError: true, message };
   }
 
@@ -37,13 +39,13 @@ class ErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center h-screen gap-4 p-8 text-center">
-          <p className="text-lg font-semibold text-danger">Something went wrong</p>
+          <p className="text-lg font-semibold text-danger">{i18n.t("error.somethingWentWrong")}</p>
           <p className="text-sm text-muted-foreground max-w-md">{this.state.message}</p>
           <button
             onClick={() => this.setState({ hasError: false, message: "" })}
             className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary-hover transition-colors"
           >
-            Try again
+            {i18n.t("error.tryAgain")}
           </button>
         </div>
       );
@@ -55,6 +57,7 @@ class ErrorBoundary extends Component<
 // --- App ---
 
 function AppContent() {
+  const { t } = useTranslation();
   const accounts = useAccountStore((s) => s.accounts);
   const setAccounts = useAccountStore((s) => s.setAccounts);
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
@@ -80,13 +83,24 @@ function AppContent() {
         }
       }
     } catch (err) {
-      addToast(`Failed to load accounts: ${getErrorMessage(err)}`, "error");
+      addToast(t("error.failedToLoadAccounts", { error: getErrorMessage(err) }), "error");
     }
   }, [setAccounts, setActiveAccount, addToast]);
 
-  // Load accounts from backend on startup
+  // Load accounts and settings from backend on startup
   useEffect(() => {
-    refreshAccounts().finally(() => setIsLoading(false));
+    const init = async () => {
+      await refreshAccounts();
+      try {
+        const settings = await getSettings();
+        if (settings.language && settings.language !== i18n.language) {
+          i18n.changeLanguage(settings.language);
+        }
+      } catch {
+        // settings load failure is non-critical
+      }
+    };
+    init().finally(() => setIsLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refresh persisted repos from backend on startup (to get latest remotes, etc.)
@@ -133,7 +147,7 @@ function AppContent() {
       addRepo(repoInfo);
       setActiveRepo(repoInfo.path);
     } catch (err) {
-      addToast(`Failed to open repository: ${getErrorMessage(err)}`, "error");
+      addToast(t("error.failedToOpenRepo", { error: getErrorMessage(err) }), "error");
     }
   }, [addRepo, setActiveRepo, addToast]);
 
@@ -141,7 +155,7 @@ function AppContent() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-pulse text-muted-foreground text-sm">Loading...</div>
+        <div className="animate-pulse text-muted-foreground text-sm">{t("common.loading")}</div>
       </div>
     );
   }

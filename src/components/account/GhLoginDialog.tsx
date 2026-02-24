@@ -155,7 +155,7 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
               onClick={onClose}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </>
         )}
@@ -179,7 +179,7 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
               onClick={onClose}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </>
         )}
@@ -227,7 +227,7 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
               onClick={onClose}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </>
         )}

@@ -52,7 +52,7 @@ export function FileList({
         <div className="flex flex-col min-h-0 max-h-[50%] shrink-0">
           <div className="flex items-center justify-between px-3 py-1.5 bg-surface border-b border-border shrink-0">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Staged Changes ({staged.length})
+              {t("commit.stagedChanges")} ({staged.length})
             </span>
             <button
               onClick={onUnstageAll}
@@ -81,7 +81,7 @@ export function FileList({
         <div className="flex flex-col flex-1 min-h-0">
           <div className="flex items-center justify-between px-3 py-1.5 bg-surface border-b border-border shrink-0">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Changes ({unstaged.length})
+              {t("commit.unstaged")} ({unstaged.length})
             </span>
             <button
               onClick={onStageAll}
@@ -119,12 +119,12 @@ export function FileList({
         >
           {contextMenu.file.staged ? (
             <ContextMenuItem
-              label="Unstage"
+              label={t("commit.unstage")}
               onClick={() => { onUnstage(contextMenu.file.path); closeContextMenu(); }}
             />
           ) : (
             <ContextMenuItem
-              label="Stage"
+              label={t("commit.stage")}
               onClick={() => { onStage(contextMenu.file.path); closeContextMenu(); }}
             />
           )}

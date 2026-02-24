@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
   ChevronUp,
@@ -20,7 +21,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useBranchStore } from "@/stores/branch";
 import { useStatus, useCommitHistory, useCommitAvatars, useBranches } from "@/api/queries";
-import { addLocalRepository, createCommit, stageFiles, unstageFiles, gitFetch } from "@/api/commands";
+import { addLocalRepository, createCommit, stageFiles, unstageFiles, gitFetch, openInEditor } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { FileStatusBadge } from "@/lib/file-status";
@@ -35,11 +36,13 @@ function FileEntry({
   entry,
   isSelected,
   onClick,
+  onDoubleClick,
   onToggleStage,
 }: {
   entry: { path: string; status: string; staged: boolean };
   isSelected: boolean;
   onClick: () => void;
+  onDoubleClick?: () => void;
   onToggleStage: () => void;
 }) {
   return (
@@ -47,6 +50,10 @@ function FileEntry({
       onClick={(e) => {
         e.stopPropagation();
         onClick();
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onDoubleClick?.();
       }}
       className={cn(
         "flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors select-none border-b border-border",
@@ -125,6 +132,7 @@ function RepoAccountPicker({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -142,7 +150,7 @@ function RepoAccountPicker({
       className="absolute right-1 top-full mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50 py-1"
     >
       <p className="px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-        Link Account
+        {t("repo.linkAccount")}
       </p>
       {accounts.map((account) => (
         <button
@@ -161,7 +169,7 @@ function RepoAccountPicker({
           <AccountAvatar account={account as any} size="xs" />
           <span className="truncate flex-1">{account.username}</span>
           {account.id === currentAccountId && (
-            <span className="text-[11px] font-medium text-primary shrink-0">Default</span>
+            <span className="text-[11px] font-medium text-primary shrink-0">{t("repo.default")}</span>
           )}
         </button>
       ))}
@@ -175,7 +183,7 @@ function RepoAccountPicker({
             }}
             className="w-full px-3 py-1.5 text-sm text-danger hover:bg-accent transition-colors text-left"
           >
-            Unlink account
+            {t("repo.unlinkAccount")}
           </button>
         </>
       )}
@@ -188,6 +196,7 @@ function RepoListView({
 }: {
   onSelectRepo: (path: string) => void;
 }) {
+  const { t } = useTranslation();
   const [filter, setFilter] = useState("");
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addRef = useRef<HTMLDivElement>(null);
@@ -211,7 +220,7 @@ function RepoListView({
       addRepo(repoInfo);
       onSelectRepo(repoInfo.path);
     } catch (err) {
-      addToast(`Failed to add repository: ${getErrorMessage(err)}`, "error");
+      addToast(t("repo.failedToAdd", { error: getErrorMessage(err) }), "error");
     }
   }, [addRepo, onSelectRepo, addToast]);
 
@@ -243,7 +252,7 @@ function RepoListView({
           <input
             ref={inputRef}
             type="text"
-            placeholder="Filter"
+            placeholder={t("common.filter")}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="flex-1 min-w-0 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
@@ -253,7 +262,7 @@ function RepoListView({
           <button
             onClick={() => setAddMenuOpen((v) => !v)}
             className="flex items-center justify-center w-8 h-8 rounded-md hover:bg-accent transition-colors"
-            title="Add repository"
+            title={t("repo.addRepository")}
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -264,21 +273,21 @@ function RepoListView({
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
               >
                 <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" />
-                Add Local Repository...
+                {t("repo.addLocal")}
               </button>
               <button
                 onClick={() => setAddMenuOpen(false)}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
               >
                 <GitFork className="w-4 h-4 text-muted-foreground shrink-0" />
-                Clone Repository...
+                {t("repo.cloneRepo")}
               </button>
               <button
                 onClick={() => setAddMenuOpen(false)}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
               >
                 <FolderPlus className="w-4 h-4 text-muted-foreground shrink-0" />
-                Create New Repository...
+                {t("repo.createNew")}
               </button>
             </div>
           )}
@@ -291,7 +300,7 @@ function RepoListView({
           <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
             <Search className="w-6 h-6 opacity-40" />
             <p className="text-sm">
-              {repos.length === 0 ? "No repositories" : "No matches"}
+              {repos.length === 0 ? t("repo.noRepos") : t("repo.noMatches")}
             </p>
           </div>
         ) : (
@@ -377,7 +386,7 @@ function RepoListView({
                             "shrink-0 rounded-full transition-opacity",
                             isActive ? "hover:opacity-80" : "hover:opacity-70",
                           )}
-                          title={linkedAccount ? linkedAccount.username : "Set account"}
+                          title={linkedAccount ? linkedAccount.username : t("repo.setAccount")}
                         >
                           {linkedAccount ? (
                             <AccountAvatar account={linkedAccount} size="xs" />
@@ -426,6 +435,7 @@ function ChangesView({
   selectedFile: string | null;
   onSelectFile: (path: string, staged: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const currentBranch = useBranchStore((s) => s.currentBranch);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
@@ -439,6 +449,20 @@ function ChangesView({
   const [commitDescription, setCommitDescription] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
 
+  const handleOpenInEditor = async (filePath: string) => {
+    if (!activeRepoPath) return;
+    try {
+      await openInEditor(activeRepoPath, filePath);
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      if (msg.includes("No default editor") || msg.includes("Unknown editor")) {
+        addToast(t("settings.editorNotSet"), "warning");
+      } else {
+        addToast(t("error.generic"), "error");
+      }
+    }
+  };
+
   const stagedFiles = statusEntries.filter((e) => e.staged);
   const unstagedFiles = statusEntries.filter((e) => !e.staged);
 
@@ -451,7 +475,7 @@ function ChangesView({
         queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
       ]);
     } catch (err) {
-      addToast(`Stage failed: ${getErrorMessage(err)}`, "error");
+      addToast(t("commit.stageFailed", { error: getErrorMessage(err) }), "error");
     }
   };
 
@@ -464,7 +488,7 @@ function ChangesView({
         queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
       ]);
     } catch (err) {
-      addToast(`Unstage failed: ${getErrorMessage(err)}`, "error");
+      addToast(t("commit.unstageFailed", { error: getErrorMessage(err) }), "error");
     }
   };
 
@@ -485,7 +509,7 @@ function ChangesView({
         queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
       ]);
     } catch (err) {
-      addToast(`Commit failed: ${getErrorMessage(err)}`, "error");
+      addToast(t("commit.commitFailed", { error: getErrorMessage(err) }), "error");
     } finally {
       setIsCommitting(false);
     }
@@ -497,7 +521,7 @@ function ChangesView({
       <div className="flex-1 overflow-y-auto bg-background">
         {statusEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
-            <p className="text-sm">No local changes</p>
+            <p className="text-sm">{t("changes.noChanges")}</p>
           </div>
         ) : (
           <>
@@ -511,7 +535,7 @@ function ChangesView({
                   onChange={handleUnstageAll}
                 />
                 <span className="text-xs font-bold text-foreground flex-1">
-                  Staged Changes
+                  {t("commit.stagedChanges")}
                 </span>
                 <span className="text-xs text-muted-foreground">{stagedFiles.length}</span>
               </div>
@@ -523,6 +547,7 @@ function ChangesView({
                 entry={entry}
                 isSelected={selectedFile === entry.path}
                 onClick={() => onSelectFile(entry.path, entry.staged)}
+                onDoubleClick={() => handleOpenInEditor(entry.path)}
                 onToggleStage={async () => {
                   if (!activeRepoPath) return;
                   try {
@@ -532,7 +557,7 @@ function ChangesView({
                       queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
                     ]);
                   } catch (err) {
-                    addToast(`Unstage failed: ${getErrorMessage(err)}`, "error");
+                    addToast(t("commit.unstageFailed", { error: getErrorMessage(err) }), "error");
                   }
                 }}
               />
@@ -551,7 +576,7 @@ function ChangesView({
                   onChange={handleStageAll}
                 />
                 <span className="text-xs font-bold text-foreground flex-1">
-                  Changes
+                  {t("commit.unstaged")}
                 </span>
                 <span className="text-xs text-muted-foreground">{unstagedFiles.length}</span>
               </div>
@@ -563,6 +588,7 @@ function ChangesView({
                 entry={entry}
                 isSelected={selectedFile === entry.path}
                 onClick={() => onSelectFile(entry.path, entry.staged)}
+                onDoubleClick={() => handleOpenInEditor(entry.path)}
                 onToggleStage={async () => {
                   if (!activeRepoPath) return;
                   try {
@@ -572,7 +598,7 @@ function ChangesView({
                       queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
                     ]);
                   } catch (err) {
-                    addToast(`Stage failed: ${getErrorMessage(err)}`, "error");
+                    addToast(t("commit.stageFailed", { error: getErrorMessage(err) }), "error");
                   }
                 }}
               />
@@ -585,7 +611,7 @@ function ChangesView({
       <div className="border-t border-border p-3 flex flex-col gap-2">
         <input
           type="text"
-          placeholder="Summary (required)"
+          placeholder={t("commit.summary")}
           value={commitSummary}
           onChange={(e) => setCommitSummary(e.target.value)}
           className={cn(
@@ -595,7 +621,7 @@ function ChangesView({
           )}
         />
         <textarea
-          placeholder="Description"
+          placeholder={t("commit.description")}
           rows={3}
           value={commitDescription}
           onChange={(e) => setCommitDescription(e.target.value)}
@@ -634,7 +660,7 @@ function ChangesView({
           )}
           disabled={stagedFiles.length === 0 || !commitSummary.trim() || isCommitting}
         >
-          Commit to <strong>{currentBranch ?? "main"}</strong>
+          {t("commit.submit", { branch: currentBranch ?? "main" })}
         </button>
       </div>
     </div>
@@ -650,6 +676,7 @@ function HistoryView({
   selectedCommitId: string | null;
   onSelectCommit: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const accounts = useAccountStore((s) => s.accounts);
   const { data: commits = [], isLoading } = useCommitHistory(activeRepoPath);
@@ -668,7 +695,7 @@ function HistoryView({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
-        <p className="text-sm">Loading history...</p>
+        <p className="text-sm">{t("history.loadingHistory")}</p>
       </div>
     );
   }
@@ -676,7 +703,7 @@ function HistoryView({
   if (commits.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
-        <p className="text-sm">No commits yet</p>
+        <p className="text-sm">{t("history.noCommits")}</p>
       </div>
     );
   }
@@ -787,6 +814,7 @@ export function Sidebar({
   selectedCommitId: string | null;
   onSelectCommit: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const repoListOpen = useUIStore((s) => s.repoListOpen);
   const setRepoListOpen = useUIStore((s) => s.setRepoListOpen);
   const activeTab = useUIStore((s) => s.activeTab);
@@ -841,10 +869,10 @@ export function Sidebar({
       >
         <GitFork className="w-4 h-4 shrink-0 opacity-50" />
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] text-muted-foreground leading-tight">Current Repository</p>
+          <p className="text-[11px] text-muted-foreground leading-tight">{t("repo.currentRepo")}</p>
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-semibold truncate">
-              {activeRepo?.name ?? "Select a repository"}
+              {activeRepo?.name ?? t("repo.selectRepo")}
             </p>
             {isFetching && (
               <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
@@ -871,17 +899,20 @@ export function Sidebar({
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors",
+                  "relative flex-1 flex items-center justify-center gap-1.5 px-3 h-[35px] text-sm font-medium transition-colors",
                   activeTab === tab
-                    ? "text-foreground border-b-2 border-primary"
+                    ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <span>{tab === "changes" ? "Changes" : "History"}</span>
+                <span>{tab === "changes" ? t("changes.title") : t("history.title")}</span>
                 {tab === "changes" && changesCount > 0 && (
                   <span className="text-xs bg-primary/15 text-primary px-1.5 py-0.5 rounded-full leading-none">
                     {changesCount}
                   </span>
+                )}
+                {activeTab === tab && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />
                 )}
               </button>
             ))}

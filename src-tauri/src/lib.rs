@@ -53,6 +53,8 @@ pub fn run() {
             commands::settings::update_settings,
             commands::settings::get_theme,
             commands::settings::set_theme,
+            commands::settings::detect_installed_editors,
+            commands::settings::open_in_editor,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");
