@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { RefreshCw, ArrowDown, ArrowUp } from "lucide-react";
+import { RefreshCw, ArrowDown, ArrowUp, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { useClickOutside } from "./useToolbarDropdown";
@@ -7,6 +7,7 @@ import { useClickOutside } from "./useToolbarDropdown";
 interface SyncDropdownProps {
   ahead: number;
   behind: number;
+  hasUpstream: boolean;
   lastFetchedAt: number | null;
   disabled: boolean;
   onFetch: () => void;
@@ -68,6 +69,7 @@ function MenuItem({ icon, label, description, badge, danger, highlighted, disabl
 export function SyncDropdown({
   ahead,
   behind,
+  hasUpstream,
   lastFetchedAt,
   disabled,
   onFetch,
@@ -83,6 +85,27 @@ export function SyncDropdown({
     fn();
     onClose();
   };
+
+  // upstream이 없으면 Publish Branch만 표시
+  if (!hasUpstream) {
+    return (
+      <div
+        ref={ref}
+        className="absolute right-0 top-full mt-2 w-72 bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
+      >
+        <div className="py-1">
+          <MenuItem
+            icon={<Upload className="w-4 h-4" />}
+            label={t("sync.publishBranch")}
+            description={t("sync.publishBranchDesc")}
+            highlighted
+            disabled={disabled}
+            onClick={() => exec(() => onPush(false))}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

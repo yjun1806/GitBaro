@@ -223,7 +223,9 @@
     "repoNotFound": "Repository not found",
     "repoNotFoundDesc": "No access to this repository",
     "readOnly": "Read-only access",
-    "readOnlyDesc": "No push permission for this repo"
+    "readOnlyDesc": "No push permission for this repo",
+    "publishBranch": "Publish Branch",
+    "publishBranchDesc": "Push this branch to remote to share with others"
   },
   "time": {
     "justNow": "just now",

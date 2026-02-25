@@ -207,7 +207,7 @@ function BranchRow({
           )}
         </span>
       )}
-      {branch.lastCommitTime && (
+      {branch.lastCommitTime != null && (
         <span className="text-xs text-muted-foreground shrink-0">
           {formatRelativeTime(branch.lastCommitTime)}
         </span>

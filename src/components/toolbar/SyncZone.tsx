@@ -40,6 +40,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const headBranch = branches.find((b) => b.isHead);
   const ahead = headBranch?.aheadBehind?.ahead ?? 0;
   const behind = headBranch?.aheadBehind?.behind ?? 0;
+  const hasUpstream = headBranch?.upstream != null;
 
   const canSync = tokenStatus?.valid === true && tokenStatus?.canPush === true;
   const syncDisabled = isSyncing || !activeAccountId || (!isValidating && !canSync);
@@ -72,7 +73,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
       addToast(`${syncError.title}: ${syncError.description}`, "error");
       return;
     }
-    const action = behind > 0 ? "pull" : ahead > 0 ? "push" : "fetch";
+    const action = !hasUpstream ? "push" : behind > 0 ? "pull" : ahead > 0 ? "push" : "fetch";
     setSyncingAction(action);
     try {
       if (action === "pull") {
@@ -156,6 +157,12 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
       accent: "text-danger",
       bg: "bg-danger/5 border-danger/20",
     };
+    if (!hasUpstream) return {
+      icon: <ArrowUp className="w-3.5 h-3.5" />,
+      label: t("sync.publishBranch"),
+      accent: "text-primary",
+      bg: "border-primary/20 hover:bg-primary/5",
+    };
     if (behind > 0) return {
       icon: <ArrowDown className="w-3.5 h-3.5" />,
       label: t("toolbar.pull"),
@@ -223,6 +230,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
         <SyncDropdown
           ahead={ahead}
           behind={behind}
+          hasUpstream={hasUpstream}
           lastFetchedAt={lastFetchedAt}
           disabled={syncDisabled}
           onFetch={handleFetch}

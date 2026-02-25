@@ -223,7 +223,9 @@
     "repoNotFound": "저장소를 찾을 수 없음",
     "repoNotFoundDesc": "이 저장소에 접근할 수 없습니다",
     "readOnly": "읽기 전용",
-    "readOnlyDesc": "이 저장소에 Push 권한이 없습니다"
+    "readOnlyDesc": "이 저장소에 Push 권한이 없습니다",
+    "publishBranch": "Branch 게시",
+    "publishBranchDesc": "이 Branch를 Remote에 Push하여 공유합니다"
   },
   "time": {
     "justNow": "방금",

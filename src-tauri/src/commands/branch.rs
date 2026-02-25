@@ -32,8 +32,8 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
 
             let last_commit_time = branch
                 .get()
-                .peel_to_commit()
-                .ok()
+                .target()
+                .and_then(|oid| repo.find_commit(oid).ok())
                 .map(|c| c.time().seconds());
 
             let upstream_branch = branch.upstream().ok();
