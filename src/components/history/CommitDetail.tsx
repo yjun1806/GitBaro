@@ -183,15 +183,15 @@ export function CommitDetail({
           <div className="flex-1 overflow-y-auto">
             {changedFiles.map((f) => {
               const isSelected = selectedPath === f.path;
-              const dir = f.path.includes("/")
-                ? f.path.substring(0, f.path.lastIndexOf("/") + 1)
-                : "";
-              const filename = f.path.includes("/")
-                ? f.path.substring(f.path.lastIndexOf("/") + 1)
+              const lastSlash = f.path.lastIndexOf("/");
+              const dir = lastSlash >= 0 ? f.path.substring(0, lastSlash) : "";
+              const filename = lastSlash >= 0
+                ? f.path.substring(lastSlash + 1)
                 : f.path;
               return (
                 <button
                   key={f.path}
+                  title={f.path}
                   onClick={() => handleFileClick(f.path)}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors",
@@ -201,16 +201,18 @@ export function CommitDetail({
                   )}
                 >
                   <FileStatusBadge status={f.status} />
-                  <span className="flex-1 min-w-0 truncate">
-                    {dir && (
-                      <span className="text-xs text-muted-foreground/60">{dir}</span>
-                    )}
+                  <span className="flex-1 min-w-0 flex flex-col">
                     <span className={cn(
-                      "text-xs font-medium",
+                      "text-xs font-medium truncate",
                       isSelected ? "text-primary" : "text-foreground",
                     )}>
                       {filename}
                     </span>
+                    {dir && (
+                      <span className="text-[10px] leading-tight text-muted-foreground/50 truncate">
+                        {dir}
+                      </span>
+                    )}
                   </span>
                 </button>
               );
