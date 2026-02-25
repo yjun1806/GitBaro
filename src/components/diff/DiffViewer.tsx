@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { FileQuestion } from "lucide-react";
 import { DiffView, DiffModeEnum } from "@git-diff-view/react";
@@ -62,10 +62,20 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
     return { added, removed };
   }, [diff]);
 
-  // DiffFile을 직접 생성·초기화하여 라이브러리 내부 effect 의존 문제를 우회.
-  // 매번 diff/isDark가 바뀔 때 새 DiffFile을 만들어 syntax highlighting을 확실히 적용.
+  // DiffFile 캐시 — 같은 diff 객체에 대해 initRaw/initSyntax를 반복하지 않음.
+  // WeakMap이므로 diff 객체가 GC되면 캐시도 자동 정리.
+  const cacheRef = useRef(new WeakMap<DiffOutput, DiffFile>());
+
   const diffFile = useMemo(() => {
     if (!diff || diff.binary || diff.hunks.length === 0) return null;
+
+    const cached = cacheRef.current.get(diff);
+    if (cached) {
+      // 테마만 갱신 (lowlight는 class 기반이라 syntax 재처리 불필요)
+      cached.initTheme(isDark ? "dark" : "light");
+      return cached;
+    }
+
     const lang = getFileLang(diff.filePath);
     const file = new DiffFile(
       diff.filePath,
@@ -79,10 +89,18 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
     file.initTheme(isDark ? "dark" : "light");
     file.initRaw();
     file.initSyntax({ registerHighlighter: highlighter });
-    file.buildSplitDiffLines();
-    file.buildUnifiedDiffLines();
+    cacheRef.current.set(diff, file);
     return file;
   }, [diff, isDark]);
+
+  // viewMode에 따라 필요한 라인만 빌드 (idempotent — 내부 플래그로 중복 실행 방지)
+  if (diffFile) {
+    if (viewMode === "split") {
+      diffFile.buildSplitDiffLines();
+    } else {
+      diffFile.buildUnifiedDiffLines();
+    }
+  }
 
   const toggleView = () =>
     setViewMode((v) => (v === "unified" ? "split" : "unified"));
