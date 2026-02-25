@@ -198,6 +198,12 @@ impl GitEngine for LibGitEngine {
             let (branch, branch_type) = branch_result?;
             let name = branch.name()?.unwrap_or("").to_string();
             let is_remote = branch_type == BranchType::Remote;
+
+            // origin/HEAD 같은 심볼릭 참조는 실제 브랜치가 아니므로 제외
+            if is_remote && name.ends_with("/HEAD") {
+                continue;
+            }
+
             let commit = branch.get().peel_to_commit()?;
             let commit_oid = commit.id();
             let commit_id = commit_oid.to_string();

@@ -103,8 +103,10 @@ export interface BranchInfo {
   name: string;
   isHead: boolean;
   isRemote: boolean;
+  isDefault: boolean;
   upstream: string | null;
   aheadBehind: { ahead: number; behind: number } | null;
+  lastCommitTime: number | null;
 }
 
 export interface RepoInfo {

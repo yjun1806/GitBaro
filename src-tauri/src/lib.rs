@@ -28,6 +28,8 @@ pub fn run() {
             commands::git::git_fetch,
             commands::git::git_push,
             commands::git::git_pull,
+            commands::git::stash_push,
+            commands::git::stash_pop,
             commands::repo::open_repository,
             commands::repo::clone_repository,
             commands::repo::get_open_repos,

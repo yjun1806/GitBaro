@@ -397,3 +397,32 @@ pub async fn git_pull(
         Err(e) => Err(e),
     }
 }
+
+#[tauri::command]
+pub async fn stash_push(repo_path: String, message: Option<String>) -> Result<(), AppError> {
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&repo_path)?;
+        let sig = repo.signature()?;
+        let msg = message.as_deref().unwrap_or("WIP");
+        let mut repo = repo;
+        repo.stash_save(&sig, msg, Some(git2::StashFlags::DEFAULT))?;
+        Ok::<_, AppError>(())
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stash_pop(repo_path: String) -> Result<(), AppError> {
+    tokio::task::spawn_blocking(move || {
+        let mut repo = git2::Repository::open(&repo_path)?;
+        repo.stash_pop(0, None)?;
+        Ok::<_, AppError>(())
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+
+    Ok(())
+}

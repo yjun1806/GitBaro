@@ -2,13 +2,14 @@ import { useState } from "react";
 import { GitBranch, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
-import { useBranches } from "@/api/queries";
-import { switchBranch, createBranch } from "@/api/commands";
+import { useBranches, useStatus } from "@/api/queries";
+import { switchBranch, createBranch, stashPush, stashPop } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { BranchDropdown } from "./BranchDropdown";
 import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
+import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
 
 interface BranchZoneProps {
   isOpen: boolean;
@@ -20,28 +21,63 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const { data: branches = [] } = useBranches(activeRepoPath);
+  const { data: statusFiles = [] } = useStatus(activeRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
 
   const headBranch = branches.find((b) => b.isHead);
   const currentBranch = headBranch?.name ?? null;
   const ahead = headBranch?.aheadBehind?.ahead ?? 0;
   const behind = headBranch?.aheadBehind?.behind ?? 0;
   const hasChanges = ahead > 0 || behind > 0;
+  const isDirty = statusFiles.length > 0;
+
+  const invalidateAll = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["branches"] }),
+      queryClient.invalidateQueries({ queryKey: ["status"] }),
+      queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
+      queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+    ]);
+
+  const doSwitch = async (branchName: string) => {
+    if (!activeRepoPath) return;
+    await switchBranch(activeRepoPath, branchName);
+    await invalidateAll();
+    addToast(t("branch.switchedTo", { name: branchName }), "success");
+  };
 
   const handleSwitch = async (branchName: string) => {
     if (!activeRepoPath || branchName === currentBranch) return;
+
+    if (isDirty) {
+      setPendingSwitch(branchName);
+      return;
+    }
+
     try {
-      await switchBranch(activeRepoPath, branchName);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["branches"] }),
-        queryClient.invalidateQueries({ queryKey: ["status"] }),
-        queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
-        queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-      ]);
-      addToast(t("branch.switchedTo", { name: branchName }), "success");
+      await doSwitch(branchName);
     } catch (err) {
+      addToast(t("branch.failedToSwitch", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
+  const handleSwitchConfirm = async (action: "leave" | "bring") => {
+    if (!activeRepoPath || !pendingSwitch) return;
+    setPendingSwitch(null);
+
+    try {
+      if (action === "leave") {
+        await stashPush(activeRepoPath);
+      }
+      await doSwitch(pendingSwitch);
+    } catch (err) {
+      // stash 후 switch 실패 시 stash 복원 시도
+      if (action === "leave") {
+        try { await stashPop(activeRepoPath); } catch { /* ignore */ }
+      }
       addToast(t("branch.failedToSwitch", { error: getErrorMessage(err) }), "error");
     }
   };
@@ -49,13 +85,15 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const handleCreate = async (name: string, fromBranch: string) => {
     if (!activeRepoPath) return;
     try {
+      if (isDirty) {
+        await stashPush(activeRepoPath);
+      }
       await createBranch(activeRepoPath, name, fromBranch);
       await switchBranch(activeRepoPath, name);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["branches"] }),
-        queryClient.invalidateQueries({ queryKey: ["status"] }),
-        queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
-      ]);
+      if (isDirty) {
+        await stashPop(activeRepoPath);
+      }
+      await invalidateAll();
       addToast(t("branch.createdAndSwitched", { name }), "success");
       setShowCreateDialog(false);
     } catch (err) {
@@ -120,6 +158,15 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           currentBranch={currentBranch}
           onCreate={handleCreate}
           onClose={() => setShowCreateDialog(false)}
+        />
+      )}
+
+      {pendingSwitch && currentBranch && (
+        <SwitchBranchDialog
+          currentBranch={currentBranch}
+          targetBranch={pendingSwitch}
+          onConfirm={handleSwitchConfirm}
+          onClose={() => setPendingSwitch(null)}
         />
       )}
     </div>

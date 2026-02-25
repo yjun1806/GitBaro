@@ -182,6 +182,15 @@ export async function getCurrentBranch(repoPath: string): Promise<string | null>
   return invoke("get_current_branch", { repoPath });
 }
 
+// Stash
+export async function stashPush(repoPath: string, message?: string): Promise<void> {
+  return invoke("stash_push", { repoPath, message });
+}
+
+export async function stashPop(repoPath: string): Promise<void> {
+  return invoke("stash_pop", { repoPath });
+}
+
 // History — backend returns raw fields (oid, parentCount, etc.)
 // that differ from the frontend CommitInfo type, so we map here.
 

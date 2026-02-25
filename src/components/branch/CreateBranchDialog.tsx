@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { X, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import clsx from "clsx";
+import { cn } from "@/lib/utils";
 import type { BranchInfo } from "@/types";
-import { Select } from "@/components/ui/Select";
 
 interface CreateBranchDialogProps {
   branches: BranchInfo[];
@@ -23,13 +22,15 @@ export function CreateBranchDialog({
   onClose,
 }: CreateBranchDialogProps) {
   const { t } = useTranslation();
+  const defaultBranch = branches.find((b) => !b.isRemote && b.isDefault);
+  const defaultBranchName = defaultBranch?.name ?? "main";
+  const isSameBranch = currentBranch === defaultBranchName;
+
   const [name, setName] = useState("");
-  const [fromBranch, setFromBranch] = useState(currentBranch ?? "");
+  const [fromBranch, setFromBranch] = useState(defaultBranchName);
 
   const valid = name.length > 0 && isValidBranchName(name);
   const error = name.length > 0 && !valid ? t("branch.invalidName") : null;
-
-  const localBranches = branches.filter((b) => !b.isRemote);
 
   const handleCreate = () => {
     if (!valid) return;
@@ -38,7 +39,7 @@ export function CreateBranchDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm">
+      <div className="bg-card rounded-xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold text-foreground">
             {t("branch.create")}
@@ -51,18 +52,18 @@ export function CreateBranchDialog({
           </button>
         </div>
 
-        <div className="px-5 py-5 flex flex-col gap-4">
+        <div className="px-5 py-5 flex flex-col gap-5">
           {/* Branch name */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-muted-foreground">
               {t("branch.name")}
             </label>
             <div
-              className={clsx(
+              className={cn(
                 "flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors",
                 error
                   ? "border-destructive focus-within:ring-2 focus-within:ring-destructive/30"
-                  : "border-border focus-within:ring-2 focus-within:ring-ring focus-within:border-primary"
+                  : "border-border focus-within:ring-2 focus-within:ring-ring focus-within:border-primary",
               )}
             >
               <GitBranch className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -81,19 +82,71 @@ export function CreateBranchDialog({
             )}
           </div>
 
-          {/* From branch */}
-          <div className="flex flex-col gap-1.5">
+          {/* From branch - radio selection */}
+          <div className="flex flex-col gap-2">
             <label className="text-xs font-medium text-muted-foreground">
-              {t("branch.from")}
+              {t("branch.basedOn")}
             </label>
-            <Select
-              value={fromBranch}
-              options={localBranches.map((b) => ({
-                value: b.name,
-                label: `${b.name}${b.isHead ? ` ${t("branch.currentTag")}` : ""}`,
-              }))}
-              onChange={setFromBranch}
-            />
+            <div className="border border-border rounded-lg overflow-hidden">
+              {/* Default branch option */}
+              <label
+                className={cn(
+                  "flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors",
+                  fromBranch === defaultBranchName
+                    ? "bg-primary/5"
+                    : "hover:bg-accent",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="fromBranch"
+                  value={defaultBranchName}
+                  checked={fromBranch === defaultBranchName}
+                  onChange={() => setFromBranch(defaultBranchName)}
+                  className="mt-1 accent-primary"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    {defaultBranchName}
+                  </p>
+                  <p className="text-[13px] text-muted-foreground mt-0.5 leading-relaxed">
+                    {t("branch.defaultBranchDesc")}
+                  </p>
+                </div>
+              </label>
+
+              {/* Current branch option (only if different from default) */}
+              {!isSameBranch && currentBranch && (
+                <>
+                  <div className="border-t border-border" />
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors",
+                      fromBranch === currentBranch
+                        ? "bg-primary/5"
+                        : "hover:bg-accent",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="fromBranch"
+                      value={currentBranch}
+                      checked={fromBranch === currentBranch}
+                      onChange={() => setFromBranch(currentBranch)}
+                      className="mt-1 accent-primary"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {currentBranch}
+                      </p>
+                      <p className="text-[13px] text-muted-foreground mt-0.5 leading-relaxed">
+                        {t("branch.currentBranchDesc")}
+                      </p>
+                    </div>
+                  </label>
+                </>
+              )}
+            </div>
           </div>
         </div>
 

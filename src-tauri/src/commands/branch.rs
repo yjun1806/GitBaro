@@ -7,6 +7,13 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
         let repo = git2::Repository::open(&repo_path)?;
         let branches = repo.branches(None)?;
 
+        // origin/HEAD로부터 default branch 이름 판별
+        let default_branch_name = repo
+            .find_reference("refs/remotes/origin/HEAD")
+            .ok()
+            .and_then(|r| r.symbolic_target().map(|s| s.to_string()))
+            .and_then(|s| s.strip_prefix("refs/remotes/origin/").map(|n| n.to_string()));
+
         let mut list: Vec<Value> = Vec::new();
         for item in branches {
             let (branch, branch_type) = item?;
@@ -14,11 +21,20 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
                 Some(n) => n.to_string(),
                 None => continue,
             };
+            let is_remote = branch_type == git2::BranchType::Remote;
+
+            // origin/HEAD 같은 심볼릭 참조 제외
+            if is_remote && name.ends_with("/HEAD") {
+                continue;
+            }
+
             let is_head = branch.is_head();
-            let kind = match branch_type {
-                git2::BranchType::Local => "local",
-                git2::BranchType::Remote => "remote",
-            };
+
+            let last_commit_time = branch
+                .get()
+                .peel_to_commit()
+                .ok()
+                .map(|c| c.time().seconds());
 
             let upstream_branch = branch.upstream().ok();
             let upstream = upstream_branch
@@ -41,14 +57,26 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
                 None
             };
 
+            let is_default = !is_remote
+                && default_branch_name.as_deref() == Some(name.as_str());
+
             list.push(json!({
                 "name": name,
                 "isHead": is_head,
-                "kind": kind,
+                "isRemote": is_remote,
+                "isDefault": is_default,
                 "upstream": upstream,
                 "aheadBehind": ahead_behind,
+                "lastCommitTime": last_commit_time,
             }));
         }
+
+        // 최근 커밋 순 정렬 (최신이 위로)
+        list.sort_by(|a, b| {
+            let ta = a["lastCommitTime"].as_i64().unwrap_or(0);
+            let tb = b["lastCommitTime"].as_i64().unwrap_or(0);
+            tb.cmp(&ta)
+        });
 
         Ok::<_, AppError>(list)
     })

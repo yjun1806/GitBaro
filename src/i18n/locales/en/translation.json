@@ -76,7 +76,18 @@
     "createdAndSwitched": "Created and switched to {{name}}",
     "failedToCreate": "Failed to create branch: {{error}}",
     "noBranch": "No branch",
-    "createBranch": "Create Branch"
+    "createBranch": "Create Branch",
+    "defaultBranch": "Default Branch",
+    "recentBranches": "Recent Branches",
+    "basedOn": "Create branch based on...",
+    "defaultBranchDesc": "The default branch in your repository. Pick this to start on something new that's not dependent on your current branch.",
+    "currentBranchDesc": "The currently checked out branch. Pick this if you need to build on work done on this branch.",
+    "switchBranch": "Switch Branch",
+    "uncommittedChanges": "You have changes on this branch. What would you like to do with them?",
+    "leaveChanges": "Leave my changes on {{branch}}",
+    "leaveChangesDesc": "Your in-progress work will be stashed on this branch for you to return to later.",
+    "bringChanges": "Bring my changes to {{branch}}",
+    "bringChangesDesc": "Your in-progress work will follow you to the new branch."
   },
   "clone": {
     "account": "Account",
