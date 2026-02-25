@@ -169,7 +169,7 @@ html *::-webkit-scrollbar-track { background: var(--scrollbar-track) !important;
 html *::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb) !important; border-radius: 4px; }
 html *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover) !important; }
 
-/* ── Diff 뷰어 스타일 오버라이드 ── */
+/* ── Diff 뷰어 폰트 오버라이드 ── */
 [data-component="git-diff-view"] {
   font-family: 'Pretendard', ui-sans-serif, system-ui, -apple-system, sans-serif !important;
 }

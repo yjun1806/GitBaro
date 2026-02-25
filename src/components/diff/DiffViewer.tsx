@@ -2,9 +2,13 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { FileQuestion } from "lucide-react";
 import { DiffView, DiffModeEnum } from "@git-diff-view/react";
+import { DiffFile } from "@git-diff-view/core";
+import { highlighter } from "@git-diff-view/lowlight";
 import "@git-diff-view/react/styles/diff-view-pure.css";
+import "./diff-theme.css";
 import type { DiffOutput, DiffHunk, FileStatus } from "@/types";
 import { DiffHeader } from "./DiffHeader";
+import { useUIStore } from "@/stores/ui";
 
 const EXT_LANG_MAP: Record<string, string> = {
   ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
@@ -25,7 +29,7 @@ function hunksToUnifiedDiff(filePath: string, hunks: DiffHunk[]): string {
     `+++ b/${filePath}`,
   ];
   for (const hunk of hunks) {
-    lines.push(hunk.header);
+    lines.push(hunk.header.replace(/\n$/, ""));
     for (const line of hunk.lines) {
       const prefix = line.lineType === "add" ? "+" : line.lineType === "delete" ? "-" : " ";
       lines.push(prefix + line.content.replace(/\n$/, ""));
@@ -42,7 +46,8 @@ interface DiffViewerProps {
 export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<"unified" | "split">("unified");
-  const isDark = document.documentElement.classList.contains("dark");
+  const theme = useUIStore((s) => s.theme);
+  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   const stats = useMemo(() => {
     if (!diff) return { added: 0, removed: 0 };
@@ -57,15 +62,27 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
     return { added, removed };
   }, [diff]);
 
-  const diffData = useMemo(() => {
+  // DiffFile을 직접 생성·초기화하여 라이브러리 내부 effect 의존 문제를 우회.
+  // 매번 diff/isDark가 바뀔 때 새 DiffFile을 만들어 syntax highlighting을 확실히 적용.
+  const diffFile = useMemo(() => {
     if (!diff || diff.binary || diff.hunks.length === 0) return null;
     const lang = getFileLang(diff.filePath);
-    return {
-      oldFile: { fileName: diff.filePath, fileLang: lang, content: diff.oldContent || null },
-      newFile: { fileName: diff.filePath, fileLang: lang, content: diff.newContent || null },
-      hunks: [hunksToUnifiedDiff(diff.filePath, diff.hunks)],
-    };
-  }, [diff]);
+    const file = new DiffFile(
+      diff.filePath,
+      diff.oldContent || "",
+      diff.filePath,
+      diff.newContent || "",
+      [hunksToUnifiedDiff(diff.filePath, diff.hunks)],
+      lang,
+      lang,
+    );
+    file.initTheme(isDark ? "dark" : "light");
+    file.initRaw();
+    file.initSyntax({ registerHighlighter: highlighter });
+    file.buildSplitDiffLines();
+    file.buildUnifiedDiffLines();
+    return file;
+  }, [diff, isDark]);
 
   const toggleView = () =>
     setViewMode((v) => (v === "unified" ? "split" : "unified"));
@@ -112,9 +129,9 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
       />
 
       <div className="flex-1 min-h-0 overflow-auto">
-        {diffData ? (
+        {diffFile ? (
           <DiffView
-            data={diffData}
+            diffFile={diffFile}
             diffViewMode={viewMode === "split" ? DiffModeEnum.Split : DiffModeEnum.Unified}
             diffViewTheme={isDark ? "dark" : "light"}
             diffViewHighlight

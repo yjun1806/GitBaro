@@ -51,11 +51,11 @@ export function CommitDetail({
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [bodyExpanded, setBodyExpanded] = useState(false);
-  const [fileListWidth, setFileListWidth] = useState(224);
+  const [fileListWidth, setFileListWidth] = useState(320);
 
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
-  const dragStartWidth = useRef(224);
+  const dragStartWidth = useRef(320);
 
   const onResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {
