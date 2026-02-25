@@ -198,7 +198,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
           )}
         >
           {stateConfig.icon}
-          <span className="text-[13px] font-semibold whitespace-nowrap">{stateConfig.label}</span>
+          <span className="text-sm font-semibold whitespace-nowrap">{stateConfig.label}</span>
           {hasCount && (
             <span className="bg-primary text-primary-foreground text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 tabular-nums leading-none">
               {behind > 0 ? behind : ahead}

@@ -54,7 +54,7 @@ export function HistoryTimeline({
           <div className="flex-1 min-w-0">
             <p
               className={clsx(
-                "text-[13px] font-semibold leading-snug truncate",
+                "text-sm font-semibold leading-snug truncate",
                 commit.id === selectedOid
                   ? "text-primary"
                   : "text-foreground"
@@ -63,11 +63,11 @@ export function HistoryTimeline({
               {commit.summary}
             </p>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[11px] text-muted-foreground/70 truncate">
+              <span className="text-xs text-muted-foreground/70 truncate">
                 {commit.author.name}
               </span>
-              <span className="text-[11px] text-muted-foreground/40">·</span>
-              <span className="text-[11px] text-muted-foreground/50 shrink-0">
+              <span className="text-xs text-muted-foreground/40">·</span>
+              <span className="text-xs text-muted-foreground/50 shrink-0">
                 {formatRelativeTime(commit.timestamp)}
               </span>
             </div>

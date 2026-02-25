@@ -30,7 +30,7 @@ export function AccountZone({
         {currentAccount ? (
           <>
             <AccountAvatar account={currentAccount} size="sm" />
-            <span className="text-[13px] font-medium truncate max-w-[100px] hidden min-[1100px]:inline">
+            <span className="text-sm font-medium truncate max-w-[100px] hidden min-[1100px]:inline">
               {currentAccount.username}
             </span>
           </>

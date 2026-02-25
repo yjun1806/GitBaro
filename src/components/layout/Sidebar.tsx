@@ -69,7 +69,7 @@ function FileEntry({
       className={cn(
         "flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors select-none border-b border-border",
         isSelected
-          ? "bg-primary text-primary-foreground"
+          ? "bg-primary/10 text-primary font-semibold"
           : "hover:bg-accent",
       )}
     >
@@ -166,7 +166,7 @@ function RepoContextMenu({
       ref={ref}
       className="absolute right-1 top-full mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50 py-1"
     >
-      <p className="px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+      <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
         {t("repo.linkAccount")}
       </p>
       {accounts.map((account) => (
@@ -186,7 +186,7 @@ function RepoContextMenu({
           <AccountAvatar account={account as any} size="xs" />
           <span className="truncate flex-1">{account.username}</span>
           {account.id === currentAccountId && (
-            <span className="text-[11px] font-medium text-primary shrink-0">{t("repo.default")}</span>
+            <span className="text-xs font-medium text-primary shrink-0">{t("repo.default")}</span>
           )}
         </button>
       ))}
@@ -432,10 +432,10 @@ function RepoListView({
                   }
                   return <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
                 })()}
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex-1 truncate text-left">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-1 truncate text-left">
                   {group.label}
                 </span>
-                <span className="text-[11px] text-muted-foreground/60 tabular-nums">
+                <span className="text-xs text-muted-foreground/60 tabular-nums">
                   {group.repos.length}
                 </span>
               </button>
@@ -473,14 +473,14 @@ function RepoListView({
                         className={cn(
                           "w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-colors min-w-0 rounded-md",
                           isActive
-                            ? "bg-primary text-primary-foreground"
+                            ? "bg-primary/10 text-primary font-semibold"
                             : "hover:bg-accent",
                         )}
                       >
                         <div className={cn(
                           "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
                           isActive
-                            ? "bg-primary-foreground/15"
+                            ? "bg-primary/15"
                             : !hasRemote
                               ? "bg-muted"
                               : visibility?.isPrivate
@@ -493,7 +493,7 @@ function RepoListView({
                             className={cn(
                               "w-3.5 h-3.5",
                               isActive
-                                ? "text-primary-foreground/70"
+                                ? "text-primary/70"
                                 : !hasRemote
                                   ? "text-muted-foreground"
                                   : visibility?.isPrivate
@@ -512,11 +512,11 @@ function RepoListView({
                             <div className="flex items-center gap-1 mt-0.5">
                               <GitBranch className={cn(
                                 "w-3 h-3 shrink-0",
-                                isActive ? "text-primary-foreground/50" : "text-muted-foreground/70",
+                                isActive ? "text-primary/50" : "text-muted-foreground/70",
                               )} />
                               <span className={cn(
-                                "text-[11px] truncate leading-tight",
-                                isActive ? "text-primary-foreground/50" : "text-muted-foreground/70",
+                                "text-xs truncate leading-tight",
+                                isActive ? "text-primary/50" : "text-muted-foreground/70",
                               )}>
                                 {repo.currentBranch}
                               </span>
@@ -526,21 +526,21 @@ function RepoListView({
                           {isValidating && (
                             <div className="flex items-center gap-1 mt-0.5">
                               <Loader2 className="w-3 h-3 shrink-0 text-muted-foreground animate-spin" />
-                              <span className="text-[11px] text-muted-foreground">{t("common.loading")}</span>
+                              <span className="text-xs text-muted-foreground">{t("common.loading")}</span>
                             </div>
                           )}
                           {!isValidating && permission && !permission.valid && (
                             <div className="flex items-center gap-1 mt-0.5">
-                              <ShieldX className={cn("w-3 h-3 shrink-0", isActive ? "text-red-300" : "text-danger")} />
-                              <span className={cn("text-[11px] font-medium", isActive ? "text-red-300" : "text-danger")}>
+                              <ShieldX className={cn("w-3 h-3 shrink-0", isActive ? "text-red-500" : "text-danger")} />
+                              <span className={cn("text-xs font-medium", isActive ? "text-red-500" : "text-danger")}>
                                 {t("repo.accountNoAccess")}
                               </span>
                             </div>
                           )}
                           {!isValidating && permission && permission.valid && !permission.canPush && (
                             <div className="flex items-center gap-1 mt-0.5">
-                              <ShieldAlert className={cn("w-3 h-3 shrink-0", isActive ? "text-amber-300" : "text-amber-500")} />
-                              <span className={cn("text-[11px] font-medium", isActive ? "text-amber-300" : "text-amber-500")}>
+                              <ShieldAlert className={cn("w-3 h-3 shrink-0", "text-amber-500")} />
+                              <span className={cn("text-xs font-medium", "text-amber-500")}>
                                 {t("repo.accountReadOnly")}
                               </span>
                             </div>
@@ -560,7 +560,7 @@ function RepoListView({
                             <Archive
                               className={cn(
                                 "w-3.5 h-3.5 shrink-0",
-                                isActive ? "text-primary-foreground/50" : "text-muted-foreground/60",
+                                isActive ? "text-primary/50" : "text-muted-foreground/60",
                               )}
                             />
                           )}
@@ -568,7 +568,7 @@ function RepoListView({
                             <CloudOff
                               className={cn(
                                 "w-3.5 h-3.5 shrink-0",
-                                isActive ? "text-primary-foreground/40" : "text-muted-foreground/50",
+                                isActive ? "text-primary/40" : "text-muted-foreground/50",
                               )}
                             />
                           )}
@@ -595,7 +595,7 @@ function RepoListView({
                             className={cn(
                               "shrink-0 w-5 h-5 flex items-center justify-center rounded cursor-pointer transition-colors",
                               isActive
-                                ? "text-primary-foreground/60 hover:text-primary-foreground"
+                                ? "text-primary/60 hover:text-primary"
                                 : "text-muted-foreground/50 hover:text-foreground hover:bg-accent",
                             )}
                           >
@@ -873,7 +873,7 @@ function ChangesView({
                 {activeAccount.username[0]?.toUpperCase() ?? "?"}
               </div>
             )}
-            <span className="text-[11px] text-muted-foreground truncate">
+            <span className="text-xs text-muted-foreground truncate">
               {activeAccount.username}
               {activeAccount.email ? ` <${activeAccount.email}>` : ""}
             </span>
@@ -958,7 +958,7 @@ function HistoryView({
               "flex items-start gap-3 px-3 py-2.5 border-b border-border cursor-pointer transition-colors select-none",
               "focus:outline-none",
               isActive
-                ? "bg-primary text-primary-foreground"
+                ? "bg-primary/10 text-primary font-semibold"
                 : "hover:bg-accent",
             )}
           >
@@ -983,7 +983,7 @@ function HistoryView({
                         "w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0",
                         "text-[8px] font-bold",
                         isActive
-                          ? "bg-primary-foreground/20 text-primary-foreground"
+                          ? "bg-primary/20 text-primary"
                           : "bg-primary/10 text-primary",
                       )}
                     >
@@ -991,13 +991,13 @@ function HistoryView({
                     </div>
                   );
                 })()}
-                <span className={cn("text-[11px] truncate", isActive ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                <span className={cn("text-xs truncate", isActive ? "text-primary/70" : "text-muted-foreground")}>
                   {commit.author.name}
                 </span>
-                <span className={cn("text-[11px] shrink-0 leading-none", isActive ? "text-primary-foreground/50" : "text-muted-foreground")}>
+                <span className={cn("text-xs shrink-0 leading-none", isActive ? "text-primary/50" : "text-muted-foreground")}>
                   •
                 </span>
-                <span className={cn("text-[11px] shrink-0", isActive ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                <span className={cn("text-xs shrink-0", isActive ? "text-primary/70" : "text-muted-foreground")}>
                   {formatRelativeTime(commit.timestamp)}
                 </span>
               </div>
@@ -1007,7 +1007,7 @@ function HistoryView({
                 className={cn(
                   "shrink-0 self-center flex items-center justify-center w-5 h-5 rounded-full",
                   isActive
-                    ? "bg-primary-foreground/20"
+                    ? "bg-primary/20"
                     : "bg-primary/10",
                 )}
               >
@@ -1015,7 +1015,7 @@ function HistoryView({
                   strokeWidth={3}
                   className={cn(
                     "w-3 h-3",
-                    isActive ? "text-primary-foreground" : "text-primary",
+                    isActive ? "text-primary" : "text-primary",
                   )}
                 />
               </div>
@@ -1111,7 +1111,7 @@ export function Sidebar({
       >
         <RepoHeaderIcon className="w-4 h-4 shrink-0 opacity-50" />
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] text-muted-foreground leading-tight">{t("repo.currentRepo")}</p>
+          <p className="text-xs text-muted-foreground leading-tight">{t("repo.currentRepo")}</p>
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-semibold truncate">
               {activeRepo?.name ?? t("repo.selectRepo")}

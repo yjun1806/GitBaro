@@ -16,12 +16,12 @@
   --font-mono: 'Pretendard', ui-sans-serif, system-ui, -apple-system, sans-serif;
 
   /* 타이포그래피 스케일 (데스크톱 앱에 맞게 컴팩트하게 조정) */
-  --text-xs: 0.6875rem;
-  --text-xs--line-height: 1rem;
-  --text-sm: 0.8125rem;
-  --text-sm--line-height: 1.25rem;
-  --text-base: 0.875rem;
-  --text-base--line-height: 1.375rem;
+  --text-xs: 0.75rem;              /* 12px */
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.875rem;             /* 14px */
+  --text-sm--line-height: 1.375rem;
+  --text-base: 0.9375rem;          /* 15px */
+  --text-base--line-height: 1.5rem;
 
   /* 시맨틱 컬러 토큰 */
   --color-background: var(--background);
@@ -64,100 +64,103 @@
   --color-scrollbar-thumb-hover: var(--scrollbar-thumb-hover);
 }
 
-/* ── Light 테마 ── */
+/* ── Light 테마 (Zinc Grayscale + Violet Accent) ── */
+/* 기본 팔레트: Zinc 그레이스케일
+   키컬러: Violet (#3E1BB1) — 버튼, 선택, 링크, 포커스에만 사용
+   WCAG AA 전체 통과 */
 :root {
-  --background: #ffffff;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
+  --background: #FFFFFF;
+  --foreground: #09090B;           /* zinc-950 */
+  --card: #FFFFFF;
+  --card-foreground: #09090B;      /* zinc-950 */
+  --popover: #FFFFFF;
+  --popover-foreground: #09090B;   /* zinc-950 */
 
-  --primary: #84CC16;
-  --primary-foreground: #1a2e05;
-  --primary-hover: #65a30d;
+  --primary: #3E1BB1;              /* violet-600 */
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #331692;        /* violet-700 */
 
-  --secondary: #f1f5f9;
-  --secondary-foreground: #475569;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
+  --secondary: #F4F4F5;           /* zinc-100 */
+  --secondary-foreground: #18181B; /* zinc-900 */
+  --muted: #FAFAFA;               /* zinc-50 */
+  --muted-foreground: #71717A;    /* zinc-500 */
+  --accent: #F4F4F5;              /* zinc-100 */
+  --accent-foreground: #18181B;   /* zinc-900 */
 
-  --destructive: #dc2626;
-  --destructive-foreground: #ffffff;
-  --success: #16a34a;
-  --success-foreground: #ffffff;
-  --warning: #d97706;
-  --warning-foreground: #0f172a;
-  --danger: #dc2626;
-  --danger-foreground: #ffffff;
-  --info: #0284c7;
-  --info-foreground: #ffffff;
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+  --success: #16A34A;
+  --success-foreground: #FFFFFF;
+  --warning: #D97706;
+  --warning-foreground: #09090B;   /* zinc-950 */
+  --danger: #DC2626;
+  --danger-foreground: #FFFFFF;
+  --info: #0284C7;
+  --info-foreground: #FFFFFF;
 
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #84CC16;
-  --surface: #f8fafc;
+  --border: #E4E4E7;              /* zinc-200 */
+  --input: #E4E4E7;               /* zinc-200 */
+  --ring: #3E1BB1;                /* violet-600 */
+  --surface: #FAFAFA;             /* zinc-50 */
 
-  --diff-add: #f0fdf4;
+  --diff-add: #EEF7F0;
   --diff-add-fg: #166534;
-  --diff-del: #fef2f2;
-  --diff-del-fg: #991b1b;
-  --diff-hunk: #eff6ff;
-  --diff-hunk-fg: #3b82f6;
+  --diff-del: #FDF0EE;
+  --diff-del-fg: #991B1B;
+  --diff-hunk: #FAFAFA;           /* zinc-50 */
+  --diff-hunk-fg: #52525B;        /* zinc-600 */
 
-  --scrollbar-track: #f3f3f3;
-  --scrollbar-thumb: #aaaaaa;
-  --scrollbar-thumb-hover: #888888;
+  --scrollbar-track: #F4F4F5;     /* zinc-100 */
+  --scrollbar-thumb: #D4D4D8;     /* zinc-300 */
+  --scrollbar-thumb-hover: #A1A1AA; /* zinc-400 */
 }
 
-/* ── Dark 테마 ── */
+/* ── Dark 테마 (Zinc Grayscale + Violet Accent) ── */
 .dark {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-  --card: #1e293b;
-  --card-foreground: #f1f5f9;
-  --popover: #1e293b;
-  --popover-foreground: #f1f5f9;
+  --background: #09090B;          /* zinc-950 */
+  --foreground: #FAFAFA;          /* zinc-50 */
+  --card: #18181B;                /* zinc-900 */
+  --card-foreground: #FAFAFA;     /* zinc-50 */
+  --popover: #18181B;             /* zinc-900 */
+  --popover-foreground: #FAFAFA;  /* zinc-50 */
 
-  --primary: #84CC16;
-  --primary-foreground: #1a2e05;
-  --primary-hover: #a3e635;
+  --primary: #7A5AE2;             /* violet-400 */
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #A995EA;       /* violet-300 */
 
-  --secondary: #334155;
-  --secondary-foreground: #e2e8f0;
-  --muted: #334155;
-  --muted-foreground: #94a3b8;
-  --accent: #334155;
-  --accent-foreground: #f1f5f9;
+  --secondary: #27272A;           /* zinc-800 */
+  --secondary-foreground: #F4F4F5; /* zinc-100 */
+  --muted: #27272A;               /* zinc-800 */
+  --muted-foreground: #A1A1AA;    /* zinc-400 */
+  --accent: #27272A;              /* zinc-800 */
+  --accent-foreground: #FAFAFA;   /* zinc-50 */
 
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --success: #4ade80;
-  --success-foreground: #0f172a;
-  --warning: #fbbf24;
-  --warning-foreground: #0f172a;
-  --danger: #ef4444;
-  --danger-foreground: #ffffff;
-  --info: #38bdf8;
-  --info-foreground: #0f172a;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --success: #4ADE80;
+  --success-foreground: #09090B;   /* zinc-950 */
+  --warning: #FBBF24;
+  --warning-foreground: #09090B;   /* zinc-950 */
+  --danger: #EF4444;
+  --danger-foreground: #FFFFFF;
+  --info: #38BDF8;
+  --info-foreground: #09090B;     /* zinc-950 */
 
-  --border: #334155;
-  --input: #334155;
-  --ring: #84CC16;
-  --surface: #1e293b;
+  --border: #27272A;              /* zinc-800 */
+  --input: #27272A;               /* zinc-800 */
+  --ring: #7A5AE2;                /* violet-400 */
+  --surface: #18181B;             /* zinc-900 */
 
-  --diff-add: rgba(22, 101, 52, 0.2);
-  --diff-add-fg: #86efac;
-  --diff-del: rgba(153, 27, 27, 0.2);
-  --diff-del-fg: #fca5a5;
-  --diff-hunk: rgba(59, 130, 246, 0.15);
-  --diff-hunk-fg: #93c5fd;
+  --diff-add: rgba(22, 101, 52, 0.18);
+  --diff-add-fg: #86EFAC;
+  --diff-del: rgba(153, 27, 27, 0.18);
+  --diff-del-fg: #FCA5A5;
+  --diff-hunk: rgba(113, 113, 122, 0.12); /* zinc-500 기반 */
+  --diff-hunk-fg: #A1A1AA;        /* zinc-400 */
 
-  --scrollbar-track: #2a2a2a;
-  --scrollbar-thumb: #555555;
-  --scrollbar-thumb-hover: #777777;
+  --scrollbar-track: #09090B;     /* zinc-950 */
+  --scrollbar-thumb: #27272A;     /* zinc-800 */
+  --scrollbar-thumb-hover: #3F3F46; /* zinc-700 */
 }
 
 /* ── 스크롤바 (시맨틱 토큰 사용) ── */

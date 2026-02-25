@@ -78,7 +78,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           "w-3.5 h-3.5 shrink-0",
           isOpen ? "text-primary" : "text-muted-foreground",
         )} />
-        <span className="text-[13px] font-semibold truncate max-w-[200px]">
+        <span className="text-sm font-semibold truncate max-w-[200px]">
           {currentBranch ?? t("branch.noBranch")}
         </span>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { GitCommit, Clock, Copy, Check, ChevronDown } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
@@ -51,6 +51,36 @@ export function CommitDetail({
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [bodyExpanded, setBodyExpanded] = useState(false);
+  const [fileListWidth, setFileListWidth] = useState(224);
+
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(224);
+
+  const onResizeMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      isDragging.current = true;
+      dragStartX.current = e.clientX;
+      dragStartWidth.current = fileListWidth;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!isDragging.current) return;
+        const delta = ev.clientX - dragStartX.current;
+        const next = Math.min(480, Math.max(140, dragStartWidth.current + delta));
+        setFileListWidth(next);
+      };
+
+      const onMouseUp = () => {
+        isDragging.current = false;
+        window.removeEventListener("mousemove", onMouseMove);
+        window.removeEventListener("mouseup", onMouseUp);
+      };
+
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    },
+    [fileListWidth],
+  );
 
   // Auto-select first file when commit changes
   useEffect(() => {
@@ -90,7 +120,7 @@ export function CommitDetail({
               !bodyExpanded && "-rotate-90",
             )} />
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-foreground leading-snug">
+              <p className="text-sm font-semibold text-foreground leading-snug">
                 {commit.summary}
               </p>
               {bodyExpanded && (
@@ -101,24 +131,24 @@ export function CommitDetail({
             </div>
           </button>
         ) : (
-          <p className="text-[13px] font-semibold text-foreground leading-snug">
+          <p className="text-sm font-semibold text-foreground leading-snug">
             {commit.summary}
           </p>
         )}
         <div className="flex items-center gap-2.5 mt-2.5">
           {/* Author avatar + info */}
           <AuthorAvatar name={commit.author.name} avatarUrl={authorAvatarUrl} />
-          <span className="text-[11px] font-medium text-foreground/80">{commit.author.name}</span>
-          <span className="text-[11px] text-muted-foreground/60">{commit.author.email}</span>
-          <span className="text-[11px] text-muted-foreground/40">·</span>
-          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <span className="text-xs font-medium text-foreground/80">{commit.author.name}</span>
+          <span className="text-xs text-muted-foreground/60">{commit.author.email}</span>
+          <span className="text-xs text-muted-foreground/40">·</span>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="w-3 h-3" />
             {formatDate(commit.timestamp)}
           </span>
-          <span className="text-[11px] text-muted-foreground/40">·</span>
+          <span className="text-xs text-muted-foreground/40">·</span>
           <button
             onClick={handleCopyHash}
-            className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
           >
             <GitCommit className="w-3 h-3" />
             {commit.shortId}
@@ -126,8 +156,8 @@ export function CommitDetail({
           </button>
           {commit.parentIds.length > 0 && (
             <>
-              <span className="text-[11px] text-muted-foreground/40">·</span>
-              <span className="text-[11px] font-mono text-muted-foreground">
+              <span className="text-xs text-muted-foreground/40">·</span>
+              <span className="text-xs font-mono text-muted-foreground">
                 {commit.parentIds.map((id) => id.slice(0, 7)).join(", ")}
               </span>
             </>
@@ -138,12 +168,15 @@ export function CommitDetail({
       {/* File list + Diff viewer */}
       <div className="flex h-0 flex-1">
         {/* File list */}
-        <div className="w-56 shrink-0 border-r border-border flex flex-col">
+        <div
+          style={{ width: fileListWidth }}
+          className="shrink-0 border-r border-border flex flex-col"
+        >
           <div className="px-3 h-[36px] border-b border-border flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {t("history.changedFiles")}
             </span>
-            <span className="text-[11px] text-muted-foreground/60 tabular-nums">
+            <span className="text-xs text-muted-foreground/60 tabular-nums">
               {changedFiles.length}
             </span>
           </div>
@@ -170,10 +203,10 @@ export function CommitDetail({
                   <FileStatusBadge status={f.status} />
                   <span className="flex-1 min-w-0 truncate">
                     {dir && (
-                      <span className="text-[11px] text-muted-foreground/60">{dir}</span>
+                      <span className="text-xs text-muted-foreground/60">{dir}</span>
                     )}
                     <span className={cn(
-                      "text-[11px] font-medium",
+                      "text-xs font-medium",
                       isSelected ? "text-primary" : "text-foreground",
                     )}>
                       {filename}
@@ -184,6 +217,12 @@ export function CommitDetail({
             })}
           </div>
         </div>
+
+        {/* Resize handle */}
+        <div
+          onMouseDown={onResizeMouseDown}
+          className="w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/40 transition-colors"
+        />
 
         {/* Diff viewer */}
         <div className="flex-1 overflow-hidden flex flex-col">

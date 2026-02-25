@@ -60,7 +60,7 @@ export function BranchDropdown({
         {/* Local */}
         {local.length > 0 && (
           <div className="py-1">
-            <p className="px-3 pt-1.5 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <p className="px-3 pt-1.5 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {t("branch.local")}
             </p>
             {local.map((branch) => (
@@ -84,7 +84,7 @@ export function BranchDropdown({
           <div className="py-1 border-t border-border">
             <button
               onClick={() => setRemoteExpanded((v) => !v)}
-              className="w-full flex items-center gap-1.5 px-3 pt-1.5 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+              className="w-full flex items-center gap-1.5 px-3 pt-1.5 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
             >
               <ChevronRight
                 className={cn(
@@ -161,7 +161,7 @@ function BranchRow({
       )} />
       <span className="flex-1 truncate text-left">{branch.name}</span>
       {hasAheadBehind && (
-        <span className="flex items-center gap-1.5 text-[11px] tabular-nums">
+        <span className="flex items-center gap-1.5 text-xs tabular-nums">
           {branch.aheadBehind!.ahead > 0 && (
             <span className="text-primary font-medium">
               {"\u2191"}{branch.aheadBehind!.ahead}

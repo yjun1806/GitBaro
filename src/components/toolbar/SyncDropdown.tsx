@@ -51,7 +51,7 @@ function MenuItem({ icon, label, description, badge, danger, highlighted, disabl
         )}>
           {label}
         </p>
-        <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">{description}</p>
+        <p className="text-xs text-muted-foreground leading-tight mt-0.5">{description}</p>
       </div>
       {badge !== undefined && badge > 0 && (
         <span className={cn(
@@ -132,7 +132,7 @@ export function SyncDropdown({
 
       {/* Footer */}
       <div className="border-t border-border bg-surface/50 px-3 py-2">
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {lastFetchedAt
             ? t("sync.lastFetched", { time: formatRelativeTime(lastFetchedAt) })
             : t("sync.neverFetched")}
