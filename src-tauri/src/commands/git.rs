@@ -1,3 +1,8 @@
+// ── Git operation strategy ──────────────────────────────────────────────────
+// 읽기 전용 (status, diff): git2 (libgit2) — 성능 우선
+// 쓰기 + hooks (commit, stash): GitCliEngine — hooks 실행 보장
+// 리모트 (fetch, push, pull): GitCliEngine + AskpassScript — 인증
+
 use crate::commands::auth::resolve_token;
 use crate::error::AppError;
 use crate::git::cli::GitCliEngine;
@@ -156,44 +161,10 @@ pub async fn create_commit(
         None
     };
 
-    let oid = tokio::task::spawn_blocking(move || {
-        let repo = git2::Repository::open(&repo_path)?;
-        let mut index = repo.index()?;
-        let tree_id = index.write_tree()?;
-        let tree = repo.find_tree(tree_id)?;
-
-        let sig = if let Some((ref name, ref email)) = account_info {
-            git2::Signature::now(name, email)?
-        } else {
-            repo.signature()?
-        };
-
-        let oid = if amend {
-            let head = repo.head()?;
-            let parent_commit = head.peel_to_commit()?;
-            let new_oid = parent_commit.amend(
-                Some("HEAD"),
-                Some(&sig),
-                Some(&sig),
-                None,
-                Some(&message),
-                Some(&tree),
-            )?;
-            new_oid
-        } else {
-            let parent_commits: Vec<git2::Commit> = match repo.head() {
-                Ok(head) => vec![head.peel_to_commit()?],
-                Err(_) => vec![],
-            };
-            let parents: Vec<&git2::Commit> = parent_commits.iter().collect();
-            repo.commit(Some("HEAD"), &sig, &sig, &message, &tree, &parents)?
-        };
-
-        Ok::<_, AppError>(oid.to_string())
-    })
-    .await
-    .map_err(|e| AppError::Channel(e.to_string()))??;
-
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let author = account_info.as_ref().map(|(n, e)| (n.as_str(), e.as_str()));
+    let oid = engine.commit(&message, amend, author).await?;
+    tracing::info!("Committed {}", oid);
     Ok(oid)
 }
 
@@ -400,29 +371,16 @@ pub async fn git_pull(
 
 #[tauri::command]
 pub async fn stash_push(repo_path: String, message: Option<String>) -> Result<(), AppError> {
-    tokio::task::spawn_blocking(move || {
-        let repo = git2::Repository::open(&repo_path)?;
-        let sig = repo.signature()?;
-        let msg = message.as_deref().unwrap_or("WIP");
-        let mut repo = repo;
-        repo.stash_save(&sig, msg, Some(git2::StashFlags::DEFAULT))?;
-        Ok::<_, AppError>(())
-    })
-    .await
-    .map_err(|e| AppError::Channel(e.to_string()))??;
-
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.stash_save(message.as_deref()).await?;
+    tracing::info!("Stash saved");
     Ok(())
 }
 
 #[tauri::command]
 pub async fn stash_pop(repo_path: String) -> Result<(), AppError> {
-    tokio::task::spawn_blocking(move || {
-        let mut repo = git2::Repository::open(&repo_path)?;
-        repo.stash_pop(0, None)?;
-        Ok::<_, AppError>(())
-    })
-    .await
-    .map_err(|e| AppError::Channel(e.to_string()))??;
-
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.stash_pop().await?;
+    tracing::info!("Stash popped");
     Ok(())
 }

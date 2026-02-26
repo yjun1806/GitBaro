@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::git::cli::GitCliEngine;
 use serde_json::{json, Value};
 
 #[tauri::command]
@@ -115,22 +116,8 @@ pub async fn create_branch(
 
 #[tauri::command]
 pub async fn switch_branch(repo_path: String, name: String) -> Result<(), AppError> {
-    let branch_name = name.clone();
-    tokio::task::spawn_blocking(move || {
-        let repo = git2::Repository::open(&repo_path)?;
-        let refname = format!("refs/heads/{}", branch_name);
-        let obj = repo.revparse_single(&refname)?;
-
-        let mut checkout_opts = git2::build::CheckoutBuilder::new();
-        checkout_opts.safe();
-        repo.checkout_tree(&obj, Some(&mut checkout_opts))?;
-        repo.set_head(&refname)?;
-
-        Ok::<_, AppError>(())
-    })
-    .await
-    .map_err(|e| AppError::Channel(e.to_string()))??;
-
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.switch_branch(&name).await?;
     tracing::info!("Switched to branch: {}", name);
     Ok(())
 }

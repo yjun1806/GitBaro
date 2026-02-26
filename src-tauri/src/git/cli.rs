@@ -17,6 +17,92 @@ impl GitCliEngine {
     }
 }
 
+// ── Local operations (hooks-aware) ──────────────────────────────────────────
+// commit, switch_branch, stash 등 hooks가 실행되어야 하는 작업은
+// git2 대신 git CLI를 통해 실행한다.
+
+impl GitCliEngine {
+    /// Run a local git command (no auth needed, hooks will execute).
+    async fn run_local(&self, args: &[&str]) -> Result<std::process::Output, AppError> {
+        tracing::info!(
+            "[git] git {} (cwd: {})",
+            args.join(" "),
+            self.repo_path.display()
+        );
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(&self.repo_path)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .output()
+            .await
+            .map_err(map_io_err)?;
+        log_output(&output);
+        Ok(output)
+    }
+
+    /// Run a local git command and check for success. Returns stdout on success.
+    async fn run_local_checked(&self, args: &[&str]) -> Result<String, AppError> {
+        let output = self.run_local(args).await?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(AppError::GitCli {
+                message: parse_git_error(&stderr),
+                exit_code: output.status.code(),
+            })
+        }
+    }
+
+    /// Create a commit via git CLI so that hooks (pre-commit, commit-msg, post-commit) run.
+    pub async fn commit(
+        &self,
+        message: &str,
+        amend: bool,
+        author: Option<(&str, &str)>,
+    ) -> Result<String, AppError> {
+        crate::git::commit::validate_message(message)?;
+
+        let mut args = vec!["commit", "-m", message];
+        if amend {
+            args.push("--amend");
+        }
+        let author_str;
+        if let Some((name, email)) = author {
+            author_str = format!("{} <{}>", name, email);
+            args.push("--author");
+            args.push(&author_str);
+        }
+        self.run_local_checked(&args).await?;
+        self.run_local_checked(&["rev-parse", "HEAD"]).await
+    }
+
+    /// Switch branch via git CLI so that post-checkout hook runs.
+    pub async fn switch_branch(&self, name: &str) -> Result<(), AppError> {
+        self.run_local_checked(&["checkout", name]).await?;
+        Ok(())
+    }
+
+    /// Stash working changes via git CLI.
+    pub async fn stash_save(&self, message: Option<&str>) -> Result<(), AppError> {
+        let mut args = vec!["stash", "push"];
+        if let Some(msg) = message {
+            args.push("-m");
+            args.push(msg);
+        }
+        self.run_local_checked(&args).await?;
+        Ok(())
+    }
+
+    /// Pop the latest stash entry via git CLI (post-checkout hook may run).
+    pub async fn stash_pop(&self) -> Result<(), AppError> {
+        self.run_local_checked(&["stash", "pop"]).await?;
+        Ok(())
+    }
+}
+
+// ── Remote operations (auth-aware) ──────────────────────────────────────────
+
 impl GitRemoteEngine for GitCliEngine {
     async fn clone_repo(&self, url: &str, path: &Path, token: &str) -> Result<(), AppError> {
         let askpass = AskpassScript::create(token).await?;
