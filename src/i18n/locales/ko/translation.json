@@ -139,6 +139,17 @@
     "checkAgain": "다시 확인",
     "managedByCli": "GitHub CLI로 관리되는 계정"
   },
+  "ghSync": {
+    "detected": {
+      "title": "GitHub 계정이 발견되었습니다",
+      "description": "이 컴퓨터의 GitHub CLI에 로그인된 계정을 발견했습니다. GitBaro에서 사용할 계정을 선택하세요.",
+      "confirm": "{{count}}개 계정 사용하기",
+      "signInNew": "다른 계정으로 로그인"
+    },
+    "syncButton": "CLI에서 동기화",
+    "syncSuccess": "GitHub CLI에서 {{count}}개 계정을 동기화했습니다",
+    "syncFailed": "계정 동기화 실패: {{error}}"
+  },
   "repo": {
     "clone": "저장소 Clone",
     "add": "로컬 저장소 추가",
@@ -198,7 +209,21 @@
     "selectCommit": "Commit을 선택하여 상세 정보를 확인하세요",
     "loadingDiff": "Diff 로딩 중...",
     "failedToLoad": "Diff 로드 실패",
-    "commitDetails": "여기에 Commit 상세 정보가 표시됩니다"
+    "commitDetails": "여기에 Commit 상세 정보가 표시됩니다",
+    "imageDiff": {
+      "twoUp": "2-up",
+      "swipe": "스와이프",
+      "onionSkin": "오니온 스킨",
+      "difference": "차이점"
+    },
+    "added": "추가됨",
+    "deleted": "삭제됨",
+    "changed": "변경됨",
+    "tooLarge": "미리보기하기에 파일이 너무 큽니다 (10 MB 초과)",
+    "svgPreview": "SVG 미리보기",
+    "sizeDiff": "차이: {{diff}} ({{percent}}%)",
+    "dimensions": "{{width}} × {{height}}",
+    "fileSize": "{{size}}"
   },
   "sync": {
     "fetchOrigin": "Fetch origin",

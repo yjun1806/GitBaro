@@ -2,9 +2,11 @@ use std::collections::HashMap;
 
 use crate::error::AppError;
 use crate::gh::cli;
+use crate::git::binary::{detect_file_type, extension_to_mime, is_previewable, MAX_PREVIEW_SIZE};
 use crate::git::remote::parse_github_url;
 use crate::github::client::GitHubClient;
 use crate::state::TokenStore;
+use base64::Engine;
 use serde_json::{json, Value};
 
 fn gravatar_url(email: &str) -> String {
@@ -180,12 +182,6 @@ pub async fn get_commit_file_diff(
             Some(&mut diff_opts),
         )?;
 
-        let is_binary = diff.deltas().any(|d| {
-            d.flags().contains(git2::DiffFlags::BINARY)
-                || d.old_file().is_binary()
-                || d.new_file().is_binary()
-        });
-
         let mut hunks: Vec<Value> = Vec::new();
         let mut current_hunk_lines: Vec<Value> = Vec::new();
         let mut current_hunk_header = String::new();
@@ -238,6 +234,71 @@ pub async fn get_commit_file_diff(
             }));
         }
 
+        // Detect binary: git2 flags (set after diff.print) + extension-based fallback
+        let is_binary_by_flags = diff.deltas().any(|d| {
+            d.flags().contains(git2::DiffFlags::BINARY)
+                || d.old_file().is_binary()
+                || d.new_file().is_binary()
+        });
+        let is_binary_by_ext = is_previewable(&detect_file_type(&file_path));
+        let is_binary = is_binary_by_flags || is_binary_by_ext;
+
+        // Build binary preview if applicable
+        let binary_preview = if is_binary {
+            let file_type = detect_file_type(&file_path);
+            if is_previewable(&file_type) {
+                let mime_type = extension_to_mime(&file_path);
+
+                let old_bytes: Option<Vec<u8>> = parent_tree
+                    .as_ref()
+                    .and_then(|tree| tree.get_path(std::path::Path::new(&file_path)).ok())
+                    .and_then(|entry| repo.find_blob(entry.id()).ok())
+                    .map(|blob| blob.content().to_vec());
+
+                let new_bytes: Option<Vec<u8>> = commit_tree
+                    .get_path(std::path::Path::new(&file_path))
+                    .ok()
+                    .and_then(|entry| repo.find_blob(entry.id()).ok())
+                    .map(|blob| blob.content().to_vec());
+
+                let old_size = old_bytes.as_ref().map(|b| b.len());
+                let new_size = new_bytes.as_ref().map(|b| b.len());
+
+                if old_size.unwrap_or(0) > MAX_PREVIEW_SIZE || new_size.unwrap_or(0) > MAX_PREVIEW_SIZE {
+                    Some(json!({
+                        "meta": {
+                            "fileType": file_type,
+                            "mimeType": mime_type,
+                            "oldSize": old_size,
+                            "newSize": new_size,
+                            "tooLarge": true
+                        },
+                        "oldBase64": null,
+                        "newBase64": null
+                    }))
+                } else {
+                    let encoder = base64::engine::general_purpose::STANDARD;
+                    let old_b64 = old_bytes.map(|b| encoder.encode(&b));
+                    let new_b64 = new_bytes.map(|b| encoder.encode(&b));
+
+                    Some(json!({
+                        "meta": {
+                            "fileType": file_type,
+                            "mimeType": mime_type,
+                            "oldSize": old_size,
+                            "newSize": new_size
+                        },
+                        "oldBase64": old_b64,
+                        "newBase64": new_b64
+                    }))
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         // Read old content from parent tree
         let old_content = parent_tree
             .and_then(|tree| tree.get_path(std::path::Path::new(&file_path)).ok())
@@ -259,6 +320,7 @@ pub async fn get_commit_file_diff(
             "filePath": file_path,
             "staged": false,
             "binary": is_binary,
+            "binaryPreview": binary_preview,
             "insertions": stats.insertions(),
             "deletions": stats.deletions(),
             "hunks": hunks,

@@ -3,6 +3,7 @@ import type {
   StatusEntry,
   FileStatus,
   DiffOutput,
+  BinaryPreview,
   RepoInfo,
   BranchInfo,
   CommitInfo,
@@ -312,6 +313,7 @@ export async function getCommitFileDiff(
     oldContent: raw.oldContent ?? "",
     newContent: raw.newContent ?? "",
     binary: raw.binary ?? false,
+    binaryPreview: raw.binaryPreview,
     hunks: raw.hunks.map((h) => ({
       header: h.header,
       oldStart: h.oldStart,
@@ -432,6 +434,7 @@ interface RawFileDiff {
   hunks: RawDiffHunk[];
   oldContent: string;
   newContent: string;
+  binaryPreview?: BinaryPreview;
 }
 
 function mapLineKind(kind: string): "add" | "delete" | "context" {
@@ -451,6 +454,7 @@ export async function getFileDiff(
     oldContent: raw.oldContent ?? "",
     newContent: raw.newContent ?? "",
     binary: raw.binary ?? false,
+    binaryPreview: raw.binaryPreview,
     hunks: raw.hunks.map((h) => ({
       header: h.header,
       oldStart: h.oldStart,

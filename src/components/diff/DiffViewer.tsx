@@ -8,6 +8,7 @@ import "@git-diff-view/react/styles/diff-view-pure.css";
 import "./diff-theme.css";
 import type { DiffOutput, DiffHunk, FileStatus } from "@/types";
 import { DiffHeader } from "./DiffHeader";
+import { BinaryDiffViewer } from "./BinaryDiffViewer";
 import { useUIStore } from "@/stores/ui";
 
 const EXT_LANG_MAP: Record<string, string> = {
@@ -115,7 +116,7 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
 
   if (diff.binary) {
     return (
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <DiffHeader
           filePath={diff.filePath}
           status={status}
@@ -124,12 +125,18 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
           viewMode={viewMode}
           onToggleView={toggleView}
         />
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-muted-foreground">
-          <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
-            <FileQuestion className="w-6 h-6" />
-          </div>
-          <p className="text-sm font-medium">{t("diff.binary")}</p>
-          <p className="text-xs">{diff.filePath.split(".").pop()?.toUpperCase()}</p>
+        <div className="flex-1 min-h-0 overflow-auto">
+          {diff.binaryPreview ? (
+            <BinaryDiffViewer filePath={diff.filePath} preview={diff.binaryPreview} />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+              <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
+                <FileQuestion className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-medium">{t("diff.binary")}</p>
+              <p className="text-xs">{diff.filePath.split(".").pop()?.toUpperCase()}</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -161,8 +168,7 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
             <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
               <FileQuestion className="w-6 h-6" />
             </div>
-            <p className="text-sm font-medium">{t("diff.binary")}</p>
-            <p className="text-xs">{diff.filePath.split(".").pop()?.toUpperCase()}</p>
+            <p className="text-sm font-medium">{t("diff.noSelection")}</p>
           </div>
         )}
       </div>

@@ -139,6 +139,17 @@
     "checkAgain": "Check again",
     "managedByCli": "Accounts managed by GitHub CLI"
   },
+  "ghSync": {
+    "detected": {
+      "title": "GitHub Accounts Found",
+      "description": "We found accounts logged in via GitHub CLI on this machine. Select the accounts you'd like to use with GitBaro.",
+      "confirm": "Use {{count}} account(s)",
+      "signInNew": "Sign in with a different account"
+    },
+    "syncButton": "Sync from CLI",
+    "syncSuccess": "Synced {{count}} account(s) from GitHub CLI",
+    "syncFailed": "Failed to sync accounts: {{error}}"
+  },
   "repo": {
     "clone": "Clone a Repository",
     "add": "Add Local Repository",
@@ -198,7 +209,21 @@
     "selectCommit": "Select a commit to view its details",
     "loadingDiff": "Loading diff...",
     "failedToLoad": "Failed to load diff",
-    "commitDetails": "Commit details will render here"
+    "commitDetails": "Commit details will render here",
+    "imageDiff": {
+      "twoUp": "2-up",
+      "swipe": "Swipe",
+      "onionSkin": "Onion Skin",
+      "difference": "Difference"
+    },
+    "added": "Added",
+    "deleted": "Deleted",
+    "changed": "Changed",
+    "tooLarge": "File too large to preview (exceeds 10 MB)",
+    "svgPreview": "SVG Preview",
+    "sizeDiff": "Diff: {{diff}} ({{percent}}%)",
+    "dimensions": "{{width}} × {{height}}",
+    "fileSize": "{{size}}"
   },
   "sync": {
     "fetchOrigin": "Fetch origin",

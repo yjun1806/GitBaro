@@ -1,39 +1,179 @@
 /*
- * Diff 뷰어 색상 오버라이드 — GitHub Desktop 스타일
+ * Diff 뷰어 색상 오버라이드
  * 이 파일은 @git-diff-view/react CSS 뒤에 import되어
  * 동일 specificity에서 cascade 우선순위로 라이브러리 기본값을 덮어씁니다.
  */
 
 /* Light 테마 */
 [data-theme="light"] .diff-style-root {
-  --diff-add-content--: #dafbe1;
-  --diff-del-content--: #ffebe9;
-  --diff-add-content-highlight--: #aceebb;
-  --diff-del-content-highlight--: #ffcecb;
-  --diff-add-lineNumber--: #aceebb;
-  --diff-del-lineNumber--: #ffcecb;
-  --diff-plain-lineNumber-color--: #636c76;
-  --diff-hunk-content--: #ddf4ff;
-  --diff-hunk-lineNumber--: #b6e3ff;
-  --diff-hunk-content-color--: #0550ae;
-  --diff-border--: #d0d7de;
-  --diff-plain-content--: #ffffff;
-  --diff-empty-content--: #f6f8fa;
+  --diff-add-content--: #e6f4ea;
+  --diff-del-content--: #fce8e6;
+  --diff-add-content-highlight--: #c8e6c9;
+  --diff-del-content-highlight--: #f5c6cb;
+  --diff-add-lineNumber--: #c8e6c9;
+  --diff-del-lineNumber--: #f5c6cb;
+  --diff-plain-lineNumber-color--: var(--gray-600);
+  --diff-hunk-content--: #eaecf5;
+  --diff-hunk-lineNumber--: #d4d8ed;
+  --diff-hunk-content-color--: #5E6AD2;
+  --diff-border--: var(--gray-300);
+  --diff-plain-content--: var(--white);
+  --diff-empty-content--: var(--gray-100);
 }
 
 /* Dark 테마 */
 [data-theme="dark"] .diff-style-root {
-  --diff-add-content--: #12261e;
-  --diff-del-content--: #2d1315;
-  --diff-add-content-highlight--: #1a4721;
-  --diff-del-content-highlight--: #6e2b2d;
-  --diff-add-lineNumber--: #1b3d23;
-  --diff-del-lineNumber--: #542124;
-  --diff-plain-lineNumber-color--: #848d97;
-  --diff-hunk-content--: #121d2f;
-  --diff-hunk-lineNumber--: #0c2d6b;
-  --diff-hunk-content-color--: #539bf5;
-  --diff-border--: #3d444d;
-  --diff-plain-content--: #0d1117;
-  --diff-empty-content--: #161b22;
+  --diff-add-content--: #1a2e1f;
+  --diff-del-content--: #2e1a1a;
+  --diff-add-content-highlight--: #264d2c;
+  --diff-del-content-highlight--: #5c2626;
+  --diff-add-lineNumber--: #1f3824;
+  --diff-del-lineNumber--: #4a2020;
+  --diff-plain-lineNumber-color--: var(--gray-500);
+  --diff-hunk-content--: #1c1e30;
+  --diff-hunk-lineNumber--: #2a2d4e;
+  --diff-hunk-content-color--: #7E89EC;
+  --diff-border--: var(--gray-900);
+  --diff-plain-content--: var(--gray-1000);
+  --diff-empty-content--: var(--gray-950);
+}
+
+/* ─── Binary diff / Image preview ─── */
+
+.checkerboard-bg {
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
+    linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
+    linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+[data-theme="dark"] .checkerboard-bg {
+  background-color: #1a1a1a;
+  background-image:
+    linear-gradient(45deg, #2a2a2a 25%, transparent 25%),
+    linear-gradient(-45deg, #2a2a2a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2a2a2a 75%),
+    linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+}
+
+.image-diff-border-added {
+  border: 2px solid #28a745;
+}
+
+.image-diff-border-deleted {
+  border: 2px solid #d73a49;
+}
+
+.image-diff-border-changed {
+  border: 2px solid #f0ad4e;
+}
+
+/* Swipe slider handle */
+.swipe-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #5E6AD2;
+  cursor: ew-resize;
+  z-index: 10;
+}
+
+.swipe-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #5E6AD2;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Onion skin range slider */
+.onion-skin-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 200px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--gray-300);
+  outline: none;
+}
+
+.onion-skin-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #5E6AD2;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .onion-skin-slider {
+  background: var(--gray-700);
+}
+
+/* Image diff mode toggle bar */
+.image-diff-mode-bar {
+  display: inline-flex;
+  gap: 1px;
+  background: var(--gray-200);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+[data-theme="dark"] .image-diff-mode-bar {
+  background: var(--gray-800);
+}
+
+.image-diff-mode-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--gray-600);
+  transition: all 0.15s ease;
+}
+
+.image-diff-mode-btn:hover {
+  color: var(--gray-900);
+}
+
+.image-diff-mode-btn.active {
+  background: white;
+  color: var(--gray-900);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .image-diff-mode-btn {
+  color: var(--gray-400);
+}
+
+[data-theme="dark"] .image-diff-mode-btn:hover {
+  color: var(--gray-200);
+}
+
+[data-theme="dark"] .image-diff-mode-btn.active {
+  background: var(--gray-700);
+  color: var(--gray-100);
+}
+
+/* Image meta info */
+.image-meta-label {
+  font-size: 11px;
+  color: var(--gray-500);
+  font-variant-numeric: tabular-nums;
 }

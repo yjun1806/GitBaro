@@ -64,6 +64,7 @@ export interface DiffOutput {
   newContent: string;
   hunks: DiffHunk[];
   binary: boolean;
+  binaryPreview?: BinaryPreview;
 }
 
 export interface DiffHunk {
@@ -80,6 +81,22 @@ export interface DiffLine {
   lineType: "add" | "delete" | "context";
   oldLineNo: number | null;
   newLineNo: number | null;
+}
+
+export type BinaryFileType = "image" | "svg" | "unknown";
+
+export interface BinaryFileMeta {
+  fileType: BinaryFileType;
+  mimeType: string;
+  oldSize: number | null;
+  newSize: number | null;
+  tooLarge?: boolean;
+}
+
+export interface BinaryPreview {
+  meta: BinaryFileMeta;
+  oldBase64: string | null;
+  newBase64: string | null;
 }
 
 export interface CommitInfo {
@@ -126,7 +143,7 @@ export interface RemoteInfo {
 export interface AppSettings {
   theme: Theme;
   defaultEditor: string;
-  defaultShell: string;
+
   autoFetchInterval: number;
   language: string;
 }

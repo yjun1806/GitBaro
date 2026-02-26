@@ -1,3 +1,4 @@
+pub mod binary;
 pub mod branch;
 pub mod cli;
 pub mod commit;
