@@ -31,7 +31,7 @@ export function ThemeSelector({ value, onChange }: ThemeSelectorProps) {
           key={opt.value}
           onClick={() => onChange(opt.value)}
           className={clsx(
-            "flex flex-col items-center gap-2 px-5 py-3 rounded-xl border text-sm font-medium transition-all",
+            "w-24 flex flex-col items-center gap-2 py-3 rounded-xl border text-sm font-medium transition-all",
             value === opt.value
               ? "border-primary bg-primary/10 text-primary"
               : "border-border text-muted-foreground hover:border-border hover:bg-accent"

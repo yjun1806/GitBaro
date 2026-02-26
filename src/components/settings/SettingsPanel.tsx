@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Users, Palette, Code, Terminal, Check, Loader2 } from "lucide-react";
+import { X, Users, Palette, Code, Check, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import type { AppSettings, GitHubAccount, EditorInfo } from "@/types";
@@ -31,16 +31,16 @@ interface SettingsPanelProps {
   onUpdateSettings: (patch: Partial<AppSettings>) => void;
   onRemoveAccount: (accountId: string) => void;
   onAddAccount: () => void;
+  onSyncAccounts: () => Promise<void>;
   onClose: () => void;
 }
 
-type Section = "accounts" | "appearance" | "editor" | "shell";
+type Section = "accounts" | "appearance" | "editor";
 
 const sections: { id: Section; labelKey: string; icon: typeof Users }[] = [
   { id: "accounts", labelKey: "settings.accounts", icon: Users },
   { id: "appearance", labelKey: "settings.appearance", icon: Palette },
   { id: "editor", labelKey: "settings.editor", icon: Code },
-  { id: "shell", labelKey: "settings.shell", icon: Terminal },
 ];
 
 export function SettingsPanel({
@@ -49,6 +49,7 @@ export function SettingsPanel({
   onUpdateSettings,
   onRemoveAccount,
   onAddAccount,
+  onSyncAccounts,
   onClose,
 }: SettingsPanelProps) {
   const { t } = useTranslation();
@@ -110,6 +111,7 @@ export function SettingsPanel({
                 accounts={accounts}
                 onRemove={onRemoveAccount}
                 onAddAccount={onAddAccount}
+                onSyncAccounts={onSyncAccounts}
               />
             )}
 
@@ -190,22 +192,6 @@ export function SettingsPanel({
               </div>
             )}
 
-            {activeSection === "shell" && (
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-medium text-muted-foreground">
-                  {t("settings.shell")}
-                </label>
-                <input
-                  type="text"
-                  value={settings.defaultShell}
-                  onChange={(e) =>
-                    onUpdateSettings({ defaultShell: e.target.value })
-                  }
-                  placeholder="zsh, bash, fish..."
-                  className="w-full max-w-xs px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-            )}
           </div>
         </div>
       </div>

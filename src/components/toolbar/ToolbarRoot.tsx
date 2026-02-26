@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Settings } from "lucide-react";
 import { useAccountStore } from "@/stores/account";
 import {
+  getAccounts,
   getSettings,
   updateSettings as updateSettingsApi,
   removeAccount as removeAccountApi,
@@ -42,11 +43,29 @@ export function ToolbarRoot() {
         theme: "system",
         language: "ko",
         defaultEditor: "",
-        defaultShell: "",
+
         autoFetchInterval: 0,
       } as AppSettings);
     }
     setShowSettings(true);
+  };
+
+  const handleSyncAccounts = async () => {
+    try {
+      const loaded = await getAccounts();
+      const { setAccounts, setActiveAccount } = useAccountStore.getState();
+      setAccounts(loaded);
+      if (loaded.length > 0) {
+        const currentId = useAccountStore.getState().activeAccountId;
+        const stillExists = loaded.some((a) => a.id === currentId);
+        if (!stillExists) {
+          setActiveAccount(loaded[0].id);
+        }
+      }
+      addToast(t("ghSync.syncSuccess", { count: loaded.length }), "success");
+    } catch (err) {
+      addToast(t("ghSync.syncFailed", { error: getErrorMessage(err) }), "error");
+    }
   };
 
   const handleRemoveAccount = async (accountId: string) => {
@@ -152,6 +171,7 @@ export function ToolbarRoot() {
             setShowSettings(false);
             setShowLoginDialog(true);
           }}
+          onSyncAccounts={handleSyncAccounts}
           onClose={() => setShowSettings(false)}
         />
       )}

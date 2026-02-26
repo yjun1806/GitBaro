@@ -13,6 +13,7 @@ import { getErrorMessage } from "@/lib/utils";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { WelcomeScreen } from "@/components/welcome/WelcomeScreen";
 import { GhLoginDialog } from "@/components/account/GhLoginDialog";
+import { GhAccountDetectedDialog } from "@/components/account/GhAccountDetectedDialog";
 import { GhSetupGuard } from "@/components/account/GhSetupGuard";
 import { ErrorToast } from "@/components/error/ErrorToast";
 import { useToastStore } from "@/stores/toast";
@@ -75,6 +76,7 @@ function AppContent() {
   const [showAccountSelectDialog, setShowAccountSelectDialog] = useState(false);
   const [pendingLocalRepo, setPendingLocalRepo] = useState<{ path: string; repoInfo: import("@/types").RepoInfo } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [detectedGhAccounts, setDetectedGhAccounts] = useState<import("@/types").GitHubAccount[] | null>(null);
 
   // Reusable: load accounts from gh CLI and update store
   const refreshAccounts = useCallback(async () => {
@@ -97,6 +99,15 @@ function AppContent() {
   useEffect(() => {
     const init = async () => {
       await refreshAccounts();
+
+      // If gh accounts were detected but user has no repos (first launch),
+      // show the detected accounts dialog so user can choose to link them.
+      const currentAccounts = useAccountStore.getState().accounts;
+      const currentRepos = useRepositoryStore.getState().repos;
+      if (currentAccounts.length > 0 && currentRepos.length === 0) {
+        setDetectedGhAccounts(currentAccounts);
+      }
+
       try {
         const settings = await getSettings();
         if (settings.language && settings.language !== i18n.language) {
@@ -120,6 +131,30 @@ function AppContent() {
       ),
     );
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // DEV: Cmd+Shift+W to preview welcome screen for testing (data preserved)
+  const [debugWelcome, setDebugWelcome] = useState(false);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey && e.shiftKey && e.key === "w") {
+        e.preventDefault();
+        if (debugWelcome) {
+          // toggle off: return to normal
+          setDebugWelcome(false);
+          setDetectedGhAccounts(null);
+        } else {
+          // toggle on: show welcome + detected accounts dialog
+          setDebugWelcome(true);
+          const accs = useAccountStore.getState().accounts;
+          if (accs.length > 0) {
+            setDetectedGhAccounts(accs);
+          }
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [debugWelcome]);
 
   // Apply theme on change
   useEffect(() => {
@@ -186,6 +221,23 @@ function AppContent() {
     setPendingLocalRepo(null);
   }, [pendingLocalRepo, addRepo, setActiveRepo]);
 
+  const handleGhDetectedConfirm = useCallback((selected: import("@/types").GitHubAccount[]) => {
+    setAccounts(selected);
+    if (selected.length > 0) {
+      const currentId = useAccountStore.getState().activeAccountId;
+      const stillExists = selected.some((a) => a.id === currentId);
+      if (!stillExists) {
+        setActiveAccount(selected[0].id);
+      }
+    }
+    setDetectedGhAccounts(null);
+  }, [setAccounts, setActiveAccount]);
+
+  const handleGhDetectedSignInNew = useCallback(() => {
+    setDetectedGhAccounts(null);
+    setShowLoginDialog(true);
+  }, []);
+
   // Show loading screen while initial account check runs
   if (isLoading) {
     return (
@@ -195,7 +247,7 @@ function AppContent() {
     );
   }
 
-  const showWelcome = accounts.length === 0 && repos.length === 0;
+  const showWelcome = repos.length === 0 || debugWelcome;
 
   return (
     <>
@@ -233,6 +285,13 @@ function AppContent() {
           onClose={() => {
             handleAccountSelectForRepo(null);
           }}
+        />
+      )}
+      {detectedGhAccounts && detectedGhAccounts.length > 0 && (
+        <GhAccountDetectedDialog
+          accounts={detectedGhAccounts}
+          onConfirm={handleGhDetectedConfirm}
+          onSignInNew={handleGhDetectedSignInNew}
         />
       )}
     </>
