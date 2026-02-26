@@ -32,7 +32,9 @@ import { useAccountStore } from "@/stores/account";
 import { useBranchStore } from "@/stores/branch";
 import { useStatus, useCommitHistory, useCommitAvatars, useBranches } from "@/api/queries";
 import { addLocalRepository, cloneRepository, createCommit, stageFiles, unstageFiles, gitFetch, openInEditor, getRepoVisibility, getOwnerType, validateToken } from "@/api/commands";
+import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
 import { CloneDialog } from "@/components/repository/CloneDialog";
+import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { FileStatusBadge } from "@/lib/file-status";
@@ -254,6 +256,8 @@ function RepoListView({
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
   const addToast = useToastStore((s) => s.addToast);
   const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [showAccountSelectDialog, setShowAccountSelectDialog] = useState(false);
+  const [pendingLocalRepo, setPendingLocalRepo] = useState<{ path: string; repoInfo: RepoInfo } | null>(null);
   const [validatingRepo, setValidatingRepo] = useState<string | null>(null);
   const collapsedGroups = useRepositoryStore((s) => s.collapsedGroups);
   const toggleGroupCollapsed = useRepositoryStore((s) => s.toggleGroupCollapsed);
@@ -276,12 +280,28 @@ function RepoListView({
       if (!selected) return;
       const dirPath = typeof selected === "string" ? selected : selected;
       const repoInfo = await addLocalRepository(dirPath);
-      addRepo(repoInfo);
-      onSelectRepo(repoInfo.path);
+
+      if (accounts.length >= 2) {
+        setPendingLocalRepo({ path: dirPath, repoInfo });
+        setShowAccountSelectDialog(true);
+      } else {
+        const accountId = accounts.length === 1 ? accounts[0].id : null;
+        addRepo({ ...repoInfo, accountId });
+        onSelectRepo(repoInfo.path);
+      }
     } catch (err) {
       addToast(t("repo.failedToAdd", { error: getErrorMessage(err) }), "error");
     }
-  }, [addRepo, onSelectRepo, addToast]);
+  }, [accounts, addRepo, onSelectRepo, addToast]);
+
+  const handleAccountSelectForRepo = useCallback((accountId: string | null) => {
+    if (pendingLocalRepo) {
+      addRepo({ ...pendingLocalRepo.repoInfo, accountId });
+      onSelectRepo(pendingLocalRepo.repoInfo.path);
+    }
+    setShowAccountSelectDialog(false);
+    setPendingLocalRepo(null);
+  }, [pendingLocalRepo, addRepo, onSelectRepo]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -651,6 +671,14 @@ function RepoListView({
           onClose={() => setShowCloneDialog(false)}
         />
       )}
+      {showAccountSelectDialog && (
+        <AccountSelectDialog
+          accounts={accounts}
+          activeAccountId={activeAccountId}
+          onSelect={handleAccountSelectForRepo}
+          onClose={() => handleAccountSelectForRepo(null)}
+        />
+      )}
     </div>
   );
 }
@@ -677,6 +705,7 @@ function ChangesView({
   const [commitSummary, setCommitSummary] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
 
   const handleOpenInEditor = async (filePath: string) => {
     if (!activeRepoPath) return;
@@ -738,7 +767,7 @@ function ChangesView({
         queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
       ]);
     } catch (err) {
-      addToast(t("commit.commitFailed", { error: getErrorMessage(err) }), "error");
+      setCommitError(getErrorMessage(err));
     } finally {
       setIsCommitting(false);
     }
@@ -889,8 +918,21 @@ function ChangesView({
           )}
           disabled={stagedFiles.length === 0 || !commitSummary.trim() || isCommitting}
         >
-          {t("commit.submit", { branch: currentBranch ?? "main" })}
+          {isCommitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {t("commit.committing")}
+            </span>
+          ) : (
+            t("commit.submit", { branch: currentBranch ?? "main" })
+          )}
         </button>
+        {commitError && (
+          <CommitErrorDialog
+            message={commitError}
+            onClose={() => setCommitError(null)}
+          />
+        )}
       </div>
     </div>
   );

@@ -6,6 +6,7 @@
     "loading": "Loading...",
     "filter": "Filter",
     "browse": "Browse",
+    "confirm": "Confirm",
     "settings": "Settings"
   },
   "welcome": {
@@ -44,6 +45,11 @@
     "subjectTooLong": "Subject line exceeds {{max}} characters — consider shortening it.",
     "coauthors": "Co-authors — coming soon",
     "commitFailed": "Commit failed: {{error}}",
+    "committing": "Committing...",
+    "errorTitle": "Commit Failed",
+    "copy": "Copy",
+    "copied": "Copied",
+    "close": "Close",
     "stageFailed": "Stage failed: {{error}}",
     "unstageFailed": "Unstage failed: {{error}}"
   },
@@ -160,7 +166,10 @@
     "removeFromList": "Remove from List",
     "favorite": "Favorite",
     "unfavorite": "Unfavorite",
-    "favorites": "Favorites"
+    "favorites": "Favorites",
+    "selectDefaultAccount": "Select Default Account",
+    "selectDefaultAccountDesc": "Choose the default GitHub account to use with this repository.",
+    "skipAccountSelect": "Skip"
   },
   "settings": {
     "title": "Settings",

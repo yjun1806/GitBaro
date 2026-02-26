@@ -6,6 +6,7 @@
     "loading": "로딩 중...",
     "filter": "필터",
     "browse": "찾아보기",
+    "confirm": "확인",
     "settings": "설정"
   },
   "welcome": {
@@ -44,6 +45,11 @@
     "subjectTooLong": "제목이 {{max}}자를 초과합니다 — 줄이는 것을 고려하세요.",
     "coauthors": "Co-authors — 준비 중",
     "commitFailed": "Commit 실패: {{error}}",
+    "committing": "커밋 중...",
+    "errorTitle": "Commit 실패",
+    "copy": "복사",
+    "copied": "복사됨",
+    "close": "닫기",
     "stageFailed": "Stage 실패: {{error}}",
     "unstageFailed": "Unstage 실패: {{error}}"
   },
@@ -160,7 +166,10 @@
     "removeFromList": "목록에서 제거",
     "favorite": "즐겨찾기 추가",
     "unfavorite": "즐겨찾기 해제",
-    "favorites": "즐겨찾기"
+    "favorites": "즐겨찾기",
+    "selectDefaultAccount": "기본 계정 선택",
+    "selectDefaultAccountDesc": "이 저장소에서 사용할 기본 GitHub 계정을 선택하세요.",
+    "skipAccountSelect": "건너뛰기"
   },
   "settings": {
     "title": "설정",
