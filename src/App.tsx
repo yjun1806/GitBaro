@@ -7,6 +7,7 @@ import { useUIStore } from "@/stores/ui";
 import { applyTheme, watchSystemTheme } from "@/lib/theme";
 import { addLocalRepository, cloneRepository, getAccounts, getSettings, openRepository } from "@/api/commands";
 import { CloneDialog } from "@/components/repository/CloneDialog";
+import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import i18n from "@/i18n/config";
 import { getErrorMessage } from "@/lib/utils";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -71,6 +72,8 @@ function AppContent() {
   const addToast = useToastStore((s) => s.addToast);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [showAccountSelectDialog, setShowAccountSelectDialog] = useState(false);
+  const [pendingLocalRepo, setPendingLocalRepo] = useState<{ path: string; repoInfo: import("@/types").RepoInfo } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Reusable: load accounts from gh CLI and update store
@@ -159,12 +162,29 @@ function AppContent() {
       if (!selected) return;
       const dirPath = typeof selected === "string" ? selected : selected;
       const repoInfo = await addLocalRepository(dirPath);
-      addRepo(repoInfo);
-      setActiveRepo(repoInfo.path);
+
+      const currentAccounts = useAccountStore.getState().accounts;
+      if (currentAccounts.length >= 2) {
+        setPendingLocalRepo({ path: dirPath, repoInfo });
+        setShowAccountSelectDialog(true);
+      } else {
+        const accountId = currentAccounts.length === 1 ? currentAccounts[0].id : null;
+        addRepo({ ...repoInfo, accountId });
+        setActiveRepo(repoInfo.path);
+      }
     } catch (err) {
       addToast(t("error.failedToOpenRepo", { error: getErrorMessage(err) }), "error");
     }
   }, [addRepo, setActiveRepo, addToast]);
+
+  const handleAccountSelectForRepo = useCallback((accountId: string | null) => {
+    if (pendingLocalRepo) {
+      addRepo({ ...pendingLocalRepo.repoInfo, accountId });
+      setActiveRepo(pendingLocalRepo.repoInfo.path);
+    }
+    setShowAccountSelectDialog(false);
+    setPendingLocalRepo(null);
+  }, [pendingLocalRepo, addRepo, setActiveRepo]);
 
   // Show loading screen while initial account check runs
   if (isLoading) {
@@ -203,6 +223,16 @@ function AppContent() {
           onAccountChange={setActiveAccount}
           onClone={handleClone}
           onClose={() => setShowCloneDialog(false)}
+        />
+      )}
+      {showAccountSelectDialog && (
+        <AccountSelectDialog
+          accounts={accounts}
+          activeAccountId={activeAccountId}
+          onSelect={handleAccountSelectForRepo}
+          onClose={() => {
+            handleAccountSelectForRepo(null);
+          }}
         />
       )}
     </>
