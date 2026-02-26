@@ -31,7 +31,7 @@ export function formatRelativeTime(timestamp: number): string {
   if (diffMinutes < 60) return i18n.t("time.minutesAgo", { count: diffMinutes });
   if (diffHours < 24) return i18n.t("time.hoursAgo", { count: diffHours });
   if (diffDays < 7) return i18n.t("time.daysAgo", { count: diffDays });
-  if (diffWeeks < 4) return i18n.t("time.weeksAgo", { count: diffWeeks });
+  if (diffDays < 30) return i18n.t("time.weeksAgo", { count: diffWeeks });
   if (diffMonths < 12) return i18n.t("time.monthsAgo", { count: diffMonths });
   return i18n.t("time.yearsAgo", { count: diffYears });
 }
