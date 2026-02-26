@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { GitBranch, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
@@ -7,6 +7,7 @@ import { switchBranch, createBranch, stashPush, stashPop } from "@/api/commands"
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { useClickOutside } from "./useToolbarDropdown";
 import { BranchDropdown } from "./BranchDropdown";
 import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
 import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
@@ -18,6 +19,8 @@ interface BranchZoneProps {
 }
 
 export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
+  const zoneRef = useRef<HTMLDivElement>(null);
+  useClickOutside(zoneRef, onClose, isOpen);
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const { data: branches = [] } = useBranches(activeRepoPath);
@@ -102,7 +105,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   };
 
   return (
-    <div className="relative shrink-0 flex items-center pl-2">
+    <div ref={zoneRef} className="relative shrink-0 flex items-center pl-2">
       <button
         onClick={onToggle}
         className={cn(

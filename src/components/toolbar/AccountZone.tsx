@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import { useAccountStore } from "@/stores/account";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
+import { useClickOutside } from "./useToolbarDropdown";
 import { AccountDropdown } from "./AccountDropdown";
 
 interface AccountZoneProps {
@@ -17,12 +19,14 @@ export function AccountZone({
   onSignIn,
   onManageAccounts,
 }: AccountZoneProps) {
+  const zoneRef = useRef<HTMLDivElement>(null);
+  useClickOutside(zoneRef, onClose, isOpen);
   const accounts = useAccountStore((s) => s.accounts);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const currentAccount = accounts.find((a) => a.id === activeAccountId);
 
   return (
-    <div className="relative shrink-0">
+    <div ref={zoneRef} className="relative shrink-0">
       <button
         onClick={onToggle}
         className="flex items-center gap-2 px-3 h-[52px] hover:bg-accent transition-colors"

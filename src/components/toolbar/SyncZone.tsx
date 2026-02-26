@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   RefreshCw,
   ArrowUp,
@@ -14,6 +14,7 @@ import { gitFetch, gitPush, gitPull } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { useClickOutside } from "./useToolbarDropdown";
 import { SyncDropdown } from "./SyncDropdown";
 
 interface SyncZoneProps {
@@ -23,6 +24,8 @@ interface SyncZoneProps {
 }
 
 export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
+  const zoneRef = useRef<HTMLDivElement>(null);
+  useClickOutside(zoneRef, onClose, isOpen);
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
@@ -186,7 +189,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const hasCount = !syncError && (ahead > 0 || behind > 0);
 
   return (
-    <div className="relative flex items-center shrink-0 pr-2">
+    <div ref={zoneRef} className="relative flex items-center shrink-0 pr-2">
       {/* Split-button group */}
       <div className={cn(
         "flex items-center h-8 rounded-lg border transition-all",

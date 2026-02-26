@@ -1,8 +1,7 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { GitBranch, Search, Plus, ChevronRight, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import { useClickOutside } from "./useToolbarDropdown";
 import type { BranchInfo } from "@/types";
 
 interface BranchDropdownProps {
@@ -21,11 +20,8 @@ export function BranchDropdown({
   onClose,
 }: BranchDropdownProps) {
   const { t } = useTranslation();
-  const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [remoteExpanded, setRemoteExpanded] = useState(false);
-
-  useClickOutside(ref, onClose);
 
   const lowerQuery = query.toLowerCase();
   const filtered = branches.filter((b) =>
@@ -57,7 +53,6 @@ export function BranchDropdown({
 
   return (
     <div
-      ref={ref}
       className="absolute left-0 top-full mt-2 w-96 bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
     >
       {/* Search */}

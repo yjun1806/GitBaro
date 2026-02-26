@@ -1,10 +1,7 @@
-import { useRef } from "react";
 import { Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAccountStore } from "@/stores/account";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
-import { useClickOutside } from "./useToolbarDropdown";
-
 interface AccountDropdownProps {
   onClose: () => void;
   onSignIn: () => void;
@@ -20,13 +17,8 @@ export function AccountDropdown({
   const accounts = useAccountStore((s) => s.accounts);
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useClickOutside(ref, onClose);
-
   return (
     <div
-      ref={ref}
       className="absolute right-0 top-full mt-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50 py-1"
     >
       {accounts.length === 0 ? (

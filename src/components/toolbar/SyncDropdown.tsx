@@ -1,9 +1,7 @@
-import { useRef } from "react";
+import React from "react";
 import { RefreshCw, ArrowDown, ArrowUp, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import { useClickOutside } from "./useToolbarDropdown";
-
 interface SyncDropdownProps {
   ahead: number;
   behind: number;
@@ -78,9 +76,6 @@ export function SyncDropdown({
   onClose,
 }: SyncDropdownProps) {
   const { t } = useTranslation();
-  const ref = useRef<HTMLDivElement>(null);
-  useClickOutside(ref, onClose);
-
   const exec = (fn: () => void) => {
     fn();
     onClose();
@@ -90,7 +85,6 @@ export function SyncDropdown({
   if (!hasUpstream) {
     return (
       <div
-        ref={ref}
         className="absolute right-0 top-full mt-2 w-72 bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
       >
         <div className="py-1">
@@ -109,7 +103,6 @@ export function SyncDropdown({
 
   return (
     <div
-      ref={ref}
       className="absolute right-0 top-full mt-2 w-72 bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
     >
       {/* Fetch */}
