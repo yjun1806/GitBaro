@@ -6,11 +6,6 @@ import App from "./App";
 import "./i18n/config";
 import "./styles/globals.css";
 
-// Tauri 윈도우 포커스 이벤트를 React Query에 연동
-getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-  focusManager.setFocused(focused);
-});
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -19,6 +14,15 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: true,
     },
   },
+});
+
+// Tauri 윈도우 포커스 이벤트를 React Query에 연동
+// 포커스 시 모든 쿼리를 invalidate하여 staleTime과 관계없이 즉시 갱신
+getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+  focusManager.setFocused(focused);
+  if (focused) {
+    queryClient.invalidateQueries();
+  }
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
