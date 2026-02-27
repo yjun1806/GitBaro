@@ -2,10 +2,16 @@ import { useState } from "react";
 import { FileText, GitCommit } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
+import { useUIStore } from "@/stores/ui";
+import { useToastStore } from "@/stores/toast";
 import { useStatus, useFileDiff, useCommitDetail, useCommitFileDiff, useCommitAvatars } from "@/api/queries";
+import { stopWorktreePreview } from "@/api/commands";
+import { useQueryClient } from "@tanstack/react-query";
+import { getErrorMessage } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { CommitDetail } from "@/components/history/CommitDetail";
 import { ToolbarRoot } from "@/components/toolbar";
+import { PreviewBanner } from "@/components/worktree/PreviewBanner";
 import type { FileStatus } from "@/types";
 
 /* --- Empty / Placeholder States --- */
@@ -107,9 +113,32 @@ export function ContentArea({
   selectedCommitId,
 }: ContentAreaProps) {
   const { t } = useTranslation();
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const setPreviewBranch = useUIStore((s) => s.setPreviewBranch);
+  const addToast = useToastStore((s) => s.addToast);
+  const queryClient = useQueryClient();
+
+  const handleStopPreview = async () => {
+    if (!activeRepoPath) return;
+    try {
+      await stopWorktreePreview(activeRepoPath);
+      setPreviewBranch(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["branches"] }),
+        queryClient.invalidateQueries({ queryKey: ["status"] }),
+        queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
+        queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+      ]);
+      addToast(t("preview.stopped"), "success");
+    } catch (err) {
+      addToast(t("preview.failedToStop", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <ToolbarRoot />
+      <PreviewBanner onStopPreview={handleStopPreview} />
 
       {/* Diff / Detail content */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">

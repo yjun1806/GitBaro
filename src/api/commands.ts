@@ -24,6 +24,10 @@ interface RawStatusEntry {
   unstaged: boolean;
   indexStatus: string;
   worktreeStatus: string;
+  modifiedAt: number | null;
+  insertions: number | null;
+  deletions: number | null;
+  sizeBytes: number | null;
 }
 
 export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
@@ -36,6 +40,10 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
         path: entry.path,
         status: entry.indexStatus as FileStatus,
         staged: true,
+        modifiedAt: entry.modifiedAt,
+        insertions: entry.insertions,
+        deletions: entry.deletions,
+        sizeBytes: entry.sizeBytes,
       });
     }
     if (entry.unstaged && entry.worktreeStatus !== "unchanged") {
@@ -43,6 +51,10 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
         path: entry.path,
         status: entry.worktreeStatus as FileStatus,
         staged: false,
+        modifiedAt: entry.modifiedAt,
+        insertions: entry.insertions,
+        deletions: entry.deletions,
+        sizeBytes: entry.sizeBytes,
       });
     }
   }
@@ -523,4 +535,17 @@ export async function removeWorktree(
   force = false,
 ): Promise<void> {
   return invoke("remove_worktree", { repoPath, path, force });
+}
+
+// Preview
+export async function startWorktreePreview(repoPath: string, branch: string): Promise<void> {
+  return invoke("start_worktree_preview", { repoPath, branch });
+}
+
+export async function stopWorktreePreview(repoPath: string): Promise<void> {
+  return invoke("stop_worktree_preview", { repoPath });
+}
+
+export async function checkPreviewActive(repoPath: string): Promise<boolean> {
+  return invoke("check_preview_active", { repoPath });
 }

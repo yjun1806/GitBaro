@@ -2,6 +2,7 @@ import { useState } from "react";
 import { GitCommit } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
+import { useUIStore } from "@/stores/ui";
 import { CommitMessage } from "./CommitMessage";
 
 interface CommitPanelProps {
@@ -15,8 +16,9 @@ export function CommitPanel({ currentBranch, stagedCount, onCommit }: CommitPane
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
   const [amend, setAmend] = useState(false);
+  const previewBranch = useUIStore((s) => s.previewBranch);
 
-  const canCommit = (summary.trim().length > 0 && stagedCount > 0) || amend;
+  const canCommit = !previewBranch && ((summary.trim().length > 0 && stagedCount > 0) || amend);
 
   const handleCommit = () => {
     if (!canCommit) return;
@@ -74,9 +76,11 @@ export function CommitPanel({ currentBranch, stagedCount, onCommit }: CommitPane
         )}
       >
         <GitCommit className="w-4 h-4" />
-        {stagedCount === 0 && !amend
-          ? t("commit.noStagedFiles")
-          : t("commit.submit", { branch: currentBranch ?? "HEAD" })}
+        {previewBranch
+          ? t("preview.disabledCommit")
+          : stagedCount === 0 && !amend
+            ? t("commit.noStagedFiles")
+            : t("commit.submit", { branch: currentBranch ?? "HEAD" })}
       </button>
     </div>
   );

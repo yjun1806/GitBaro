@@ -30,7 +30,9 @@
     "stageAll": "Stage All",
     "unstageAll": "Unstage All",
     "noChanges": "No local changes",
-    "discard": "Discard Changes"
+    "discard": "Discard Changes",
+    "rootFiles": "Root",
+    "filesCount": "{{count}} files"
   },
   "commit": {
     "summary": "Summary (required)",
@@ -322,6 +324,17 @@
     "failedToOpenRepo": "Failed to open repository: {{error}}",
     "failedToLogout": "Failed to log out: {{error}}",
     "failedToUpdateSettings": "Failed to update settings: {{error}}"
+  },
+  "preview": {
+    "previewing": "Previewing: {{branch}}",
+    "stop": "Stop Preview",
+    "start": "Preview",
+    "started": "Previewing {{branch}}",
+    "stopped": "Preview stopped",
+    "failedToStart": "Failed to start preview: {{error}}",
+    "failedToStop": "Failed to stop preview: {{error}}",
+    "disabledCommit": "Commit disabled during preview",
+    "disabledSync": "Sync disabled during preview"
   },
   "conflict": {
     "title": "Merge Conflicts",
