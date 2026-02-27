@@ -18,6 +18,58 @@ pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
         opts.include_untracked(true).recurse_untracked_dirs(true);
         let statuses = repo.statuses(Some(&mut opts))?;
 
+        let workdir = repo.workdir()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_default();
+
+        let file_count = statuses.iter().count();
+        const DIFF_STATS_THRESHOLD: usize = 300;
+
+        // Build per-file diff stats if file count is within threshold
+        let mut diff_stats: std::collections::HashMap<String, (usize, usize)> =
+            std::collections::HashMap::new();
+
+        if file_count <= DIFF_STATS_THRESHOLD {
+            // Staged diff: tree-to-index
+            let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
+            let staged_diff = repo.diff_tree_to_index(head_tree.as_ref(), None, None)?;
+
+            for idx in 0..staged_diff.deltas().count() {
+                if let Ok(patch) = git2::Patch::from_diff(&staged_diff, idx) {
+                    if let Some(patch) = patch {
+                        let path = patch.delta().new_file().path()
+                            .or_else(|| patch.delta().old_file().path())
+                            .map(|p| p.to_string_lossy().to_string());
+                        if let (Some(path), Ok((_, ins, del))) = (path, patch.line_stats()) {
+                            let entry = diff_stats.entry(path).or_insert((0, 0));
+                            entry.0 += ins;
+                            entry.1 += del;
+                        }
+                    }
+                }
+            }
+
+            // Unstaged diff: index-to-workdir
+            let mut unstaged_opts = git2::DiffOptions::new();
+            unstaged_opts.include_untracked(true);
+            let unstaged_diff = repo.diff_index_to_workdir(None, Some(&mut unstaged_opts))?;
+
+            for idx in 0..unstaged_diff.deltas().count() {
+                if let Ok(patch) = git2::Patch::from_diff(&unstaged_diff, idx) {
+                    if let Some(patch) = patch {
+                        let path = patch.delta().new_file().path()
+                            .or_else(|| patch.delta().old_file().path())
+                            .map(|p| p.to_string_lossy().to_string());
+                        if let (Some(path), Ok((_, ins, del))) = (path, patch.line_stats()) {
+                            let entry = diff_stats.entry(path).or_insert((0, 0));
+                            entry.0 += ins;
+                            entry.1 += del;
+                        }
+                    }
+                }
+            }
+        }
+
         let entries: Vec<Value> = statuses
             .iter()
             .filter_map(|entry| {
@@ -63,12 +115,48 @@ pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
                     "unchanged"
                 };
 
+                // Filesystem metadata (null for deleted files)
+                let is_deleted = status.contains(git2::Status::WT_DELETED)
+                    || (status.contains(git2::Status::INDEX_DELETED) && !unstaged);
+                let full_path = workdir.join(&path);
+                let (modified_at, size_bytes) = if is_deleted || !full_path.exists() {
+                    (Value::Null, Value::Null)
+                } else {
+                    match std::fs::metadata(&full_path) {
+                        Ok(meta) => {
+                            let mtime = meta.modified().ok().and_then(|t| {
+                                t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs())
+                            });
+                            let size = meta.len();
+                            (
+                                mtime.map(|s| json!(s)).unwrap_or(Value::Null),
+                                json!(size),
+                            )
+                        }
+                        Err(_) => (Value::Null, Value::Null),
+                    }
+                };
+
+                // Diff stats (null if over threshold)
+                let (insertions, deletions) = if file_count > DIFF_STATS_THRESHOLD {
+                    (Value::Null, Value::Null)
+                } else {
+                    match diff_stats.get(&path) {
+                        Some((ins, del)) => (json!(ins), json!(del)),
+                        None => (json!(0), json!(0)),
+                    }
+                };
+
                 Some(json!({
                     "path": path,
                     "staged": staged,
                     "unstaged": unstaged,
                     "indexStatus": index_status,
                     "worktreeStatus": wt_status,
+                    "modifiedAt": modified_at,
+                    "insertions": insertions,
+                    "deletions": deletions,
+                    "sizeBytes": size_bytes,
                 }))
             })
             .collect();

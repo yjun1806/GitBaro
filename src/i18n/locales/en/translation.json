@@ -30,7 +30,9 @@
     "stageAll": "Stage All",
     "unstageAll": "Unstage All",
     "noChanges": "No local changes",
-    "discard": "Discard Changes"
+    "discard": "Discard Changes",
+    "rootFiles": "Root",
+    "filesCount": "{{count}} files"
   },
   "commit": {
     "summary": "Summary (required)",

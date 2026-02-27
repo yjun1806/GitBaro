@@ -30,7 +30,9 @@
     "stageAll": "Stage All",
     "unstageAll": "Unstage All",
     "noChanges": "로컬 변경 사항 없음",
-    "discard": "변경 사항 버리기"
+    "discard": "변경 사항 버리기",
+    "rootFiles": "루트",
+    "filesCount": "{{count}}개 파일"
   },
   "commit": {
     "summary": "요약 (필수)",

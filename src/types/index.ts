@@ -46,6 +46,10 @@ export interface StatusEntry {
   path: string;
   status: FileStatus;
   staged: boolean;
+  modifiedAt?: number | null;
+  insertions?: number | null;
+  deletions?: number | null;
+  sizeBytes?: number | null;
 }
 
 export type FileStatus =
