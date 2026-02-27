@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Search,
   FolderOpen,
@@ -38,6 +39,7 @@ import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { FileStatusBadge } from "@/lib/file-status";
+import { groupFilesByDirectory } from "@/lib/group-files";
 import { useToastStore } from "@/stores/toast";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import type { CommitInfo, RepoInfo } from "@/types";
@@ -743,6 +745,20 @@ function ChangesView({
   const stagedFiles = statusEntries.filter((e) => e.staged);
   const unstagedFiles = statusEntries.filter((e) => !e.staged);
 
+  const stagedGroups = useMemo(() => groupFilesByDirectory(stagedFiles), [stagedFiles]);
+  const unstagedGroups = useMemo(() => groupFilesByDirectory(unstagedFiles), [unstagedFiles]);
+
+  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set());
+
+  const toggleDirCollapse = useCallback((key: string) => {
+    setCollapsedDirs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   const handleStageAll = async () => {
     if (!activeRepoPath || unstagedFiles.length === 0) return;
     try {
@@ -817,28 +833,52 @@ function ChangesView({
                 <span className="text-xs text-muted-foreground">{stagedFiles.length}</span>
               </div>
             )}
-            {/* Staged file entries */}
-            {stagedFiles.map((entry) => (
-              <FileEntry
-                key={`${entry.path}-staged`}
-                entry={entry}
-                isSelected={selectedFile === entry.path}
-                onClick={() => onSelectFile(entry.path, entry.staged)}
-                onDoubleClick={() => handleOpenInEditor(entry.path)}
-                onToggleStage={async () => {
-                  if (!activeRepoPath) return;
-                  try {
-                    await unstageFiles(activeRepoPath, [entry.path]);
-                    await Promise.all([
-                      queryClient.invalidateQueries({ queryKey: ["status"] }),
-                      queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-                    ]);
-                  } catch (err) {
-                    addToast(t("commit.unstageFailed", { error: getErrorMessage(err) }), "error");
-                  }
-                }}
-              />
-            ))}
+            {/* Staged file entries (grouped by directory) */}
+            {stagedGroups.map((group) => {
+              const dirKey = `staged:${group.directory}`;
+              const isCollapsed = collapsedDirs.has(dirKey);
+              return (
+                <div key={dirKey}>
+                  {stagedGroups.length > 1 && (
+                    <div
+                      onClick={() => toggleDirCollapse(dirKey)}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-surface border-b border-border cursor-pointer select-none"
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="w-3 h-3 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="text-xs font-bold text-foreground flex-1 truncate">
+                        {group.directory || t("changes.rootFiles")}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{group.files.length}</span>
+                    </div>
+                  )}
+                  {!isCollapsed && group.files.map((entry) => (
+                    <FileEntry
+                      key={`${entry.path}-staged`}
+                      entry={entry}
+                      isSelected={selectedFile === entry.path}
+                      onClick={() => onSelectFile(entry.path, entry.staged)}
+                      onDoubleClick={() => handleOpenInEditor(entry.path)}
+                      onToggleStage={async () => {
+                        if (!activeRepoPath) return;
+                        try {
+                          await unstageFiles(activeRepoPath, [entry.path]);
+                          await Promise.all([
+                            queryClient.invalidateQueries({ queryKey: ["status"] }),
+                            queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+                          ]);
+                        } catch (err) {
+                          addToast(t("commit.unstageFailed", { error: getErrorMessage(err) }), "error");
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
+              );
+            })}
 
             {/* Changes header */}
             {unstagedFiles.length > 0 && (
@@ -858,28 +898,52 @@ function ChangesView({
                 <span className="text-xs text-muted-foreground">{unstagedFiles.length}</span>
               </div>
             )}
-            {/* Unstaged file entries */}
-            {unstagedFiles.map((entry) => (
-              <FileEntry
-                key={`${entry.path}-unstaged`}
-                entry={entry}
-                isSelected={selectedFile === entry.path}
-                onClick={() => onSelectFile(entry.path, entry.staged)}
-                onDoubleClick={() => handleOpenInEditor(entry.path)}
-                onToggleStage={async () => {
-                  if (!activeRepoPath) return;
-                  try {
-                    await stageFiles(activeRepoPath, [entry.path]);
-                    await Promise.all([
-                      queryClient.invalidateQueries({ queryKey: ["status"] }),
-                      queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-                    ]);
-                  } catch (err) {
-                    addToast(t("commit.stageFailed", { error: getErrorMessage(err) }), "error");
-                  }
-                }}
-              />
-            ))}
+            {/* Unstaged file entries (grouped by directory) */}
+            {unstagedGroups.map((group) => {
+              const dirKey = `unstaged:${group.directory}`;
+              const isCollapsed = collapsedDirs.has(dirKey);
+              return (
+                <div key={dirKey}>
+                  {unstagedGroups.length > 1 && (
+                    <div
+                      onClick={() => toggleDirCollapse(dirKey)}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-surface border-b border-border cursor-pointer select-none"
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="w-3 h-3 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="text-xs font-bold text-foreground flex-1 truncate">
+                        {group.directory || t("changes.rootFiles")}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{group.files.length}</span>
+                    </div>
+                  )}
+                  {!isCollapsed && group.files.map((entry) => (
+                    <FileEntry
+                      key={`${entry.path}-unstaged`}
+                      entry={entry}
+                      isSelected={selectedFile === entry.path}
+                      onClick={() => onSelectFile(entry.path, entry.staged)}
+                      onDoubleClick={() => handleOpenInEditor(entry.path)}
+                      onToggleStage={async () => {
+                        if (!activeRepoPath) return;
+                        try {
+                          await stageFiles(activeRepoPath, [entry.path]);
+                          await Promise.all([
+                            queryClient.invalidateQueries({ queryKey: ["status"] }),
+                            queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+                          ]);
+                        } catch (err) {
+                          addToast(t("commit.stageFailed", { error: getErrorMessage(err) }), "error");
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
+              );
+            })}
           </>
         )}
       </div>
