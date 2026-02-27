@@ -323,7 +323,9 @@
     "clearComparison": "Clear comparison",
     "detachedHead": "Branch comparison is not available in detached HEAD state",
     "branchNotFound": "Branch not found — it may have been deleted",
-    "loading": "Comparing branches..."
+    "loading": "Comparing branches...",
+    "comparingWith": "Comparing with {{branch}}",
+    "noBranches": "No branches available"
   },
   "merge": {
     "title": "Merge",

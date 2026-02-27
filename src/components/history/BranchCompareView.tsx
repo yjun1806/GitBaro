@@ -108,7 +108,7 @@ export function BranchCompareView({
   if (data.aheadCount === 0 && data.behindCount === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-        {t("compare.branchesIdentical")}
+        {t("compare.identical")}
       </div>
     );
   }
@@ -137,7 +137,7 @@ export function BranchCompareView({
           ))
         ) : (
           <div className="px-4 py-3 text-sm text-muted-foreground">
-            {t("compare.noCommitsAhead")}
+            {t("compare.noAheadCommits")}
           </div>
         )}
       </div>
@@ -164,7 +164,7 @@ export function BranchCompareView({
           ))
         ) : (
           <div className="px-4 py-3 text-sm text-muted-foreground">
-            {t("compare.noCommitsBehind")}
+            {t("compare.noBehindCommits")}
           </div>
         )}
       </div>

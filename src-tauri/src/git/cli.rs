@@ -106,6 +106,7 @@ impl GitCliEngine {
         if no_ff {
             args.push("--no-ff");
         }
+        args.push("--");
         args.push(branch);
         self.run_local_checked(&args).await?;
         Ok(())
@@ -114,13 +115,13 @@ impl GitCliEngine {
     /// Squash-merge a branch into the current branch via git CLI.
     /// This stages the squashed changes but does NOT create a commit.
     pub async fn squash_merge(&self, branch: &str) -> Result<(), AppError> {
-        self.run_local_checked(&["merge", "--squash", branch]).await?;
+        self.run_local_checked(&["merge", "--squash", "--", branch]).await?;
         Ok(())
     }
 
     /// Rebase the current branch onto the given base via git CLI.
     pub async fn rebase_onto(&self, base: &str) -> Result<(), AppError> {
-        self.run_local_checked(&["rebase", base]).await?;
+        self.run_local_checked(&["rebase", "--", base]).await?;
         Ok(())
     }
 }

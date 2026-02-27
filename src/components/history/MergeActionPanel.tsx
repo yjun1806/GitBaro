@@ -18,7 +18,7 @@ interface MergeActionPanelProps {
 
 const STRATEGIES: { value: MergeStrategy; labelKey: string; descKey: string }[] = [
   { value: "merge", labelKey: "merge.mergeCommit", descKey: "merge.mergeCommitDesc" },
-  { value: "squash", labelKey: "merge.squashMerge", descKey: "merge.squashMergeDesc" },
+  { value: "squash", labelKey: "merge.squash", descKey: "merge.squashDesc" },
   { value: "rebase", labelKey: "merge.rebase", descKey: "merge.rebaseDesc" },
 ];
 
@@ -44,7 +44,7 @@ export function MergeActionPanel({
     setIsLoading(true);
     try {
       await mergeBranch(repoPath, compareBranch, strategy);
-      addToast(t("merge.mergeSuccess"), "success");
+      addToast(t("merge.success", { source: compareBranch, target: currentBranch }), "success");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["branches"] }),
         queryClient.invalidateQueries({ queryKey: ["status"] }),
@@ -55,10 +55,10 @@ export function MergeActionPanel({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message.toLowerCase().includes("conflict")) {
-        addToast(t("merge.mergeConflict"), "warning");
+        addToast(t("merge.conflictDetected"), "warning");
         setActiveTab("changes");
       } else {
-        addToast(t("merge.mergeFailed", { error: message }), "error");
+        addToast(t("merge.failed", { error: message }), "error");
       }
     } finally {
       setIsLoading(false);
@@ -132,7 +132,7 @@ export function MergeActionPanel({
             <GitMerge className="w-4 h-4" />
             {behindCount === 0
               ? t("merge.nothingToMerge")
-              : t("merge.mergeInto", { branch: currentBranch })}
+              : t("merge.mergeInto", { source: compareBranch, target: currentBranch })}
           </>
         )}
       </button>
