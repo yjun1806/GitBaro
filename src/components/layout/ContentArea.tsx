@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { FileText, GitCommit } from "lucide-react";
+import { FileText, GitCommit, GitCompare } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
+import { useUIStore } from "@/stores/ui";
 import { useStatus, useFileDiff, useCommitDetail, useCommitFileDiff, useCommitAvatars } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { CommitDetail } from "@/components/history/CommitDetail";
@@ -107,6 +108,8 @@ export function ContentArea({
   selectedCommitId,
 }: ContentAreaProps) {
   const { t } = useTranslation();
+  const compareBranch = useUIStore((s) => s.compareBranch);
+
   return (
     <div className="flex flex-col h-full">
       <ToolbarRoot />
@@ -125,6 +128,12 @@ export function ContentArea({
           )
         ) : selectedCommitId ? (
           <CommitDetailView commitId={selectedCommitId} />
+        ) : compareBranch ? (
+          <EmptyState
+            icon={GitCompare}
+            title={t("diff.noCommitSelected")}
+            description={t("compare.comparingWith", { branch: compareBranch })}
+          />
         ) : (
           <EmptyState
             icon={GitCommit}
