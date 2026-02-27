@@ -10,7 +10,7 @@ function makeEntry(path: string): StatusEntry {
     insertions: 0,
     deletions: 0,
     sizeBytes: 100,
-    lastModified: 1700000000,
+    modifiedAt: 1700000000,
   };
 }
 
