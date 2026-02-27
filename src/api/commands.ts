@@ -23,6 +23,10 @@ interface RawStatusEntry {
   unstaged: boolean;
   indexStatus: string;
   worktreeStatus: string;
+  modifiedAt: number | null;
+  insertions: number | null;
+  deletions: number | null;
+  sizeBytes: number | null;
 }
 
 export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
@@ -35,6 +39,10 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
         path: entry.path,
         status: entry.indexStatus as FileStatus,
         staged: true,
+        modifiedAt: entry.modifiedAt,
+        insertions: entry.insertions,
+        deletions: entry.deletions,
+        sizeBytes: entry.sizeBytes,
       });
     }
     if (entry.unstaged && entry.worktreeStatus !== "unchanged") {
@@ -42,6 +50,10 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
         path: entry.path,
         status: entry.worktreeStatus as FileStatus,
         staged: false,
+        modifiedAt: entry.modifiedAt,
+        insertions: entry.insertions,
+        deletions: entry.deletions,
+        sizeBytes: entry.sizeBytes,
       });
     }
   }
