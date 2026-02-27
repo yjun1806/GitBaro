@@ -36,8 +36,8 @@ export function BranchDropdown({
     b.name.toLowerCase().includes(lowerQuery),
   );
 
-  // 메인 worktree 제외 (삭제 불가)
-  const nonMainWorktrees = worktrees.filter((w) => !w.isMain);
+  // 메인 worktree 포함 (삭제 버튼만 숨김)
+  const activeWorktrees = worktrees.filter((w) => !w.isBare);
 
   // 로컬 브랜치가 추적하는 remote 이름 수집
   const trackedRemotes = new Set(
@@ -147,9 +147,9 @@ export function BranchDropdown({
         )}
 
         {/* Worktrees */}
-        {nonMainWorktrees.length > 0 && (
+        {activeWorktrees.length > 0 && (
           <WorktreeSection
-            worktrees={nonMainWorktrees}
+            worktrees={activeWorktrees}
             onOpen={(path) => {
               onOpenWorktree(path);
               onClose();
@@ -277,14 +277,22 @@ function WorktreeSection({
                 </p>
               </div>
             </button>
-            {wt.isLocked && (
+            {wt.isMain && (
+              <span className="text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                {t("worktree.main")}
+              </span>
+            )}
+            {!wt.isMain && wt.isLocked && (
               <span title={wt.lockReason ?? t("worktree.locked")}>
                 <Lock className="w-3 h-3 text-warning shrink-0" />
               </span>
             )}
-            {!wt.isLocked && (
+            {!wt.isMain && !wt.isLocked && (
               <button
-                onClick={() => setConfirmRemove(wt.path)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmRemove(wt.path);
+                }}
                 className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
                 title={t("worktree.remove")}
               >

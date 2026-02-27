@@ -9,6 +9,7 @@ use crate::git::engine::GitRemoteEngine;
 // ── Worktree types ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorktreeEntry {
     pub path: String,
     pub head: String,
