@@ -12,6 +12,7 @@ import type {
   AppSettings,
   Theme,
   EditorInfo,
+  WorktreeInfo,
 } from "@/types";
 
 // Git operations — backend returns indexStatus/worktreeStatus separately,
@@ -507,4 +508,44 @@ export async function detectInstalledEditors(): Promise<EditorInfo[]> {
 
 export async function openInEditor(repoPath: string, filePath: string): Promise<void> {
   return invoke("open_in_editor", { repoPath, filePath });
+}
+
+// Worktrees
+export async function getWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
+  return invoke("get_worktrees", { repoPath });
+}
+
+export async function addWorktree(
+  repoPath: string,
+  path: string,
+  branch?: string,
+  newBranch?: string,
+): Promise<void> {
+  return invoke("add_worktree", {
+    repoPath,
+    path,
+    branch: branch ?? null,
+    newBranch: newBranch ?? null,
+  });
+}
+
+export async function removeWorktree(
+  repoPath: string,
+  path: string,
+  force = false,
+): Promise<void> {
+  return invoke("remove_worktree", { repoPath, path, force });
+}
+
+// Preview
+export async function startWorktreePreview(repoPath: string, branch: string): Promise<void> {
+  return invoke("start_worktree_preview", { repoPath, branch });
+}
+
+export async function stopWorktreePreview(repoPath: string): Promise<void> {
+  return invoke("stop_worktree_preview", { repoPath });
+}
+
+export async function checkPreviewActive(repoPath: string): Promise<boolean> {
+  return invoke("check_preview_active", { repoPath });
 }

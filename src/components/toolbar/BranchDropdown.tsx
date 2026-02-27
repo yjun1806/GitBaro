@@ -1,22 +1,34 @@
 import { useState } from "react";
-import { GitBranch, Search, Plus, ChevronRight, Check } from "lucide-react";
+import { GitBranch, Search, Plus, ChevronRight, Check, FolderGit2, Trash2, Lock, Eye } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import type { BranchInfo } from "@/types";
+import type { BranchInfo, WorktreeInfo } from "@/types";
 
 interface BranchDropdownProps {
   branches: BranchInfo[];
   currentBranch: string | null;
+  worktrees: WorktreeInfo[];
+  previewBranch: string | null;
   onSwitch: (branchName: string) => void;
   onCreateBranch: () => void;
+  onCreateWorktree: () => void;
+  onOpenWorktree: (path: string) => void;
+  onRemoveWorktree: (path: string) => void;
+  onStartPreview: (branch: string) => void;
   onClose: () => void;
 }
 
 export function BranchDropdown({
   branches,
   currentBranch,
+  worktrees,
+  previewBranch,
   onSwitch,
   onCreateBranch,
+  onCreateWorktree,
+  onOpenWorktree,
+  onRemoveWorktree,
+  onStartPreview,
   onClose,
 }: BranchDropdownProps) {
   const { t } = useTranslation();
@@ -27,6 +39,9 @@ export function BranchDropdown({
   const filtered = branches.filter((b) =>
     b.name.toLowerCase().includes(lowerQuery),
   );
+
+  // 메인 worktree 포함 (삭제 버튼만 숨김)
+  const activeWorktrees = worktrees.filter((w) => !w.isBare);
 
   // 로컬 브랜치가 추적하는 remote 이름 수집
   const trackedRemotes = new Set(
@@ -134,9 +149,26 @@ export function BranchDropdown({
             <p className="text-sm text-muted-foreground">{t("branch.noBranches")}</p>
           </div>
         )}
+
+        {/* Worktrees */}
+        {activeWorktrees.length > 0 && (
+          <WorktreeSection
+            worktrees={activeWorktrees}
+            previewBranch={previewBranch}
+            onOpen={(path) => {
+              onOpenWorktree(path);
+              onClose();
+            }}
+            onRemove={onRemoveWorktree}
+            onPreview={(branch) => {
+              onStartPreview(branch);
+              onClose();
+            }}
+          />
+        )}
       </div>
 
-      {/* New branch */}
+      {/* New branch + New worktree */}
       <div className="border-t border-border">
         <button
           onClick={() => {
@@ -147,6 +179,16 @@ export function BranchDropdown({
         >
           <Plus className="w-4 h-4" />
           {t("branch.newBranch")}
+        </button>
+        <button
+          onClick={() => {
+            onCreateWorktree();
+            onClose();
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors"
+        >
+          <FolderGit2 className="w-4 h-4" />
+          {t("worktree.newWorktree")}
         </button>
       </div>
     </div>
@@ -209,5 +251,116 @@ function BranchRow({
       )}
       {isCurrent && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
     </button>
+  );
+}
+
+function WorktreeSection({
+  worktrees,
+  previewBranch,
+  onOpen,
+  onRemove,
+  onPreview,
+}: {
+  worktrees: WorktreeInfo[];
+  previewBranch: string | null;
+  onOpen: (path: string) => void;
+  onRemove: (path: string) => void;
+  onPreview: (branch: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+
+  return (
+    <div className="py-1 border-t border-border">
+      <SectionLabel label={t("worktree.title")} />
+      {worktrees.map((wt) => {
+        const isPreviewing = previewBranch === wt.branch;
+        return (
+          <div key={wt.path} className="relative group">
+            <div className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors">
+              <button
+                onClick={() => onOpen(wt.path)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-left"
+              >
+                <FolderGit2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-foreground truncate" title={wt.path}>
+                    {wt.path.split("/").pop()}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {wt.branch ?? t("worktree.detachedHead")}
+                  </p>
+                </div>
+              </button>
+              {wt.isMain && (
+                <span className="text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                  {t("worktree.main")}
+                </span>
+              )}
+              {!wt.isMain && wt.branch && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isPreviewing) onPreview(wt.branch!);
+                  }}
+                  className={cn(
+                    "p-1 rounded transition-colors shrink-0",
+                    isPreviewing
+                      ? "text-warning bg-warning/15"
+                      : "text-muted-foreground/50 hover:text-warning hover:bg-warning/10 opacity-0 group-hover:opacity-100",
+                  )}
+                  title={t("preview.start")}
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {!wt.isMain && wt.isLocked && (
+                <span title={wt.lockReason ?? t("worktree.locked")}>
+                  <Lock className="w-3 h-3 text-warning shrink-0" />
+                </span>
+              )}
+              {!wt.isMain && !wt.isLocked && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setConfirmRemove(wt.path);
+                  }}
+                  className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
+                  title={t("worktree.remove")}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Inline confirm */}
+            {confirmRemove === wt.path && (
+              <div className="absolute inset-x-0 bottom-full mb-1 mx-2 bg-card border border-border rounded-lg shadow-lg p-3 z-10">
+                <p className="text-sm text-foreground mb-2">
+                  {t("worktree.removeConfirm", { path: wt.path.split("/").pop() })}
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setConfirmRemove(null)}
+                    className="px-3 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    onClick={() => {
+                      onRemove(wt.path);
+                      setConfirmRemove(null);
+                    }}
+                    className="px-3 py-1 text-xs bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded transition-colors"
+                  >
+                    {t("common.delete")}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

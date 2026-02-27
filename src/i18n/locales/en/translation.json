@@ -97,6 +97,27 @@
     "bringChanges": "Bring my changes to {{branch}}",
     "bringChangesDesc": "Your in-progress work will follow you to the new branch."
   },
+  "worktree": {
+    "title": "Worktrees",
+    "newWorktree": "New worktree...",
+    "create": "Create Worktree",
+    "remove": "Remove Worktree",
+    "removeConfirm": "Remove worktree at {{path}}?",
+    "detachedHead": "detached HEAD",
+    "locked": "Locked",
+    "main": "main worktree",
+    "path": "Path",
+    "selectFolder": "Select folder...",
+    "branchOption": "Branch",
+    "existingBranch": "Existing branch",
+    "newBranch": "Create new branch",
+    "branchName": "Branch name",
+    "selectBranch": "Select branch...",
+    "created": "Worktree created at {{path}}",
+    "removed": "Worktree removed: {{path}}",
+    "failedToCreate": "Failed to create worktree: {{error}}",
+    "failedToRemove": "Failed to remove worktree: {{error}}"
+  },
   "clone": {
     "account": "Account",
     "selectAccount": "Select account...",
@@ -303,6 +324,17 @@
     "failedToOpenRepo": "Failed to open repository: {{error}}",
     "failedToLogout": "Failed to log out: {{error}}",
     "failedToUpdateSettings": "Failed to update settings: {{error}}"
+  },
+  "preview": {
+    "previewing": "Previewing: {{branch}}",
+    "stop": "Stop Preview",
+    "start": "Preview",
+    "started": "Previewing {{branch}}",
+    "stopped": "Preview stopped",
+    "failedToStart": "Failed to start preview: {{error}}",
+    "failedToStop": "Failed to stop preview: {{error}}",
+    "disabledCommit": "Commit disabled during preview",
+    "disabledSync": "Sync disabled during preview"
   },
   "conflict": {
     "title": "Merge Conflicts",

@@ -1,9 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { GitBranch, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
-import { useBranches, useStatus } from "@/api/queries";
-import { switchBranch, createBranch, stashPush, stashPop } from "@/api/commands";
+import { useUIStore } from "@/stores/ui";
+import { useBranches, useStatus, useWorktrees } from "@/api/queries";
+import { switchBranch, createBranch, stashPush, stashPop, removeWorktree, addLocalRepository, startWorktreePreview, stopWorktreePreview, checkPreviewActive } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -11,6 +12,7 @@ import { useClickOutside } from "./useToolbarDropdown";
 import { BranchDropdown } from "./BranchDropdown";
 import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
 import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
+import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog";
 
 interface BranchZoneProps {
   isOpen: boolean;
@@ -25,10 +27,25 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const { data: branches = [] } = useBranches(activeRepoPath);
   const { data: statusFiles = [] } = useStatus(activeRepoPath);
+  const { data: worktrees = [] } = useWorktrees(activeRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
+  const previewBranch = useUIStore((s) => s.previewBranch);
+  const setPreviewBranch = useUIStore((s) => s.setPreviewBranch);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showWorktreeDialog, setShowWorktreeDialog] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
+
+  // 마운트 시 잔여 미리보기 정리
+  useEffect(() => {
+    if (!activeRepoPath) return;
+    checkPreviewActive(activeRepoPath).then((active) => {
+      if (active && !previewBranch) {
+        stopWorktreePreview(activeRepoPath).then(() => invalidateAll()).catch(() => {});
+      }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRepoPath]);
 
   const headBranch = branches.find((b) => b.isHead);
   const currentBranch = headBranch?.name ?? null;
@@ -104,6 +121,39 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     }
   };
 
+  const handleOpenWorktree = async (path: string) => {
+    try {
+      const repo = await addLocalRepository(path);
+      useRepositoryStore.getState().addRepo(repo);
+      useRepositoryStore.getState().setActiveRepo(repo.path);
+    } catch (err) {
+      addToast(t("repo.failedToAdd", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
+  const handleRemoveWorktree = async (path: string) => {
+    if (!activeRepoPath) return;
+    try {
+      await removeWorktree(activeRepoPath, path);
+      await queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+      addToast(t("worktree.removed", { path: path.split("/").pop() }), "success");
+    } catch (err) {
+      addToast(t("worktree.failedToRemove", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
+  const handleStartPreview = async (branch: string) => {
+    if (!activeRepoPath) return;
+    try {
+      await startWorktreePreview(activeRepoPath, branch);
+      setPreviewBranch(branch);
+      await invalidateAll();
+      addToast(t("preview.started", { branch }), "success");
+    } catch (err) {
+      addToast(t("preview.failedToStart", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
   return (
     <div ref={zoneRef} className="relative shrink-0 flex items-center pl-2">
       <button
@@ -149,8 +199,14 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         <BranchDropdown
           branches={branches}
           currentBranch={currentBranch}
+          worktrees={worktrees}
+          previewBranch={previewBranch}
           onSwitch={handleSwitch}
           onCreateBranch={() => setShowCreateDialog(true)}
+          onCreateWorktree={() => setShowWorktreeDialog(true)}
+          onOpenWorktree={handleOpenWorktree}
+          onRemoveWorktree={handleRemoveWorktree}
+          onStartPreview={handleStartPreview}
           onClose={onClose}
         />
       )}
@@ -170,6 +226,14 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           targetBranch={pendingSwitch}
           onConfirm={handleSwitchConfirm}
           onClose={() => setPendingSwitch(null)}
+        />
+      )}
+
+      {showWorktreeDialog && (
+        <CreateWorktreeDialog
+          repoPath={activeRepoPath!}
+          branches={branches}
+          onClose={() => setShowWorktreeDialog(false)}
         />
       )}
     </div>

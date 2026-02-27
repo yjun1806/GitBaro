@@ -7,6 +7,7 @@ pub mod github;
 pub mod state;
 pub mod watcher;
 
+use tauri::{LogicalPosition, LogicalSize, Manager};
 use tracing_subscriber::EnvFilter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -17,7 +18,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(state::TokenStore::new())
         .invoke_handler(tauri::generate_handler![
             commands::git::get_status,
@@ -62,11 +62,78 @@ pub fn run() {
             commands::settings::set_theme,
             commands::settings::detect_installed_editors,
             commands::settings::open_in_editor,
+            commands::worktree::get_worktrees,
+            commands::worktree::add_worktree,
+            commands::worktree::remove_worktree,
+            commands::worktree::start_worktree_preview,
+            commands::worktree::stop_worktree_preview,
+            commands::worktree::check_preview_active,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");
 
-            let app_handle = app.handle().clone();
+            // 저장된 window bounds 복원
+            let app_handle_for_restore = app.handle().clone();
+            let app_state = tauri::async_runtime::block_on(
+                state::app_state::load_app_state(&app_handle_for_restore),
+            );
+
+            if let Some(bounds) = app_state.window_bounds {
+                let bounds = bounds.validated();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_position(LogicalPosition::new(bounds.x, bounds.y));
+                    let _ = window.set_size(LogicalSize::new(bounds.width, bounds.height));
+                    if bounds.maximized {
+                        let _ = window.maximize();
+                    }
+                    tracing::info!(
+                        "Restored window: {}x{} at ({}, {}), maximized={}",
+                        bounds.width, bounds.height, bounds.x, bounds.y, bounds.maximized
+                    );
+                }
+            }
+
+            // close 이벤트에서 window bounds 저장
+            let app_handle_for_close = app.handle().clone();
+            if let Some(window) = app.get_webview_window("main") {
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                        let handle = app_handle_for_close.clone();
+                        if let Some(win) = handle.get_webview_window("main") {
+                            let scale = win.scale_factor().unwrap_or(1.0);
+                            let is_maximized = win.is_maximized().unwrap_or(false);
+
+                            // 물리 픽셀 → 논리 픽셀로 변환
+                            let size = win.outer_size().unwrap_or_default();
+                            let pos = win.outer_position().unwrap_or_default();
+
+                            let bounds = state::app_state::WindowBounds {
+                                x: pos.x as f64 / scale,
+                                y: pos.y as f64 / scale,
+                                width: size.width as f64 / scale,
+                                height: size.height as f64 / scale,
+                                maximized: is_maximized,
+                            };
+
+                            tracing::info!(
+                                "Saving window state: {}x{} at ({}, {}), maximized={}, scale={}",
+                                bounds.width, bounds.height, bounds.x, bounds.y,
+                                bounds.maximized, scale
+                            );
+
+                            tauri::async_runtime::block_on(async {
+                                let mut state =
+                                    state::app_state::load_app_state(&handle).await;
+                                state.window_bounds = Some(bounds);
+                                if let Err(e) = state::app_state::save_app_state(&state).await {
+                                    tracing::error!("Failed to save window state: {}", e);
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = check_git_cli().await {
                     tracing::warn!("Git CLI check failed: {}", e);
@@ -74,7 +141,6 @@ pub fn run() {
                 if let Err(e) = check_gh_cli().await {
                     tracing::warn!("GitHub CLI check: {}", e);
                 }
-                state::app_state::load_app_state(&app_handle).await;
             });
 
             Ok(())

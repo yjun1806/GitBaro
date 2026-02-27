@@ -161,3 +161,13 @@ export interface EditorInfo {
   installed: boolean;
   icon: string | null;
 }
+
+export interface WorktreeInfo {
+  path: string;
+  head: string;
+  branch: string | null;
+  isMain: boolean;
+  isBare: boolean;
+  isLocked: boolean;
+  lockReason: string | null;
+}
