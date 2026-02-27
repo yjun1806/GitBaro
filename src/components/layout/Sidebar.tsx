@@ -33,6 +33,8 @@ import { useBranchStore } from "@/stores/branch";
 import { useStatus, useCommitHistory, useCommitAvatars, useBranches } from "@/api/queries";
 import { addLocalRepository, cloneRepository, createCommit, stageFiles, unstageFiles, gitFetch, openInEditor, getRepoVisibility, getOwnerType, validateToken } from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
+import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
+import { BranchCompareView } from "@/components/history/BranchCompareView";
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import { useQueryClient } from "@tanstack/react-query";
@@ -953,8 +955,10 @@ function HistoryView({
   const { data: commits = [], isLoading } = useCommitHistory(activeRepoPath);
   const { data: branches = [] } = useBranches(activeRepoPath);
   const { data: githubAvatarMap = {} } = useCommitAvatars(activeRepoPath);
+  const [compareBranch, setCompareBranch] = useState<string | null>(null);
 
   const headBranch = branches.find((b) => b.isHead);
+  const currentBranchName = headBranch?.name ?? null;
   const ahead = headBranch?.aheadBehind?.ahead ?? 0;
 
   // 연동된 GitHub 계정의 이메일 → avatarUrl 매핑
@@ -980,7 +984,30 @@ function HistoryView({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="flex flex-col flex-1 overflow-hidden bg-background">
+      {/* Branch compare selector */}
+      {branches.length > 1 && (
+        <div className="px-3 py-2 border-b border-border shrink-0">
+          <BranchCompareSelector
+            branches={branches}
+            currentBranch={currentBranchName}
+            compareBranch={compareBranch}
+            onSelect={setCompareBranch}
+          />
+        </div>
+      )}
+
+      {/* Compare view or normal commit list */}
+      {compareBranch && activeRepoPath && currentBranchName ? (
+        <BranchCompareView
+          repoPath={activeRepoPath}
+          baseBranch={currentBranchName}
+          compareBranch={compareBranch}
+          selectedCommitId={selectedCommitId}
+          onSelectCommit={onSelectCommit}
+        />
+      ) : (
+      <div className="flex-1 overflow-y-auto">
       {commits.map((commit: CommitInfo, index: number) => {
         const isActive = selectedCommitId === commit.id;
         const isUnpushed = index < ahead;
@@ -1065,6 +1092,8 @@ function HistoryView({
           </div>
         );
       })}
+      </div>
+      )}
     </div>
   );
 }
