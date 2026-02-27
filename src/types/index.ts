@@ -140,6 +140,7 @@ export interface RepoInfo {
   isDirty: boolean;
   remotes: RemoteInfo[];
   accountId: string | null;
+  isWorktree?: boolean;
 }
 
 export interface RemoteInfo {

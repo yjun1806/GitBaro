@@ -25,7 +25,7 @@ interface RepositoryState {
   collapsedGroups: string[];
   /** Favorite repo paths */
   favoriteRepos: string[];
-  setActiveRepo: (path: string) => void;
+  setActiveRepo: (path: string, parentRepoPath?: string) => void;
   addRepo: (repo: RepoInfo) => void;
   removeRepo: (path: string) => void;
   setRepos: (repos: RepoInfo[]) => void;
@@ -53,8 +53,9 @@ export const useRepositoryStore = create<RepositoryState>()(
       collapsedGroups: [],
       favoriteRepos: [],
 
-      setActiveRepo: (path) => {
-        const repo = get().repos.find((r) => r.path === path) ?? null;
+      setActiveRepo: (path, parentRepoPath?) => {
+        const lookupPath = parentRepoPath ?? path;
+        const repo = get().repos.find((r) => r.path === lookupPath) ?? null;
         set({ activeRepoPath: path, activeRepo: repo });
       },
 

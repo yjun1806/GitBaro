@@ -121,12 +121,20 @@ function AppContent() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refresh persisted repos from backend on startup (to get latest remotes, etc.)
+  // Also purge any worktree entries that were incorrectly added as repos.
+  const removeRepo = useRepositoryStore((s) => s.removeRepo);
   useEffect(() => {
     if (repos.length === 0) return;
     Promise.all(
       repos.map((r) =>
         openRepository(r.path)
-          .then((fresh) => addRepo({ ...fresh, accountId: r.accountId }))
+          .then((fresh) => {
+            if (fresh.isWorktree) {
+              removeRepo(r.path);
+            } else {
+              addRepo({ ...fresh, accountId: r.accountId });
+            }
+          })
           .catch(() => { /* repo may have been removed from disk */ })
       ),
     );

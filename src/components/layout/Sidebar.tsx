@@ -264,7 +264,7 @@ function RepoListView({
   const repos = useRepositoryStore((s) => s.repos);
   const addRepo = useRepositoryStore((s) => s.addRepo);
   const removeRepo = useRepositoryStore((s) => s.removeRepo);
-  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const activeRepo = useRepositoryStore((s) => s.activeRepo);
   const updateRepoAccount = useRepositoryStore((s) => s.updateRepoAccount);
   const repoVisibility = useRepositoryStore((s) => s.repoVisibility);
   const ownerTypes = useRepositoryStore((s) => s.ownerTypes);
@@ -483,7 +483,7 @@ function RepoListView({
               {/* Repo items — indented under group header */}
               {!collapsedGroups.includes(group.label) && <div className="flex flex-col gap-0.5 ml-3 pl-3 border-l border-border/50">
                 {group.repos.map((repo) => {
-                  const isActive = repo.path === activeRepoPath;
+                  const isActive = repo.path === activeRepo?.path;
                   const linkedAccount = repo.accountId
                     ? accounts.find((a) => a.id === repo.accountId)
                     : null;

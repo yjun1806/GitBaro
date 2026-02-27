@@ -48,6 +48,8 @@ fn repo_info_from_path(repo_path: &str) -> Result<Value, AppError> {
         })
         .collect();
 
+    let is_worktree = repo.is_worktree();
+
     Ok(json!({
         "path": path,
         "name": name,
@@ -55,6 +57,7 @@ fn repo_info_from_path(repo_path: &str) -> Result<Value, AppError> {
         "isDirty": is_dirty,
         "remotes": remotes,
         "accountId": null,
+        "isWorktree": is_worktree,
     }))
 }
 
