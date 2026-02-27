@@ -95,6 +95,27 @@
     "bringChanges": "{{branch}}(으)로 변경사항 가져가기",
     "bringChangesDesc": "작업 중인 내용이 새 Branch로 함께 이동합니다."
   },
+  "worktree": {
+    "title": "Worktrees",
+    "newWorktree": "새 Worktree...",
+    "create": "Worktree 생성",
+    "remove": "Worktree 삭제",
+    "removeConfirm": "{{path}}의 Worktree를 삭제하시겠습니까?",
+    "detachedHead": "detached HEAD",
+    "locked": "잠김",
+    "main": "메인 Worktree",
+    "path": "경로",
+    "selectFolder": "폴더 선택...",
+    "branchOption": "Branch",
+    "existingBranch": "기존 Branch 선택",
+    "newBranch": "새 Branch 생성",
+    "branchName": "Branch 이름",
+    "selectBranch": "Branch 선택...",
+    "created": "Worktree 생성 완료: {{path}}",
+    "removed": "Worktree 삭제 완료: {{path}}",
+    "failedToCreate": "Worktree 생성 실패: {{error}}",
+    "failedToRemove": "Worktree 삭제 실패: {{error}}"
+  },
   "clone": {
     "account": "계정",
     "selectAccount": "계정 선택...",
@@ -301,6 +322,17 @@
     "failedToOpenRepo": "저장소 열기 실패: {{error}}",
     "failedToLogout": "로그아웃 실패: {{error}}",
     "failedToUpdateSettings": "설정 업데이트 실패: {{error}}"
+  },
+  "preview": {
+    "previewing": "미리보기 중: {{branch}}",
+    "stop": "미리보기 중단",
+    "start": "미리보기",
+    "started": "{{branch}} 미리보기 시작",
+    "stopped": "미리보기 중단됨",
+    "failedToStart": "미리보기 시작 실패: {{error}}",
+    "failedToStop": "미리보기 중단 실패: {{error}}",
+    "disabledCommit": "미리보기 중에는 Commit할 수 없습니다",
+    "disabledSync": "미리보기 중에는 동기화할 수 없습니다"
   },
   "conflict": {
     "title": "Merge 충돌",

@@ -13,6 +13,7 @@ import {
   checkGhStatus,
   resolveCommitAvatars,
   compareBranches,
+  getWorktrees,
 } from "./commands";
 
 export function useStatus(repoPath: string | null) {
@@ -124,5 +125,13 @@ export function useGhStatus() {
     queryKey: ["ghStatus"],
     queryFn: checkGhStatus,
     staleTime: 60_000,
+  });
+}
+
+export function useWorktrees(repoPath: string | null) {
+  return useQuery({
+    queryKey: ["worktrees", repoPath],
+    queryFn: () => getWorktrees(repoPath!),
+    enabled: repoPath !== null,
   });
 }

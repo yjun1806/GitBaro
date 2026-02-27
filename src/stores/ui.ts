@@ -8,12 +8,14 @@ interface UIState {
   isSidebarCollapsed: boolean;
   repoListOpen: boolean;
   compareBranch: string | null;
+  previewBranch: string | null;
   setTheme: (theme: Theme) => void;
   setActiveTab: (tab: "changes" | "history") => void;
   setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
   setRepoListOpen: (open: boolean) => void;
   setCompareBranch: (branch: string | null) => void;
+  setPreviewBranch: (branch: string | null) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -23,6 +25,7 @@ export const useUIStore = create<UIState>((set) => ({
   isSidebarCollapsed: false,
   repoListOpen: false,
   compareBranch: null,
+  previewBranch: null,
 
   setTheme: (theme) => set({ theme }),
 
@@ -36,4 +39,5 @@ export const useUIStore = create<UIState>((set) => ({
   setRepoListOpen: (open) => set({ repoListOpen: open }),
 
   setCompareBranch: (branch) => set({ compareBranch: branch }),
+  setPreviewBranch: (branch) => set({ previewBranch: branch }),
 }));

@@ -1,9 +1,24 @@
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
 use tokio::process::Command;
 
 use crate::error::AppError;
 use crate::git::engine::GitRemoteEngine;
+
+// ── Worktree types ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeEntry {
+    pub path: String,
+    pub head: String,
+    pub branch: Option<String>,
+    pub is_main: bool,
+    pub is_bare: bool,
+    pub is_locked: bool,
+    pub lock_reason: Option<String>,
+}
 
 pub struct GitCliEngine {
     pub repo_path: PathBuf,
@@ -123,6 +138,170 @@ impl GitCliEngine {
     pub async fn rebase_onto(&self, base: &str) -> Result<(), AppError> {
         self.run_local_checked(&["rebase", "--", base]).await?;
         Ok(())
+    }
+}
+
+// ── Worktree operations ─────────────────────────────────────────────────────
+// worktree는 로컬 전용 CLI 작업이다. git2(libgit2)는 worktree 지원이 제한적이므로
+// git CLI를 직접 사용한다.
+
+impl GitCliEngine {
+    /// List all worktrees via `git worktree list --porcelain`.
+    pub async fn list_worktrees(&self) -> Result<Vec<WorktreeEntry>, AppError> {
+        let output = self.run_local_checked(&["worktree", "list", "--porcelain"]).await?;
+        Ok(parse_worktree_porcelain(&output))
+    }
+
+    /// Add a new worktree via `git worktree add`.
+    pub async fn add_worktree(
+        &self,
+        path: &str,
+        branch: Option<&str>,
+        new_branch: Option<&str>,
+    ) -> Result<(), AppError> {
+        let mut args = vec!["worktree", "add"];
+        let nb_flag;
+        if let Some(nb) = new_branch {
+            nb_flag = nb.to_string();
+            args.push("-b");
+            args.push(&nb_flag);
+        }
+        args.push(path);
+        if let Some(b) = branch {
+            args.push(b);
+        }
+        self.run_local_checked(&args).await?;
+        Ok(())
+    }
+
+    /// Remove a worktree via `git worktree remove`.
+    pub async fn remove_worktree(&self, path: &str, force: bool) -> Result<(), AppError> {
+        let mut args = vec!["worktree", "remove"];
+        if force {
+            args.push("--force");
+        }
+        args.push(path);
+        self.run_local_checked(&args).await?;
+        Ok(())
+    }
+}
+
+/// Parse `git worktree list --porcelain` output into WorktreeEntry list.
+///
+/// Format: blocks separated by blank lines, each containing:
+///   worktree <path>
+///   HEAD <hash>
+///   branch refs/heads/<name>  (or `detached`)
+///   bare  (optional)
+///   locked [<reason>]  (optional)
+fn parse_worktree_porcelain(output: &str) -> Vec<WorktreeEntry> {
+    let mut entries = Vec::new();
+    let mut is_first = true;
+
+    for block in output.split("\n\n") {
+        let block = block.trim();
+        if block.is_empty() {
+            continue;
+        }
+
+        let mut path = String::new();
+        let mut head = String::new();
+        let mut branch: Option<String> = None;
+        let mut is_bare = false;
+        let mut is_locked = false;
+        let mut lock_reason: Option<String> = None;
+
+        for line in block.lines() {
+            let line = line.trim();
+            if let Some(p) = line.strip_prefix("worktree ") {
+                path = p.to_string();
+            } else if let Some(h) = line.strip_prefix("HEAD ") {
+                head = h.to_string();
+            } else if let Some(b) = line.strip_prefix("branch ") {
+                branch = b.strip_prefix("refs/heads/").map(|s| s.to_string())
+                    .or_else(|| Some(b.to_string()));
+            } else if line == "bare" {
+                is_bare = true;
+            } else if line == "locked" {
+                is_locked = true;
+            } else if let Some(reason) = line.strip_prefix("locked ") {
+                is_locked = true;
+                lock_reason = Some(reason.to_string());
+            }
+            // `detached` line → branch stays None
+        }
+
+        if !path.is_empty() {
+            let is_main = is_first;
+            entries.push(WorktreeEntry {
+                path,
+                head,
+                branch,
+                is_main,
+                is_bare,
+                is_locked,
+                lock_reason,
+            });
+            is_first = false;
+        }
+    }
+
+    entries
+}
+
+// ── Preview operations (merge-based preview) ─────────────────────────────────
+// 다른 branch의 변경사항을 임시 머지하여 dev 서버 핫리로드로 미리보기한다.
+// stop_preview로 깔끔하게 원복한다.
+
+impl GitCliEngine {
+    /// Start previewing another branch by performing a no-commit merge.
+    /// If the working tree is dirty, stashes changes first.
+    pub async fn start_preview(&self, branch: &str) -> Result<(), AppError> {
+        // 1. dirty 상태면 stash
+        let status = self.run_local_checked(&["status", "--porcelain"]).await?;
+        let was_dirty = !status.is_empty();
+        if was_dirty {
+            self.run_local_checked(&["stash", "push", "-m", "gitbaro-preview"]).await?;
+        }
+
+        // 2. no-commit merge
+        let result = self.run_local(&["merge", "--no-commit", "--no-ff", branch]).await?;
+        if !result.status.success() {
+            // 머지 실패 시 abort 후 stash 복원
+            let _ = self.run_local(&["merge", "--abort"]).await;
+            if was_dirty {
+                let _ = self.run_local(&["stash", "pop"]).await;
+            }
+            let stderr = String::from_utf8_lossy(&result.stderr);
+            return Err(AppError::GitCli {
+                message: parse_git_error(&stderr),
+                exit_code: result.status.code(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Stop an active preview by aborting the merge and restoring stash.
+    pub async fn stop_preview(&self) -> Result<(), AppError> {
+        // 1. merge abort
+        self.run_local_checked(&["merge", "--abort"]).await?;
+
+        // 2. gitbaro-preview stash가 있으면 pop
+        let stash_list = self.run_local_checked(&["stash", "list"]).await?;
+        if stash_list.contains("gitbaro-preview") {
+            self.run_local_checked(&["stash", "pop"]).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Check if a merge is currently in progress (.git/MERGE_HEAD exists).
+    pub async fn is_merging(&self) -> Result<bool, AppError> {
+        // `git rev-parse --git-dir`로 .git 디렉토리를 찾은 뒤 MERGE_HEAD 확인
+        let git_dir = self.run_local_checked(&["rev-parse", "--git-dir"]).await?;
+        let merge_head = PathBuf::from(git_dir).join("MERGE_HEAD");
+        Ok(merge_head.exists())
     }
 }
 
