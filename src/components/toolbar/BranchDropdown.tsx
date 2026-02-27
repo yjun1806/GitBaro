@@ -11,6 +11,7 @@ interface BranchDropdownProps {
   onSwitch: (branchName: string) => void;
   onCreateBranch: () => void;
   onCreateWorktree: () => void;
+  onOpenWorktree: (path: string) => void;
   onRemoveWorktree: (path: string) => void;
   onClose: () => void;
 }
@@ -22,6 +23,7 @@ export function BranchDropdown({
   onSwitch,
   onCreateBranch,
   onCreateWorktree,
+  onOpenWorktree,
   onRemoveWorktree,
   onClose,
 }: BranchDropdownProps) {
@@ -148,6 +150,10 @@ export function BranchDropdown({
         {nonMainWorktrees.length > 0 && (
           <WorktreeSection
             worktrees={nonMainWorktrees}
+            onOpen={(path) => {
+              onOpenWorktree(path);
+              onClose();
+            }}
             onRemove={onRemoveWorktree}
           />
         )}
@@ -241,9 +247,11 @@ function BranchRow({
 
 function WorktreeSection({
   worktrees,
+  onOpen,
   onRemove,
 }: {
   worktrees: WorktreeInfo[];
+  onOpen: (path: string) => void;
   onRemove: (path: string) => void;
 }) {
   const { t } = useTranslation();
@@ -255,15 +263,20 @@ function WorktreeSection({
       {worktrees.map((wt) => (
         <div key={wt.path} className="relative group">
           <div className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors">
-            <FolderGit2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-foreground truncate" title={wt.path}>
-                {wt.path.split("/").pop()}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {wt.branch ?? t("worktree.detachedHead")}
-              </p>
-            </div>
+            <button
+              onClick={() => onOpen(wt.path)}
+              className="flex items-center gap-2 flex-1 min-w-0 text-left"
+            >
+              <FolderGit2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-foreground truncate" title={wt.path}>
+                  {wt.path.split("/").pop()}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {wt.branch ?? t("worktree.detachedHead")}
+                </p>
+              </div>
+            </button>
             {wt.isLocked && (
               <span title={wt.lockReason ?? t("worktree.locked")}>
                 <Lock className="w-3 h-3 text-warning shrink-0" />

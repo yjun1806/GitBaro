@@ -3,7 +3,7 @@ import { GitBranch, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useBranches, useStatus, useWorktrees } from "@/api/queries";
-import { switchBranch, createBranch, stashPush, stashPop, removeWorktree } from "@/api/commands";
+import { switchBranch, createBranch, stashPush, stashPop, removeWorktree, addLocalRepository } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -107,6 +107,16 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     }
   };
 
+  const handleOpenWorktree = async (path: string) => {
+    try {
+      const repo = await addLocalRepository(path);
+      useRepositoryStore.getState().addRepo(repo);
+      useRepositoryStore.getState().setActiveRepo(repo.path);
+    } catch (err) {
+      addToast(t("repo.failedToAdd", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
   const handleRemoveWorktree = async (path: string) => {
     if (!activeRepoPath) return;
     try {
@@ -167,6 +177,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           onSwitch={handleSwitch}
           onCreateBranch={() => setShowCreateDialog(true)}
           onCreateWorktree={() => setShowWorktreeDialog(true)}
+          onOpenWorktree={handleOpenWorktree}
           onRemoveWorktree={handleRemoveWorktree}
           onClose={onClose}
         />
