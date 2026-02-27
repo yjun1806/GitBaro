@@ -164,6 +164,27 @@ pub struct ConflictFile {
     pub base: Option<String>,
 }
 
+// ── Branch Compare ────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchCompareResult {
+    pub base_branch: String,
+    pub compare_branch: String,
+    pub ahead_count: usize,
+    pub behind_count: usize,
+    pub ahead_commits: Vec<CommitInfo>,
+    pub behind_commits: Vec<CommitInfo>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum MergeStrategy {
+    Merge,
+    Squash,
+    Rebase,
+}
+
 // ── Blame ─────────────────────────────────────────────────────────────────────
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
