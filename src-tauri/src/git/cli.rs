@@ -18,6 +18,7 @@ pub struct WorktreeEntry {
     pub is_bare: bool,
     pub is_locked: bool,
     pub lock_reason: Option<String>,
+    pub is_dirty: bool,
 }
 
 pub struct GitCliEngine {
@@ -195,6 +196,7 @@ impl GitCliEngine {
         path: &str,
         branch: Option<&str>,
         new_branch: Option<&str>,
+        base_branch: Option<&str>,
     ) -> Result<(), AppError> {
         let mut args = vec!["worktree", "add"];
         let nb_flag;
@@ -204,7 +206,9 @@ impl GitCliEngine {
             args.push(&nb_flag);
         }
         args.push(path);
-        if let Some(b) = branch {
+        if let Some(base) = base_branch {
+            args.push(base);
+        } else if let Some(b) = branch {
             args.push(b);
         }
         self.run_local_checked(&args).await?;
@@ -278,6 +282,7 @@ fn parse_worktree_porcelain(output: &str) -> Vec<WorktreeEntry> {
                 is_bare,
                 is_locked,
                 lock_reason,
+                is_dirty: false,
             });
             is_first = false;
         }
@@ -394,14 +399,13 @@ impl GitRemoteEngine for GitCliEngine {
         force: bool,
     ) -> Result<(), AppError> {
         let askpass = AskpassScript::create(token).await?;
-        let refspec = format!("refs/heads/{}:refs/heads/{}", branch, branch);
 
-        let mut args = vec!["-c", "credential.helper=", "push"];
+        let mut args = vec!["-c", "credential.helper=", "push", "--set-upstream"];
         if force {
             args.push("--force");
         }
         args.push(remote);
-        args.push(&refspec);
+        args.push(branch);
 
         tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
 

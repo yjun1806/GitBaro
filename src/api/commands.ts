@@ -536,6 +536,19 @@ export async function openInEditor(repoPath: string, filePath: string): Promise<
   return invoke("open_in_editor", { repoPath, filePath });
 }
 
+// Repository context menu actions
+export async function revealInFinder(path: string): Promise<void> {
+  return invoke("reveal_in_finder", { path });
+}
+
+export async function openInTerminal(repoPath: string): Promise<void> {
+  return invoke("open_in_terminal", { repoPath });
+}
+
+export async function openRepoInEditor(repoPath: string): Promise<void> {
+  return invoke("open_repo_in_editor", { repoPath });
+}
+
 // Worktrees
 export async function getWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
   return invoke("get_worktrees", { repoPath });
@@ -546,12 +559,14 @@ export async function addWorktree(
   path: string,
   branch?: string,
   newBranch?: string,
+  baseBranch?: string,
 ): Promise<void> {
   return invoke("add_worktree", {
     repoPath,
     path,
     branch: branch ?? null,
     newBranch: newBranch ?? null,
+    baseBranch: baseBranch ?? null,
   });
 }
 

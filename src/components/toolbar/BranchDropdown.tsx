@@ -2,11 +2,7 @@ import { useReducer, useState, useCallback } from "react";
 import {
   GitBranch,
   Search,
-  Plus,
   FolderGit2,
-  Trash2,
-  Lock,
-  Eye,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
@@ -18,6 +14,7 @@ import {
   getBranchAtIndex,
 } from "@/components/branch/BranchTabContent";
 import { BranchContextMenu } from "@/components/branch/BranchContextMenu";
+import { WorktreeTabContent } from "@/components/branch/WorktreeTabContent";
 import type { BranchInfo, WorktreeInfo } from "@/types";
 
 type Tab = "branches" | "worktrees";
@@ -83,13 +80,12 @@ interface BranchDropdownProps {
   currentBranch: string | null;
   recentBranchNames: string[];
   worktrees: WorktreeInfo[];
-  previewBranch: string | null;
+  worktreeByBranch: Map<string, WorktreeInfo>;
   onSwitch: (branchName: string) => void;
   onCreateBranch: () => void;
   onCreateWorktree: () => void;
   onOpenWorktree: (path: string) => void;
   onRemoveWorktree: (path: string) => void;
-  onStartPreview: (branch: string) => void;
   onDelete: (branchName: string) => void;
   onRename: (branchName: string) => void;
   onCompare: (branchName: string) => void;
@@ -105,13 +101,12 @@ export function BranchDropdown({
   currentBranch,
   recentBranchNames,
   worktrees,
-  previewBranch,
+  worktreeByBranch,
   onSwitch,
   onCreateBranch,
   onCreateWorktree,
   onOpenWorktree,
   onRemoveWorktree,
-  onStartPreview,
   onDelete,
   onRename,
   onCompare,
@@ -139,12 +134,15 @@ export function BranchDropdown({
 
   const handleSelect = useCallback(
     (branch: BranchInfo) => {
-      if (branch.name !== currentBranch) {
+      const wt = worktreeByBranch.get(branch.name);
+      if (wt && !wt.isMain) {
+        onOpenWorktree(wt.path);
+      } else if (branch.name !== currentBranch) {
         onSwitch(branch.name);
       }
       onClose();
     },
-    [currentBranch, onSwitch, onClose],
+    [currentBranch, onSwitch, onClose, worktreeByBranch, onOpenWorktree],
   );
 
   const handleContextMenu = useCallback(
@@ -199,7 +197,7 @@ export function BranchDropdown({
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
-      className="absolute left-2 top-full mt-2 w-[28rem] bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
+      className="flex flex-col h-full overflow-hidden"
       onKeyDown={handleKeyDown}
     >
       {/* Tabs */}
@@ -220,9 +218,9 @@ export function BranchDropdown({
         />
       </div>
 
-      {/* Search */}
-      <div className="p-2 border-b border-border">
-        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-surface border border-border focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+      {/* Search + Action */}
+      <div className="flex items-center gap-2 p-2 border-b border-border">
+        <div className="flex-1 flex items-center gap-2 px-2.5 py-2 rounded-lg bg-surface border border-border focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
           <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           <input
             autoFocus
@@ -239,16 +237,30 @@ export function BranchDropdown({
             className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
           />
         </div>
+        <button
+          onClick={() => {
+            if (activeTab === "branches") {
+              onCreateBranch();
+            } else {
+              onCreateWorktree();
+            }
+            onClose();
+          }}
+          className="shrink-0 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary-hover rounded-lg transition-colors"
+        >
+          {activeTab === "branches" ? t("branch.newBranch") : t("worktree.newWorktree")}
+        </button>
       </div>
 
       {/* Content */}
-      <div className="max-h-80 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto">
         {activeTab === "branches" ? (
           <BranchTabContent
             groups={groups}
             currentBranch={currentBranch}
             activeIndex={state.activeIndex}
             sortBy={sortBy}
+            worktreeByBranch={worktreeByBranch}
             onSortChange={setSortBy}
             onSelect={handleSelect}
             onContextMenu={handleContextMenu}
@@ -256,44 +268,12 @@ export function BranchDropdown({
         ) : (
           <WorktreeTabContent
             worktrees={filteredWorktrees}
-            previewBranch={previewBranch}
             onOpen={(path) => {
               onOpenWorktree(path);
               onClose();
             }}
             onRemove={onRemoveWorktree}
-            onPreview={(branch) => {
-              onStartPreview(branch);
-              onClose();
-            }}
           />
-        )}
-      </div>
-
-      {/* Action button */}
-      <div className="border-t border-border">
-        {activeTab === "branches" ? (
-          <button
-            onClick={() => {
-              onCreateBranch();
-              onClose();
-            }}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            {t("branch.newBranch")}
-          </button>
-        ) : (
-          <button
-            onClick={() => {
-              onCreateWorktree();
-              onClose();
-            }}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            {t("worktree.newWorktree")}
-          </button>
         )}
       </div>
 
@@ -380,129 +360,3 @@ function TabButton({
   );
 }
 
-// ── WorktreeTabContent ──────────────────────────────────────────────────────
-// Kept inline — not complex enough to warrant its own file
-
-function WorktreeTabContent({
-  worktrees,
-  previewBranch,
-  onOpen,
-  onRemove,
-  onPreview,
-}: {
-  worktrees: WorktreeInfo[];
-  previewBranch: string | null;
-  onOpen: (path: string) => void;
-  onRemove: (path: string) => void;
-  onPreview: (branch: string) => void;
-}) {
-  const { t } = useTranslation();
-  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-
-  if (worktrees.length === 0) {
-    return (
-      <div className="py-6 text-center">
-        <p className="text-sm text-muted-foreground">
-          {t("worktree.noWorktrees")}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="py-1">
-      {worktrees.map((wt) => {
-        const isPreviewing = previewBranch === wt.branch;
-        return (
-          <div key={wt.path} className="relative group">
-            <div className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors">
-              <button
-                onClick={() => onOpen(wt.path)}
-                className="flex items-center gap-2 flex-1 min-w-0 text-left"
-              >
-                <FolderGit2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p
-                    className="text-sm text-foreground truncate"
-                    title={wt.path}
-                  >
-                    {wt.path.split("/").pop()}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {wt.branch ?? t("worktree.detachedHead")}
-                  </p>
-                </div>
-              </button>
-              {wt.isMain && (
-                <span className="text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
-                  {t("worktree.main")}
-                </span>
-              )}
-              {!wt.isMain && wt.branch && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!isPreviewing) onPreview(wt.branch!);
-                  }}
-                  className={cn(
-                    "p-1 rounded transition-colors shrink-0",
-                    isPreviewing
-                      ? "text-warning bg-warning/15"
-                      : "text-muted-foreground/50 hover:text-warning hover:bg-warning/10 opacity-0 group-hover:opacity-100",
-                  )}
-                  title={t("preview.start")}
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                </button>
-              )}
-              {!wt.isMain && wt.isLocked && (
-                <span title={wt.lockReason ?? t("worktree.locked")}>
-                  <Lock className="w-3 h-3 text-warning shrink-0" />
-                </span>
-              )}
-              {!wt.isMain && !wt.isLocked && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setConfirmRemove(wt.path);
-                  }}
-                  className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
-                  title={t("worktree.remove")}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {confirmRemove === wt.path && (
-              <div className="absolute inset-x-0 bottom-full mb-1 mx-2 bg-card border border-border rounded-lg shadow-lg p-3 z-10">
-                <p className="text-sm text-foreground mb-2">
-                  {t("worktree.removeConfirm", {
-                    path: wt.path.split("/").pop(),
-                  })}
-                </p>
-                <div className="flex gap-2 justify-end">
-                  <button
-                    onClick={() => setConfirmRemove(null)}
-                    className="px-3 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {t("common.cancel")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      onRemove(wt.path);
-                      setConfirmRemove(null);
-                    }}
-                    className="px-3 py-1 text-xs bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded transition-colors"
-                  >
-                    {t("common.delete")}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}

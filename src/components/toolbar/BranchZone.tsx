@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import { GitBranch, ChevronDown } from "lucide-react";
+import { GitBranch, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useBranches, useRecentBranches, useStatus, useWorktrees } from "@/api/queries";
-import { switchBranch, createBranch, deleteBranch, renameBranch, stashPush, stashPop, removeWorktree, addLocalRepository, startWorktreePreview, stopWorktreePreview, checkPreviewActive } from "@/api/commands";
+import { switchBranch, createBranch, deleteBranch, renameBranch, stashPush, stashPop, removeWorktree, addLocalRepository, stopWorktreePreview, checkPreviewActive } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -13,6 +13,8 @@ import { BranchDropdown } from "./BranchDropdown";
 import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
 import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
 import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog";
+import { DeleteBranchDialog } from "@/components/branch/DeleteBranchDialog";
+import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 
 interface BranchZoneProps {
   isOpen: boolean;
@@ -31,11 +33,13 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const { data: worktrees = [] } = useWorktrees(activeRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
+  const sidebarWidth = useUIStore((s) => s.sidebarWidth);
   const previewBranch = useUIStore((s) => s.previewBranch);
-  const setPreviewBranch = useUIStore((s) => s.setPreviewBranch);
+  const { isInWorktree, mainWorktree, worktreeByBranch } = useWorktreeContext(activeRepoPath, worktrees);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showWorktreeDialog, setShowWorktreeDialog] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   // 마운트 시 잔여 미리보기 정리
   useEffect(() => {
@@ -143,24 +147,18 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     }
   };
 
-  const handleStartPreview = async (branch: string) => {
-    if (!activeRepoPath) return;
-    try {
-      await startWorktreePreview(activeRepoPath, branch);
-      setPreviewBranch(branch);
-      await invalidateAll();
-      addToast(t("preview.started", { branch }), "success");
-    } catch (err) {
-      addToast(t("preview.failedToStart", { error: getErrorMessage(err) }), "error");
-    }
+  const handleDelete = (branchName: string) => {
+    setPendingDelete(branchName);
   };
 
-  const handleDelete = async (branchName: string) => {
-    if (!activeRepoPath) return;
+  const handleDeleteConfirm = async () => {
+    if (!activeRepoPath || !pendingDelete) return;
+    const name = pendingDelete;
+    setPendingDelete(null);
     try {
-      await deleteBranch(activeRepoPath, branchName);
+      await deleteBranch(activeRepoPath, name);
       await invalidateAll();
-      addToast(t("branch.deleted", { name: branchName }), "success");
+      addToast(t("branch.deleted", { name }), "success");
     } catch (err) {
       addToast(t("branch.failedToDelete", { error: getErrorMessage(err) }), "error");
     }
@@ -196,66 +194,93 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   };
 
   return (
-    <div ref={zoneRef} className="relative shrink-0 flex items-center pl-4">
+    <div ref={zoneRef} className={cn("relative shrink-0 flex items-center", isOpen && "z-50")}>
       <button
         onClick={onToggle}
         className={cn(
-          "flex items-center gap-2 h-8 pl-2.5 pr-2 rounded-lg border transition-all",
-          isOpen
-            ? "border-primary/30 bg-primary/5 shadow-sm"
-            : "border-transparent hover:border-border hover:bg-accent",
+          "flex items-center gap-2 px-4 w-[220px] h-[52px] border-r border-border transition-colors text-left",
+          isOpen ? "relative z-50 bg-surface" : "hover:bg-accent",
+          isOpen ? "bg-accent" : "hover:bg-accent",
         )}
       >
-        <GitBranch className={cn(
-          "w-3.5 h-3.5 shrink-0",
-          isOpen ? "text-primary" : "text-muted-foreground",
-        )} />
-        <span className="text-sm font-semibold truncate max-w-[200px]">
-          {currentBranch ?? t("branch.noBranch")}
-        </span>
-
-        {/* Ahead / Behind pills */}
-        {hasChanges && (
-          <div className="flex items-center gap-0.5 ml-0.5">
-            {ahead > 0 && (
-              <span className="inline-flex items-center gap-px text-[10px] font-semibold text-primary bg-primary/10 pl-1 pr-1.5 py-px rounded-full leading-tight tabular-nums">
-                <span className="opacity-70">{"\u2191"}</span>{ahead}
+        <GitBranch className="w-4 h-4 shrink-0 opacity-50" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-muted-foreground leading-tight">{t("branch.current")}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold truncate max-w-[200px]">
+              {currentBranch ?? t("branch.noBranch")}
+            </p>
+            {isInWorktree && (
+              <span className="text-[10px] font-semibold text-info bg-info/10 px-1.5 py-0.5 rounded shrink-0">
+                WT
               </span>
             )}
-            {behind > 0 && (
-              <span className="inline-flex items-center gap-px text-[10px] font-semibold text-danger bg-danger/10 pl-1 pr-1.5 py-px rounded-full leading-tight tabular-nums">
-                <span className="opacity-70">{"\u2193"}</span>{behind}
-              </span>
+            {hasChanges && (
+              <div className="flex items-center gap-0.5">
+                {ahead > 0 && (
+                  <span className="inline-flex items-center gap-px text-[10px] font-semibold text-primary bg-primary/10 pl-1 pr-1.5 py-px rounded-full leading-tight tabular-nums">
+                    <span className="opacity-70">{"\u2191"}</span>{ahead}
+                  </span>
+                )}
+                {behind > 0 && (
+                  <span className="inline-flex items-center gap-px text-[10px] font-semibold text-danger bg-danger/10 pl-1 pr-1.5 py-px rounded-full leading-tight tabular-nums">
+                    <span className="opacity-70">{"\u2193"}</span>{behind}
+                  </span>
+                )}
+              </div>
             )}
           </div>
+        </div>
+        {isOpen ? (
+          <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
         )}
-
-        <ChevronDown className={cn(
-          "w-3 h-3 text-muted-foreground shrink-0 transition-transform",
-          isOpen && "rotate-180",
-        )} />
       </button>
 
+      {isInWorktree && mainWorktree && (
+        <button
+          onClick={() => handleOpenWorktree(mainWorktree.path)}
+          className="flex items-center gap-1 h-[52px] px-3 border-r border-border hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          title={t("worktree.returnToMain")}
+        >
+          <Undo2 className="w-3.5 h-3.5" />
+          <span className="text-xs font-medium">Main</span>
+        </button>
+      )}
+
       {isOpen && (
-        <BranchDropdown
-          branches={branches}
-          currentBranch={currentBranch}
-          recentBranchNames={recentBranchNames}
-          worktrees={worktrees}
-          previewBranch={previewBranch}
-          onSwitch={handleSwitch}
-          onCreateBranch={() => setShowCreateDialog(true)}
-          onCreateWorktree={() => setShowWorktreeDialog(true)}
-          onOpenWorktree={handleOpenWorktree}
-          onRemoveWorktree={handleRemoveWorktree}
-          onStartPreview={handleStartPreview}
-          onDelete={handleDelete}
-          onRename={handleRename}
-          onCompare={handleCompare}
-          onMerge={handleMerge}
-          onCopyName={handleCopyName}
-          onClose={onClose}
-        />
+        <>
+          {/* Backdrop — 전체 화면 (사이드바 포함) */}
+          <div
+            className="fixed inset-0 bg-black/20 z-40"
+            onClick={onClose}
+          />
+          {/* Full-height panel — 사이드바 오른쪽, 툴바 아래부터 하단까지 */}
+          <div
+            className="fixed z-50 flex flex-col bg-popover border-r border-border shadow-2xl"
+            style={{ left: sidebarWidth + 1, top: 52, bottom: 0, width: '28rem' }}
+          >
+            <BranchDropdown
+              branches={branches}
+              currentBranch={currentBranch}
+              recentBranchNames={recentBranchNames}
+              worktrees={worktrees}
+              worktreeByBranch={worktreeByBranch}
+              onSwitch={handleSwitch}
+              onCreateBranch={() => setShowCreateDialog(true)}
+              onCreateWorktree={() => setShowWorktreeDialog(true)}
+              onOpenWorktree={handleOpenWorktree}
+              onRemoveWorktree={handleRemoveWorktree}
+              onDelete={handleDelete}
+              onRename={handleRename}
+              onCompare={handleCompare}
+              onMerge={handleMerge}
+              onCopyName={handleCopyName}
+              onClose={onClose}
+            />
+          </div>
+        </>
       )}
 
       {showCreateDialog && (
@@ -280,7 +305,17 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         <CreateWorktreeDialog
           repoPath={activeRepoPath!}
           branches={branches}
+          worktrees={worktrees}
           onClose={() => setShowWorktreeDialog(false)}
+        />
+      )}
+
+      {pendingDelete && (
+        <DeleteBranchDialog
+          branchName={pendingDelete}
+          isFullyMerged={branches.find((b) => b.name === pendingDelete)?.isFullyMerged ?? false}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setPendingDelete(null)}
         />
       )}
     </div>
