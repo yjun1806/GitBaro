@@ -12,6 +12,7 @@ import {
   validateToken,
   checkGhStatus,
   resolveCommitAvatars,
+  compareBranches,
 } from "./commands";
 
 export function useStatus(repoPath: string | null) {
@@ -103,6 +104,18 @@ export function useCommitAvatars(repoPath: string | null) {
     enabled: repoPath !== null,
     staleTime: 5 * 60 * 1000, // 5min cache
     retry: false,
+  });
+}
+
+export function useBranchComparison(
+  repoPath: string | null,
+  baseBranch: string | null,
+  compareBranch: string | null,
+) {
+  return useQuery({
+    queryKey: ["branchComparison", repoPath, baseBranch, compareBranch],
+    queryFn: () => compareBranches(repoPath!, baseBranch!, compareBranch!),
+    enabled: repoPath !== null && baseBranch !== null && compareBranch !== null,
   });
 }
 
