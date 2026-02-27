@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::git::cli::GitCliEngine;
-use crate::git::engine::{AuthorInfo, BranchCompareResult, CommitInfo};
+use crate::git::engine::{AuthorInfo, BranchCompareResult, CommitInfo, MergeStrategy};
 use serde_json::{json, Value};
 
 #[tauri::command]
@@ -251,4 +251,41 @@ pub async fn compare_branches(
     .map_err(|e| AppError::Channel(e.to_string()))??;
 
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn merge_branch_into_current(
+    repo_path: String,
+    branch: String,
+    strategy: MergeStrategy,
+) -> Result<String, AppError> {
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let branch_name = branch.clone();
+
+    match strategy {
+        MergeStrategy::Merge => {
+            engine.merge_branch(&branch_name, true).await?;
+        }
+        MergeStrategy::Squash => {
+            engine.squash_merge(&branch_name).await?;
+            // squash merge stages changes but doesn't commit; create the commit
+            engine
+                .commit(
+                    &format!("Squash merge branch '{}'", branch_name),
+                    false,
+                    None,
+                )
+                .await?;
+        }
+        MergeStrategy::Rebase => {
+            engine.rebase_onto(&branch_name).await?;
+        }
+    }
+
+    tracing::info!(
+        "Merged branch '{}' into current using {:?} strategy",
+        branch,
+        strategy
+    );
+    Ok(format!("Successfully merged '{}' into current branch", branch))
 }
