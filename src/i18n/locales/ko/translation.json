@@ -323,6 +323,17 @@
     "failedToLogout": "로그아웃 실패: {{error}}",
     "failedToUpdateSettings": "설정 업데이트 실패: {{error}}"
   },
+  "preview": {
+    "previewing": "미리보기 중: {{branch}}",
+    "stop": "미리보기 중단",
+    "start": "미리보기",
+    "started": "{{branch}} 미리보기 시작",
+    "stopped": "미리보기 중단됨",
+    "failedToStart": "미리보기 시작 실패: {{error}}",
+    "failedToStop": "미리보기 중단 실패: {{error}}",
+    "disabledCommit": "미리보기 중에는 Commit할 수 없습니다",
+    "disabledSync": "미리보기 중에는 동기화할 수 없습니다"
+  },
   "conflict": {
     "title": "Merge 충돌",
     "openTool": "외부 Merge 도구에서 열기",

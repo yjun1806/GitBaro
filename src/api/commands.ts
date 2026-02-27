@@ -524,3 +524,16 @@ export async function removeWorktree(
 ): Promise<void> {
   return invoke("remove_worktree", { repoPath, path, force });
 }
+
+// Preview
+export async function startWorktreePreview(repoPath: string, branch: string): Promise<void> {
+  return invoke("start_worktree_preview", { repoPath, branch });
+}
+
+export async function stopWorktreePreview(repoPath: string): Promise<void> {
+  return invoke("stop_worktree_preview", { repoPath });
+}
+
+export async function checkPreviewActive(repoPath: string): Promise<boolean> {
+  return invoke("check_preview_active", { repoPath });
+}

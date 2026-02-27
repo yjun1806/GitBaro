@@ -33,3 +33,28 @@ pub async fn remove_worktree(
     tracing::info!("Removed worktree: {}", path);
     Ok(())
 }
+
+#[tauri::command]
+pub async fn start_worktree_preview(
+    repo_path: String,
+    branch: String,
+) -> Result<(), AppError> {
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.start_preview(&branch).await?;
+    tracing::info!("Started preview of branch: {}", branch);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_worktree_preview(repo_path: String) -> Result<(), AppError> {
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.stop_preview().await?;
+    tracing::info!("Stopped preview");
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn check_preview_active(repo_path: String) -> Result<bool, AppError> {
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.is_merging().await
+}

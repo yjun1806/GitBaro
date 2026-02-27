@@ -65,6 +65,9 @@ pub fn run() {
             commands::worktree::get_worktrees,
             commands::worktree::add_worktree,
             commands::worktree::remove_worktree,
+            commands::worktree::start_worktree_preview,
+            commands::worktree::stop_worktree_preview,
+            commands::worktree::check_preview_active,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");

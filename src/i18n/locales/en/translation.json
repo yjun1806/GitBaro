@@ -323,6 +323,17 @@
     "failedToLogout": "Failed to log out: {{error}}",
     "failedToUpdateSettings": "Failed to update settings: {{error}}"
   },
+  "preview": {
+    "previewing": "Previewing: {{branch}}",
+    "stop": "Stop Preview",
+    "start": "Preview",
+    "started": "Previewing {{branch}}",
+    "stopped": "Preview stopped",
+    "failedToStart": "Failed to start preview: {{error}}",
+    "failedToStop": "Failed to stop preview: {{error}}",
+    "disabledCommit": "Commit disabled during preview",
+    "disabledSync": "Sync disabled during preview"
+  },
   "conflict": {
     "title": "Merge Conflicts",
     "openTool": "Open in External Merge Tool",

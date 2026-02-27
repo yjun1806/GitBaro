@@ -7,11 +7,13 @@ interface UIState {
   sidebarWidth: number;
   isSidebarCollapsed: boolean;
   repoListOpen: boolean;
+  previewBranch: string | null;
   setTheme: (theme: Theme) => void;
   setActiveTab: (tab: "changes" | "history") => void;
   setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
   setRepoListOpen: (open: boolean) => void;
+  setPreviewBranch: (branch: string | null) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -20,6 +22,7 @@ export const useUIStore = create<UIState>((set) => ({
   sidebarWidth: 500,
   isSidebarCollapsed: false,
   repoListOpen: false,
+  previewBranch: null,
 
   setTheme: (theme) => set({ theme }),
 
@@ -31,4 +34,6 @@ export const useUIStore = create<UIState>((set) => ({
     set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
 
   setRepoListOpen: (open) => set({ repoListOpen: open }),
+
+  setPreviewBranch: (branch) => set({ previewBranch: branch }),
 }));

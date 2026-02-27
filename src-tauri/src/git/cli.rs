@@ -224,6 +224,62 @@ fn parse_worktree_porcelain(output: &str) -> Vec<WorktreeEntry> {
     entries
 }
 
+// ── Preview operations (merge-based preview) ─────────────────────────────────
+// 다른 branch의 변경사항을 임시 머지하여 dev 서버 핫리로드로 미리보기한다.
+// stop_preview로 깔끔하게 원복한다.
+
+impl GitCliEngine {
+    /// Start previewing another branch by performing a no-commit merge.
+    /// If the working tree is dirty, stashes changes first.
+    pub async fn start_preview(&self, branch: &str) -> Result<(), AppError> {
+        // 1. dirty 상태면 stash
+        let status = self.run_local_checked(&["status", "--porcelain"]).await?;
+        let was_dirty = !status.is_empty();
+        if was_dirty {
+            self.run_local_checked(&["stash", "push", "-m", "gitbaro-preview"]).await?;
+        }
+
+        // 2. no-commit merge
+        let result = self.run_local(&["merge", "--no-commit", "--no-ff", branch]).await?;
+        if !result.status.success() {
+            // 머지 실패 시 abort 후 stash 복원
+            let _ = self.run_local(&["merge", "--abort"]).await;
+            if was_dirty {
+                let _ = self.run_local(&["stash", "pop"]).await;
+            }
+            let stderr = String::from_utf8_lossy(&result.stderr);
+            return Err(AppError::GitCli {
+                message: parse_git_error(&stderr),
+                exit_code: result.status.code(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Stop an active preview by aborting the merge and restoring stash.
+    pub async fn stop_preview(&self) -> Result<(), AppError> {
+        // 1. merge abort
+        self.run_local_checked(&["merge", "--abort"]).await?;
+
+        // 2. gitbaro-preview stash가 있으면 pop
+        let stash_list = self.run_local_checked(&["stash", "list"]).await?;
+        if stash_list.contains("gitbaro-preview") {
+            self.run_local_checked(&["stash", "pop"]).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Check if a merge is currently in progress (.git/MERGE_HEAD exists).
+    pub async fn is_merging(&self) -> Result<bool, AppError> {
+        // `git rev-parse --git-dir`로 .git 디렉토리를 찾은 뒤 MERGE_HEAD 확인
+        let git_dir = self.run_local_checked(&["rev-parse", "--git-dir"]).await?;
+        let merge_head = PathBuf::from(git_dir).join("MERGE_HEAD");
+        Ok(merge_head.exists())
+    }
+}
+
 // ── Remote operations (auth-aware) ──────────────────────────────────────────
 
 impl GitRemoteEngine for GitCliEngine {

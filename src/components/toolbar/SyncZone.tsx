@@ -9,6 +9,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
+import { useUIStore } from "@/stores/ui";
 import { useBranches, useTokenValidation } from "@/api/queries";
 import { gitFetch, gitPush, gitPull } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
@@ -45,8 +46,9 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const behind = headBranch?.aheadBehind?.behind ?? 0;
   const hasUpstream = headBranch?.upstream != null;
 
+  const previewBranch = useUIStore((s) => s.previewBranch);
   const canSync = tokenStatus?.valid === true && tokenStatus?.canPush === true;
-  const syncDisabled = isSyncing || !activeAccountId || (!isValidating && !canSync);
+  const syncDisabled = isSyncing || !activeAccountId || (!isValidating && !canSync) || !!previewBranch;
 
   const syncError = (() => {
     if (!activeAccountId || isValidating || canSync) return null;
