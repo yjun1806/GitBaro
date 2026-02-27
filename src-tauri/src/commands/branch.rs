@@ -27,6 +27,11 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
                 .and_then(|b| b.get().target())
         });
 
+        // HEAD 이름 기준으로 is_head 판별 (워크트리에서도 올바르게 동작)
+        let head_name = repo.head()
+            .ok()
+            .and_then(|h| h.shorthand().map(|s| s.to_string()));
+
         // HEAD의 OID (현재 브랜치 기준 ahead/behind 계산용)
         let head_oid = repo.head().ok().and_then(|h| h.target());
 
@@ -44,7 +49,7 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
                 continue;
             }
 
-            let is_head = branch.is_head();
+            let is_head = !is_remote && head_name.as_deref() == Some(name.as_str());
 
             let branch_commit = branch
                 .get()

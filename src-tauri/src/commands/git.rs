@@ -375,6 +375,55 @@ pub async fn git_fetch(
     }
 }
 
+/// Resolve the current HEAD branch name. Returns error if HEAD is detached.
+async fn resolve_head_branch(repo_path: &str) -> Result<String, AppError> {
+    let rp = repo_path.to_string();
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&rp)?;
+        let head = repo.head()?;
+        head.shorthand()
+            .map(|s| s.to_string())
+            .ok_or_else(|| AppError::GitCli {
+                message: "HEAD is detached".to_string(),
+                exit_code: None,
+            })
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
+}
+
+/// Resolve the upstream remote branch name for the current HEAD.
+/// Returns error with "no_upstream:<branch>" prefix if no upstream is configured.
+async fn resolve_upstream_branch(repo_path: &str) -> Result<String, AppError> {
+    let rp = repo_path.to_string();
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&rp)?;
+        let head = repo.head()?;
+        let local_name = head
+            .shorthand()
+            .ok_or_else(|| AppError::GitCli {
+                message: "HEAD is detached".to_string(),
+                exit_code: None,
+            })?
+            .to_string();
+        let branch = repo.find_branch(&local_name, git2::BranchType::Local)?;
+        let upstream = branch.upstream().map_err(|_| AppError::GitCli {
+            message: format!("no_upstream:{}", local_name),
+            exit_code: None,
+        })?;
+        let name = upstream
+            .name()?
+            .unwrap_or("")
+            .to_string();
+        Ok(name
+            .strip_prefix("origin/")
+            .unwrap_or(&name)
+            .to_string())
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
+}
+
 #[tauri::command]
 pub async fn git_push(
     repo_path: String,
@@ -383,23 +432,7 @@ pub async fn git_push(
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
-    let branch = tokio::task::spawn_blocking({
-        let rp = repo_path.clone();
-        move || -> Result<String, AppError> {
-            let repo = git2::Repository::open(&rp)?;
-            let head = repo.head()?;
-            let name = head
-                .shorthand()
-                .ok_or_else(|| AppError::GitCli {
-                    message: "HEAD is detached".to_string(),
-                    exit_code: None,
-                })?
-                .to_string();
-            Ok(name)
-        }
-    })
-    .await
-    .map_err(|e| AppError::Channel(e.to_string()))??;
+    let branch = resolve_head_branch(&repo_path).await?;
 
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
     let force_flag = force.unwrap_or(false);
@@ -428,23 +461,7 @@ pub async fn git_pull(
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
-    let branch = tokio::task::spawn_blocking({
-        let rp = repo_path.clone();
-        move || -> Result<String, AppError> {
-            let repo = git2::Repository::open(&rp)?;
-            let head = repo.head()?;
-            let name = head
-                .shorthand()
-                .ok_or_else(|| AppError::GitCli {
-                    message: "HEAD is detached".to_string(),
-                    exit_code: None,
-                })?
-                .to_string();
-            Ok(name)
-        }
-    })
-    .await
-    .map_err(|e| AppError::Channel(e.to_string()))??;
+    let branch = resolve_upstream_branch(&repo_path).await?;
 
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
     let rebase_flag = rebase.unwrap_or(false);

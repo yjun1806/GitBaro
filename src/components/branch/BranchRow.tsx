@@ -1,13 +1,14 @@
-import { GitBranch, Check } from "lucide-react";
+import { GitBranch, Check, FolderGit2 } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { BranchStatusDot } from "./BranchStatusDot";
 import { BranchStatusBadge } from "./BranchStatusBadge";
-import type { BranchInfo } from "@/types";
+import type { BranchInfo, WorktreeInfo } from "@/types";
 
 interface BranchRowProps {
   branch: BranchInfo;
   isCurrent: boolean;
   isActive?: boolean;
+  worktreeByBranch?: Map<string, WorktreeInfo>;
   onSelect: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 }
@@ -16,6 +17,7 @@ export function BranchRow({
   branch,
   isCurrent,
   isActive,
+  worktreeByBranch,
   onSelect,
   onContextMenu,
 }: BranchRowProps) {
@@ -81,6 +83,9 @@ export function BranchRow({
         </span>
       )}
 
+      {worktreeByBranch?.has(branch.name) && (
+        <FolderGit2 className="w-3.5 h-3.5 text-info shrink-0" />
+      )}
       {isCurrent && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
     </button>
   );

@@ -94,8 +94,13 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
       setLastFetchedAt(Math.floor(Date.now() / 1000));
       await invalidateAll();
     } catch (err) {
-      const failKey = behind > 0 ? "sync.pullFailed" : ahead > 0 ? "sync.pushFailed" : "sync.fetchFailed";
-      addToast(t(failKey, { error: getErrorMessage(err) }), "error");
+      const msg = getErrorMessage(err);
+      if (msg.startsWith("no_upstream:")) {
+        addToast(t("sync.noUpstreamError"), "error");
+      } else {
+        const failKey = behind > 0 ? "sync.pullFailed" : ahead > 0 ? "sync.pushFailed" : "sync.fetchFailed";
+        addToast(t(failKey, { error: msg }), "error");
+      }
     } finally {
       setSyncingAction(null);
     }
@@ -125,7 +130,12 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
       await invalidateAll();
       addToast(rebase ? t("sync.pullRebaseCompleted") : t("sync.pullCompleted"), "success");
     } catch (err) {
-      addToast(t("sync.pullFailed", { error: getErrorMessage(err) }), "error");
+      const msg = getErrorMessage(err);
+      if (msg.startsWith("no_upstream:")) {
+        addToast(t("sync.noUpstreamError"), "error");
+      } else {
+        addToast(t("sync.pullFailed", { error: msg }), "error");
+      }
     } finally {
       setSyncingAction(null);
     }

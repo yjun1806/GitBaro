@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BranchRow } from "./BranchRow";
-import type { BranchInfo } from "@/types";
+import type { BranchInfo, WorktreeInfo } from "@/types";
 
 interface BranchGroupProps {
   label: string;
@@ -14,6 +14,7 @@ interface BranchGroupProps {
   defaultCollapsed?: boolean;
   count?: number;
   trailing?: React.ReactNode;
+  worktreeByBranch?: Map<string, WorktreeInfo>;
   onSelect: (branch: BranchInfo) => void;
   onContextMenu?: (branch: BranchInfo, e: React.MouseEvent) => void;
 }
@@ -28,6 +29,7 @@ export function BranchGroup({
   defaultCollapsed = false,
   count,
   trailing,
+  worktreeByBranch,
   onSelect,
   onContextMenu,
 }: BranchGroupProps) {
@@ -67,6 +69,7 @@ export function BranchGroup({
             branch={branch}
             isCurrent={branch.name === currentBranch}
             isActive={activeIndex === startIndex + i}
+            worktreeByBranch={worktreeByBranch}
             onSelect={() => onSelect(branch)}
             onContextMenu={(e) => onContextMenu?.(branch, e)}
           />

@@ -6,13 +6,14 @@ import { BranchGroup } from "./BranchGroup";
 import { BranchRow } from "./BranchRow";
 import { groupByPrefix } from "@/hooks/useBranchGroups";
 import type { GroupedBranches, SortBy } from "@/hooks/useBranchGroups";
-import type { BranchInfo } from "@/types";
+import type { BranchInfo, WorktreeInfo } from "@/types";
 
 interface BranchTabContentProps {
   groups: GroupedBranches;
   currentBranch: string | null;
   activeIndex: number;
   sortBy: SortBy;
+  worktreeByBranch?: Map<string, WorktreeInfo>;
   onSortChange: (sort: SortBy) => void;
   onSelect: (branch: BranchInfo) => void;
   onContextMenu: (branch: BranchInfo, e: React.MouseEvent) => void;
@@ -23,6 +24,7 @@ export function BranchTabContent({
   currentBranch,
   activeIndex,
   sortBy,
+  worktreeByBranch,
   onSortChange,
   onSelect,
   onContextMenu,
@@ -86,6 +88,7 @@ export function BranchTabContent({
           currentBranch={currentBranch}
           activeIndex={activeIndex}
           startIndex={defaultStart}
+          worktreeByBranch={worktreeByBranch}
           onSelect={onSelect}
           onContextMenu={onContextMenu}
         />
@@ -100,6 +103,7 @@ export function BranchTabContent({
             currentBranch={currentBranch}
             activeIndex={activeIndex}
             startIndex={recentStart}
+            worktreeByBranch={worktreeByBranch}
             onSelect={onSelect}
             onContextMenu={onContextMenu}
           />
@@ -167,6 +171,7 @@ export function BranchTabContent({
                         branch={branch}
                         isCurrent={branch.name === currentBranch}
                         isActive={activeIndex === otherStart + flatIdx}
+                        worktreeByBranch={worktreeByBranch}
                         onSelect={() => onSelect(branch)}
                         onContextMenu={(e) => onContextMenu(branch, e)}
                       />
@@ -185,6 +190,7 @@ export function BranchTabContent({
                 branch={branch}
                 isCurrent={branch.name === currentBranch}
                 isActive={activeIndex === otherStart + flatIdx}
+                worktreeByBranch={worktreeByBranch}
                 onSelect={() => onSelect(branch)}
                 onContextMenu={(e) => onContextMenu(branch, e)}
               />
@@ -205,6 +211,7 @@ export function BranchTabContent({
             collapsible
             defaultCollapsed
             count={groups.remoteOnly.length}
+            worktreeByBranch={worktreeByBranch}
             onSelect={onSelect}
             onContextMenu={onContextMenu}
           />
