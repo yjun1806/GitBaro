@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use crate::git::cli::GitCliEngine;
+use crate::git::engine::{AuthorInfo, BranchCompareResult, CommitInfo, MergeStrategy};
 use serde_json::{json, Value};
 
 #[tauri::command]
@@ -153,4 +154,138 @@ pub async fn get_current_branch(repo_path: String) -> Result<Option<String>, App
     .map_err(|e| AppError::Channel(e.to_string()))??;
 
     Ok(result)
+}
+
+fn commit_to_info(commit: &git2::Commit) -> CommitInfo {
+    let id = commit.id().to_string();
+    let short_id = id[..7.min(id.len())].to_string();
+    let message = commit.message().unwrap_or_default().to_string();
+    let summary = commit.summary().unwrap_or_default().to_string();
+    let author = AuthorInfo {
+        name: commit.author().name().unwrap_or_default().to_string(),
+        email: commit.author().email().unwrap_or_default().to_string(),
+        timestamp: commit.author().when().seconds(),
+    };
+    let committer = AuthorInfo {
+        name: commit.committer().name().unwrap_or_default().to_string(),
+        email: commit.committer().email().unwrap_or_default().to_string(),
+        timestamp: commit.committer().when().seconds(),
+    };
+    let timestamp = commit.time().seconds();
+    let parent_ids = commit.parent_ids().map(|oid| oid.to_string()).collect();
+
+    CommitInfo {
+        id,
+        short_id,
+        message,
+        summary,
+        author,
+        committer,
+        timestamp,
+        parent_ids,
+    }
+}
+
+#[tauri::command]
+pub async fn compare_branches(
+    repo_path: String,
+    base_branch: String,
+    compare_branch: String,
+) -> Result<BranchCompareResult, AppError> {
+    let base = base_branch.clone();
+    let compare = compare_branch.clone();
+
+    let result = tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&repo_path)?;
+
+        let base_oid = repo
+            .revparse_single(&format!("refs/heads/{}", base))?
+            .peel_to_commit()?
+            .id();
+
+        let compare_oid = repo
+            .revparse_single(&format!("refs/heads/{}", compare))?
+            .peel_to_commit()?
+            .id();
+
+        let (ahead_count, behind_count) = repo.graph_ahead_behind(base_oid, compare_oid)?;
+
+        // Ahead commits: commits in base that are not in compare
+        let mut ahead_commits = Vec::new();
+        {
+            let mut revwalk = repo.revwalk()?;
+            revwalk.push(base_oid)?;
+            revwalk.hide(compare_oid)?;
+            revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
+            for oid in revwalk {
+                let oid = oid?;
+                let commit = repo.find_commit(oid)?;
+                ahead_commits.push(commit_to_info(&commit));
+            }
+        }
+
+        // Behind commits: commits in compare that are not in base
+        let mut behind_commits = Vec::new();
+        {
+            let mut revwalk = repo.revwalk()?;
+            revwalk.push(compare_oid)?;
+            revwalk.hide(base_oid)?;
+            revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
+            for oid in revwalk {
+                let oid = oid?;
+                let commit = repo.find_commit(oid)?;
+                behind_commits.push(commit_to_info(&commit));
+            }
+        }
+
+        Ok::<_, AppError>(BranchCompareResult {
+            base_branch: base,
+            compare_branch: compare,
+            ahead_count,
+            behind_count,
+            ahead_commits,
+            behind_commits,
+        })
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn merge_branch_into_current(
+    repo_path: String,
+    branch: String,
+    strategy: MergeStrategy,
+) -> Result<String, AppError> {
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let branch_name = branch.clone();
+
+    match strategy {
+        MergeStrategy::Merge => {
+            engine.merge_branch(&branch_name, true).await?;
+        }
+        MergeStrategy::Squash => {
+            engine.squash_merge(&branch_name).await?;
+            // squash merge stages changes but doesn't commit; create the commit
+            engine
+                .commit(
+                    &format!("Squash merge branch '{}'", branch_name),
+                    false,
+                    None,
+                )
+                .await?;
+        }
+        MergeStrategy::Rebase => {
+            engine.rebase_onto(&branch_name).await?;
+        }
+    }
+
+    tracing::info!(
+        "Merged branch '{}' into current using {:?} strategy",
+        branch,
+        strategy
+    );
+    Ok(format!("Successfully merged '{}' into current branch", branch))
 }

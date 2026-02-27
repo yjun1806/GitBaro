@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, GitCommit } from "lucide-react";
+import { FileText, GitCommit, GitCompare } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
@@ -113,6 +113,7 @@ export function ContentArea({
   selectedCommitId,
 }: ContentAreaProps) {
   const { t } = useTranslation();
+  const compareBranch = useUIStore((s) => s.compareBranch);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const setPreviewBranch = useUIStore((s) => s.setPreviewBranch);
   const addToast = useToastStore((s) => s.addToast);
@@ -154,6 +155,12 @@ export function ContentArea({
           )
         ) : selectedCommitId ? (
           <CommitDetailView commitId={selectedCommitId} />
+        ) : compareBranch ? (
+          <EmptyState
+            icon={GitCompare}
+            title={t("diff.noCommitSelected")}
+            description={t("compare.comparingWith", { branch: compareBranch })}
+          />
         ) : (
           <EmptyState
             icon={GitCommit}

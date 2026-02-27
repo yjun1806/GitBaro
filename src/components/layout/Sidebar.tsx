@@ -31,9 +31,12 @@ import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useBranchStore } from "@/stores/branch";
-import { useStatus, useCommitHistory, useCommitAvatars, useBranches } from "@/api/queries";
+import { useStatus, useCommitHistory, useCommitAvatars, useBranches, useBranchComparison } from "@/api/queries";
 import { addLocalRepository, cloneRepository, createCommit, stageFiles, unstageFiles, gitFetch, openInEditor, getRepoVisibility, getOwnerType, validateToken } from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
+import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
+import { BranchCompareView } from "@/components/history/BranchCompareView";
+import { MergeActionPanel } from "@/components/history/MergeActionPanel";
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1036,9 +1039,17 @@ function HistoryView({
   const { data: commits = [], isLoading } = useCommitHistory(activeRepoPath);
   const { data: branches = [] } = useBranches(activeRepoPath);
   const { data: githubAvatarMap = {} } = useCommitAvatars(activeRepoPath);
-
+  const compareBranch = useUIStore((s) => s.compareBranch);
+  const setCompareBranch = useUIStore((s) => s.setCompareBranch);
+  const { data: statusEntries = [] } = useStatus(activeRepoPath);
   const headBranch = branches.find((b) => b.isHead);
+  const currentBranchName = headBranch?.name ?? null;
   const ahead = headBranch?.aheadBehind?.ahead ?? 0;
+  const { data: comparisonData } = useBranchComparison(
+    activeRepoPath,
+    currentBranchName,
+    compareBranch,
+  );
 
   // 연동된 GitHub 계정의 이메일 → avatarUrl 매핑
   const accountAvatarMap = useMemo(
@@ -1063,7 +1074,39 @@ function HistoryView({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="flex flex-col flex-1 overflow-hidden bg-background">
+      {/* Branch compare selector */}
+      {branches.length > 1 && (
+        <div className="px-3 py-2 border-b border-border shrink-0">
+          <BranchCompareSelector
+            branches={branches}
+            currentBranch={currentBranchName}
+            compareBranch={compareBranch}
+            onSelect={setCompareBranch}
+          />
+        </div>
+      )}
+
+      {/* Compare view or normal commit list */}
+      {compareBranch && activeRepoPath && currentBranchName ? (
+        <>
+          <BranchCompareView
+            repoPath={activeRepoPath}
+            baseBranch={currentBranchName}
+            compareBranch={compareBranch}
+            selectedCommitId={selectedCommitId}
+            onSelectCommit={onSelectCommit}
+          />
+          <MergeActionPanel
+            repoPath={activeRepoPath}
+            compareBranch={compareBranch}
+            currentBranch={currentBranchName}
+            behindCount={comparisonData?.behindCount ?? 0}
+            isDirty={statusEntries.length > 0}
+          />
+        </>
+      ) : (
+      <div className="flex-1 overflow-y-auto">
       {commits.map((commit: CommitInfo, index: number) => {
         const isActive = selectedCommitId === commit.id;
         const isUnpushed = index < ahead;
@@ -1148,6 +1191,8 @@ function HistoryView({
           </div>
         );
       })}
+      </div>
+      )}
     </div>
   );
 }

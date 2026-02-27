@@ -162,6 +162,22 @@ export interface EditorInfo {
   icon: string | null;
 }
 
+export interface BranchCompareResult {
+  baseBranch: string;
+  compareBranch: string;
+  aheadCount: number;
+  behindCount: number;
+  aheadCommits: CommitInfo[];
+  behindCommits: CommitInfo[];
+}
+
+export type MergeStrategy = "merge" | "squash" | "rebase";
+
+export interface MergeOperationResult {
+  success: boolean;
+  strategy: MergeStrategy;
+  message: string;
+  hasConflicts: boolean;
 export interface WorktreeInfo {
   path: string;
   head: string;
