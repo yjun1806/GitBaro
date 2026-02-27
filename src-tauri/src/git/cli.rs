@@ -298,9 +298,12 @@ impl GitCliEngine {
 
     /// Check if a merge is currently in progress (.git/MERGE_HEAD exists).
     pub async fn is_merging(&self) -> Result<bool, AppError> {
-        // `git rev-parse --git-dir`로 .git 디렉토리를 찾은 뒤 MERGE_HEAD 확인
         let git_dir = self.run_local_checked(&["rev-parse", "--git-dir"]).await?;
-        let merge_head = PathBuf::from(git_dir).join("MERGE_HEAD");
+        let git_dir_path = {
+            let p = PathBuf::from(&git_dir);
+            if p.is_absolute() { p } else { self.repo_path.join(p) }
+        };
+        let merge_head = git_dir_path.join("MERGE_HEAD");
         Ok(merge_head.exists())
     }
 }
