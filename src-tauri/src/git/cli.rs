@@ -1,9 +1,23 @@
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
 use tokio::process::Command;
 
 use crate::error::AppError;
 use crate::git::engine::GitRemoteEngine;
+
+// ── Worktree types ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorktreeEntry {
+    pub path: String,
+    pub head: String,
+    pub branch: Option<String>,
+    pub is_main: bool,
+    pub is_bare: bool,
+    pub is_locked: bool,
+    pub lock_reason: Option<String>,
+}
 
 pub struct GitCliEngine {
     pub repo_path: PathBuf,
@@ -99,6 +113,114 @@ impl GitCliEngine {
         self.run_local_checked(&["stash", "pop"]).await?;
         Ok(())
     }
+}
+
+// ── Worktree operations ─────────────────────────────────────────────────────
+// worktree는 로컬 전용 CLI 작업이다. git2(libgit2)는 worktree 지원이 제한적이므로
+// git CLI를 직접 사용한다.
+
+impl GitCliEngine {
+    /// List all worktrees via `git worktree list --porcelain`.
+    pub async fn list_worktrees(&self) -> Result<Vec<WorktreeEntry>, AppError> {
+        let output = self.run_local_checked(&["worktree", "list", "--porcelain"]).await?;
+        Ok(parse_worktree_porcelain(&output))
+    }
+
+    /// Add a new worktree via `git worktree add`.
+    pub async fn add_worktree(
+        &self,
+        path: &str,
+        branch: Option<&str>,
+        new_branch: Option<&str>,
+    ) -> Result<(), AppError> {
+        let mut args = vec!["worktree", "add"];
+        let nb_flag;
+        if let Some(nb) = new_branch {
+            nb_flag = nb.to_string();
+            args.push("-b");
+            args.push(&nb_flag);
+        }
+        args.push(path);
+        if let Some(b) = branch {
+            args.push(b);
+        }
+        self.run_local_checked(&args).await?;
+        Ok(())
+    }
+
+    /// Remove a worktree via `git worktree remove`.
+    pub async fn remove_worktree(&self, path: &str, force: bool) -> Result<(), AppError> {
+        let mut args = vec!["worktree", "remove"];
+        if force {
+            args.push("--force");
+        }
+        args.push(path);
+        self.run_local_checked(&args).await?;
+        Ok(())
+    }
+}
+
+/// Parse `git worktree list --porcelain` output into WorktreeEntry list.
+///
+/// Format: blocks separated by blank lines, each containing:
+///   worktree <path>
+///   HEAD <hash>
+///   branch refs/heads/<name>  (or `detached`)
+///   bare  (optional)
+///   locked [<reason>]  (optional)
+fn parse_worktree_porcelain(output: &str) -> Vec<WorktreeEntry> {
+    let mut entries = Vec::new();
+    let mut is_first = true;
+
+    for block in output.split("\n\n") {
+        let block = block.trim();
+        if block.is_empty() {
+            continue;
+        }
+
+        let mut path = String::new();
+        let mut head = String::new();
+        let mut branch: Option<String> = None;
+        let mut is_bare = false;
+        let mut is_locked = false;
+        let mut lock_reason: Option<String> = None;
+
+        for line in block.lines() {
+            let line = line.trim();
+            if let Some(p) = line.strip_prefix("worktree ") {
+                path = p.to_string();
+            } else if let Some(h) = line.strip_prefix("HEAD ") {
+                head = h.to_string();
+            } else if let Some(b) = line.strip_prefix("branch ") {
+                branch = b.strip_prefix("refs/heads/").map(|s| s.to_string())
+                    .or_else(|| Some(b.to_string()));
+            } else if line == "bare" {
+                is_bare = true;
+            } else if line == "locked" {
+                is_locked = true;
+            } else if let Some(reason) = line.strip_prefix("locked ") {
+                is_locked = true;
+                lock_reason = Some(reason.to_string());
+            }
+            // `detached` line → branch stays None
+        }
+
+        if !path.is_empty() {
+            let is_main = is_first;
+            entries.push(WorktreeEntry {
+                path,
+                head,
+                branch,
+                is_main,
+                is_bare,
+                is_locked,
+                lock_reason,
+            });
+            is_first = false;
+        }
+    }
+
+    entries
 }
 
 // ── Remote operations (auth-aware) ──────────────────────────────────────────

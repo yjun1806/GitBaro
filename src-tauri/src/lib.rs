@@ -62,6 +62,9 @@ pub fn run() {
             commands::settings::set_theme,
             commands::settings::detect_installed_editors,
             commands::settings::open_in_editor,
+            commands::worktree::get_worktrees,
+            commands::worktree::add_worktree,
+            commands::worktree::remove_worktree,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");

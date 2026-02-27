@@ -1,22 +1,28 @@
 import { useState } from "react";
-import { GitBranch, Search, Plus, ChevronRight, Check } from "lucide-react";
+import { GitBranch, Search, Plus, ChevronRight, Check, FolderGit2, Trash2, Lock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import type { BranchInfo } from "@/types";
+import type { BranchInfo, WorktreeInfo } from "@/types";
 
 interface BranchDropdownProps {
   branches: BranchInfo[];
   currentBranch: string | null;
+  worktrees: WorktreeInfo[];
   onSwitch: (branchName: string) => void;
   onCreateBranch: () => void;
+  onCreateWorktree: () => void;
+  onRemoveWorktree: (path: string) => void;
   onClose: () => void;
 }
 
 export function BranchDropdown({
   branches,
   currentBranch,
+  worktrees,
   onSwitch,
   onCreateBranch,
+  onCreateWorktree,
+  onRemoveWorktree,
   onClose,
 }: BranchDropdownProps) {
   const { t } = useTranslation();
@@ -27,6 +33,9 @@ export function BranchDropdown({
   const filtered = branches.filter((b) =>
     b.name.toLowerCase().includes(lowerQuery),
   );
+
+  // 메인 worktree 제외 (삭제 불가)
+  const nonMainWorktrees = worktrees.filter((w) => !w.isMain);
 
   // 로컬 브랜치가 추적하는 remote 이름 수집
   const trackedRemotes = new Set(
@@ -134,9 +143,17 @@ export function BranchDropdown({
             <p className="text-sm text-muted-foreground">{t("branch.noBranches")}</p>
           </div>
         )}
+
+        {/* Worktrees */}
+        {nonMainWorktrees.length > 0 && (
+          <WorktreeSection
+            worktrees={nonMainWorktrees}
+            onRemove={onRemoveWorktree}
+          />
+        )}
       </div>
 
-      {/* New branch */}
+      {/* New branch + New worktree */}
       <div className="border-t border-border">
         <button
           onClick={() => {
@@ -147,6 +164,16 @@ export function BranchDropdown({
         >
           <Plus className="w-4 h-4" />
           {t("branch.newBranch")}
+        </button>
+        <button
+          onClick={() => {
+            onCreateWorktree();
+            onClose();
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors"
+        >
+          <FolderGit2 className="w-4 h-4" />
+          {t("worktree.newWorktree")}
         </button>
       </div>
     </div>
@@ -209,5 +236,77 @@ function BranchRow({
       )}
       {isCurrent && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
     </button>
+  );
+}
+
+function WorktreeSection({
+  worktrees,
+  onRemove,
+}: {
+  worktrees: WorktreeInfo[];
+  onRemove: (path: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+
+  return (
+    <div className="py-1 border-t border-border">
+      <SectionLabel label={t("worktree.title")} />
+      {worktrees.map((wt) => (
+        <div key={wt.path} className="relative group">
+          <div className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors">
+            <FolderGit2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-foreground truncate" title={wt.path}>
+                {wt.path.split("/").pop()}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {wt.branch ?? t("worktree.detachedHead")}
+              </p>
+            </div>
+            {wt.isLocked && (
+              <span title={wt.lockReason ?? t("worktree.locked")}>
+                <Lock className="w-3 h-3 text-warning shrink-0" />
+              </span>
+            )}
+            {!wt.isLocked && (
+              <button
+                onClick={() => setConfirmRemove(wt.path)}
+                className="p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
+                title={t("worktree.remove")}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Inline confirm */}
+          {confirmRemove === wt.path && (
+            <div className="absolute inset-x-0 bottom-full mb-1 mx-2 bg-card border border-border rounded-lg shadow-lg p-3 z-10">
+              <p className="text-sm text-foreground mb-2">
+                {t("worktree.removeConfirm", { path: wt.path.split("/").pop() })}
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setConfirmRemove(null)}
+                  className="px-3 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  onClick={() => {
+                    onRemove(wt.path);
+                    setConfirmRemove(null);
+                  }}
+                  className="px-3 py-1 text-xs bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded transition-colors"
+                >
+                  {t("common.delete")}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }

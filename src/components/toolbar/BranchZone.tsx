@@ -2,8 +2,8 @@ import { useState, useRef } from "react";
 import { GitBranch, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
-import { useBranches, useStatus } from "@/api/queries";
-import { switchBranch, createBranch, stashPush, stashPop } from "@/api/commands";
+import { useBranches, useStatus, useWorktrees } from "@/api/queries";
+import { switchBranch, createBranch, stashPush, stashPop, removeWorktree } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -11,6 +11,7 @@ import { useClickOutside } from "./useToolbarDropdown";
 import { BranchDropdown } from "./BranchDropdown";
 import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
 import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
+import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog";
 
 interface BranchZoneProps {
   isOpen: boolean;
@@ -25,9 +26,11 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const { data: branches = [] } = useBranches(activeRepoPath);
   const { data: statusFiles = [] } = useStatus(activeRepoPath);
+  const { data: worktrees = [] } = useWorktrees(activeRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showWorktreeDialog, setShowWorktreeDialog] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
 
   const headBranch = branches.find((b) => b.isHead);
@@ -104,6 +107,17 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     }
   };
 
+  const handleRemoveWorktree = async (path: string) => {
+    if (!activeRepoPath) return;
+    try {
+      await removeWorktree(activeRepoPath, path);
+      await queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+      addToast(t("worktree.removed", { path: path.split("/").pop() }), "success");
+    } catch (err) {
+      addToast(t("worktree.failedToRemove", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
   return (
     <div ref={zoneRef} className="relative shrink-0 flex items-center pl-2">
       <button
@@ -149,8 +163,11 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         <BranchDropdown
           branches={branches}
           currentBranch={currentBranch}
+          worktrees={worktrees}
           onSwitch={handleSwitch}
           onCreateBranch={() => setShowCreateDialog(true)}
+          onCreateWorktree={() => setShowWorktreeDialog(true)}
+          onRemoveWorktree={handleRemoveWorktree}
           onClose={onClose}
         />
       )}
@@ -170,6 +187,14 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           targetBranch={pendingSwitch}
           onConfirm={handleSwitchConfirm}
           onClose={() => setPendingSwitch(null)}
+        />
+      )}
+
+      {showWorktreeDialog && (
+        <CreateWorktreeDialog
+          repoPath={activeRepoPath!}
+          branches={branches}
+          onClose={() => setShowWorktreeDialog(false)}
         />
       )}
     </div>
