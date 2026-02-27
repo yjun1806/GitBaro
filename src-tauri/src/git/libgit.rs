@@ -311,8 +311,17 @@ impl GitEngine for LibGitEngine {
 
         for path_str in paths {
             let path = std::path::Path::new(path_str);
-            if workdir.join(path).exists() {
-                index.add_path(path)?;
+            let full = workdir.join(path);
+            if full.exists() {
+                if full.is_dir() {
+                    index.add_all(
+                        [format!("{}/*", path_str)],
+                        git2::IndexAddOption::DEFAULT,
+                        None,
+                    )?;
+                } else {
+                    index.add_path(path)?;
+                }
             } else {
                 index.remove_path(path)?;
             }

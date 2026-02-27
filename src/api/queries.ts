@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   getStatus,
   getBranches,
+  getRecentBranches,
   getCommitHistory,
   getCommitDetail,
   getCommitFileDiff,
@@ -132,6 +133,14 @@ export function useWorktrees(repoPath: string | null) {
   return useQuery({
     queryKey: ["worktrees", repoPath],
     queryFn: () => getWorktrees(repoPath!),
+    enabled: repoPath !== null,
+  });
+}
+
+export function useRecentBranches(repoPath: string | null, limit = 5) {
+  return useQuery({
+    queryKey: ["recentBranches", repoPath, limit],
+    queryFn: () => getRecentBranches(repoPath!, limit),
     enabled: repoPath !== null,
   });
 }

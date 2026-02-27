@@ -46,6 +46,8 @@ pub fn run() {
             commands::branch::get_current_branch,
             commands::branch::compare_branches,
             commands::branch::merge_branch_into_current,
+            commands::branch::get_recent_branches,
+            commands::branch::rename_branch,
             commands::history::get_commit_history,
             commands::history::get_commit_detail,
             commands::history::get_commit_file_diff,

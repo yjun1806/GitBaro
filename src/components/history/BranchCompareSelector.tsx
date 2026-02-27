@@ -109,6 +109,8 @@ export function BranchCompareSelector({
             {filteredBranches.length > 0 ? (
               filteredBranches.map((branch) => {
                 const isSelected = branch.name === compareBranch;
+                const ab = branch.aheadBehindHead;
+                const hasAheadBehind = ab && (ab.ahead > 0 || ab.behind > 0);
                 return (
                   <button
                     key={branch.name}
@@ -129,6 +131,20 @@ export function BranchCompareSelector({
                     <span className="flex-1 truncate text-left">
                       {branch.name}
                     </span>
+                    {hasAheadBehind && (
+                      <span className="flex items-center gap-1.5 text-xs tabular-nums shrink-0">
+                        {ab!.ahead > 0 && (
+                          <span className="text-primary font-medium">
+                            {"\u2191"}{ab!.ahead}
+                          </span>
+                        )}
+                        {ab!.behind > 0 && (
+                          <span className="text-danger font-medium">
+                            {"\u2193"}{ab!.behind}
+                          </span>
+                        )}
+                      </span>
+                    )}
                     {isSelected && (
                       <Check className="w-3.5 h-3.5 text-primary shrink-0" />
                     )}

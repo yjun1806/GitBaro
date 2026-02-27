@@ -66,6 +66,7 @@
     "loadingHistory": "Loading history..."
   },
   "branch": {
+    "title": "Branches",
     "current": "Current Branch",
     "create": "New Branch",
     "name": "Branch name",
@@ -86,7 +87,28 @@
     "noBranch": "No branch",
     "createBranch": "Create Branch",
     "defaultBranch": "Default Branch",
-    "recentBranches": "Recent Branches",
+    "recentBranches": "Recent",
+    "otherBranches": "Other Branches",
+    "merged": "Merged",
+    "stale": "Stale",
+    "unpublished": "Unpublished",
+    "sortByName": "Name (A-Z)",
+    "sortByRecent": "Recent",
+    "contextMenu": {
+      "checkout": "Checkout",
+      "compare": "Compare with current",
+      "merge": "Merge into current...",
+      "rename": "Rename...",
+      "delete": "Delete...",
+      "copyName": "Copy branch name",
+      "pin": "Pin",
+      "unpin": "Unpin"
+    },
+    "renamed": "Branch renamed: {{old}} → {{new}}",
+    "failedToRename": "Failed to rename branch: {{error}}",
+    "deleted": "Branch deleted: {{name}}",
+    "failedToDelete": "Failed to delete branch: {{error}}",
+    "copiedName": "Branch name copied",
     "basedOn": "Create branch based on...",
     "defaultBranchDesc": "The default branch in your repository. Pick this to start on something new that's not dependent on your current branch.",
     "currentBranchDesc": "The currently checked out branch. Pick this if you need to build on work done on this branch.",
@@ -116,7 +138,9 @@
     "created": "Worktree created at {{path}}",
     "removed": "Worktree removed: {{path}}",
     "failedToCreate": "Failed to create worktree: {{error}}",
-    "failedToRemove": "Failed to remove worktree: {{error}}"
+    "failedToRemove": "Failed to remove worktree: {{error}}",
+    "filterWorktrees": "Filter worktrees...",
+    "noWorktrees": "No worktrees"
   },
   "clone": {
     "account": "Account",

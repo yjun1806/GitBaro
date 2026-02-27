@@ -139,6 +139,43 @@ impl GitCliEngine {
         self.run_local_checked(&["rebase", "--", base]).await?;
         Ok(())
     }
+
+    /// Rename a branch via git CLI.
+    pub async fn rename_branch(&self, old_name: &str, new_name: &str) -> Result<(), AppError> {
+        self.run_local_checked(&["branch", "-m", old_name, new_name]).await?;
+        Ok(())
+    }
+
+    /// Get recently checked-out branches from reflog.
+    pub async fn get_reflog_branches(&self, limit: usize) -> Result<Vec<String>, AppError> {
+        let output = self.run_local_checked(&["reflog", "show", "--format=%gs", "-n", "200"]).await?;
+        let mut seen = std::collections::HashSet::new();
+        let mut result = Vec::new();
+
+        for line in output.lines() {
+            // Match "checkout: moving from X to Y"
+            if let Some(rest) = line.strip_prefix("checkout: moving from ") {
+                if let Some(idx) = rest.find(" to ") {
+                    let target = &rest[idx + 4..];
+                    let target = target.trim();
+                    if !target.is_empty() && seen.insert(target.to_string()) {
+                        result.push(target.to_string());
+                        if result.len() >= limit {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Filter out branches that no longer exist
+        let existing_output = self.run_local_checked(&["branch", "--format=%(refname:short)"]).await
+            .unwrap_or_default();
+        let existing: std::collections::HashSet<&str> = existing_output.lines().collect();
+        result.retain(|name| existing.contains(name.as_str()));
+
+        Ok(result)
+    }
 }
 
 // ── Worktree operations ─────────────────────────────────────────────────────

@@ -1,12 +1,87 @@
-import { useState } from "react";
-import { GitBranch, Search, Plus, ChevronRight, Check, FolderGit2, Trash2, Lock, Eye } from "lucide-react";
+import { useReducer, useState, useCallback } from "react";
+import {
+  GitBranch,
+  Search,
+  Plus,
+  FolderGit2,
+  Trash2,
+  Lock,
+  Eye,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { cn, formatRelativeTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useBranchGroups } from "@/hooks/useBranchGroups";
+import type { SortBy } from "@/hooks/useBranchGroups";
+import {
+  BranchTabContent,
+  getFlatBranchCount,
+  getBranchAtIndex,
+} from "@/components/branch/BranchTabContent";
+import { BranchContextMenu } from "@/components/branch/BranchContextMenu";
 import type { BranchInfo, WorktreeInfo } from "@/types";
+
+type Tab = "branches" | "worktrees";
+
+// ── Reducer ─────────────────────────────────────────────────────────────────
+
+type DropdownState = {
+  query: string;
+  activeIndex: number;
+  contextMenu: {
+    branch: BranchInfo;
+    x: number;
+    y: number;
+  } | null;
+};
+
+type DropdownAction =
+  | { type: "SET_QUERY"; query: string }
+  | { type: "NAVIGATE"; direction: "up" | "down"; total: number }
+  | {
+      type: "OPEN_CONTEXT_MENU";
+      branch: BranchInfo;
+      x: number;
+      y: number;
+    }
+  | { type: "CLOSE_CONTEXT_MENU" }
+  | { type: "RESET" };
+
+function reducer(state: DropdownState, action: DropdownAction): DropdownState {
+  switch (action.type) {
+    case "SET_QUERY":
+      return { ...state, query: action.query, activeIndex: 0 };
+    case "NAVIGATE": {
+      if (action.total === 0) return state;
+      const next =
+        action.direction === "down"
+          ? (state.activeIndex + 1) % action.total
+          : (state.activeIndex - 1 + action.total) % action.total;
+      return { ...state, activeIndex: next };
+    }
+    case "OPEN_CONTEXT_MENU":
+      return {
+        ...state,
+        contextMenu: {
+          branch: action.branch,
+          x: action.x,
+          y: action.y,
+        },
+      };
+    case "CLOSE_CONTEXT_MENU":
+      return { ...state, contextMenu: null };
+    case "RESET":
+      return { query: "", activeIndex: 0, contextMenu: null };
+    default:
+      return state;
+  }
+}
+
+// ── Props ───────────────────────────────────────────────────────────────────
 
 interface BranchDropdownProps {
   branches: BranchInfo[];
   currentBranch: string | null;
+  recentBranchNames: string[];
   worktrees: WorktreeInfo[];
   previewBranch: string | null;
   onSwitch: (branchName: string) => void;
@@ -15,12 +90,20 @@ interface BranchDropdownProps {
   onOpenWorktree: (path: string) => void;
   onRemoveWorktree: (path: string) => void;
   onStartPreview: (branch: string) => void;
+  onDelete: (branchName: string) => void;
+  onRename: (branchName: string) => void;
+  onCompare: (branchName: string) => void;
+  onMerge: (branchName: string) => void;
+  onCopyName: (branchName: string) => void;
   onClose: () => void;
 }
+
+// ── Component ───────────────────────────────────────────────────────────────
 
 export function BranchDropdown({
   branches,
   currentBranch,
+  recentBranchNames,
   worktrees,
   previewBranch,
   onSwitch,
@@ -29,47 +112,114 @@ export function BranchDropdown({
   onOpenWorktree,
   onRemoveWorktree,
   onStartPreview,
+  onDelete,
+  onRename,
+  onCompare,
+  onMerge,
+  onCopyName,
   onClose,
 }: BranchDropdownProps) {
   const { t } = useTranslation();
-  const [query, setQuery] = useState("");
-  const [remoteExpanded, setRemoteExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("branches");
+  const [sortBy, setSortBy] = useState<SortBy>("name");
+  const [state, dispatch] = useReducer(reducer, {
+    query: "",
+    activeIndex: 0,
+    contextMenu: null,
+  });
 
-  const lowerQuery = query.toLowerCase();
-  const filtered = branches.filter((b) =>
-    b.name.toLowerCase().includes(lowerQuery),
+  const groups = useBranchGroups(
+    branches,
+    recentBranchNames,
+    state.query,
+    sortBy,
   );
 
-  // 메인 worktree 포함 (삭제 버튼만 숨김)
+  const flatCount = getFlatBranchCount(groups);
+
+  const handleSelect = useCallback(
+    (branch: BranchInfo) => {
+      if (branch.name !== currentBranch) {
+        onSwitch(branch.name);
+      }
+      onClose();
+    },
+    [currentBranch, onSwitch, onClose],
+  );
+
+  const handleContextMenu = useCallback(
+    (branch: BranchInfo, e: React.MouseEvent) => {
+      dispatch({
+        type: "OPEN_CONTEXT_MENU",
+        branch,
+        x: e.clientX,
+        y: e.clientY,
+      });
+    },
+    [],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (activeTab !== "branches") return;
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          dispatch({ type: "NAVIGATE", direction: "down", total: flatCount });
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          dispatch({ type: "NAVIGATE", direction: "up", total: flatCount });
+          break;
+        case "Enter": {
+          e.preventDefault();
+          const branch = getBranchAtIndex(groups, state.activeIndex);
+          if (branch) handleSelect(branch);
+          break;
+        }
+        case "Escape":
+          e.preventDefault();
+          if (state.contextMenu) {
+            dispatch({ type: "CLOSE_CONTEXT_MENU" });
+          } else {
+            onClose();
+          }
+          break;
+      }
+    },
+    [activeTab, flatCount, groups, state.activeIndex, state.contextMenu, handleSelect, onClose],
+  );
+
   const activeWorktrees = worktrees.filter((w) => !w.isBare);
-
-  // 로컬 브랜치가 추적하는 remote 이름 수집
-  const trackedRemotes = new Set(
-    branches
-      .filter((b) => !b.isRemote && b.upstream)
-      .map((b) => b.upstream!),
+  const filteredWorktrees = activeWorktrees.filter((w) =>
+    (w.branch ?? w.path).toLowerCase().includes(state.query.toLowerCase()),
   );
-
-  // 섹션 분류
-  const defaultBranch = filtered.find((b) => !b.isRemote && b.isDefault);
-  const recentBranches = filtered.filter(
-    (b) => !b.isRemote && !b.isDefault,
-  );
-  const remoteOnly = filtered.filter(
-    (b) => b.isRemote && !trackedRemotes.has(b.name),
-  );
-
-  const handleSelect = (branch: BranchInfo) => {
-    if (branch.name !== currentBranch) {
-      onSwitch(branch.name);
-    }
-    onClose();
-  };
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
-      className="absolute left-0 top-full mt-2 w-96 bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
+      className="absolute left-2 top-full mt-2 w-[28rem] bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
+      onKeyDown={handleKeyDown}
     >
+      {/* Tabs */}
+      <div className="flex border-b border-border">
+        <TabButton
+          active={activeTab === "branches"}
+          onClick={() => setActiveTab("branches")}
+          icon={<GitBranch className="w-3.5 h-3.5" />}
+          label={t("branch.title")}
+          count={branches.filter((b) => !b.isRemote).length}
+        />
+        <TabButton
+          active={activeTab === "worktrees"}
+          onClick={() => setActiveTab("worktrees")}
+          icon={<FolderGit2 className="w-3.5 h-3.5" />}
+          label={t("worktree.title")}
+          count={activeWorktrees.length}
+        />
+      </div>
+
       {/* Search */}
       <div className="p-2 border-b border-border">
         <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-surface border border-border focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
@@ -77,83 +227,35 @@ export function BranchDropdown({
           <input
             autoFocus
             type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("branch.filterBranches")}
+            value={state.query}
+            onChange={(e) =>
+              dispatch({ type: "SET_QUERY", query: e.target.value })
+            }
+            placeholder={
+              activeTab === "branches"
+                ? t("branch.filterBranches")
+                : t("worktree.filterWorktrees")
+            }
             className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
           />
         </div>
       </div>
 
-      {/* Branch list */}
+      {/* Content */}
       <div className="max-h-80 overflow-y-auto">
-        {/* Default Branch */}
-        {defaultBranch && (
-          <div className="py-1">
-            <SectionLabel label={t("branch.defaultBranch")} />
-            <BranchRow
-              branch={defaultBranch}
-              isCurrent={defaultBranch.name === currentBranch}
-              onSelect={() => handleSelect(defaultBranch)}
-            />
-          </div>
-        )}
-
-        {/* Recent Branches */}
-        {recentBranches.length > 0 && (
-          <div className={cn("py-1", defaultBranch && "border-t border-border")}>
-            <SectionLabel label={t("branch.recentBranches")} />
-            {recentBranches.map((branch) => (
-              <BranchRow
-                key={branch.name}
-                branch={branch}
-                isCurrent={branch.name === currentBranch}
-                onSelect={() => handleSelect(branch)}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Remote-only branches */}
-        {remoteOnly.length > 0 && (
-          <div className="py-1 border-t border-border">
-            <button
-              onClick={() => setRemoteExpanded((v) => !v)}
-              className="w-full flex items-center gap-1.5 px-3 pt-1.5 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-            >
-              <ChevronRight
-                className={cn(
-                  "w-3 h-3 transition-transform duration-150",
-                  remoteExpanded && "rotate-90",
-                )}
-              />
-              {t("branch.remote")} ({remoteOnly.length})
-            </button>
-            {remoteExpanded &&
-              remoteOnly.map((branch) => (
-                <BranchRow
-                  key={branch.name}
-                  branch={branch}
-                  isCurrent={false}
-                  onSelect={() => {
-                    onSwitch(branch.name);
-                    onClose();
-                  }}
-                />
-              ))}
-          </div>
-        )}
-
-        {!defaultBranch && recentBranches.length === 0 && remoteOnly.length === 0 && (
-          <div className="py-6 text-center">
-            <p className="text-sm text-muted-foreground">{t("branch.noBranches")}</p>
-          </div>
-        )}
-
-        {/* Worktrees */}
-        {activeWorktrees.length > 0 && (
-          <WorktreeSection
-            worktrees={activeWorktrees}
+        {activeTab === "branches" ? (
+          <BranchTabContent
+            groups={groups}
+            currentBranch={currentBranch}
+            activeIndex={state.activeIndex}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            onSelect={handleSelect}
+            onContextMenu={handleContextMenu}
+          />
+        ) : (
+          <WorktreeTabContent
+            worktrees={filteredWorktrees}
             previewBranch={previewBranch}
             onOpen={(path) => {
               onOpenWorktree(path);
@@ -168,93 +270,120 @@ export function BranchDropdown({
         )}
       </div>
 
-      {/* New branch + New worktree */}
+      {/* Action button */}
       <div className="border-t border-border">
-        <button
-          onClick={() => {
-            onCreateBranch();
-            onClose();
-          }}
-          className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          {t("branch.newBranch")}
-        </button>
-        <button
-          onClick={() => {
-            onCreateWorktree();
-            onClose();
-          }}
-          className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors"
-        >
-          <FolderGit2 className="w-4 h-4" />
-          {t("worktree.newWorktree")}
-        </button>
+        {activeTab === "branches" ? (
+          <button
+            onClick={() => {
+              onCreateBranch();
+              onClose();
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            {t("branch.newBranch")}
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              onCreateWorktree();
+              onClose();
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            {t("worktree.newWorktree")}
+          </button>
+        )}
       </div>
+
+      {/* Context Menu */}
+      {state.contextMenu && (
+        <BranchContextMenu
+          isCurrent={state.contextMenu.branch.name === currentBranch}
+          isDefault={state.contextMenu.branch.isDefault}
+          position={{ x: state.contextMenu.x, y: state.contextMenu.y }}
+          onCheckout={() => {
+            handleSelect(state.contextMenu!.branch);
+            dispatch({ type: "CLOSE_CONTEXT_MENU" });
+          }}
+          onCompare={() => {
+            onCompare(state.contextMenu!.branch.name);
+            dispatch({ type: "CLOSE_CONTEXT_MENU" });
+            onClose();
+          }}
+          onMerge={() => {
+            onMerge(state.contextMenu!.branch.name);
+            dispatch({ type: "CLOSE_CONTEXT_MENU" });
+            onClose();
+          }}
+          onRename={() => {
+            onRename(state.contextMenu!.branch.name);
+            dispatch({ type: "CLOSE_CONTEXT_MENU" });
+          }}
+          onDelete={() => {
+            onDelete(state.contextMenu!.branch.name);
+            dispatch({ type: "CLOSE_CONTEXT_MENU" });
+          }}
+          onCopyName={() => {
+            onCopyName(state.contextMenu!.branch.name);
+            dispatch({ type: "CLOSE_CONTEXT_MENU" });
+          }}
+          onClose={() => dispatch({ type: "CLOSE_CONTEXT_MENU" })}
+        />
+      )}
     </div>
   );
 }
 
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <p className="px-3 pt-1.5 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-      {label}
-    </p>
-  );
-}
+// ── TabButton ───────────────────────────────────────────────────────────────
 
-function BranchRow({
-  branch,
-  isCurrent,
-  onSelect,
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
 }: {
-  branch: BranchInfo;
-  isCurrent: boolean;
-  onSelect: () => void;
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  count: number;
 }) {
-  const hasAheadBehind = branch.aheadBehind &&
-    (branch.aheadBehind.ahead > 0 || branch.aheadBehind.behind > 0);
-
   return (
     <button
-      onClick={onSelect}
+      onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors group",
-        isCurrent
-          ? "bg-primary/8 text-primary"
-          : "hover:bg-accent",
+        "flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors relative",
+        active
+          ? "text-primary"
+          : "text-muted-foreground hover:text-foreground",
       )}
     >
-      <GitBranch className={cn(
-        "w-3.5 h-3.5 shrink-0",
-        isCurrent ? "text-primary" : "text-muted-foreground",
-      )} />
-      <span className="flex-1 truncate text-left">{branch.name}</span>
-      {hasAheadBehind && (
-        <span className="flex items-center gap-1.5 text-xs tabular-nums shrink-0">
-          {branch.aheadBehind!.ahead > 0 && (
-            <span className="text-primary font-medium">
-              {"\u2191"}{branch.aheadBehind!.ahead}
-            </span>
-          )}
-          {branch.aheadBehind!.behind > 0 && (
-            <span className="text-danger font-medium">
-              {"\u2193"}{branch.aheadBehind!.behind}
-            </span>
-          )}
-        </span>
+      {icon}
+      {label}
+      <span
+        className={cn(
+          "text-xs tabular-nums px-1.5 py-0.5 rounded-full",
+          active
+            ? "bg-primary/10 text-primary"
+            : "bg-muted text-muted-foreground",
+        )}
+      >
+        {count}
+      </span>
+      {active && (
+        <span className="absolute bottom-0 inset-x-3 h-0.5 bg-primary rounded-full" />
       )}
-      {branch.lastCommitTime != null && (
-        <span className="text-xs text-muted-foreground shrink-0">
-          {formatRelativeTime(branch.lastCommitTime)}
-        </span>
-      )}
-      {isCurrent && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
     </button>
   );
 }
 
-function WorktreeSection({
+// ── WorktreeTabContent ──────────────────────────────────────────────────────
+// Kept inline — not complex enough to warrant its own file
+
+function WorktreeTabContent({
   worktrees,
   previewBranch,
   onOpen,
@@ -270,9 +399,18 @@ function WorktreeSection({
   const { t } = useTranslation();
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
+  if (worktrees.length === 0) {
+    return (
+      <div className="py-6 text-center">
+        <p className="text-sm text-muted-foreground">
+          {t("worktree.noWorktrees")}
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="py-1 border-t border-border">
-      <SectionLabel label={t("worktree.title")} />
+    <div className="py-1">
       {worktrees.map((wt) => {
         const isPreviewing = previewBranch === wt.branch;
         return (
@@ -284,7 +422,10 @@ function WorktreeSection({
               >
                 <FolderGit2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground truncate" title={wt.path}>
+                  <p
+                    className="text-sm text-foreground truncate"
+                    title={wt.path}
+                  >
                     {wt.path.split("/").pop()}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
@@ -333,11 +474,12 @@ function WorktreeSection({
               )}
             </div>
 
-            {/* Inline confirm */}
             {confirmRemove === wt.path && (
               <div className="absolute inset-x-0 bottom-full mb-1 mx-2 bg-card border border-border rounded-lg shadow-lg p-3 z-10">
                 <p className="text-sm text-foreground mb-2">
-                  {t("worktree.removeConfirm", { path: wt.path.split("/").pop() })}
+                  {t("worktree.removeConfirm", {
+                    path: wt.path.split("/").pop(),
+                  })}
                 </p>
                 <div className="flex gap-2 justify-end">
                   <button

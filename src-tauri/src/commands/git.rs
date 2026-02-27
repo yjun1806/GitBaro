@@ -180,7 +180,15 @@ pub async fn stage_files(repo_path: String, paths: Vec<String>) -> Result<(), Ap
         for path in &paths {
             let full = workdir.join(path);
             if full.exists() {
-                index.add_path(std::path::Path::new(path))?;
+                if full.is_dir() {
+                    index.add_all(
+                        [format!("{}/*", path)],
+                        git2::IndexAddOption::DEFAULT,
+                        None,
+                    )?;
+                } else {
+                    index.add_path(std::path::Path::new(path))?;
+                }
             } else {
                 index.remove_path(std::path::Path::new(path))?;
             }

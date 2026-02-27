@@ -3,6 +3,10 @@ use crate::git::cli::GitCliEngine;
 use crate::git::engine::{AuthorInfo, BranchCompareResult, CommitInfo, MergeStrategy};
 use serde_json::{json, Value};
 
+fn is_fully_merged(repo: &git2::Repository, branch_oid: git2::Oid, default_oid: git2::Oid) -> bool {
+    repo.graph_descendant_of(default_oid, branch_oid).unwrap_or(false)
+}
+
 #[tauri::command]
 pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
     let result = tokio::task::spawn_blocking(move || {
@@ -15,6 +19,16 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
             .ok()
             .and_then(|r| r.symbolic_target().map(|s| s.to_string()))
             .and_then(|s| s.strip_prefix("refs/remotes/origin/").map(|n| n.to_string()));
+
+        // default branch OID (isFullyMerged 계산용)
+        let default_oid = default_branch_name.as_deref().and_then(|name| {
+            repo.find_branch(name, git2::BranchType::Local)
+                .ok()
+                .and_then(|b| b.get().target())
+        });
+
+        // HEAD의 OID (현재 브랜치 기준 ahead/behind 계산용)
+        let head_oid = repo.head().ok().and_then(|h| h.target());
 
         let mut list: Vec<Value> = Vec::new();
         for item in branches {
@@ -32,11 +46,19 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
 
             let is_head = branch.is_head();
 
-            let last_commit_time = branch
+            let branch_commit = branch
                 .get()
                 .target()
-                .and_then(|oid| repo.find_commit(oid).ok())
-                .map(|c| c.time().seconds());
+                .and_then(|oid| repo.find_commit(oid).ok());
+
+            let last_commit_time = branch_commit.as_ref().map(|c| c.time().seconds());
+
+            let last_commit_author = branch_commit.as_ref().map(|c| {
+                json!({
+                    "name": c.author().name().unwrap_or_default(),
+                    "email": c.author().email().unwrap_or_default(),
+                })
+            });
 
             let upstream_branch = branch.upstream().ok();
             let upstream = upstream_branch
@@ -59,8 +81,35 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
                 None
             };
 
+            // 현재 브랜치(HEAD) 기준 ahead/behind
+            let ahead_behind_head = if !is_head {
+                let branch_oid = branch.get().target();
+                match (branch_oid, head_oid) {
+                    (Some(b), Some(h)) => {
+                        repo.graph_ahead_behind(b, h)
+                            .ok()
+                            .map(|(ahead, behind)| json!({ "ahead": ahead, "behind": behind }))
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
             let is_default = !is_remote
                 && default_branch_name.as_deref() == Some(name.as_str());
+
+            // 로컬 non-default 브랜치에 대해 isFullyMerged 계산
+            let fully_merged = if !is_remote && !is_default {
+                match (branch.get().target(), default_oid) {
+                    (Some(branch_oid), Some(def_oid)) => {
+                        is_fully_merged(&repo, branch_oid, def_oid)
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            };
 
             list.push(json!({
                 "name": name,
@@ -69,7 +118,10 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
                 "isDefault": is_default,
                 "upstream": upstream,
                 "aheadBehind": ahead_behind,
+                "aheadBehindHead": ahead_behind_head,
                 "lastCommitTime": last_commit_time,
+                "lastCommitAuthor": last_commit_author,
+                "isFullyMerged": fully_merged,
             }));
         }
 
@@ -288,4 +340,19 @@ pub async fn merge_branch_into_current(
         strategy
     );
     Ok(format!("Successfully merged '{}' into current branch", branch))
+}
+
+#[tauri::command]
+pub async fn get_recent_branches(repo_path: String, limit: usize) -> Result<Vec<String>, AppError> {
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let output = engine.get_reflog_branches(limit).await?;
+    Ok(output)
+}
+
+#[tauri::command]
+pub async fn rename_branch(repo_path: String, old_name: String, new_name: String) -> Result<(), AppError> {
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.rename_branch(&old_name, &new_name).await?;
+    tracing::info!("Renamed branch: {} -> {}", old_name, new_name);
+    Ok(())
 }

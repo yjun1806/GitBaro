@@ -66,6 +66,7 @@
     "loadingHistory": "히스토리 로딩 중..."
   },
   "branch": {
+    "title": "Branches",
     "current": "현재 Branch",
     "create": "새 Branch",
     "name": "Branch 이름",
@@ -86,7 +87,28 @@
     "noBranch": "Branch 없음",
     "createBranch": "Branch 생성",
     "defaultBranch": "기본 Branch",
-    "recentBranches": "최근 Branch",
+    "recentBranches": "최근",
+    "otherBranches": "기타 Branch",
+    "merged": "Merged",
+    "stale": "Stale",
+    "unpublished": "Unpublished",
+    "sortByName": "이름순 (A-Z)",
+    "sortByRecent": "최근순",
+    "contextMenu": {
+      "checkout": "Checkout",
+      "compare": "현재 Branch와 비교",
+      "merge": "현재 Branch에 Merge...",
+      "rename": "이름 변경...",
+      "delete": "삭제...",
+      "copyName": "Branch 이름 복사",
+      "pin": "고정",
+      "unpin": "고정 해제"
+    },
+    "renamed": "Branch 이름 변경: {{old}} → {{new}}",
+    "failedToRename": "Branch 이름 변경 실패: {{error}}",
+    "deleted": "Branch 삭제됨: {{name}}",
+    "failedToDelete": "Branch 삭제 실패: {{error}}",
+    "copiedName": "Branch 이름 복사됨",
     "basedOn": "기준 Branch 선택...",
     "defaultBranchDesc": "저장소의 기본 Branch입니다. 현재 Branch와 무관한 새 작업을 시작할 때 선택하세요.",
     "currentBranchDesc": "현재 체크아웃된 Branch입니다. 이 Branch의 작업을 이어서 할 때 선택하세요.",
@@ -116,7 +138,9 @@
     "created": "Worktree 생성 완료: {{path}}",
     "removed": "Worktree 삭제 완료: {{path}}",
     "failedToCreate": "Worktree 생성 실패: {{error}}",
-    "failedToRemove": "Worktree 삭제 실패: {{error}}"
+    "failedToRemove": "Worktree 삭제 실패: {{error}}",
+    "filterWorktrees": "Worktree 필터...",
+    "noWorktrees": "Worktree가 없습니다"
   },
   "clone": {
     "account": "계정",

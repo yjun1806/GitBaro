@@ -127,7 +127,10 @@ export interface BranchInfo {
   isDefault: boolean;
   upstream: string | null;
   aheadBehind: { ahead: number; behind: number } | null;
+  aheadBehindHead: { ahead: number; behind: number } | null;
   lastCommitTime: number | null;
+  isFullyMerged: boolean;
+  lastCommitAuthor: { name: string; email: string } | null;
 }
 
 export interface RepoInfo {
@@ -178,6 +181,8 @@ export interface MergeOperationResult {
   strategy: MergeStrategy;
   message: string;
   hasConflicts: boolean;
+}
+
 export interface WorktreeInfo {
   path: string;
   head: string;

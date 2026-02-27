@@ -194,6 +194,14 @@ export async function deleteBranch(repoPath: string, name: string): Promise<void
   return invoke("delete_branch", { repoPath, name });
 }
 
+export async function renameBranch(repoPath: string, oldName: string, newName: string): Promise<void> {
+  return invoke("rename_branch", { repoPath, oldName, newName });
+}
+
+export async function getRecentBranches(repoPath: string, limit: number): Promise<string[]> {
+  return invoke("get_recent_branches", { repoPath, limit });
+}
+
 export async function getCurrentBranch(repoPath: string): Promise<string | null> {
   return invoke("get_current_branch", { repoPath });
 }

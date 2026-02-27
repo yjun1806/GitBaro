@@ -3,8 +3,8 @@ import { GitBranch, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
-import { useBranches, useStatus, useWorktrees } from "@/api/queries";
-import { switchBranch, createBranch, stashPush, stashPop, removeWorktree, addLocalRepository, startWorktreePreview, stopWorktreePreview, checkPreviewActive } from "@/api/commands";
+import { useBranches, useRecentBranches, useStatus, useWorktrees } from "@/api/queries";
+import { switchBranch, createBranch, deleteBranch, renameBranch, stashPush, stashPop, removeWorktree, addLocalRepository, startWorktreePreview, stopWorktreePreview, checkPreviewActive } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -26,6 +26,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const { data: branches = [] } = useBranches(activeRepoPath);
+  const { data: recentBranchNames = [] } = useRecentBranches(activeRepoPath);
   const { data: statusFiles = [] } = useStatus(activeRepoPath);
   const { data: worktrees = [] } = useWorktrees(activeRepoPath);
   const queryClient = useQueryClient();
@@ -154,8 +155,48 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     }
   };
 
+  const handleDelete = async (branchName: string) => {
+    if (!activeRepoPath) return;
+    try {
+      await deleteBranch(activeRepoPath, branchName);
+      await invalidateAll();
+      addToast(t("branch.deleted", { name: branchName }), "success");
+    } catch (err) {
+      addToast(t("branch.failedToDelete", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
+  const handleRename = async (branchName: string) => {
+    const newName = window.prompt(t("branch.contextMenu.rename"), branchName);
+    if (!newName || newName === branchName || !activeRepoPath) return;
+    try {
+      await renameBranch(activeRepoPath, branchName, newName);
+      await invalidateAll();
+      addToast(t("branch.renamed", { old: branchName, new: newName }), "success");
+    } catch (err) {
+      addToast(t("branch.failedToRename", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
+  const handleCompare = (branchName: string) => {
+    // Navigate to compare view — delegate to branch store
+    useUIStore.getState().setCompareBranch(branchName);
+    onClose();
+  };
+
+  const handleMerge = (branchName: string) => {
+    // Navigate to compare view with merge intent
+    useUIStore.getState().setCompareBranch(branchName);
+    onClose();
+  };
+
+  const handleCopyName = (branchName: string) => {
+    navigator.clipboard.writeText(branchName);
+    addToast(t("branch.copiedName"), "success");
+  };
+
   return (
-    <div ref={zoneRef} className="relative shrink-0 flex items-center pl-2">
+    <div ref={zoneRef} className="relative shrink-0 flex items-center pl-4">
       <button
         onClick={onToggle}
         className={cn(
@@ -199,6 +240,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         <BranchDropdown
           branches={branches}
           currentBranch={currentBranch}
+          recentBranchNames={recentBranchNames}
           worktrees={worktrees}
           previewBranch={previewBranch}
           onSwitch={handleSwitch}
@@ -207,6 +249,11 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           onOpenWorktree={handleOpenWorktree}
           onRemoveWorktree={handleRemoveWorktree}
           onStartPreview={handleStartPreview}
+          onDelete={handleDelete}
+          onRename={handleRename}
+          onCompare={handleCompare}
+          onMerge={handleMerge}
+          onCopyName={handleCopyName}
           onClose={onClose}
         />
       )}

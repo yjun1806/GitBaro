@@ -63,9 +63,6 @@ function FileEntry({
   onDoubleClick?: () => void;
   onToggleStage: () => void;
 }) {
-  const dir = entry.path.includes("/")
-    ? entry.path.substring(0, entry.path.lastIndexOf("/") + 1)
-    : "";
   const filename = entry.path.includes("/")
     ? entry.path.substring(entry.path.lastIndexOf("/") + 1)
     : entry.path;
@@ -97,7 +94,6 @@ function FileEntry({
         }}
       />
       <FileStatusBadge status={entry.status as FileStatus} />
-      {dir && <span className="text-xs text-muted-foreground truncate max-w-16">{dir}</span>}
       <span className="text-xs font-medium text-foreground truncate">{filename}</span>
       {(entry.insertions != null || entry.deletions != null) && (
         <span className="text-xs shrink-0">
@@ -823,17 +819,17 @@ function ChangesView({
           <>
             {/* Staged Changes header */}
             {stagedFiles.length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border-b border-border sticky top-0 z-10">
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted border-b border-border sticky top-0 z-10">
                 <input
                   type="checkbox"
                   className="w-3.5 h-3.5 shrink-0 cursor-pointer"
                   checked={true}
                   onChange={handleUnstageAll}
                 />
-                <span className="text-xs font-bold text-foreground flex-1">
+                <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex-1">
                   {t("commit.stagedChanges")}
                 </span>
-                <span className="text-xs text-muted-foreground">{stagedFiles.length}</span>
+                <span className="text-[10px] font-medium text-muted-foreground bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{stagedFiles.length}</span>
               </div>
             )}
             {/* Staged file entries (grouped by directory) */}
@@ -845,17 +841,17 @@ function ChangesView({
                   {stagedGroups.length > 1 && (
                     <div
                       onClick={() => toggleDirCollapse(dirKey)}
-                      className="flex items-center gap-1.5 px-3 py-1 bg-surface border-b border-border cursor-pointer select-none"
+                      className="flex items-center gap-1.5 pl-6 pr-3 py-1 border-b border-border/50 cursor-pointer select-none hover:bg-accent/50 transition-colors"
                     >
                       {isCollapsed ? (
                         <ChevronRight className="w-3 h-3 shrink-0 text-muted-foreground" />
                       ) : (
                         <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
                       )}
-                      <span className="text-xs font-bold text-foreground flex-1 truncate">
+                      <span className="text-[11px] font-medium text-muted-foreground flex-1 truncate">
                         {group.directory || t("changes.rootFiles")}
                       </span>
-                      <span className="text-xs text-muted-foreground">{group.files.length}</span>
+                      <span className="text-[10px] text-muted-foreground/70">{group.files.length}</span>
                     </div>
                   )}
                   {!isCollapsed && group.files.map((entry) => (
@@ -886,8 +882,8 @@ function ChangesView({
             {/* Changes header */}
             {unstagedFiles.length > 0 && (
               <div className={cn(
-                "flex items-center gap-2 px-3 py-1.5 bg-surface border-b border-border sticky bottom-0 z-10",
-                stagedFiles.length > 0 ? "top-[29px]" : "top-0",
+                "flex items-center gap-2 px-3 py-2 bg-muted border-b border-border sticky z-10",
+                stagedFiles.length > 0 ? "top-[33px] border-t border-t-border" : "top-0",
               )}>
                 <input
                   type="checkbox"
@@ -895,10 +891,10 @@ function ChangesView({
                   checked={false}
                   onChange={handleStageAll}
                 />
-                <span className="text-xs font-bold text-foreground flex-1">
+                <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex-1">
                   {t("commit.unstaged")}
                 </span>
-                <span className="text-xs text-muted-foreground">{unstagedFiles.length}</span>
+                <span className="text-[10px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">{unstagedFiles.length}</span>
               </div>
             )}
             {/* Unstaged file entries (grouped by directory) */}
@@ -910,17 +906,17 @@ function ChangesView({
                   {unstagedGroups.length > 1 && (
                     <div
                       onClick={() => toggleDirCollapse(dirKey)}
-                      className="flex items-center gap-1.5 px-3 py-1 bg-surface border-b border-border cursor-pointer select-none"
+                      className="flex items-center gap-1.5 pl-6 pr-3 py-1 border-b border-border/50 cursor-pointer select-none hover:bg-accent/50 transition-colors"
                     >
                       {isCollapsed ? (
                         <ChevronRight className="w-3 h-3 shrink-0 text-muted-foreground" />
                       ) : (
                         <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
                       )}
-                      <span className="text-xs font-bold text-foreground flex-1 truncate">
+                      <span className="text-[11px] font-medium text-muted-foreground flex-1 truncate">
                         {group.directory || t("changes.rootFiles")}
                       </span>
-                      <span className="text-xs text-muted-foreground">{group.files.length}</span>
+                      <span className="text-[10px] text-muted-foreground/70">{group.files.length}</span>
                     </div>
                   )}
                   {!isCollapsed && group.files.map((entry) => (
