@@ -21,6 +21,48 @@ pub struct WindowBounds {
     pub y: f64,
     pub width: f64,
     pub height: f64,
+    #[serde(default)]
+    pub maximized: bool,
+}
+
+const DEFAULT_WIDTH: f64 = 1400.0;
+const DEFAULT_HEIGHT: f64 = 860.0;
+const MIN_WIDTH: f64 = 1024.0;
+const MIN_HEIGHT: f64 = 680.0;
+
+impl WindowBounds {
+    /// 저장된 bounds가 유효한지 검증하고, 유효하지 않으면 기본값으로 보정한다.
+    /// - width/height가 최소값 미만이면 기본값 사용
+    /// - x/y가 극단적 음수(-10000 이하)이면 기본값 사용 (모니터 제거 시나리오)
+    pub fn validated(self) -> Self {
+        let (width, height) = if self.width < MIN_WIDTH || self.height < MIN_HEIGHT {
+            info!(
+                "Window bounds too small ({}x{}), using defaults",
+                self.width, self.height
+            );
+            (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+        } else {
+            (self.width, self.height)
+        };
+
+        let (x, y) = if self.x < -10000.0 || self.y < -10000.0 {
+            info!(
+                "Window position out of range ({}, {}), centering",
+                self.x, self.y
+            );
+            (100.0, 100.0)
+        } else {
+            (self.x, self.y)
+        };
+
+        Self {
+            x,
+            y,
+            width,
+            height,
+            maximized: self.maximized,
+        }
+    }
 }
 
 /// Returns the application data directory (`~/Library/Application Support/com.gitbaro.app`),
