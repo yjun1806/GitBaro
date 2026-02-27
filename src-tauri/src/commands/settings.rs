@@ -268,6 +268,57 @@ impl<'a> Drop for Base64Encoder<'a> {
     }
 }
 
+/// Finder에서 해당 경로를 선택 상태로 표시합니다.
+#[tauri::command]
+pub async fn reveal_in_finder(path: String) -> Result<(), AppError> {
+    tokio::process::Command::new("open")
+        .args(["-R", &path])
+        .spawn()
+        .map_err(AppError::Io)?;
+    Ok(())
+}
+
+/// 터미널 ID에서 macOS 앱 이름을 조회합니다.
+fn terminal_app_name(shell_id: &str) -> Option<&'static str> {
+    match shell_id {
+        "terminal" => Some("Terminal"),
+        "iterm" => Some("iTerm"),
+        "warp" => Some("Warp"),
+        "ghostty" => Some("Ghostty"),
+        "alacritty" => Some("Alacritty"),
+        _ => None,
+    }
+}
+
+/// 설정된 기본 터미널로 저장소 경로를 엽니다.
+#[tauri::command]
+pub async fn open_in_terminal(repo_path: String) -> Result<(), AppError> {
+    let settings = load_settings().await?;
+    let app_name = terminal_app_name(&settings.default_shell).unwrap_or("Terminal");
+    tokio::process::Command::new("open")
+        .args(["-a", app_name, &repo_path])
+        .spawn()
+        .map_err(AppError::Io)?;
+    Ok(())
+}
+
+/// 설정된 기본 편집기로 저장소를 엽니다.
+#[tauri::command]
+pub async fn open_repo_in_editor(repo_path: String) -> Result<(), AppError> {
+    let settings = load_settings().await?;
+    if settings.default_editor.is_empty() {
+        return Err(AppError::Auth("No default editor configured".to_string()));
+    }
+    let app_name = editor_app_name(&settings.default_editor).ok_or_else(|| {
+        AppError::Auth(format!("Unknown editor: {}", settings.default_editor))
+    })?;
+    tokio::process::Command::new("open")
+        .args(["-a", app_name, &repo_path])
+        .spawn()
+        .map_err(AppError::Io)?;
+    Ok(())
+}
+
 /// macOS에서 설치된 코드 편집기 목록을 감지합니다.
 /// /Applications 폴더의 .app 번들과 CLI 명령어(which)를 모두 확인하며,
 /// 앱 아이콘을 base64 PNG data URI로 반환합니다.

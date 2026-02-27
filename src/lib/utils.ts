@@ -53,6 +53,13 @@ export function parseGitHubUrl(url: string): { owner: string; repo: string } | n
   return null;
 }
 
+/** Git 리모트 URL(HTTPS/SSH)에서 GitHub 웹 URL을 추출. GitHub이 아니면 null. */
+export function getGitHubWebUrl(remoteUrl: string): string | null {
+  const parsed = parseGitHubUrl(remoteUrl);
+  if (!parsed) return null;
+  return `https://github.com/${parsed.owner}/${parsed.repo}`;
+}
+
 export function getFileExtension(path: string): string {
   const lastDot = path.lastIndexOf(".");
   if (lastDot === -1) return "";

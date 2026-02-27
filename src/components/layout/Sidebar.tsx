@@ -31,13 +31,14 @@ import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useBranchStore } from "@/stores/branch";
-import { useStatus, useCommitHistory, useCommitAvatars, useBranches, useBranchComparison } from "@/api/queries";
+import { useStatus, useCommitHistory, useCommitAvatars, useBranches, useBranchComparison, useSettings } from "@/api/queries";
 import { addLocalRepository, cloneRepository, createCommit, stageFiles, unstageFiles, gitFetch, openInEditor, getRepoVisibility, getOwnerType, validateToken } from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
 import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
 import { BranchCompareView } from "@/components/history/BranchCompareView";
 import { MergeActionPanel } from "@/components/history/MergeActionPanel";
 import { CloneDialog } from "@/components/repository/CloneDialog";
+import { RepoHeaderContextMenu } from "@/components/repository/RepoHeaderContextMenu";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
@@ -1223,6 +1224,9 @@ export function Sidebar({
   const changesCount = statusEntries.length;
   const queryClient = useQueryClient();
   const [isFetching, setIsFetching] = useState(false);
+  const [repoMenuPos, setRepoMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const { data: settingsData = null } = useSettings();
+  const removeRepo = useRepositoryStore((s) => s.removeRepo);
 
   const hasRemote = activeRepo ? activeRepo.remotes.length > 0 : false;
   const activeVisibility = activeRepoPath ? repoVisibility[activeRepoPath] : undefined;
@@ -1272,11 +1276,16 @@ export function Sidebar({
       {/* Repo header — toggles repo list */}
       <button
         onClick={() => setRepoListOpen(!repoListOpen)}
+        onContextMenu={(e) => {
+          if (activeRepo) {
+            e.preventDefault();
+            setRepoMenuPos({ x: e.clientX, y: e.clientY });
+          }
+        }}
         className="flex items-center gap-2 px-4 h-[52px] shrink-0 border-b border-border hover:bg-accent transition-colors text-left"
-        data-tauri-drag-region
       >
         <RepoHeaderIcon className="w-4 h-4 shrink-0 opacity-50" />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0" data-tauri-drag-region>
           <p className="text-xs text-muted-foreground leading-tight">{t("repo.currentRepo")}</p>
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-semibold truncate">
@@ -1293,6 +1302,18 @@ export function Sidebar({
           <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
         )}
       </button>
+      {repoMenuPos && activeRepo && (
+        <RepoHeaderContextMenu
+          repo={activeRepo}
+          settings={settingsData}
+          position={repoMenuPos}
+          onRemove={() => {
+            removeRepo(activeRepo.path);
+            setRepoMenuPos(null);
+          }}
+          onClose={() => setRepoMenuPos(null)}
+        />
+      )}
 
       {repoListOpen ? (
         /* ─── Repo list view ─── */

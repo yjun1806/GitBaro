@@ -150,7 +150,7 @@ export interface RemoteInfo {
 export interface AppSettings {
   theme: Theme;
   defaultEditor: string;
-
+  defaultShell: string;
   autoFetchInterval: number;
   language: string;
 }
@@ -191,4 +191,5 @@ export interface WorktreeInfo {
   isBare: boolean;
   isLocked: boolean;
   lockReason: string | null;
+  isDirty: boolean;
 }
