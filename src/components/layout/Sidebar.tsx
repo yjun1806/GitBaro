@@ -52,12 +52,19 @@ function FileEntry({
   onDoubleClick,
   onToggleStage,
 }: {
-  entry: { path: string; status: string; staged: boolean };
+  entry: { path: string; status: string; staged: boolean; insertions?: number | null; deletions?: number | null; modifiedAt?: number | null };
   isSelected: boolean;
   onClick: () => void;
   onDoubleClick?: () => void;
   onToggleStage: () => void;
 }) {
+  const dir = entry.path.includes("/")
+    ? entry.path.substring(0, entry.path.lastIndexOf("/") + 1)
+    : "";
+  const filename = entry.path.includes("/")
+    ? entry.path.substring(entry.path.lastIndexOf("/") + 1)
+    : entry.path;
+
   return (
     <div
       onClick={(e) => {
@@ -84,8 +91,20 @@ function FileEntry({
           onToggleStage();
         }}
       />
-      <span className="text-sm truncate flex-1">{entry.path}</span>
       <FileStatusBadge status={entry.status as FileStatus} />
+      {dir && <span className="text-xs text-muted-foreground truncate max-w-16">{dir}</span>}
+      <span className="text-xs font-medium text-foreground truncate">{filename}</span>
+      {(entry.insertions != null || entry.deletions != null) && (
+        <span className="text-xs shrink-0">
+          {entry.insertions != null && <span className="text-success">+{entry.insertions}</span>}
+          {entry.insertions != null && entry.deletions != null && <span className="text-muted-foreground"> </span>}
+          {entry.deletions != null && <span className="text-danger">-{entry.deletions}</span>}
+        </span>
+      )}
+      <span className="flex-1" />
+      {entry.modifiedAt != null && (
+        <span className="text-xs text-muted-foreground shrink-0">{formatRelativeTime(entry.modifiedAt)}</span>
+      )}
     </div>
   );
 }
