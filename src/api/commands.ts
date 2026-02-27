@@ -12,6 +12,8 @@ import type {
   AppSettings,
   Theme,
   EditorInfo,
+  BranchCompareResult,
+  MergeStrategy,
 } from "@/types";
 
 // Git operations — backend returns indexStatus/worktreeStatus separately,
@@ -181,6 +183,22 @@ export async function deleteBranch(repoPath: string, name: string): Promise<void
 
 export async function getCurrentBranch(repoPath: string): Promise<string | null> {
   return invoke("get_current_branch", { repoPath });
+}
+
+export async function compareBranches(
+  repoPath: string,
+  baseBranch: string,
+  compareBranch: string,
+): Promise<BranchCompareResult> {
+  return invoke("compare_branches", { repoPath, baseBranch, compareBranch });
+}
+
+export async function mergeBranch(
+  repoPath: string,
+  branch: string,
+  strategy: MergeStrategy,
+): Promise<string> {
+  return invoke("merge_branch_into_current", { repoPath, branch, strategy });
 }
 
 // Stash
