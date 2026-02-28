@@ -76,7 +76,7 @@ export function GhSetupGuard({ children }: GhSetupGuardProps) {
   if (status === "version-error") {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-6 p-8 select-none">
-        <AlertTriangle className="w-16 h-16 text-amber-500" />
+        <AlertTriangle className="w-16 h-16 text-warning" />
         <div className="text-center">
           <h2 className="text-lg font-semibold">
             {t("gh.versionTooOld", "GitHub CLI needs to be updated")}

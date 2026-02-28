@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { UserCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import clsx from "clsx";
 import type { GitHubAccount } from "@/types";
 import { AccountAvatar } from "./AccountAvatar";
 
@@ -64,19 +65,21 @@ export function GhAccountDetectedDialog({
                 key={account.id}
                 type="button"
                 onClick={() => toggleAccount(account.id)}
-                className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
+                className={clsx(
+                  "flex items-center gap-3 p-3 rounded-lg border text-left transition-colors",
                   checked
                     ? "bg-primary/5 border-primary/30"
-                    : "bg-card border-border opacity-60"
-                }`}
+                    : "bg-card border-border opacity-60",
+                )}
               >
                 {/* Checkbox */}
                 <div
-                  className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${
+                  className={clsx(
+                    "w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors",
                     checked
                       ? "bg-primary border-primary"
-                      : "border-muted-foreground/30"
-                  }`}
+                      : "border-muted-foreground/30",
+                  )}
                 >
                   {checked && (
                     <svg

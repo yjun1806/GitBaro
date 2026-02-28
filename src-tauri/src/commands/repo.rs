@@ -92,6 +92,7 @@ pub async fn clone_repository(
         let engine = GitCliEngine::new(std::path::Path::new(&path));
         engine.clone_repo(&url, std::path::Path::new(&path), tok).await?;
     } else {
+        tracing::info!("[git] git clone {} {} (no auth)", url, path);
         let output = tokio::process::Command::new("git")
             .args(["clone", &url, &path])
             .stdout(std::process::Stdio::piped())
@@ -101,9 +102,9 @@ pub async fn clone_repository(
             .map_err(|_| AppError::GitCliNotFound)?;
 
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(AppError::GitCli {
-                message: stderr,
+                message: crate::git::cli::parse_git_error(&stderr),
                 exit_code: output.status.code(),
             });
         }

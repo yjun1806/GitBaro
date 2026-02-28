@@ -1,4 +1,5 @@
 import { GitBranch, Check, FolderGit2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { BranchStatusDot } from "./BranchStatusDot";
 import { BranchStatusBadge } from "./BranchStatusBadge";
@@ -21,6 +22,7 @@ export function BranchRow({
   onSelect,
   onContextMenu,
 }: BranchRowProps) {
+  const { t } = useTranslation();
   const hasAheadBehind =
     branch.aheadBehind &&
     (branch.aheadBehind.ahead > 0 || branch.aheadBehind.behind > 0);
@@ -53,7 +55,7 @@ export function BranchRow({
         <span className="truncate block">{branch.name}</span>
         {branch.lastCommitAuthor && !branch.isRemote && (
           <span className="text-[11px] text-muted-foreground truncate block">
-            by {branch.lastCommitAuthor.name}
+            {t("branch.commitByAuthor", { name: branch.lastCommitAuthor.name })}
           </span>
         )}
       </div>

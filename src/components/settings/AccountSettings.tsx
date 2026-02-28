@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { LogOut, Plus, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import clsx from "clsx";
 import type { GitHubAccount } from "@/types";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 
@@ -78,7 +79,7 @@ export function AccountSettings({
           title={t("ghSync.syncButton")}
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-border hover:border-primary hover:bg-primary/10 text-sm text-muted-foreground hover:text-primary transition-all disabled:opacity-50"
         >
-          <RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
+          <RefreshCw className={clsx("w-4 h-4", isSyncing && "animate-spin")} />
           {t("ghSync.syncButton")}
         </button>
       </div>

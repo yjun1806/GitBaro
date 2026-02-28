@@ -336,7 +336,7 @@ pub async fn discard_changes(repo_path: String, paths: Vec<String>) -> Result<()
 }
 
 /// Check if a git CLI error is an authentication failure.
-fn is_auth_error(err: &AppError) -> bool {
+pub(crate) fn is_auth_error(err: &AppError) -> bool {
     match err {
         AppError::GitCli { message, .. } => {
             let msg = message.to_lowercase();

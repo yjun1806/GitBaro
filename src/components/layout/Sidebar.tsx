@@ -46,7 +46,7 @@ import { FileStatusBadge } from "@/lib/file-status";
 import { groupFilesByDirectory } from "@/lib/group-files";
 import { useToastStore } from "@/stores/toast";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
-import type { CommitInfo, RepoInfo } from "@/types";
+import type { CommitInfo, GitHubAccount, RepoInfo } from "@/types";
 import type { FileStatus } from "@/types";
 
 /* ─── File Entry ─── */
@@ -163,7 +163,7 @@ function RepoContextMenu({
   onRemoveRepo,
   onClose,
 }: {
-  accounts: { id: string; username: string; avatarUrl: string }[];
+  accounts: GitHubAccount[];
   currentAccountId: string | null;
   isFavorite: boolean;
   onSelect: (accountId: string | null) => void;
@@ -206,7 +206,7 @@ function RepoContextMenu({
               : "hover:bg-accent",
           )}
         >
-          <AccountAvatar account={account as any} size="xs" />
+          <AccountAvatar account={account} size="xs" />
           <span className="truncate flex-1">{account.username}</span>
           {account.id === currentAccountId && (
             <span className="text-xs font-medium text-primary shrink-0">{t("repo.default")}</span>
@@ -234,7 +234,7 @@ function RepoContextMenu({
         }}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors text-left"
       >
-        <Star className={cn("w-3.5 h-3.5 shrink-0", isFavorite ? "fill-amber-400 text-amber-400" : "text-muted-foreground")} />
+        <Star className={cn("w-3.5 h-3.5 shrink-0", isFavorite ? "fill-warning text-warning" : "text-muted-foreground")} />
         {isFavorite ? t("repo.unfavorite") : t("repo.favorite")}
       </button>
       <button
@@ -359,8 +359,8 @@ function RepoListView({
           .then((v) => {
             useRepositoryStore.getState().setRepoVisibility(repo.path, v);
           })
-          .catch((err) => {
-            console.warn(`[visibility] ${repo.name}:`, err);
+          .catch(() => {
+            // visibility fetch is non-critical
           });
       }
     }
@@ -379,8 +379,8 @@ function RepoListView({
         .then((res) => {
           useRepositoryStore.getState().setOwnerType(group.label, res.ownerType);
         })
-        .catch((err) => {
-          console.warn(`[ownerType] ${group.label}:`, err);
+        .catch(() => {
+          // ownerType fetch is non-critical
         });
     }
   }, [groups, accounts]);
@@ -459,7 +459,7 @@ function RepoListView({
                 )} />
                 {(() => {
                   if (group.label === t("repo.favorites")) {
-                    return <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0" />;
+                    return <Star className="w-3.5 h-3.5 text-warning fill-warning shrink-0" />;
                   }
                   if (group.label === "Local") {
                     return <HardDrive className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
@@ -525,10 +525,10 @@ function RepoListView({
                             : !hasRemote
                               ? "bg-muted"
                               : visibility?.isPrivate
-                                ? "bg-amber-500/10"
+                                ? "bg-warning/10"
                                 : visibility?.isFork
-                                  ? "bg-blue-500/10"
-                                  : "bg-emerald-500/10",
+                                  ? "bg-info/10"
+                                  : "bg-success/10",
                         )}>
                           <RepoIcon
                             className={cn(
@@ -538,10 +538,10 @@ function RepoListView({
                                 : !hasRemote
                                   ? "text-muted-foreground"
                                   : visibility?.isPrivate
-                                    ? "text-amber-600 dark:text-amber-400"
+                                    ? "text-warning"
                                     : visibility?.isFork
-                                      ? "text-blue-600 dark:text-blue-400"
-                                      : "text-emerald-600 dark:text-emerald-400",
+                                      ? "text-info"
+                                      : "text-success",
                             )}
                           />
                         </div>
@@ -572,16 +572,16 @@ function RepoListView({
                           )}
                           {!isValidating && permission && !permission.valid && (
                             <div className="flex items-center gap-1 mt-0.5">
-                              <ShieldX className={cn("w-3 h-3 shrink-0", isActive ? "text-red-500" : "text-danger")} />
-                              <span className={cn("text-xs font-medium", isActive ? "text-red-500" : "text-danger")}>
+                              <ShieldX className={cn("w-3 h-3 shrink-0", "text-danger")} />
+                              <span className={cn("text-xs font-medium", "text-danger")}>
                                 {t("repo.accountNoAccess")}
                               </span>
                             </div>
                           )}
                           {!isValidating && permission && permission.valid && !permission.canPush && (
                             <div className="flex items-center gap-1 mt-0.5">
-                              <ShieldAlert className={cn("w-3 h-3 shrink-0", "text-amber-500")} />
-                              <span className={cn("text-xs font-medium", "text-amber-500")}>
+                              <ShieldAlert className={cn("w-3 h-3 shrink-0", "text-warning")} />
+                              <span className={cn("text-xs font-medium", "text-warning")}>
                                 {t("repo.accountReadOnly")}
                               </span>
                             </div>
@@ -593,7 +593,7 @@ function RepoListView({
                             <Circle
                               className={cn(
                                 "w-2 h-2 fill-current shrink-0",
-                                isActive ? "text-amber-300" : "text-amber-500",
+                                isActive ? "text-warning/70" : "text-warning",
                               )}
                             />
                           )}

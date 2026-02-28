@@ -53,7 +53,7 @@ impl GitHubClient {
         self.handle_response(response).await
     }
 
-    async fn get_with_query(
+    pub async fn get_with_query(
         &self,
         token: &str,
         path: &str,
@@ -112,6 +112,26 @@ impl GitHubClient {
 
         let body: Value = response.json().await?;
         Ok(body)
+    }
+
+    pub async fn patch_empty(&self, token: &str, path: &str) -> Result<(), AppError> {
+        let url = format!("{}{}", self.base_url, path);
+        let response = self
+            .http
+            .patch(&url)
+            .headers(self.auth_headers(token))
+            .header("Content-Length", "0")
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() && status.as_u16() != 205 {
+            return Err(AppError::GithubApi {
+                status: status.as_u16(),
+                message: "Request failed".to_string(),
+            });
+        }
+        Ok(())
     }
 
     pub async fn get_user(&self, token: &str) -> Result<Value, AppError> {

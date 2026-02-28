@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::git::branch::validate_branch_name;
 use crate::git::cli::{GitCliEngine, WorktreeEntry};
 
 #[tauri::command]
@@ -41,6 +42,9 @@ pub async fn add_worktree(
     new_branch: Option<String>,
     base_branch: Option<String>,
 ) -> Result<(), AppError> {
+    if let Some(ref name) = new_branch {
+        validate_branch_name(name)?;
+    }
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
     engine
         .add_worktree(&path, branch.as_deref(), new_branch.as_deref(), base_branch.as_deref())

@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowUp, ArrowDown, Loader2 } from "lucide-react";
 import clsx from "clsx";
 import { useBranchComparison } from "@/api/queries";
-import { formatRelativeTime } from "@/lib/utils";
+import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import type { CommitInfo } from "@/types";
 
 interface BranchCompareViewProps {
@@ -98,7 +98,7 @@ export function BranchCompareView({
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center text-sm text-destructive">
-        {(error as Error).message}
+        {getErrorMessage(error)}
       </div>
     );
   }
@@ -145,11 +145,11 @@ export function BranchCompareView({
       {/* Behind section */}
       <div className="flex flex-col">
         <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface sticky top-0 z-10">
-          <ArrowDown className="w-4 h-4 text-orange-500" />
+          <ArrowDown className="w-4 h-4 text-warning" />
           <span className="text-sm font-medium text-foreground">
             {t("compare.behind")}
           </span>
-          <span className="bg-orange-500/10 text-orange-500 text-xs font-semibold rounded-full px-2 py-0.5">
+          <span className="bg-warning/10 text-warning text-xs font-semibold rounded-full px-2 py-0.5">
             {data.behindCount}
           </span>
         </div>

@@ -195,8 +195,9 @@ export function BranchDropdown({
   );
 
   return (
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
+      role="button"
+      tabIndex={0}
       className="flex flex-col h-full overflow-hidden"
       onKeyDown={handleKeyDown}
     >

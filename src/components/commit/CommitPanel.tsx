@@ -57,7 +57,7 @@ export function CommitPanel({ currentBranch, stagedCount, onCommit }: CommitPane
           type="checkbox"
           checked={amend}
           onChange={(e) => setAmend(e.target.checked)}
-          className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-ring"
+          className="w-3.5 h-3.5 rounded border-border text-primary focus:ring-ring"
         />
         <span className="text-xs text-muted-foreground">
           {t("commit.amend")}
