@@ -550,7 +550,7 @@ fn check_output(output: std::process::Output) -> Result<(), AppError> {
 }
 
 /// Strip "error: " / "fatal: " prefixes from git stderr output.
-fn parse_git_error(stderr: &str) -> String {
+pub(crate) fn parse_git_error(stderr: &str) -> String {
     for line in stderr.lines() {
         let trimmed = line.trim();
         if let Some(msg) = trimmed.strip_prefix("error: ") {

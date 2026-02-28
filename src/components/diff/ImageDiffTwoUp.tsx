@@ -41,7 +41,7 @@ export function ImageDiffTwoUp({ oldSrc, newSrc, meta }: ImageDiffTwoUpProps) {
         <div className="flex flex-col items-center gap-2 flex-1 max-w-[50%]">
           {oldSrc ? (
             <>
-              <span className="text-xs font-medium text-red-500">
+              <span className="text-xs font-medium text-danger">
                 {t("diff.deleted")}
               </span>
               <div className="checkerboard-bg rounded-md overflow-hidden image-diff-border-deleted p-1">
@@ -79,7 +79,7 @@ export function ImageDiffTwoUp({ oldSrc, newSrc, meta }: ImageDiffTwoUpProps) {
         <div className="flex flex-col items-center gap-2 flex-1 max-w-[50%]">
           {newSrc ? (
             <>
-              <span className="text-xs font-medium text-green-500">
+              <span className="text-xs font-medium text-success">
                 {t("diff.added")}
               </span>
               <div className="checkerboard-bg rounded-md overflow-hidden image-diff-border-added p-1">

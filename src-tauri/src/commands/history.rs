@@ -368,7 +368,7 @@ pub async fn resolve_commit_avatars(
         Some(u) => u,
         None => return Ok(HashMap::new()),
     };
-    let token = match token_store.get_token(&username).await {
+    let token = match crate::commands::auth::resolve_token(&token_store, &username).await {
         Ok(t) => t,
         Err(_) => return Ok(HashMap::new()),
     };

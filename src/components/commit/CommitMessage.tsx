@@ -49,7 +49,7 @@ export function CommitMessage({ value, onChange, placeholder }: CommitMessagePro
             isError
               ? "text-destructive"
               : isWarning
-              ? "text-amber-500"
+              ? "text-warning"
               : "text-muted-foreground"
           )}
         >

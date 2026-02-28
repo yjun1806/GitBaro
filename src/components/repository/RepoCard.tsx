@@ -1,5 +1,6 @@
 import { GitBranch } from "lucide-react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import type { RepoInfo, GitHubAccount } from "@/types";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 
@@ -16,6 +17,7 @@ export function RepoCard({
   isSelected = false,
   onClick,
 }: RepoCardProps) {
+  const { t } = useTranslation();
   return (
     <button
       onClick={onClick}
@@ -39,7 +41,7 @@ export function RepoCard({
             {repo.name}
           </span>
           {repo.isDirty && (
-            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400" title="Uncommitted changes" />
+            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-warning" title={t("repo.uncommittedChanges")} />
           )}
         </div>
 

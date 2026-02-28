@@ -207,7 +207,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
             </p>
             {isInWorktree && (
               <span className="text-[10px] font-semibold text-info bg-info/10 px-1.5 py-0.5 rounded shrink-0">
-                WT
+                {t("branch.worktreeAbbrev")}
               </span>
             )}
             {hasChanges && (
@@ -240,7 +240,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           title={t("worktree.returnToMain")}
         >
           <Undo2 className="w-3.5 h-3.5" />
-          <span className="text-xs font-medium">Main</span>
+          <span className="text-xs font-medium">{t("branch.mainLabel")}</span>
         </button>
       )}
 

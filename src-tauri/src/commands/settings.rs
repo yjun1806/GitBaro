@@ -1,3 +1,4 @@
+use base64::Engine as _;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 
@@ -121,11 +122,17 @@ pub async fn open_in_editor(repo_path: String, file_path: String) -> Result<(), 
     let editor_id = settings.default_editor;
 
     if editor_id.is_empty() {
-        return Err(AppError::Auth("No default editor configured".to_string()));
+        return Err(AppError::GitCli {
+            message: "No default editor configured".to_string(),
+            exit_code: None,
+        });
     }
 
     let app_name = editor_app_name(&editor_id).ok_or_else(|| {
-        AppError::Auth(format!("Unknown editor: {}", editor_id))
+        AppError::GitCli {
+            message: format!("Unknown editor: {}", editor_id),
+            exit_code: None,
+        }
     })?;
 
     let full_path = std::path::Path::new(&repo_path).join(&file_path);
@@ -186,86 +193,8 @@ async fn extract_app_icon(app_bundle: &str) -> Option<String> {
     let png_bytes = tokio::fs::read(&tmp_path).await.ok()?;
     let _ = tokio::fs::remove_file(&tmp_path).await;
 
-    use std::io::Write;
-    let mut base64_str = String::new();
-    {
-        let mut encoder = Base64Encoder::new(&mut base64_str);
-        encoder.write_all(&png_bytes).ok()?;
-    }
-
+    let base64_str = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
     Some(format!("data:image/png;base64,{}", base64_str))
-}
-
-/// 간단한 base64 인코더 (외부 크레이트 불필요)
-struct Base64Encoder<'a> {
-    output: &'a mut String,
-    buf: [u8; 3],
-    buf_len: usize,
-}
-
-const BASE64_CHARS: &[u8; 64] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-impl<'a> Base64Encoder<'a> {
-    fn new(output: &'a mut String) -> Self {
-        Self {
-            output,
-            buf: [0; 3],
-            buf_len: 0,
-        }
-    }
-
-    fn flush_buf(&mut self) {
-        if self.buf_len == 0 {
-            return;
-        }
-        let b = self.buf;
-        let len = self.buf_len;
-
-        self.output.push(BASE64_CHARS[(b[0] >> 2) as usize] as char);
-        self.output
-            .push(BASE64_CHARS[((b[0] & 0x03) << 4 | b[1] >> 4) as usize] as char);
-
-        if len > 1 {
-            self.output
-                .push(BASE64_CHARS[((b[1] & 0x0f) << 2 | b[2] >> 6) as usize] as char);
-        } else {
-            self.output.push('=');
-        }
-
-        if len > 2 {
-            self.output.push(BASE64_CHARS[(b[2] & 0x3f) as usize] as char);
-        } else {
-            self.output.push('=');
-        }
-
-        self.buf = [0; 3];
-        self.buf_len = 0;
-    }
-}
-
-impl<'a> std::io::Write for Base64Encoder<'a> {
-    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
-        for &byte in data {
-            self.buf[self.buf_len] = byte;
-            self.buf_len += 1;
-            if self.buf_len == 3 {
-                self.flush_buf();
-            }
-        }
-        Ok(data.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.flush_buf();
-        Ok(())
-    }
-}
-
-impl<'a> Drop for Base64Encoder<'a> {
-    fn drop(&mut self) {
-        self.flush_buf();
-    }
 }
 
 /// Finder에서 해당 경로를 선택 상태로 표시합니다.
@@ -307,10 +236,16 @@ pub async fn open_in_terminal(repo_path: String) -> Result<(), AppError> {
 pub async fn open_repo_in_editor(repo_path: String) -> Result<(), AppError> {
     let settings = load_settings().await?;
     if settings.default_editor.is_empty() {
-        return Err(AppError::Auth("No default editor configured".to_string()));
+        return Err(AppError::GitCli {
+            message: "No default editor configured".to_string(),
+            exit_code: None,
+        });
     }
     let app_name = editor_app_name(&settings.default_editor).ok_or_else(|| {
-        AppError::Auth(format!("Unknown editor: {}", settings.default_editor))
+        AppError::GitCli {
+            message: format!("Unknown editor: {}", settings.default_editor),
+            exit_code: None,
+        }
     })?;
     tokio::process::Command::new("open")
         .args(["-a", app_name, &repo_path])

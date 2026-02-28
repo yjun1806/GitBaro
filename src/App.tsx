@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, Component, type ReactNode } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAccountStore } from "@/stores/account";
@@ -15,49 +15,9 @@ import { WelcomeScreen } from "@/components/welcome/WelcomeScreen";
 import { GhLoginDialog } from "@/components/account/GhLoginDialog";
 import { GhAccountDetectedDialog } from "@/components/account/GhAccountDetectedDialog";
 import { GhSetupGuard } from "@/components/account/GhSetupGuard";
+import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 import { ErrorToast } from "@/components/error/ErrorToast";
 import { useToastStore } from "@/stores/toast";
-
-// --- Error Boundary ---
-interface ErrorBoundaryState {
-  hasError: boolean;
-  message: string;
-}
-
-class ErrorBoundary extends Component<
-  { children: ReactNode },
-  ErrorBoundaryState
-> {
-  constructor(props: { children: ReactNode }) {
-    super(props);
-    this.state = { hasError: false, message: "" };
-  }
-
-  static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
-    const message = error instanceof Error ? error.message : i18n.t("error.unknownError");
-    return { hasError: true, message };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex flex-col items-center justify-center h-screen gap-4 p-8 text-center">
-          <p className="text-lg font-semibold text-danger">{i18n.t("error.somethingWentWrong")}</p>
-          <p className="text-sm text-muted-foreground max-w-md">{this.state.message}</p>
-          <button
-            onClick={() => this.setState({ hasError: false, message: "" })}
-            className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:bg-primary-hover transition-colors"
-          >
-            {i18n.t("error.tryAgain")}
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-// --- App ---
 
 function AppContent() {
   const { t } = useTranslation();
@@ -308,7 +268,7 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ErrorBoundary>
+    <ErrorBoundary fullScreen>
       <GhSetupGuard>
         <AppContent />
       </GhSetupGuard>

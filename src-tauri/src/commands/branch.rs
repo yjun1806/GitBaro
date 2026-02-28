@@ -1,6 +1,8 @@
 use crate::error::AppError;
+use crate::git::branch::validate_branch_name;
 use crate::git::cli::GitCliEngine;
-use crate::git::engine::{AuthorInfo, BranchCompareResult, CommitInfo, MergeStrategy};
+use crate::git::commit::commit_to_info;
+use crate::git::engine::{BranchCompareResult, MergeStrategy};
 use serde_json::{json, Value};
 
 fn is_fully_merged(repo: &git2::Repository, branch_oid: git2::Oid, default_oid: git2::Oid) -> bool {
@@ -151,6 +153,7 @@ pub async fn create_branch(
     name: String,
     from: Option<String>,
 ) -> Result<(), AppError> {
+    validate_branch_name(&name)?;
     let branch_name = name.clone();
     tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
@@ -211,36 +214,6 @@ pub async fn get_current_branch(repo_path: String) -> Result<Option<String>, App
     .map_err(|e| AppError::Channel(e.to_string()))??;
 
     Ok(result)
-}
-
-fn commit_to_info(commit: &git2::Commit) -> CommitInfo {
-    let id = commit.id().to_string();
-    let short_id = id[..7.min(id.len())].to_string();
-    let message = commit.message().unwrap_or_default().to_string();
-    let summary = commit.summary().unwrap_or_default().to_string();
-    let author = AuthorInfo {
-        name: commit.author().name().unwrap_or_default().to_string(),
-        email: commit.author().email().unwrap_or_default().to_string(),
-        timestamp: commit.author().when().seconds(),
-    };
-    let committer = AuthorInfo {
-        name: commit.committer().name().unwrap_or_default().to_string(),
-        email: commit.committer().email().unwrap_or_default().to_string(),
-        timestamp: commit.committer().when().seconds(),
-    };
-    let timestamp = commit.time().seconds();
-    let parent_ids = commit.parent_ids().map(|oid| oid.to_string()).collect();
-
-    CommitInfo {
-        id,
-        short_id,
-        message,
-        summary,
-        author,
-        committer,
-        timestamp,
-        parent_ids,
-    }
 }
 
 #[tauri::command]

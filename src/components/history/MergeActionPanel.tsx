@@ -2,7 +2,7 @@ import { useState } from "react";
 import { GitMerge, Loader2, AlertCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { cn } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { mergeBranch } from "@/api/commands";
 import { useUIStore } from "@/stores/ui";
 import { useToastStore } from "@/stores/toast";
@@ -53,7 +53,7 @@ export function MergeActionPanel({
       ]);
       setCompareBranch(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = getErrorMessage(error);
       if (message.toLowerCase().includes("conflict")) {
         addToast(t("merge.conflictDetected"), "warning");
         setActiveTab("changes");
@@ -119,7 +119,7 @@ export function MergeActionPanel({
           "w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
           isDisabled
             ? "bg-muted text-muted-foreground cursor-not-allowed"
-            : "bg-primary text-white hover:bg-primary/90",
+            : "bg-primary text-primary-foreground hover:bg-primary/90",
         )}
       >
         {isLoading ? (

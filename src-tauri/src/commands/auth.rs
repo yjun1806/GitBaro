@@ -116,7 +116,7 @@ async fn get_accounts_internal(
     let mut accounts = Vec::new();
 
     for gh_acc in &gh_accounts {
-        let enriched = match token_store.get_token(&gh_acc.username).await {
+        let enriched = match resolve_token(token_store, &gh_acc.username).await {
             Ok(token) => fetch_github_user_info(&token).await.ok(),
             Err(_) => None,
         };
@@ -369,6 +369,7 @@ pub(crate) async fn resolve_token(
 
 /// Resolve owner/repo from a local repo path by reading its origin remote URL.
 async fn resolve_repo_owner(repo_path: &str) -> Option<(String, String)> {
+    tracing::info!("[git] git remote get-url origin (cwd: {})", repo_path);
     let output = tokio::process::Command::new("git")
         .args(["remote", "get-url", "origin"])
         .current_dir(repo_path)

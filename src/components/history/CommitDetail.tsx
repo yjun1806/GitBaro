@@ -152,7 +152,7 @@ export function CommitDetail({
           >
             <GitCommit className="w-3 h-3" />
             {commit.shortId}
-            {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+            {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
           </button>
           {commit.parentIds.length > 0 && (
             <>

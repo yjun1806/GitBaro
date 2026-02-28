@@ -18,7 +18,7 @@ export function BranchStatusBadge({ branch }: BranchStatusBadgeProps) {
       <span
         className={cn(
           "inline-flex items-center text-[10px] leading-none font-medium px-1.5 py-[3px] rounded shrink-0",
-          "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+          "bg-success/15 text-success",
         )}
       >
         {t("branch.merged")}
@@ -31,7 +31,7 @@ export function BranchStatusBadge({ branch }: BranchStatusBadgeProps) {
       <span
         className={cn(
           "inline-flex items-center text-[10px] leading-none font-medium px-1.5 py-[3px] rounded shrink-0",
-          "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+          "bg-warning/15 text-warning",
         )}
       >
         {t("branch.stale")}

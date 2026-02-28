@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import clsx from "clsx";
 import type { BinaryPreview } from "@/types";
 import { ImageDiffTwoUp } from "./ImageDiffTwoUp";
 import { ImageDiffSwipe } from "./ImageDiffSwipe";
@@ -50,7 +51,7 @@ export function ImageDiff({ filePath: _filePath, preview }: ImageDiffProps) {
             {modes.map((m) => (
               <button
                 key={m.key}
-                className={`image-diff-mode-btn ${mode === m.key ? "active" : ""}`}
+                className={clsx("image-diff-mode-btn", mode === m.key && "active")}
                 onClick={() => setMode(m.key)}
               >
                 {m.label}

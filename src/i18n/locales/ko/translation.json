@@ -109,6 +109,9 @@
     "failedToRename": "Branch 이름 변경 실패: {{error}}",
     "deleted": "Branch 삭제됨: {{name}}",
     "failedToDelete": "Branch 삭제 실패: {{error}}",
+    "commitByAuthor": "{{name}}",
+    "worktreeAbbrev": "WT",
+    "mainLabel": "메인",
     "copiedName": "Branch 이름 복사됨",
     "basedOn": "기준 Branch 선택",
     "defaultBranchDesc": "저장소의 기본 Branch입니다. 현재 Branch와 무관한 새 작업을 시작할 때 선택하세요.",
@@ -240,6 +243,7 @@
       "removeConfirmDetail": "\"{{name}}\"을(를) 목록에서 제거하시겠습니까? 디스크에서 저장소가 삭제되지는 않습니다.",
       "copied": "복사됨!"
     },
+    "uncommittedChanges": "커밋되지 않은 변경 사항",
     "removeFromList": "목록에서 제거",
     "favorite": "즐겨찾기 추가",
     "unfavorite": "즐겨찾기 해제",
