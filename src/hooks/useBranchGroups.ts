@@ -114,8 +114,8 @@ export function groupByPrefix(branches: BranchInfo[]): OtherBranchesGrouped {
     }
   }
 
-  // Sort folders by prefix name, ungrouped by original order
-  folders.sort((a, b) => a.prefix.localeCompare(b.prefix));
+  // Preserve input order — folder order follows the sort applied by useBranchGroups
+  // (alphabetical for "name", chronological for "recent")
 
   return { folders, ungrouped };
 }

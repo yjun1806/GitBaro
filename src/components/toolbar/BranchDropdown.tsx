@@ -2,10 +2,10 @@ import { useReducer, useState, useCallback } from "react";
 import {
   GitBranch,
   Search,
-  FolderGit2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { useBranchGroups } from "@/hooks/useBranchGroups";
 import type { SortBy } from "@/hooks/useBranchGroups";
 import {
@@ -46,13 +46,15 @@ type DropdownAction =
 function reducer(state: DropdownState, action: DropdownAction): DropdownState {
   switch (action.type) {
     case "SET_QUERY":
-      return { ...state, query: action.query, activeIndex: 0 };
+      return { ...state, query: action.query, activeIndex: -1 };
     case "NAVIGATE": {
       if (action.total === 0) return state;
       const next =
-        action.direction === "down"
-          ? (state.activeIndex + 1) % action.total
-          : (state.activeIndex - 1 + action.total) % action.total;
+        state.activeIndex < 0
+          ? action.direction === "down" ? 0 : action.total - 1
+          : action.direction === "down"
+            ? (state.activeIndex + 1) % action.total
+            : (state.activeIndex - 1 + action.total) % action.total;
       return { ...state, activeIndex: next };
     }
     case "OPEN_CONTEXT_MENU":
@@ -67,7 +69,7 @@ function reducer(state: DropdownState, action: DropdownAction): DropdownState {
     case "CLOSE_CONTEXT_MENU":
       return { ...state, contextMenu: null };
     case "RESET":
-      return { query: "", activeIndex: 0, contextMenu: null };
+      return { query: "", activeIndex: -1, contextMenu: null };
     default:
       return state;
   }
@@ -119,7 +121,7 @@ export function BranchDropdown({
   const [sortBy, setSortBy] = useState<SortBy>("name");
   const [state, dispatch] = useReducer(reducer, {
     query: "",
-    activeIndex: 0,
+    activeIndex: -1,
     contextMenu: null,
   });
 
@@ -189,7 +191,7 @@ export function BranchDropdown({
     [activeTab, flatCount, groups, state.activeIndex, state.contextMenu, handleSelect, onClose],
   );
 
-  const activeWorktrees = worktrees.filter((w) => !w.isBare);
+  const activeWorktrees = worktrees.filter((w) => !w.isBare && !w.isMain);
   const filteredWorktrees = activeWorktrees.filter((w) =>
     (w.branch ?? w.path).toLowerCase().includes(state.query.toLowerCase()),
   );
@@ -213,7 +215,7 @@ export function BranchDropdown({
         <TabButton
           active={activeTab === "worktrees"}
           onClick={() => setActiveTab("worktrees")}
-          icon={<FolderGit2 className="w-3.5 h-3.5" />}
+          icon={<WorktreeIcon className="w-3.5 h-3.5" />}
           label={t("worktree.title")}
           count={activeWorktrees.length}
         />

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { X, FolderGit2 } from "lucide-react";
+import { X } from "lucide-react";
+import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
@@ -256,7 +257,7 @@ export function CreateWorktreeDialog({
                   "border-border focus-within:ring-2 focus-within:ring-ring focus-within:border-primary",
                 )}
               >
-                <FolderGit2 className="w-4 h-4 text-muted-foreground shrink-0" />
+                <WorktreeIcon className="w-4 h-4" />
                 <input
                   type="text"
                   value={worktreePath}

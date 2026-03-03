@@ -1,4 +1,5 @@
-import { GitBranch, Check, FolderGit2 } from "lucide-react";
+import { GitBranch, Check } from "lucide-react";
+import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { BranchStatusDot } from "./BranchStatusDot";
@@ -86,7 +87,7 @@ export function BranchRow({
       )}
 
       {worktreeByBranch?.has(branch.name) && (
-        <FolderGit2 className="w-3.5 h-3.5 text-info shrink-0" />
+        <WorktreeIcon className="w-3.5 h-3.5" />
       )}
       {isCurrent && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
     </button>

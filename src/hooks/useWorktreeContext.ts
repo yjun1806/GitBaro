@@ -12,7 +12,7 @@ export function useWorktreeContext(
     const isInWorktree = currentWorktree != null && !currentWorktree.isMain;
     const mainWorktree = worktrees.find((wt) => wt.isMain);
     const worktreeByBranch = new Map(
-      worktrees.filter((w) => w.branch).map((w) => [w.branch!, w]),
+      worktrees.filter((w) => w.branch && !w.isMain).map((w) => [w.branch!, w]),
     );
     return { currentWorktree, isInWorktree, mainWorktree, worktreeByBranch };
   }, [activeRepoPath, worktrees]);

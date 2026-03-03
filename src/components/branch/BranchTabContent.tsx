@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowDownUp } from "lucide-react";
+import { ArrowDownUp, ChevronRight, Folder } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { BranchGroup } from "./BranchGroup";
@@ -140,62 +140,108 @@ export function BranchTabContent({
             </button>
           </div>
 
-          {/* Folder groups */}
-          {otherGrouped.folders.map((folder) => {
-            const isCollapsed = collapsedPrefixes.has(folder.prefix);
-            return (
-              <div key={folder.prefix}>
-                <button
-                  onClick={() => togglePrefix(folder.prefix)}
-                  className="w-full flex items-center gap-1.5 px-5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <span
-                    className={cn(
-                      "text-[10px] transition-transform",
-                      !isCollapsed && "rotate-90",
-                    )}
-                  >
-                    ▶
-                  </span>
-                  <span className="font-medium">{folder.prefix}/</span>
-                  <span className="text-muted-foreground/60">
-                    ({folder.branches.length})
-                  </span>
-                </button>
-                {!isCollapsed &&
-                  folder.branches.map((branch) => {
-                    const flatIdx = groups.other.indexOf(branch);
-                    return (
-                      <BranchRow
-                        key={branch.name}
-                        branch={branch}
-                        isCurrent={branch.name === currentBranch}
-                        isActive={activeIndex === otherStart + flatIdx}
-                        worktreeByBranch={worktreeByBranch}
-                        onSelect={() => onSelect(branch)}
-                        onContextMenu={(e) => onContextMenu(branch, e)}
-                      />
-                    );
-                  })}
-              </div>
-            );
-          })}
+          {/* Unified sorted items (folders + ungrouped) */}
+          {(() => {
+            type OtherItem =
+              | { type: "folder"; folder: (typeof otherGrouped.folders)[number] }
+              | { type: "branch"; branch: BranchInfo };
 
-          {/* Ungrouped branches */}
-          {otherGrouped.ungrouped.map((branch) => {
-            const flatIdx = groups.other.indexOf(branch);
-            return (
-              <BranchRow
-                key={branch.name}
-                branch={branch}
-                isCurrent={branch.name === currentBranch}
-                isActive={activeIndex === otherStart + flatIdx}
-                worktreeByBranch={worktreeByBranch}
-                onSelect={() => onSelect(branch)}
-                onContextMenu={(e) => onContextMenu(branch, e)}
-              />
-            );
-          })}
+            const items: OtherItem[] = [
+              ...otherGrouped.folders.map(
+                (folder) => ({ type: "folder" as const, folder }),
+              ),
+              ...otherGrouped.ungrouped.map(
+                (branch) => ({ type: "branch" as const, branch }),
+              ),
+            ];
+
+            const getSortKey = (item: OtherItem) => {
+              if (sortBy === "recent") {
+                if (item.type === "folder") {
+                  return Math.max(
+                    ...item.folder.branches.map((b) => b.lastCommitTime ?? 0),
+                  );
+                }
+                return item.branch.lastCommitTime ?? 0;
+              }
+              return item.type === "folder"
+                ? item.folder.prefix
+                : item.branch.name;
+            };
+
+            const sorted =
+              sortBy === "recent"
+                ? [...items].sort(
+                    (a, b) =>
+                      (getSortKey(b) as number) - (getSortKey(a) as number),
+                  )
+                : [...items].sort((a, b) =>
+                    (getSortKey(a) as string).localeCompare(
+                      getSortKey(b) as string,
+                    ),
+                  );
+
+            return sorted.map((item) => {
+              if (item.type === "folder") {
+                const { folder } = item;
+                const isCollapsed = collapsedPrefixes.has(folder.prefix);
+                return (
+                  <div key={`folder:${folder.prefix}`} className="mt-0.5">
+                    <button
+                      onClick={() => togglePrefix(folder.prefix)}
+                      className="w-full flex items-center gap-1.5 px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+                    >
+                      <ChevronRight
+                        className={cn(
+                          "w-3 h-3 shrink-0 transition-transform",
+                          !isCollapsed && "rotate-90",
+                        )}
+                      />
+                      <Folder className="w-3 h-3 shrink-0" />
+                      <span className="font-medium">{folder.prefix}/</span>
+                      <span className="text-muted-foreground/50 tabular-nums">
+                        {folder.branches.length}
+                      </span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className="ml-3 border-l border-border/60">
+                        {folder.branches.map((branch) => {
+                          const flatIdx = groups.other.indexOf(branch);
+                          return (
+                            <BranchRow
+                              key={branch.name}
+                              branch={branch}
+                              isCurrent={branch.name === currentBranch}
+                              isActive={activeIndex === otherStart + flatIdx}
+                              worktreeByBranch={worktreeByBranch}
+                              onSelect={() => onSelect(branch)}
+                              onContextMenu={(e) =>
+                                onContextMenu(branch, e)
+                              }
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              const { branch } = item;
+              const flatIdx = groups.other.indexOf(branch);
+              return (
+                <BranchRow
+                  key={branch.name}
+                  branch={branch}
+                  isCurrent={branch.name === currentBranch}
+                  isActive={activeIndex === otherStart + flatIdx}
+                  worktreeByBranch={worktreeByBranch}
+                  onSelect={() => onSelect(branch)}
+                  onContextMenu={(e) => onContextMenu(branch, e)}
+                />
+              );
+            });
+          })()}
         </div>
       )}
 
