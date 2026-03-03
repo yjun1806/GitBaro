@@ -6,8 +6,10 @@ import type { GitHubAccount } from "@/types";
 import { searchGithubRepos, type GitHubRepoSearchResult } from "@/api/commands";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
+import { TabGroup, Tab } from "@/components/ui/Tabs";
+import { useActivityStore } from "@/stores/activity";
 
-type Tab = "github" | "url";
+type CloneTab = "github" | "url";
 
 interface CloneDialogProps {
   accounts: GitHubAccount[];
@@ -25,12 +27,14 @@ export function CloneDialog({
   onClose,
 }: CloneDialogProps) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>(accounts.length > 0 ? "github" : "url");
+  const [tab, setTab] = useState<CloneTab>(accounts.length > 0 ? "github" : "url");
   const [repoSearch, setRepoSearch] = useState("");
   const [url, setUrl] = useState("");
   const [localPath, setLocalPath] = useState("");
   const [isCloning, setIsCloning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const activeOperations = useActivityStore((s) => s.activeOperations);
+  const activeClone = Object.values(activeOperations).find((op) => op.operation === "clone");
 
   // GitHub tab state
   const [searchResults, setSearchResults] = useState<GitHubRepoSearchResult[]>([]);
@@ -143,23 +147,22 @@ export function CloneDialog({
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-border px-6">
-          {(["github", "url"] as Tab[]).map((t_) => (
-            <button
-              key={t_}
-              onClick={() => { setTab(t_); setError(null); }}
-              disabled={isCloning}
-              className={cn(
-                "px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors",
-                tab === t_
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {t_ === "github" ? "GitHub.com" : "URL"}
-            </button>
-          ))}
-        </div>
+        <TabGroup className="px-6">
+          <Tab
+            active={tab === "github"}
+            onClick={() => { setTab("github"); setError(null); }}
+            disabled={isCloning}
+          >
+            GitHub.com
+          </Tab>
+          <Tab
+            active={tab === "url"}
+            onClick={() => { setTab("url"); setError(null); }}
+            disabled={isCloning}
+          >
+            URL
+          </Tab>
+        </TabGroup>
 
         <div className="px-6 py-5 flex flex-col gap-4">
           {tab === "github" && (
@@ -372,6 +375,12 @@ export function CloneDialog({
             )}
             {isCloning ? t("clone.cloning") : t("clone.clone")}
           </button>
+          {activeClone?.progress && (
+            <p className="text-xs text-muted-foreground truncate">
+              {activeClone.progress.message}
+              {activeClone.progress.percent != null && ` (${activeClone.progress.percent}%)`}
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod concurrency;
 pub mod error;
+pub mod events;
 pub mod gh;
 pub mod git;
 pub mod github;
@@ -31,6 +32,11 @@ pub fn run() {
             commands::git::git_pull,
             commands::git::stash_push,
             commands::git::stash_pop,
+            commands::git::stash_list,
+            commands::git::stash_apply,
+            commands::git::stash_drop,
+            commands::git::stash_show,
+            commands::git::stash_push_partial,
             commands::repo::open_repository,
             commands::repo::clone_repository,
             commands::repo::get_open_repos,
@@ -48,6 +54,8 @@ pub fn run() {
             commands::branch::merge_branch_into_current,
             commands::branch::get_recent_branches,
             commands::branch::rename_branch,
+            commands::branch::check_merge_conflicts,
+            commands::branch::get_conflict_file_diff,
             commands::history::get_commit_history,
             commands::history::get_commit_detail,
             commands::history::get_commit_file_diff,

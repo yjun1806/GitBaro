@@ -5,6 +5,15 @@ pub fn stash_ref(index: usize) -> String {
     format!("stash@{{{}}}", index)
 }
 
+/// Extract the branch name from a stash message.
+/// git stash messages look like "On main: WIP on main: abc1234 subject" → Some("main")
+pub fn extract_branch_from_stash_message(message: &str) -> Option<String> {
+    message
+        .strip_prefix("On ")
+        .and_then(|rest| rest.split(':').next())
+        .map(|s| s.trim().to_string())
+}
+
 /// Extract a short summary from a stash message.
 /// git stash messages look like "On branch: WIP on main: abc1234 subject"
 pub fn stash_short_message(message: &str) -> &str {

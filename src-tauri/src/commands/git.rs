@@ -6,7 +6,7 @@
 use crate::commands::auth::resolve_token;
 use crate::error::AppError;
 use crate::git::cli::GitCliEngine;
-use crate::git::engine::GitRemoteEngine;
+use crate::git::engine::{GitEngine, GitRemoteEngine};
 use crate::state::TokenStore;
 use serde_json::{json, Value};
 
@@ -354,10 +354,11 @@ pub(crate) fn is_auth_error(err: &AppError) -> bool {
 pub async fn git_fetch(
     repo_path: String,
     account_id: String,
+    app_handle: tauri::AppHandle,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
 
     match engine.fetch("origin", &token).await {
         Ok(()) => {
@@ -429,12 +430,13 @@ pub async fn git_push(
     repo_path: String,
     account_id: String,
     force: Option<bool>,
+    app_handle: tauri::AppHandle,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
     let branch = resolve_head_branch(&repo_path).await?;
 
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     let force_flag = force.unwrap_or(false);
 
     match engine.push("origin", &branch, &token, force_flag).await {
@@ -458,12 +460,13 @@ pub async fn git_pull(
     repo_path: String,
     account_id: String,
     rebase: Option<bool>,
+    app_handle: tauri::AppHandle,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
     let branch = resolve_upstream_branch(&repo_path).await?;
 
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     let rebase_flag = rebase.unwrap_or(false);
 
     match engine.pull("origin", &branch, &token, rebase_flag).await {
@@ -495,5 +498,62 @@ pub async fn stash_pop(repo_path: String) -> Result<(), AppError> {
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
     engine.stash_pop().await?;
     tracing::info!("Stash popped");
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stash_list(
+    repo_path: String,
+) -> Result<Vec<crate::git::engine::StashEntry>, AppError> {
+    let result = tokio::task::spawn_blocking(move || {
+        let engine =
+            crate::git::libgit::LibGitEngine::open(std::path::Path::new(&repo_path))?;
+        engine.stash_list()
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn stash_apply(repo_path: String, index: usize) -> Result<(), AppError> {
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.stash_apply(index).await?;
+    tracing::info!("Stash applied: stash@{{{}}}", index);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stash_drop(repo_path: String, index: usize) -> Result<(), AppError> {
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.stash_drop(index).await?;
+    tracing::info!("Stash dropped: stash@{{{}}}", index);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stash_show(
+    repo_path: String,
+    index: usize,
+) -> Result<crate::git::engine::StashShowResult, AppError> {
+    let result = tokio::task::spawn_blocking(move || {
+        let engine =
+            crate::git::libgit::LibGitEngine::open(std::path::Path::new(&repo_path))?;
+        engine.stash_show(index)
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn stash_push_partial(
+    repo_path: String,
+    paths: Vec<String>,
+    message: Option<String>,
+) -> Result<(), AppError> {
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.stash_push_paths(message.as_deref(), &paths).await?;
+    tracing::info!("Stash pushed (partial): {} files", paths.len());
     Ok(())
 }

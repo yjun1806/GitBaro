@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDownToLine, ArrowUpFromLine, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useBranchComparison } from "@/api/queries";
-import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
-import type { CommitInfo } from "@/types";
+import { TabGroup, Tab } from "@/components/ui/Tabs";
+import { getErrorMessage } from "@/lib/utils";
+import { CommitItem } from "./CommitItem";
 
 interface BranchCompareViewProps {
   repoPath: string;
@@ -11,124 +12,10 @@ interface BranchCompareViewProps {
   compareBranch: string;
   selectedCommitId: string | null;
   onSelectCommit: (id: string) => void;
+  resolveAvatarUrl?: (email: string) => string | undefined;
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((n) => n.charAt(0).toUpperCase())
-    .join("");
-}
-
-function CommitRow({
-  commit,
-  isSelected,
-  onClick,
-}: {
-  commit: CommitInfo;
-  isSelected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex items-start gap-3 px-4 py-3 text-left transition-colors border-b border-border w-full",
-        isSelected ? "bg-primary/10" : "hover:bg-accent",
-      )}
-    >
-      {/* Avatar */}
-      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground shrink-0 mt-0.5">
-        {getInitials(commit.author.name)}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <p
-          className={cn(
-            "text-sm font-semibold leading-snug truncate",
-            isSelected ? "text-primary" : "text-foreground",
-          )}
-        >
-          {commit.summary}
-        </p>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="text-xs text-muted-foreground/70 truncate">
-            {commit.author.name}
-          </span>
-          <span className="text-xs text-muted-foreground/40">·</span>
-          <span className="text-xs text-muted-foreground/50 shrink-0">
-            {formatRelativeTime(commit.timestamp)}
-          </span>
-        </div>
-      </div>
-
-      {/* Short hash */}
-      <span className="text-xs font-mono text-muted-foreground/50 shrink-0 mt-1">
-        {commit.shortId}
-      </span>
-    </button>
-  );
-}
-
-interface CommitSectionProps {
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-  badgeClass: string;
-  commits: CommitInfo[];
-  emptyMessage: string;
-  selectedCommitId: string | null;
-  onSelectCommit: (id: string) => void;
-  tooltip?: string;
-}
-
-function CommitSection({
-  icon,
-  label,
-  count,
-  badgeClass,
-  commits,
-  emptyMessage,
-  selectedCommitId,
-  onSelectCommit,
-  tooltip,
-}: CommitSectionProps) {
-  return (
-    <div className={cn("flex flex-col", count === 0 && "opacity-50")}>
-      <div
-        className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface sticky top-0 z-10"
-        title={tooltip}
-      >
-        {icon}
-        <span className="text-sm font-medium text-foreground">{label}</span>
-        <span
-          className={cn(
-            "text-xs font-semibold rounded-full px-2 py-0.5",
-            badgeClass,
-          )}
-        >
-          {count}
-        </span>
-      </div>
-      {commits.length > 0 ? (
-        commits.map((commit) => (
-          <CommitRow
-            key={commit.id}
-            commit={commit}
-            isSelected={commit.id === selectedCommitId}
-            onClick={() => onSelectCommit(commit.id)}
-          />
-        ))
-      ) : (
-        <div className="px-4 py-3 text-sm text-muted-foreground">
-          {emptyMessage}
-        </div>
-      )}
-    </div>
-  );
-}
+type CompareTab = "incoming" | "outgoing";
 
 export function BranchCompareView({
   repoPath,
@@ -136,8 +23,10 @@ export function BranchCompareView({
   compareBranch,
   selectedCommitId,
   onSelectCommit,
+  resolveAvatarUrl,
 }: BranchCompareViewProps) {
   const { t } = useTranslation();
+  const [activeTab, setActiveTab] = useState<CompareTab>("incoming");
   const { data, isLoading, error } = useBranchComparison(
     repoPath,
     baseBranch,
@@ -178,40 +67,57 @@ export function BranchCompareView({
    */
   const incoming = { count: data.behindCount, commits: data.behindCommits };
   const outgoing = { count: data.aheadCount, commits: data.aheadCommits };
+  const activeCommits =
+    activeTab === "incoming" ? incoming.commits : outgoing.commits;
+  const emptyMessage =
+    activeTab === "incoming"
+      ? t("compare.noIncomingCommits")
+      : t("compare.noOutgoingCommits");
 
   return (
-    <div className="flex flex-col flex-1 overflow-y-auto">
-      {/* Incoming section first — more actionable */}
-      <CommitSection
-        icon={<ArrowDownToLine className="w-4 h-4 text-info" />}
-        label={t("compare.incomingFrom", { branch: compareBranch })}
-        count={incoming.count}
-        badgeClass="bg-info/10 text-info"
-        commits={incoming.commits}
-        emptyMessage={t("compare.noIncomingCommits")}
-        selectedCommitId={selectedCommitId}
-        onSelectCommit={onSelectCommit}
-        tooltip={t("compare.incomingTooltip", {
-          count: incoming.count,
-          branch: compareBranch,
-        })}
-      />
+    <div className="flex flex-col flex-1 overflow-hidden">
+      {/* Tab bar */}
+      <TabGroup className="shrink-0">
+        <Tab
+          active={activeTab === "incoming"}
+          onClick={() => setActiveTab("incoming")}
+          icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
+          count={incoming.count}
+          color="info"
+          size="sm"
+        >
+          {t("compare.incoming")}
+        </Tab>
+        <Tab
+          active={activeTab === "outgoing"}
+          onClick={() => setActiveTab("outgoing")}
+          icon={<ArrowUpFromLine className="w-3.5 h-3.5" />}
+          count={outgoing.count}
+          color="success"
+          size="sm"
+        >
+          {t("compare.outgoing")}
+        </Tab>
+      </TabGroup>
 
-      {/* Outgoing section */}
-      <CommitSection
-        icon={<ArrowUpFromLine className="w-4 h-4 text-success" />}
-        label={t("compare.outgoingTo", { branch: compareBranch })}
-        count={outgoing.count}
-        badgeClass="bg-success/10 text-success"
-        commits={outgoing.commits}
-        emptyMessage={t("compare.noOutgoingCommits")}
-        selectedCommitId={selectedCommitId}
-        onSelectCommit={onSelectCommit}
-        tooltip={t("compare.outgoingTooltip", {
-          count: outgoing.count,
-          branch: compareBranch,
-        })}
-      />
+      {/* Commit list */}
+      <div className="flex-1 overflow-y-auto">
+        {activeCommits.length > 0 ? (
+          activeCommits.map((commit) => (
+            <CommitItem
+              key={commit.id}
+              commit={commit}
+              isSelected={commit.id === selectedCommitId}
+              avatarUrl={resolveAvatarUrl?.(commit.author.email ?? "")}
+              onClick={() => onSelectCommit(commit.id)}
+            />
+          ))
+        ) : (
+          <div className="flex-1 flex items-center justify-center py-8 text-xs text-muted-foreground">
+            {emptyMessage}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

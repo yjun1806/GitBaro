@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, GitCommit, GitCompare } from "lucide-react";
+import { FileText, GitCommit, GitCompare, Archive } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { CommitDetail } from "@/components/history/CommitDetail";
+import { StashDetailView } from "@/components/stash/StashDetailView";
 import { ToolbarRoot } from "@/components/toolbar";
 import { PreviewBanner } from "@/components/worktree/PreviewBanner";
 import type { FileStatus } from "@/types";
@@ -100,10 +101,12 @@ function CommitDetailView({ commitId }: { commitId: string }) {
 /* --- ContentArea (main export) --- */
 
 interface ContentAreaProps {
-  activeTab: "changes" | "history";
+  activeTab: "changes" | "history" | "stash";
   selectedFile: string | null;
   selectedFileStaged: boolean;
   selectedCommitId: string | null;
+  selectedStashIndex: number | null;
+  onStashAction: (index: number | null) => void;
 }
 
 export function ContentArea({
@@ -111,6 +114,8 @@ export function ContentArea({
   selectedFile,
   selectedFileStaged,
   selectedCommitId,
+  selectedStashIndex,
+  onStashAction,
 }: ContentAreaProps) {
   const { t } = useTranslation();
   const compareBranch = useUIStore((s) => s.compareBranch);
@@ -143,7 +148,22 @@ export function ContentArea({
 
       {/* Diff / Detail content */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {activeTab === "changes" ? (
+        {activeTab === "stash" ? (
+          selectedStashIndex !== null ? (
+            <StashDetailView
+              stashIndex={selectedStashIndex}
+              onApply={() => {}}
+              onPop={() => onStashAction(null)}
+              onDrop={() => onStashAction(null)}
+            />
+          ) : (
+            <EmptyState
+              icon={Archive}
+              title={t("stash.noStashSelected")}
+              description={t("stash.selectStash")}
+            />
+          )
+        ) : activeTab === "changes" ? (
           selectedFile ? (
             <DiffContent filePath={selectedFile} staged={selectedFileStaged} />
           ) : (

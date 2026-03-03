@@ -3,6 +3,8 @@ import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { Sidebar } from "./Sidebar";
 import { ContentArea } from "./ContentArea";
+import { StatusBar } from "./StatusBar";
+import { ActivityLogPanel } from "./ActivityLogPanel";
 
 const MIN_SIDEBAR_WIDTH = 200;
 const MIN_RIGHT_PANEL_WIDTH = 700;
@@ -19,12 +21,14 @@ export function MainLayout() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedFileStaged, setSelectedFileStaged] = useState(false);
   const [selectedCommitId, setSelectedCommitId] = useState<string | null>(null);
+  const [selectedStashIndex, setSelectedStashIndex] = useState<number | null>(null);
 
   // 레포 변경 시 선택 상태 초기화
   useEffect(() => {
     setSelectedFile(null);
     setSelectedFileStaged(false);
     setSelectedCommitId(null);
+    setSelectedStashIndex(null);
   }, [activeRepoPath]);
 
   const isDragging = useRef(false);
@@ -60,45 +64,60 @@ export function MainLayout() {
     [sidebarWidth, setSidebarWidth],
   );
 
+  const isActivityLogOpen = useUIStore((s) => s.isActivityLogOpen);
+
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* Left panel — Repo header + Changes/History or Repo list */}
-      <div
-        style={{ width: sidebarWidth }}
-        className="shrink-0 overflow-hidden"
-      >
-        <Sidebar
-          selectedFile={selectedFile}
-          onSelectFile={(path, staged) => {
-            setSelectedFile(path);
-            setSelectedFileStaged(staged);
-          }}
-          selectedCommitId={selectedCommitId}
-          onSelectCommit={setSelectedCommitId}
-        />
-      </div>
-
-      {/* Resize handle (acts as border between panels) */}
-      <div
-        onMouseDown={onMouseDown}
-        className="w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/40 transition-colors"
-      />
-
-      {/* Right panel — Branch header + Diff viewer */}
-      <div className="relative flex-1 overflow-hidden bg-background">
-        <ContentArea
-          activeTab={activeTab}
-          selectedFile={selectedFile}
-          selectedFileStaged={selectedFileStaged}
-          selectedCommitId={selectedCommitId}
-        />
-        {repoListOpen && (
-          <div
-            className="absolute inset-0 bg-black/30 z-40 transition-opacity"
-            onClick={() => setRepoListOpen(false)}
+    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+      {/* Main content row */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left panel — Repo header + Changes/History or Repo list */}
+        <div
+          style={{ width: sidebarWidth }}
+          className="shrink-0 overflow-hidden"
+        >
+          <Sidebar
+            selectedFile={selectedFile}
+            onSelectFile={(path, staged) => {
+              setSelectedFile(path);
+              setSelectedFileStaged(staged);
+            }}
+            selectedCommitId={selectedCommitId}
+            onSelectCommit={setSelectedCommitId}
+            selectedStashIndex={selectedStashIndex}
+            onSelectStash={setSelectedStashIndex}
           />
-        )}
+        </div>
+
+        {/* Resize handle (acts as border between panels) */}
+        <div
+          onMouseDown={onMouseDown}
+          className="w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/40 transition-colors"
+        />
+
+        {/* Right panel — Branch header + Diff viewer */}
+        <div className="relative flex-1 overflow-hidden bg-background">
+          <ContentArea
+            activeTab={activeTab}
+            selectedFile={selectedFile}
+            selectedFileStaged={selectedFileStaged}
+            selectedCommitId={selectedCommitId}
+            selectedStashIndex={selectedStashIndex}
+            onStashAction={setSelectedStashIndex}
+          />
+          {repoListOpen && (
+            <div
+              className="absolute inset-0 bg-black/30 z-40 transition-opacity"
+              onClick={() => setRepoListOpen(false)}
+            />
+          )}
+        </div>
       </div>
+
+      {/* Activity log panel (above status bar) */}
+      {isActivityLogOpen && <ActivityLogPanel />}
+
+      {/* Status bar */}
+      <StatusBar />
     </div>
   );
 }

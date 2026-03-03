@@ -7,7 +7,9 @@
     "filter": "Filter",
     "browse": "Browse",
     "confirm": "Confirm",
-    "settings": "Settings"
+    "settings": "Settings",
+    "proceed": "Proceed",
+    "commandPreview": "Command to execute:"
   },
   "welcome": {
     "title": "Welcome to GitBaro",
@@ -455,7 +457,96 @@
     "squashFailed": "Squash merge failed: {{error}}",
     "nothingToMerge": "Nothing to merge — current branch is up to date",
     "upToDate": "Your branch is up to date with {{branch}}",
-    "incomingCount_one": "Merge {{count}} commit from {{branch}}",
-    "incomingCount_other": "Merge {{count}} commits from {{branch}}"
+    "incomingCount_one": "Merge {{count}} commit",
+    "incomingCount_other": "Merge {{count}} commits",
+    "preCheck": {
+      "checking": "Checking for conflicts",
+      "clean": "No conflicts — safe to merge",
+      "fastForward": "Fast-forward available — no merge commit needed",
+      "conflictsDetected_one": "{{count}} file will conflict",
+      "conflictsDetected_other": "{{count}} files will conflict",
+      "previewButton": "Preview",
+      "previewTitle": "Conflict Preview",
+      "previewFiles": "{{count}} conflicting files",
+      "previewSelectFile": "Select a file to view conflicts",
+      "previewLoading": "Loading diff",
+      "previewError": "Failed to load diff",
+      "previewOurs": "Current (HEAD)",
+      "previewTheirs": "Incoming ({{branch}})",
+      "previewRegions_one": "{{count}} conflict region",
+      "previewRegions_other": "{{count}} conflict regions",
+      "previewLegendOurs": "Lines only in current branch (will be lost if overwritten)",
+      "previewLegendTheirs": "Lines only in incoming branch (will be added after merge)",
+      "previewConflictBothModified": "Both branches modified this section differently",
+      "previewConflictOursOnly": "Current branch has changes that incoming branch removed",
+      "previewConflictTheirsOnly": "Incoming branch added changes not present in current branch",
+      "previewLineRange": "Lines {{start}}–{{end}}"
+    },
+    "confirm": {
+      "title": "Confirm Merge",
+      "description": "Merge '{{branch}}' into '{{target}}'"
+    }
+  },
+  "stash": {
+    "title": "Stash",
+    "noStashes": "No stashes",
+    "noStashesDescription": "Stash your changes to save them for later",
+    "noStashSelected": "No stash selected",
+    "selectStash": "Select a stash to view its changes",
+    "save": "Stash Changes",
+    "saveDialog": {
+      "title": "Stash Changes",
+      "messagePlaceholder": "Stash message (optional)",
+      "stashAll": "All changes",
+      "stashSelected": "Selected files only",
+      "selectFiles": "Select files to stash",
+      "save": "Stash",
+      "cancel": "Cancel",
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All"
+    },
+    "apply": "Apply",
+    "applyDescription": "Apply stash changes without removing from list",
+    "pop": "Pop",
+    "popDescription": "Apply stash changes and remove from list",
+    "drop": "Drop",
+    "dropDescription": "Delete this stash permanently",
+    "dropConfirm": "Drop stash?",
+    "dropConfirmDescription": "This will permanently delete this stash. This action cannot be undone.",
+    "applied": "Stash applied successfully",
+    "popped": "Stash popped successfully",
+    "dropped": "Stash dropped",
+    "saved": "Changes stashed",
+    "failedToApply": "Failed to apply stash: {{error}}",
+    "failedToPop": "Failed to pop stash: {{error}}",
+    "failedToDrop": "Failed to drop stash: {{error}}",
+    "failedToSave": "Failed to stash changes: {{error}}",
+    "failedToLoad": "Failed to load stashes: {{error}}",
+    "onBranch": "on {{branch}}",
+    "filesChanged": "{{count}} file changed",
+    "filesChanged_other": "{{count}} files changed",
+    "detail": {
+      "files": "Changed files",
+      "noFiles": "No files changed"
+    }
+  },
+  "activity": {
+    "title": "Activity Log",
+    "clear": "Clear",
+    "noActivity": "No recent git operations",
+    "running": "Running...",
+    "completed": "Completed",
+    "failed": "Failed",
+    "showOutput": "Show output",
+    "hideOutput": "Hide output",
+    "fetchSummary": "{{updated}} updated, {{new}} new, {{deleted}} removed",
+    "pushSummary": "Pushed {{count}} commits to {{branch}}",
+    "mergeSummary": "Merged ({{mergeType}}), {{files}} files changed",
+    "noChanges": "Already up to date",
+    "progress": "{{percent}}%"
+  },
+  "sync": {
+    "forcePushWarning": "This will overwrite remote history. This action cannot be undone.",
+    "forcePushConfirmTitle": "Confirm Force Push"
   }
 }

@@ -1,10 +1,20 @@
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use serde::Serialize;
+use tauri::Emitter;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+use uuid::Uuid;
 
 use crate::error::AppError;
+use crate::events::{
+    GitCommandCompleteEvent, GitCommandProgressEvent, GitCommandStartEvent, OperationSummary,
+    GIT_COMMAND_COMPLETE, GIT_COMMAND_PROGRESS, GIT_COMMAND_START,
+};
 use crate::git::engine::GitRemoteEngine;
+use crate::git::output_parser;
 
 // ── Worktree types ───────────────────────────────────────────────────────────
 
@@ -23,12 +33,21 @@ pub struct WorktreeEntry {
 
 pub struct GitCliEngine {
     pub repo_path: PathBuf,
+    app_handle: Option<tauri::AppHandle>,
 }
 
 impl GitCliEngine {
     pub fn new(repo_path: &Path) -> Self {
         Self {
             repo_path: repo_path.to_path_buf(),
+            app_handle: None,
+        }
+    }
+
+    pub fn with_app_handle(repo_path: impl Into<PathBuf>, app_handle: tauri::AppHandle) -> Self {
+        Self {
+            repo_path: repo_path.into(),
+            app_handle: Some(app_handle),
         }
     }
 }
@@ -38,13 +57,75 @@ impl GitCliEngine {
 // git2 대신 git CLI를 통해 실행한다.
 
 impl GitCliEngine {
+    fn emit_command_start(&self, id: &str, args: &[&str], operation: &str, started_at: i64) {
+        if let Some(handle) = &self.app_handle {
+            let _ = handle.emit(
+                GIT_COMMAND_START,
+                GitCommandStartEvent {
+                    id: id.to_string(),
+                    command: format!("git {}", args.join(" ")),
+                    operation: operation.to_string(),
+                    repo_path: self.repo_path.to_string_lossy().to_string(),
+                    started_at,
+                },
+            );
+        }
+    }
+
+    fn emit_command_complete(
+        &self,
+        id: &str,
+        operation: &str,
+        output: &std::process::Output,
+        duration_ms: u64,
+        summary: Option<OperationSummary>,
+    ) {
+        if let Some(handle) = &self.app_handle {
+            let _ = handle.emit(
+                GIT_COMMAND_COMPLETE,
+                GitCommandCompleteEvent {
+                    id: id.to_string(),
+                    operation: operation.to_string(),
+                    success: output.status.success(),
+                    duration_ms,
+                    stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+                    stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                    exit_code: output.status.code(),
+                    result_summary: summary,
+                },
+            );
+        }
+    }
+
+    fn emit_progress(&self, id: &str, operation: &str, message: &str, percent: Option<u32>) {
+        if let Some(handle) = &self.app_handle {
+            let _ = handle.emit(
+                GIT_COMMAND_PROGRESS,
+                GitCommandProgressEvent {
+                    id: id.to_string(),
+                    operation: operation.to_string(),
+                    message: message.to_string(),
+                    percent,
+                },
+            );
+        }
+    }
+
     /// Run a local git command (no auth needed, hooks will execute).
     async fn run_local(&self, args: &[&str]) -> Result<std::process::Output, AppError> {
+        let operation = args.first().copied().unwrap_or("unknown");
+        let id = Uuid::new_v4().to_string();
+        let start = Instant::now();
+        let started_at = chrono::Utc::now().timestamp_millis();
+
         tracing::info!(
             "[git] git {} (cwd: {})",
             args.join(" "),
             self.repo_path.display()
         );
+
+        self.emit_command_start(&id, args, operation, started_at);
+
         let output = Command::new("git")
             .args(args)
             .current_dir(&self.repo_path)
@@ -52,7 +133,51 @@ impl GitCliEngine {
             .output()
             .await
             .map_err(map_io_err)?;
+
         log_output(&output);
+
+        let duration_ms = start.elapsed().as_millis() as u64;
+        self.emit_command_complete(&id, operation, &output, duration_ms, None);
+
+        Ok(output)
+    }
+
+    /// Run a local git command with a custom summary builder, emitting a richer event.
+    async fn run_local_with_summary<F>(
+        &self,
+        args: &[&str],
+        summary_fn: F,
+    ) -> Result<std::process::Output, AppError>
+    where
+        F: FnOnce(&std::process::Output) -> Option<OperationSummary>,
+    {
+        let operation = args.first().copied().unwrap_or("unknown");
+        let id = Uuid::new_v4().to_string();
+        let start = Instant::now();
+        let started_at = chrono::Utc::now().timestamp_millis();
+
+        tracing::info!(
+            "[git] git {} (cwd: {})",
+            args.join(" "),
+            self.repo_path.display()
+        );
+
+        self.emit_command_start(&id, args, operation, started_at);
+
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(&self.repo_path)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .output()
+            .await
+            .map_err(map_io_err)?;
+
+        log_output(&output);
+
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let summary = summary_fn(&output);
+        self.emit_command_complete(&id, operation, &output, duration_ms, summary);
+
         Ok(output)
     }
 
@@ -116,6 +241,45 @@ impl GitCliEngine {
         Ok(())
     }
 
+    /// Apply a stash entry by index without removing it.
+    pub async fn stash_apply(&self, index: usize) -> Result<(), AppError> {
+        let ref_str = crate::git::stash::stash_ref(index);
+        self.run_local_checked(&["stash", "apply", &ref_str]).await?;
+        Ok(())
+    }
+
+    /// Drop (delete) a stash entry by index.
+    pub async fn stash_drop(&self, index: usize) -> Result<(), AppError> {
+        let ref_str = crate::git::stash::stash_ref(index);
+        self.run_local_checked(&["stash", "drop", &ref_str]).await?;
+        Ok(())
+    }
+
+    /// Pop a stash entry by index (apply + drop).
+    pub async fn stash_pop_index(&self, index: usize) -> Result<(), AppError> {
+        let ref_str = crate::git::stash::stash_ref(index);
+        self.run_local_checked(&["stash", "pop", &ref_str]).await?;
+        Ok(())
+    }
+
+    /// Stash only specific paths (partial stash).
+    pub async fn stash_push_paths(
+        &self,
+        message: Option<&str>,
+        paths: &[String],
+    ) -> Result<(), AppError> {
+        let mut args = vec!["stash", "push"];
+        if let Some(msg) = message {
+            args.push("-m");
+            args.push(msg);
+        }
+        args.push("--");
+        let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+        args.extend(path_refs);
+        self.run_local_checked(&args).await?;
+        Ok(())
+    }
+
     /// Merge a branch into the current branch via git CLI so that hooks run.
     pub async fn merge_branch(&self, branch: &str, no_ff: bool) -> Result<(), AppError> {
         let mut args = vec!["merge"];
@@ -124,8 +288,20 @@ impl GitCliEngine {
         }
         args.push("--");
         args.push(branch);
-        self.run_local_checked(&args).await?;
-        Ok(())
+        let output = self.run_local_with_summary(&args, |out| {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            output_parser::parse_merge_output(&stdout, branch)
+        })
+        .await?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(AppError::GitCli {
+                message: parse_git_error(&stderr),
+                exit_code: output.status.code(),
+            })
+        }
     }
 
     /// Squash-merge a branch into the current branch via git CLI.
@@ -352,23 +528,102 @@ impl GitCliEngine {
 
 // ── Remote operations (auth-aware) ──────────────────────────────────────────
 
+impl GitCliEngine {
+    /// 원격 작업을 spawn + stderr 스트리밍으로 실행.
+    /// app_handle이 None이면 기존 .output() 방식으로 폴백한다.
+    async fn run_remote_with_progress(
+        &self,
+        cmd: &mut Command,
+        id: &str,
+        operation: &str,
+    ) -> Result<std::process::Output, AppError> {
+        if self.app_handle.is_none() {
+            return cmd.output().await.map_err(map_io_err);
+        }
+
+        cmd.stderr(std::process::Stdio::piped());
+        cmd.stdout(std::process::Stdio::piped());
+
+        let mut child = cmd.spawn().map_err(map_io_err)?;
+
+        let stderr_handle = child.stderr.take();
+        let collected_stderr = Arc::new(Mutex::new(Vec::<String>::new()));
+        let stderr_clone = Arc::clone(&collected_stderr);
+        let self_id = id.to_string();
+        let self_op = operation.to_string();
+        let app_handle = self.app_handle.clone();
+        let repo_path = self.repo_path.clone();
+
+        let stderr_task = tokio::spawn(async move {
+            if let Some(stderr) = stderr_handle {
+                let reader = BufReader::new(stderr);
+                let mut lines = reader.lines();
+
+                let temp_engine = GitCliEngine {
+                    repo_path,
+                    app_handle,
+                };
+
+                while let Ok(Some(line)) = lines.next_line().await {
+                    let segments: Vec<&str> = line.split('\r').collect();
+                    let last_segment = segments.last().copied().unwrap_or("").trim();
+
+                    if last_segment.is_empty() {
+                        continue;
+                    }
+
+                    stderr_clone.lock().unwrap().push(last_segment.to_string());
+
+                    // Parse percent: "Receiving objects: 45% (123/273)"
+                    let percent = last_segment.find('%').and_then(|pos| {
+                        let before = &last_segment[..pos];
+                        before
+                            .rsplit(|c: char| !c.is_ascii_digit())
+                            .next()
+                            .and_then(|n| n.parse::<u32>().ok())
+                    });
+
+                    temp_engine.emit_progress(&self_id, &self_op, last_segment, percent);
+                }
+            }
+        });
+
+        let output = child.wait_with_output().await.map_err(map_io_err)?;
+        let _ = stderr_task.await;
+
+        let collected = collected_stderr.lock().unwrap();
+        let mut final_output = output;
+        if !collected.is_empty() {
+            final_output.stderr = collected.join("\n").into_bytes();
+        }
+
+        Ok(final_output)
+    }
+}
+
 impl GitRemoteEngine for GitCliEngine {
     async fn clone_repo(&self, url: &str, path: &Path, token: &str) -> Result<(), AppError> {
         let askpass = AskpassScript::create(token).await?;
         let path_str = path.to_string_lossy().into_owned();
         let args = ["-c", "credential.helper=", "clone", "--", url, &path_str];
 
-        tracing::info!("[git] git {}", args.join(" "));
+        let id = Uuid::new_v4().to_string();
+        let start = Instant::now();
+        let started_at = chrono::Utc::now().timestamp_millis();
+        let display_args = ["clone", "--", url, &path_str];
 
-        let output = Command::new("git")
-            .args(args)
+        tracing::info!("[git] git {}", args.join(" "));
+        self.emit_command_start(&id, &display_args, "clone", started_at);
+
+        let mut cmd = Command::new("git");
+        cmd.args(args)
             .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_ASKPASS", askpass.path())
-            .output()
-            .await
-            .map_err(map_io_err)?;
+            .env("GIT_ASKPASS", askpass.path());
+        let output = self.run_remote_with_progress(&mut cmd, &id, "clone").await?;
 
         log_output(&output);
+        let duration_ms = start.elapsed().as_millis() as u64;
+        self.emit_command_complete(&id, "clone", &output, duration_ms, None);
         check_output(output)
     }
 
@@ -376,18 +631,25 @@ impl GitRemoteEngine for GitCliEngine {
         let askpass = AskpassScript::create(token).await?;
         let args = ["-c", "credential.helper=", "fetch", "--prune", remote];
 
-        tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
+        let id = Uuid::new_v4().to_string();
+        let start = Instant::now();
+        let started_at = chrono::Utc::now().timestamp_millis();
+        let display_args = ["fetch", "--prune", remote];
 
-        let output = Command::new("git")
-            .args(args)
+        tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
+        self.emit_command_start(&id, &display_args, "fetch", started_at);
+
+        let mut cmd = Command::new("git");
+        cmd.args(args)
             .current_dir(&self.repo_path)
             .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_ASKPASS", askpass.path())
-            .output()
-            .await
-            .map_err(map_io_err)?;
+            .env("GIT_ASKPASS", askpass.path());
+        let output = self.run_remote_with_progress(&mut cmd, &id, "fetch").await?;
 
         log_output(&output);
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let summary = output_parser::parse_fetch_output(&String::from_utf8_lossy(&output.stderr));
+        self.emit_command_complete(&id, "fetch", &output, duration_ms, summary);
         check_output(output)
     }
 
@@ -407,18 +669,34 @@ impl GitRemoteEngine for GitCliEngine {
         args.push(remote);
         args.push(branch);
 
-        tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
+        let id = Uuid::new_v4().to_string();
+        let start = Instant::now();
+        let started_at = chrono::Utc::now().timestamp_millis();
+        let mut display_args = vec!["push", "--set-upstream"];
+        if force {
+            display_args.push("--force");
+        }
+        display_args.push(remote);
+        display_args.push(branch);
 
-        let output = Command::new("git")
-            .args(&args)
+        tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
+        self.emit_command_start(&id, &display_args, "push", started_at);
+
+        let mut cmd = Command::new("git");
+        cmd.args(&args)
             .current_dir(&self.repo_path)
             .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_ASKPASS", askpass.path())
-            .output()
-            .await
-            .map_err(map_io_err)?;
+            .env("GIT_ASKPASS", askpass.path());
+        let output = self.run_remote_with_progress(&mut cmd, &id, "push").await?;
 
         log_output(&output);
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let summary = output_parser::parse_push_output(
+            &String::from_utf8_lossy(&output.stderr),
+            branch,
+            remote,
+        );
+        self.emit_command_complete(&id, "push", &output, duration_ms, summary);
         check_output(output)
     }
 
@@ -438,18 +716,33 @@ impl GitRemoteEngine for GitCliEngine {
         args.push(remote);
         args.push(branch);
 
-        tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
+        let id = Uuid::new_v4().to_string();
+        let start = Instant::now();
+        let started_at = chrono::Utc::now().timestamp_millis();
+        let mut display_args = vec!["pull"];
+        if rebase {
+            display_args.push("--rebase");
+        }
+        display_args.push(remote);
+        display_args.push(branch);
 
-        let output = Command::new("git")
-            .args(&args)
+        tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
+        self.emit_command_start(&id, &display_args, "pull", started_at);
+
+        let mut cmd = Command::new("git");
+        cmd.args(&args)
             .current_dir(&self.repo_path)
             .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_ASKPASS", askpass.path())
-            .output()
-            .await
-            .map_err(map_io_err)?;
+            .env("GIT_ASKPASS", askpass.path());
+        let output = self.run_remote_with_progress(&mut cmd, &id, "pull").await?;
 
         log_output(&output);
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let summary = output_parser::parse_pull_output(
+            &String::from_utf8_lossy(&output.stdout),
+            &String::from_utf8_lossy(&output.stderr),
+        );
+        self.emit_command_complete(&id, "pull", &output, duration_ms, summary);
         check_output(output)
     }
 }

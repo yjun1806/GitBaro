@@ -4,8 +4,8 @@ import {
   Search,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { cn } from "@/lib/utils";
 import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
+import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { useBranchGroups } from "@/hooks/useBranchGroups";
 import type { SortBy } from "@/hooks/useBranchGroups";
 import {
@@ -17,7 +17,7 @@ import { BranchContextMenu } from "@/components/branch/BranchContextMenu";
 import { WorktreeTabContent } from "@/components/branch/WorktreeTabContent";
 import type { BranchInfo, WorktreeInfo } from "@/types";
 
-type Tab = "branches" | "worktrees";
+type DropdownTab = "branches" | "worktrees";
 
 // ── Reducer ─────────────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ export function BranchDropdown({
   onClose,
 }: BranchDropdownProps) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<Tab>("branches");
+  const [activeTab, setActiveTab] = useState<DropdownTab>("branches");
   const [sortBy, setSortBy] = useState<SortBy>("name");
   const [state, dispatch] = useReducer(reducer, {
     query: "",
@@ -204,22 +204,24 @@ export function BranchDropdown({
       onKeyDown={handleKeyDown}
     >
       {/* Tabs */}
-      <div className="flex border-b border-border">
-        <TabButton
+      <TabGroup>
+        <Tab
           active={activeTab === "branches"}
           onClick={() => setActiveTab("branches")}
           icon={<GitBranch className="w-3.5 h-3.5" />}
-          label={t("branch.title")}
           count={branches.filter((b) => !b.isRemote).length}
-        />
-        <TabButton
+        >
+          {t("branch.title")}
+        </Tab>
+        <Tab
           active={activeTab === "worktrees"}
           onClick={() => setActiveTab("worktrees")}
           icon={<WorktreeIcon className="w-3.5 h-3.5" />}
-          label={t("worktree.title")}
           count={activeWorktrees.length}
-        />
-      </div>
+        >
+          {t("worktree.title")}
+        </Tab>
+      </TabGroup>
 
       {/* Search + Action */}
       <div className="flex items-center gap-2 p-2 border-b border-border">
@@ -319,47 +321,4 @@ export function BranchDropdown({
   );
 }
 
-// ── TabButton ───────────────────────────────────────────────────────────────
-
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
-  count,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors relative",
-        active
-          ? "text-primary"
-          : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {icon}
-      {label}
-      <span
-        className={cn(
-          "text-xs tabular-nums px-1.5 py-0.5 rounded-full",
-          active
-            ? "bg-primary/10 text-primary"
-            : "bg-muted text-muted-foreground",
-        )}
-      >
-        {count}
-      </span>
-      {active && (
-        <span className="absolute bottom-0 inset-x-3 h-0.5 bg-primary rounded-full" />
-      )}
-    </button>
-  );
-}
 

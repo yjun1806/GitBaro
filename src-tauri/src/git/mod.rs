@@ -6,6 +6,7 @@ pub mod diff;
 pub mod engine;
 pub mod libgit;
 pub mod merge;
+pub mod output_parser;
 pub mod remote;
 pub mod repository;
 pub mod stash;

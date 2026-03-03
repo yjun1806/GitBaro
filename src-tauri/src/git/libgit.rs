@@ -9,7 +9,7 @@ use crate::git::commit::{commit_to_info, signature_to_author, validate_message};
 use crate::git::diff::convert_diff;
 use crate::git::engine::{
     BlameLine, BranchInfo, CommitInfo, ConflictFile, DiffOutput, DiffSpec, FileStatus,
-    GitEngine, LogOptions, MergeResult, StashEntry, StatusEntry,
+    GitEngine, LogOptions, MergeResult, StashEntry, StashFileSummary, StashShowResult, StatusEntry,
 };
 
 /// git2 `Repository` requires `&mut self` for stash/merge operations.
@@ -377,16 +377,36 @@ impl GitEngine for LibGitEngine {
     }
 
     fn stash_list(&self) -> Result<Vec<StashEntry>, AppError> {
-        let mut repo = self.repo.borrow_mut();
-        let mut entries = Vec::new();
-        repo.stash_foreach(|index, message, oid| {
-            entries.push(StashEntry {
-                index,
-                message: message.to_string(),
-                commit_id: oid.to_string(),
-            });
-            true
-        })?;
+        // Pass 1: collect raw entries via stash_foreach (requires &mut repo)
+        let mut raw: Vec<(usize, String, git2::Oid)> = Vec::new();
+        {
+            let mut repo = self.repo.borrow_mut();
+            repo.stash_foreach(|index, message, oid| {
+                raw.push((index, message.to_string(), *oid));
+                true
+            })?;
+        }
+
+        // Pass 2: enrich with timestamp + branch_name (immutable borrow is fine)
+        let repo = self.repo.borrow();
+        let entries = raw
+            .into_iter()
+            .map(|(index, message, oid)| {
+                let timestamp = repo
+                    .find_commit(oid)
+                    .map(|c| c.time().seconds())
+                    .unwrap_or(0);
+                let branch_name =
+                    crate::git::stash::extract_branch_from_stash_message(&message);
+                StashEntry {
+                    index,
+                    message,
+                    commit_id: oid.to_string(),
+                    branch_name,
+                    timestamp,
+                }
+            })
+            .collect();
         Ok(entries)
     }
 
@@ -526,5 +546,68 @@ impl GitEngine for LibGitEngine {
         }
 
         Ok(result)
+    }
+}
+
+// ── LibGitEngine extra methods (not in trait) ────────────────────────────────
+
+impl LibGitEngine {
+    /// Show the file summary for a stash entry.
+    /// Not part of the GitEngine trait — only LibGitEngine exposes this directly.
+    pub fn stash_show(&self, index: usize) -> Result<StashShowResult, AppError> {
+        let repo = self.repo.borrow();
+        let stash_ref = crate::git::stash::stash_ref(index);
+        let obj = repo.revparse_single(&stash_ref)?;
+        let stash_commit = obj.peel_to_commit()?;
+        let stash_tree = stash_commit.tree()?;
+        let parent = stash_commit.parent(0)?;
+        let parent_tree = parent.tree()?;
+        let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&stash_tree), None)?;
+
+        let mut files = Vec::new();
+        for idx in 0..diff.deltas().count() {
+            let delta = diff.get_delta(idx).unwrap();
+            let path = delta
+                .new_file()
+                .path()
+                .or_else(|| delta.old_file().path())
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let status = match delta.status() {
+                git2::Delta::Added => "added",
+                git2::Delta::Deleted => "deleted",
+                git2::Delta::Modified => "modified",
+                git2::Delta::Renamed => "renamed",
+                _ => "modified",
+            };
+
+            let (insertions, deletions) = match git2::Patch::from_diff(&diff, idx) {
+                Ok(Some(patch)) => {
+                    let (_, ins, del) = patch.line_stats().unwrap_or((0, 0, 0));
+                    (ins, del)
+                }
+                _ => (0, 0),
+            };
+
+            files.push(StashFileSummary {
+                path,
+                status: status.to_string(),
+                insertions,
+                deletions,
+            });
+        }
+
+        let message = stash_commit.message().unwrap_or("").to_string();
+        let timestamp = stash_commit.time().seconds();
+        let branch_name = crate::git::stash::extract_branch_from_stash_message(&message);
+        let entry = StashEntry {
+            index,
+            message,
+            commit_id: stash_commit.id().to_string(),
+            branch_name,
+            timestamp,
+        };
+
+        Ok(StashShowResult { entry, files })
     }
 }

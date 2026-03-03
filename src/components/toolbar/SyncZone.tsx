@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useUIStore } from "@/stores/ui";
+import { useActivityStore } from "@/stores/activity";
 import { useBranches, useTokenValidation } from "@/api/queries";
 import { gitFetch, gitPush, gitPull } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { useClickOutside } from "./useToolbarDropdown";
 import { SyncDropdown } from "./SyncDropdown";
+import { ConfirmCommandDialog } from "@/components/ui/ConfirmCommandDialog";
 
 interface SyncZoneProps {
   isOpen: boolean;
@@ -35,9 +37,11 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
 
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
+  const activeOperations = useActivityStore((s) => s.activeOperations);
 
   const [syncingAction, setSyncingAction] = useState<"fetch" | "push" | "pull" | null>(null);
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
+  const [showForcePushConfirm, setShowForcePushConfirm] = useState(false);
 
   const isSyncing = syncingAction !== null;
 
@@ -45,10 +49,17 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const ahead = headBranch?.aheadBehind?.ahead ?? 0;
   const behind = headBranch?.aheadBehind?.behind ?? 0;
   const hasUpstream = headBranch?.upstream != null;
+  const headBranchName = headBranch?.name ?? "";
 
   const previewBranch = useUIStore((s) => s.previewBranch);
   const canSync = tokenStatus?.valid === true && tokenStatus?.canPush === true;
   const syncDisabled = isSyncing || !activeAccountId || (!isValidating && !canSync) || !!previewBranch;
+
+  // Find active remote operation progress
+  const activeRemoteOp = Object.values(activeOperations).find(
+    (op) => op.operation === "fetch" || op.operation === "push" || op.operation === "pull",
+  );
+  const progressPercent = activeRemoteOp?.progress?.percent;
 
   const syncError = (() => {
     if (!activeAccountId || isValidating || canSync) return null;
@@ -144,13 +155,28 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const handlePush = async (force = false) => {
     if (!activeRepoPath || !activeAccountId || isSyncing) return;
     if (force) {
-      addToast(t("sync.forcePushing"), "info");
+      setShowForcePushConfirm(true);
+      return;
     }
     setSyncingAction("push");
     try {
-      await gitPush(activeRepoPath, activeAccountId, force);
+      await gitPush(activeRepoPath, activeAccountId, false);
       await invalidateAll();
-      addToast(force ? t("sync.forcePushCompleted") : t("sync.pushCompleted"), "success");
+      addToast(t("sync.pushCompleted"), "success");
+    } catch (err) {
+      addToast(t("sync.pushFailed", { error: getErrorMessage(err) }), "error");
+    } finally {
+      setSyncingAction(null);
+    }
+  };
+
+  const handleForcePushConfirmed = async () => {
+    if (!activeRepoPath || !activeAccountId) return;
+    setSyncingAction("push");
+    try {
+      await gitPush(activeRepoPath, activeAccountId, true);
+      await invalidateAll();
+      addToast(t("sync.forcePushCompleted"), "success");
     } catch (err) {
       addToast(t("sync.pushFailed", { error: getErrorMessage(err) }), "error");
     } finally {
@@ -221,6 +247,11 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
         >
           {stateConfig.icon}
           <span className="text-sm font-semibold whitespace-nowrap">{stateConfig.label}</span>
+          {isSyncing && progressPercent !== undefined && (
+            <span className="text-[10px] tabular-nums text-muted-foreground">
+              {t("activity.progress", { percent: progressPercent })}
+            </span>
+          )}
           {hasCount && (
             <span className="bg-primary text-primary-foreground text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 tabular-nums leading-none">
               {behind > 0 ? behind : ahead}
@@ -252,6 +283,17 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
           onPull={handlePull}
           onPush={handlePush}
           onClose={onClose}
+        />
+      )}
+
+      {showForcePushConfirm && (
+        <ConfirmCommandDialog
+          title={t("sync.forcePushConfirmTitle")}
+          command={`git push --force origin ${headBranchName}`}
+          warnings={[t("sync.forcePushWarning")]}
+          confirmVariant="destructive"
+          onConfirm={handleForcePushConfirmed}
+          onClose={() => setShowForcePushConfirm(false)}
         />
       )}
     </div>

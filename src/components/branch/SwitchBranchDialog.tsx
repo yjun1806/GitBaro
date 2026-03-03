@@ -64,6 +64,9 @@ export function SwitchBranchDialog({
                 <p className="text-[13px] text-muted-foreground mt-0.5 leading-relaxed">
                   {t("branch.leaveChangesDesc")}
                 </p>
+                <span className="text-xs text-muted-foreground font-mono block ml-6">
+                  git stash && git checkout {targetBranch}
+                </span>
               </div>
             </label>
 
@@ -91,6 +94,9 @@ export function SwitchBranchDialog({
                 <p className="text-[13px] text-muted-foreground mt-0.5 leading-relaxed">
                   {t("branch.bringChangesDesc")}
                 </p>
+                <span className="text-xs text-muted-foreground font-mono block ml-6">
+                  git checkout {targetBranch}
+                </span>
               </div>
             </label>
           </div>

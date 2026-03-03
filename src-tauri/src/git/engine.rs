@@ -142,6 +142,24 @@ pub struct StashEntry {
     pub index: usize,
     pub message: String,
     pub commit_id: String,
+    pub branch_name: Option<String>,
+    pub timestamp: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct StashShowResult {
+    pub entry: StashEntry,
+    pub files: Vec<StashFileSummary>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct StashFileSummary {
+    pub path: String,
+    pub status: String,
+    pub insertions: usize,
+    pub deletions: usize,
 }
 
 // ── Merge ─────────────────────────────────────────────────────────────────────
@@ -162,6 +180,16 @@ pub struct ConflictFile {
     pub ours: Option<String>,
     pub theirs: Option<String>,
     pub base: Option<String>,
+}
+
+// ── Merge Pre-Check ──────────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MergePreCheckResult {
+    pub can_fast_forward: bool,
+    pub has_conflicts: bool,
+    pub conflict_files: Vec<String>,
 }
 
 // ── Branch Compare ────────────────────────────────────────────────────────────

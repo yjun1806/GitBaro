@@ -16,7 +16,10 @@ import type {
   AiCliInfo,
   BranchCompareResult,
   MergeStrategy,
+  MergePreCheckResult,
   WorktreeInfo,
+  StashEntry,
+  StashShowResult,
 } from "@/types";
 
 // Git operations — backend returns indexStatus/worktreeStatus separately,
@@ -224,6 +227,41 @@ export async function mergeBranch(
   return invoke("merge_branch_into_current", { repoPath, branch, strategy });
 }
 
+export async function checkMergeConflicts(
+  repoPath: string,
+  branch: string,
+): Promise<MergePreCheckResult> {
+  return invoke("check_merge_conflicts", { repoPath, branch });
+}
+
+export async function getConflictFileDiff(
+  repoPath: string,
+  branch: string,
+  filePath: string,
+): Promise<DiffOutput> {
+  const raw: RawFileDiff = await invoke("get_conflict_file_diff", { repoPath, branch, filePath });
+  return {
+    filePath: raw.filePath,
+    oldContent: raw.oldContent ?? "",
+    newContent: raw.newContent ?? "",
+    binary: raw.binary ?? false,
+    binaryPreview: raw.binaryPreview,
+    hunks: raw.hunks.map((h) => ({
+      header: h.header,
+      oldStart: h.oldStart,
+      oldLines: h.lines.filter((l) => l.kind !== "addition").length,
+      newStart: h.newStart,
+      newLines: h.lines.filter((l) => l.kind !== "deletion").length,
+      lines: h.lines.map((l) => ({
+        content: l.content,
+        lineType: mapLineKind(l.kind),
+        oldLineNo: l.oldLineNo,
+        newLineNo: l.newLineNo,
+      })),
+    })),
+  };
+}
+
 // Stash
 export async function stashPush(repoPath: string, message?: string): Promise<void> {
   return invoke("stash_push", { repoPath, message });
@@ -231,6 +269,26 @@ export async function stashPush(repoPath: string, message?: string): Promise<voi
 
 export async function stashPop(repoPath: string): Promise<void> {
   return invoke("stash_pop", { repoPath });
+}
+
+export async function stashList(repoPath: string): Promise<StashEntry[]> {
+  return invoke("stash_list", { repoPath });
+}
+
+export async function stashApply(repoPath: string, index: number): Promise<void> {
+  return invoke("stash_apply", { repoPath, index });
+}
+
+export async function stashDrop(repoPath: string, index: number): Promise<void> {
+  return invoke("stash_drop", { repoPath, index });
+}
+
+export async function stashShow(repoPath: string, index: number): Promise<StashShowResult> {
+  return invoke("stash_show", { repoPath, index });
+}
+
+export async function stashPushPartial(repoPath: string, paths: string[], message?: string): Promise<void> {
+  return invoke("stash_push_partial", { repoPath, paths, message });
 }
 
 // History — backend returns raw fields (oid, parentCount, etc.)

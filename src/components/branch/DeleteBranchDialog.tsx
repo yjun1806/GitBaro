@@ -36,6 +36,10 @@ export function DeleteBranchDialog({
             {t("branch.deleteConfirm", { name: branchName })}
           </p>
 
+          <p className="font-mono text-xs text-muted-foreground mt-2">
+            {isFullyMerged ? `git branch -d ${branchName}` : `git branch -D ${branchName}`}
+          </p>
+
           {!isFullyMerged && (
             <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-warning/10 border border-warning/20">
               <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />

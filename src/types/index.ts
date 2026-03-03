@@ -199,6 +199,12 @@ export interface MergeOperationResult {
   hasConflicts: boolean;
 }
 
+export interface MergePreCheckResult {
+  canFastForward: boolean;
+  hasConflicts: boolean;
+  conflictFiles: string[];
+}
+
 export interface WorktreeInfo {
   path: string;
   head: string;
@@ -208,4 +214,85 @@ export interface WorktreeInfo {
   isLocked: boolean;
   lockReason: string | null;
   isDirty: boolean;
+}
+
+// ── Stash ────────────────────────────────────────────────────────────────────
+
+export interface StashEntry {
+  index: number;
+  message: string;
+  commitId: string;
+  branchName: string | null;
+  timestamp: number;
+}
+
+export interface StashFileSummary {
+  path: string;
+  status: string;
+  insertions: number;
+  deletions: number;
+}
+
+export interface StashShowResult {
+  entry: StashEntry;
+  files: StashFileSummary[];
+}
+
+// ── Activity ──
+
+export type OperationType =
+  | "fetch"
+  | "push"
+  | "pull"
+  | "clone"
+  | "merge"
+  | "commit"
+  | "checkout"
+  | "stash"
+  | "rebase"
+  | "status"
+  | "log";
+
+export interface GitCommandEntry {
+  id: string;
+  command: string;
+  operation: OperationType;
+  repoPath: string;
+  startedAt: number;
+  completedAt?: number;
+  durationMs?: number;
+  success?: boolean;
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number | null;
+  resultSummary?: OperationSummary;
+  progress?: { message: string; percent?: number };
+}
+
+export type OperationSummary =
+  | {
+      type: "fetch";
+      updatedBranches: BranchUpdate[];
+      newBranches: string[];
+      deletedBranches: string[];
+    }
+  | { type: "push"; branch: string; commitCount: number; remote: string }
+  | {
+      type: "pull";
+      mergeType: string;
+      filesChanged: number;
+      hasConflicts: boolean;
+    }
+  | {
+      type: "merge";
+      mergeType: string;
+      filesChanged: number;
+      hasConflicts: boolean;
+      sourceBranch: string;
+    };
+
+export interface BranchUpdate {
+  name: string;
+  oldOid: string;
+  newOid: string;
 }

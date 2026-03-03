@@ -1,20 +1,11 @@
 import { useTranslation } from "react-i18next";
-import clsx from "clsx";
 import type { CommitInfo } from "@/types";
-import { formatRelativeTime } from "@/lib/utils";
+import { CommitItem } from "./CommitItem";
 
 interface HistoryTimelineProps {
   commits: CommitInfo[];
   selectedOid?: string;
   onSelectCommit: (commit: CommitInfo) => void;
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((n) => n.charAt(0).toUpperCase())
-    .join("");
 }
 
 export function HistoryTimeline({
@@ -35,49 +26,12 @@ export function HistoryTimeline({
   return (
     <div className="flex flex-col overflow-y-auto">
       {commits.map((commit) => (
-        <button
+        <CommitItem
           key={commit.id}
+          commit={commit}
+          isSelected={commit.id === selectedOid}
           onClick={() => onSelectCommit(commit)}
-          className={clsx(
-            "flex items-start gap-3 px-4 py-3 text-left transition-colors border-b border-border",
-            commit.id === selectedOid
-              ? "bg-primary/10"
-              : "hover:bg-accent"
-          )}
-        >
-          {/* Avatar */}
-          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground shrink-0 mt-0.5">
-            {getInitials(commit.author.name)}
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <p
-              className={clsx(
-                "text-sm font-semibold leading-snug truncate",
-                commit.id === selectedOid
-                  ? "text-primary"
-                  : "text-foreground"
-              )}
-            >
-              {commit.summary}
-            </p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-xs text-muted-foreground/70 truncate">
-                {commit.author.name}
-              </span>
-              <span className="text-xs text-muted-foreground/40">·</span>
-              <span className="text-xs text-muted-foreground/50 shrink-0">
-                {formatRelativeTime(commit.timestamp)}
-              </span>
-            </div>
-          </div>
-
-          {/* Short hash */}
-          <span className="text-xs font-mono text-muted-foreground/50 shrink-0 mt-1">
-            {commit.shortId}
-          </span>
-        </button>
+        />
       ))}
     </div>
   );

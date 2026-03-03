@@ -78,6 +78,7 @@ pub async fn clone_repository(
     url: String,
     path: String,
     account_id: Option<String>,
+    app_handle: tauri::AppHandle,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<Value, AppError> {
     let token = if let Some(ref id) = account_id {
@@ -89,7 +90,7 @@ pub async fn clone_repository(
     // Use GIT_ASKPASS for secure credential passing (no token in URL/process args)
     let path_clone = path.clone();
     if let Some(ref tok) = token {
-        let engine = GitCliEngine::new(std::path::Path::new(&path));
+        let engine = GitCliEngine::with_app_handle(std::path::Path::new(&path), app_handle);
         engine.clone_repo(&url, std::path::Path::new(&path), tok).await?;
     } else {
         tracing::info!("[git] git clone {} {} (no auth)", url, path);

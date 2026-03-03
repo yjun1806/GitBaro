@@ -2,7 +2,7 @@ use crate::error::AppError;
 use crate::git::branch::validate_branch_name;
 use crate::git::cli::GitCliEngine;
 use crate::git::commit::commit_to_info;
-use crate::git::engine::{BranchCompareResult, MergeStrategy};
+use crate::git::engine::{BranchCompareResult, MergePreCheckResult, MergeStrategy};
 use serde_json::{json, Value};
 
 fn is_fully_merged(repo: &git2::Repository, branch_oid: git2::Oid, default_oid: git2::Oid) -> bool {
@@ -288,8 +288,9 @@ pub async fn merge_branch_into_current(
     repo_path: String,
     branch: String,
     strategy: MergeStrategy,
+    app_handle: tauri::AppHandle,
 ) -> Result<String, AppError> {
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     let branch_name = branch.clone();
 
     match strategy {
@@ -318,6 +319,197 @@ pub async fn merge_branch_into_current(
         strategy
     );
     Ok(format!("Successfully merged '{}' into current branch", branch))
+}
+
+#[tauri::command]
+pub async fn check_merge_conflicts(
+    repo_path: String,
+    branch: String,
+) -> Result<MergePreCheckResult, AppError> {
+    let branch_name = branch.clone();
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&repo_path)?;
+
+        // 1. Resolve branch OID
+        let branch_oid = repo
+            .revparse_single(&format!("refs/heads/{}", branch_name))?
+            .peel_to_commit()?
+            .id();
+        let annotated = repo.find_annotated_commit(branch_oid)?;
+
+        // 2. merge_analysis — fast-forward / up-to-date detection
+        let (analysis, _) = repo.merge_analysis(&[&annotated])?;
+        if analysis.is_up_to_date() {
+            return Ok(MergePreCheckResult {
+                can_fast_forward: false,
+                has_conflicts: false,
+                conflict_files: vec![],
+            });
+        }
+        if analysis.is_fast_forward() {
+            return Ok(MergePreCheckResult {
+                can_fast_forward: true,
+                has_conflicts: false,
+                conflict_files: vec![],
+            });
+        }
+
+        // 3. merge_trees — non-destructive 3-way simulation (in-memory only)
+        let head_commit = repo.head()?.peel_to_commit()?;
+        let their_commit = repo.find_commit(branch_oid)?;
+        let ancestor = repo.find_commit(
+            repo.merge_base(head_commit.id(), their_commit.id())?,
+        )?;
+
+        let index = repo.merge_trees(
+            &ancestor.tree()?,
+            &head_commit.tree()?,
+            &their_commit.tree()?,
+            None,
+        )?;
+
+        let mut conflict_files = Vec::new();
+        if index.has_conflicts() {
+            for conflict in index.conflicts()? {
+                let c = conflict?;
+                if let Some(path) = c
+                    .our
+                    .as_ref()
+                    .or(c.their.as_ref())
+                    .or(c.ancestor.as_ref())
+                    .and_then(|e| std::str::from_utf8(&e.path).ok().map(String::from))
+                {
+                    conflict_files.push(path);
+                }
+            }
+        }
+
+        Ok::<_, AppError>(MergePreCheckResult {
+            can_fast_forward: false,
+            has_conflicts: !conflict_files.is_empty(),
+            conflict_files,
+        })
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
+}
+
+#[tauri::command]
+pub async fn get_conflict_file_diff(
+    repo_path: String,
+    branch: String,
+    file_path: String,
+) -> Result<Value, AppError> {
+    let branch_name = branch.clone();
+    let target_path = file_path.clone();
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&repo_path)?;
+
+        // HEAD tree (ours)
+        let head_tree = repo.head()?.peel_to_tree()?;
+        // Branch tree (theirs)
+        let their_tree = repo
+            .revparse_single(&format!("refs/heads/{}", branch_name))?
+            .peel_to_tree()?;
+
+        let mut diff_opts = git2::DiffOptions::new();
+        diff_opts.pathspec(&target_path);
+
+        let diff = repo.diff_tree_to_tree(
+            Some(&head_tree),
+            Some(&their_tree),
+            Some(&mut diff_opts),
+        )?;
+
+        let mut hunks: Vec<Value> = Vec::new();
+        let mut current_hunk_lines: Vec<Value> = Vec::new();
+        let mut current_hunk_header = String::new();
+        let mut current_old_start: u32 = 0;
+        let mut current_new_start: u32 = 0;
+
+        diff.print(git2::DiffFormat::Patch, |_delta, hunk, line| {
+            match line.origin() {
+                'H' => {
+                    if !current_hunk_lines.is_empty() {
+                        hunks.push(json!({
+                            "header": current_hunk_header.clone(),
+                            "oldStart": current_old_start,
+                            "newStart": current_new_start,
+                            "lines": current_hunk_lines.clone(),
+                        }));
+                        current_hunk_lines.clear();
+                    }
+                    if let Some(h) = hunk {
+                        current_hunk_header = String::from_utf8_lossy(h.header()).to_string();
+                        current_old_start = h.old_start();
+                        current_new_start = h.new_start();
+                    }
+                }
+                origin @ ('+' | '-' | ' ') => {
+                    let kind = match origin {
+                        '+' => "addition",
+                        '-' => "deletion",
+                        _ => "context",
+                    };
+                    let content = String::from_utf8_lossy(line.content()).to_string();
+                    current_hunk_lines.push(json!({
+                        "kind": kind,
+                        "content": content,
+                        "oldLineNo": line.old_lineno(),
+                        "newLineNo": line.new_lineno(),
+                    }));
+                }
+                _ => {}
+            }
+            true
+        })?;
+
+        if !current_hunk_lines.is_empty() {
+            hunks.push(json!({
+                "header": current_hunk_header,
+                "oldStart": current_old_start,
+                "newStart": current_new_start,
+                "lines": current_hunk_lines,
+            }));
+        }
+
+        let is_binary = diff.deltas().any(|d| {
+            d.flags().contains(git2::DiffFlags::BINARY)
+                || d.old_file().is_binary()
+                || d.new_file().is_binary()
+        });
+
+        // Read old content from HEAD tree (ours)
+        let old_content = head_tree
+            .get_path(std::path::Path::new(&target_path))
+            .ok()
+            .and_then(|entry| repo.find_blob(entry.id()).ok())
+            .map(|blob| String::from_utf8_lossy(blob.content()).to_string())
+            .unwrap_or_default();
+
+        // Read new content from branch tree (theirs)
+        let new_content = their_tree
+            .get_path(std::path::Path::new(&target_path))
+            .ok()
+            .and_then(|entry| repo.find_blob(entry.id()).ok())
+            .map(|blob| String::from_utf8_lossy(blob.content()).to_string())
+            .unwrap_or_default();
+
+        let stats = diff.stats()?;
+
+        Ok::<_, AppError>(json!({
+            "filePath": target_path,
+            "staged": false,
+            "binary": is_binary,
+            "insertions": stats.insertions(),
+            "deletions": stats.deletions(),
+            "hunks": hunks,
+            "oldContent": old_content,
+            "newContent": new_content,
+        }))
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
 }
 
 #[tauri::command]

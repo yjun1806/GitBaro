@@ -69,7 +69,7 @@ export function CommitPanel({ currentBranch, stagedCount, onCommit }: CommitPane
         onClick={handleCommit}
         disabled={!canCommit}
         className={clsx(
-          "flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors",
+          "flex items-center justify-center gap-2 py-1.5 rounded-md text-xs font-medium transition-colors",
           canCommit
             ? "bg-primary hover:bg-primary-hover text-primary-foreground"
             : "bg-muted text-muted-foreground cursor-not-allowed"

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getStatus,
   getBranches,
@@ -14,7 +14,15 @@ import {
   checkGhStatus,
   resolveCommitAvatars,
   compareBranches,
+  checkMergeConflicts,
   getWorktrees,
+  stashList,
+  stashShow,
+  stashApply,
+  stashDrop,
+  stashPush,
+  stashPop,
+  stashPushPartial,
 } from "./commands";
 
 export function useStatus(repoPath: string | null) {
@@ -121,6 +129,19 @@ export function useBranchComparison(
   });
 }
 
+export function useMergeConflictCheck(
+  repoPath: string | null,
+  branch: string | null,
+) {
+  return useQuery({
+    queryKey: ["mergeConflictCheck", repoPath, branch],
+    queryFn: () => checkMergeConflicts(repoPath!, branch!),
+    enabled: repoPath !== null && branch !== null,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
 export function useGhStatus() {
   return useQuery({
     queryKey: ["ghStatus"],
@@ -143,4 +164,67 @@ export function useRecentBranches(repoPath: string | null, limit = 5) {
     queryFn: () => getRecentBranches(repoPath!, limit),
     enabled: repoPath !== null,
   });
+}
+
+// ── Stash ────────────────────────────────────────────────────────────────────
+
+export function useStashList(repoPath: string | null) {
+  return useQuery({
+    queryKey: ["stashList", repoPath],
+    queryFn: () => stashList(repoPath!),
+    enabled: repoPath !== null,
+    staleTime: 0,
+  });
+}
+
+export function useStashShow(repoPath: string | null, index: number | null) {
+  return useQuery({
+    queryKey: ["stashShow", repoPath, index],
+    queryFn: () => stashShow(repoPath!, index!),
+    enabled: repoPath !== null && index !== null,
+  });
+}
+
+export function useStashMutations(repoPath: string | null) {
+  const queryClient = useQueryClient();
+
+  const invalidateStashAndStatus = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["stashList"] }),
+      queryClient.invalidateQueries({ queryKey: ["status"] }),
+    ]);
+
+  const applyMutation = useMutation({
+    mutationFn: (index: number) => stashApply(repoPath!, index),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["status"] }),
+  });
+
+  const popMutation = useMutation({
+    mutationFn: () => stashPop(repoPath!),
+    onSuccess: () => invalidateStashAndStatus(),
+  });
+
+  const dropMutation = useMutation({
+    mutationFn: (index: number) => stashDrop(repoPath!, index),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["stashList"] }),
+  });
+
+  const pushMutation = useMutation({
+    mutationFn: (message?: string) => stashPush(repoPath!, message),
+    onSuccess: () => invalidateStashAndStatus(),
+  });
+
+  const pushPartialMutation = useMutation({
+    mutationFn: ({ paths, message }: { paths: string[]; message?: string }) =>
+      stashPushPartial(repoPath!, paths, message),
+    onSuccess: () => invalidateStashAndStatus(),
+  });
+
+  return {
+    apply: applyMutation,
+    pop: popMutation,
+    drop: dropMutation,
+    push: pushMutation,
+    pushPartial: pushPartialMutation,
+  };
 }
