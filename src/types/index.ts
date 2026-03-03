@@ -152,6 +152,7 @@ export interface AppSettings {
   theme: Theme;
   defaultEditor: string;
   defaultShell: string;
+  defaultAiCli: string;
   autoFetchInterval: number;
   language: string;
 }
@@ -164,6 +165,20 @@ export interface EditorInfo {
   command: string;
   installed: boolean;
   icon: string | null;
+}
+
+export interface TerminalInfo {
+  id: string;
+  name: string;
+  installed: boolean;
+  icon: string | null;
+}
+
+export interface AiCliInfo {
+  id: string;
+  name: string;
+  command: string;
+  installed: boolean;
 }
 
 export interface BranchCompareResult {

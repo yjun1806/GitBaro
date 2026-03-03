@@ -5,15 +5,24 @@ import {
   Terminal,
   Globe,
   Code2,
+  Bot,
   Trash2,
 } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import type { ContextMenuSection } from "@/components/ui/ContextMenu";
-import { revealInFinder, openInTerminal, openRepoInEditor } from "@/api/commands";
+import { revealInFinder, openInTerminal, openRepoInEditor, openAiCliInTerminal } from "@/api/commands";
 import { getGitHubWebUrl } from "@/lib/utils";
 import type { RepoInfo, AppSettings } from "@/types";
+
+const AI_CLI_DISPLAY_NAMES: Record<string, string> = {
+  claude: "Claude Code",
+  codex: "Codex CLI",
+  gemini: "Gemini CLI",
+  aider: "Aider",
+  copilot: "Copilot CLI",
+};
 
 const EDITOR_DISPLAY_NAMES: Record<string, string> = {
   vscode: "Visual Studio Code",
@@ -59,6 +68,10 @@ export function RepoHeaderContextMenu({
   const editorId = settings?.defaultEditor ?? "";
   const editorName = EDITOR_DISPLAY_NAMES[editorId] ?? "";
   const hasEditor = editorId !== "" && editorName !== "";
+
+  const aiCliId = settings?.defaultAiCli ?? "";
+  const aiCliName = AI_CLI_DISPLAY_NAMES[aiCliId] ?? "";
+  const hasAiCli = aiCliId !== "" && aiCliName !== "";
 
   const sections: ContextMenuSection[] = [
     {
@@ -114,6 +127,16 @@ export function RepoHeaderContextMenu({
             openRepoInEditor(repo.path);
           },
           disabled: !hasEditor,
+        },
+        {
+          label: hasAiCli
+            ? t("repo.contextMenu.openAiCli", { cli: aiCliName })
+            : t("repo.contextMenu.openAiCliFallback"),
+          icon: <Bot className="w-3.5 h-3.5" />,
+          onClick: () => {
+            openAiCliInTerminal(repo.path, aiCliId);
+          },
+          disabled: !hasAiCli,
         },
       ],
     },

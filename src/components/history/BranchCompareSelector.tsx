@@ -11,6 +11,25 @@ interface BranchCompareSelectorProps {
   onSelect: (branchName: string | null) => void;
 }
 
+/**
+ * aheadBehindHead 기준 dot 색상:
+ * - ahead(incoming) + behind(outgoing) 모두 → warning
+ * - ahead(incoming)만 → info
+ * - behind(outgoing)만 → success
+ */
+type CompareStatus = "both" | "incoming" | "outgoing";
+const compareDotStyles: Record<CompareStatus, string> = {
+  both: "bg-warning",
+  incoming: "bg-info",
+  outgoing: "bg-success",
+};
+
+function getCompareStatus(ahead: number, behind: number): CompareStatus {
+  if (ahead > 0 && behind > 0) return "both";
+  if (ahead > 0) return "incoming";
+  return "outgoing";
+}
+
 export function BranchCompareSelector({
   branches,
   currentBranch,
@@ -110,7 +129,6 @@ export function BranchCompareSelector({
               filteredBranches.map((branch) => {
                 const isSelected = branch.name === compareBranch;
                 const ab = branch.aheadBehindHead;
-                const hasAheadBehind = ab && (ab.ahead > 0 || ab.behind > 0);
                 return (
                   <button
                     key={branch.name}
@@ -128,19 +146,34 @@ export function BranchCompareSelector({
                         isSelected ? "text-primary" : "text-muted-foreground",
                       )}
                     />
+                    {/* Dot indicator */}
+                    {ab && (ab.ahead > 0 || ab.behind > 0) && (
+                      <span
+                        className={cn(
+                          "w-1.5 h-1.5 rounded-full shrink-0",
+                          compareDotStyles[getCompareStatus(ab.ahead, ab.behind)],
+                        )}
+                      />
+                    )}
                     <span className="flex-1 truncate text-left">
                       {branch.name}
                     </span>
-                    {hasAheadBehind && (
+                    {ab && (ab.ahead > 0 || ab.behind > 0) && (
                       <span className="flex items-center gap-1.5 text-xs tabular-nums shrink-0">
-                        {ab!.ahead > 0 && (
-                          <span className="text-primary font-medium">
-                            {"\u2191"}{ab!.ahead}
+                        {ab.ahead > 0 && (
+                          <span
+                            className="text-info font-medium"
+                            title={t("compare.selectorIncomingTooltip", { count: ab.ahead })}
+                          >
+                            {"\u2193"}{ab.ahead}
                           </span>
                         )}
-                        {ab!.behind > 0 && (
-                          <span className="text-danger font-medium">
-                            {"\u2193"}{ab!.behind}
+                        {ab.behind > 0 && (
+                          <span
+                            className="text-success font-medium"
+                            title={t("compare.selectorOutgoingTooltip", { count: ab.behind })}
+                          >
+                            {"\u2191"}{ab.behind}
                           </span>
                         )}
                       </span>

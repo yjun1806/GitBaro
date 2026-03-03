@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { ArrowUp, ArrowDown, Loader2 } from "lucide-react";
-import clsx from "clsx";
+import { ArrowDownToLine, ArrowUpFromLine, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useBranchComparison } from "@/api/queries";
 import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import type { CommitInfo } from "@/types";
@@ -33,7 +33,7 @@ function CommitRow({
   return (
     <button
       onClick={onClick}
-      className={clsx(
+      className={cn(
         "flex items-start gap-3 px-4 py-3 text-left transition-colors border-b border-border w-full",
         isSelected ? "bg-primary/10" : "hover:bg-accent",
       )}
@@ -46,7 +46,7 @@ function CommitRow({
       {/* Content */}
       <div className="flex-1 min-w-0">
         <p
-          className={clsx(
+          className={cn(
             "text-sm font-semibold leading-snug truncate",
             isSelected ? "text-primary" : "text-foreground",
           )}
@@ -69,6 +69,64 @@ function CommitRow({
         {commit.shortId}
       </span>
     </button>
+  );
+}
+
+interface CommitSectionProps {
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  badgeClass: string;
+  commits: CommitInfo[];
+  emptyMessage: string;
+  selectedCommitId: string | null;
+  onSelectCommit: (id: string) => void;
+  tooltip?: string;
+}
+
+function CommitSection({
+  icon,
+  label,
+  count,
+  badgeClass,
+  commits,
+  emptyMessage,
+  selectedCommitId,
+  onSelectCommit,
+  tooltip,
+}: CommitSectionProps) {
+  return (
+    <div className={cn("flex flex-col", count === 0 && "opacity-50")}>
+      <div
+        className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface sticky top-0 z-10"
+        title={tooltip}
+      >
+        {icon}
+        <span className="text-sm font-medium text-foreground">{label}</span>
+        <span
+          className={cn(
+            "text-xs font-semibold rounded-full px-2 py-0.5",
+            badgeClass,
+          )}
+        >
+          {count}
+        </span>
+      </div>
+      {commits.length > 0 ? (
+        commits.map((commit) => (
+          <CommitRow
+            key={commit.id}
+            commit={commit}
+            isSelected={commit.id === selectedCommitId}
+            onClick={() => onSelectCommit(commit.id)}
+          />
+        ))
+      ) : (
+        <div className="px-4 py-3 text-sm text-muted-foreground">
+          {emptyMessage}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -113,61 +171,47 @@ export function BranchCompareView({
     );
   }
 
+  /**
+   * Git ↔ UI 용어 매핑:
+   * - aheadCount / aheadCommits  → "Outgoing" (현재 브랜치에만 있는 커밋, push 대상)
+   * - behindCount / behindCommits → "Incoming" (비교 브랜치에만 있는 커밋, merge 대상)
+   */
+  const incoming = { count: data.behindCount, commits: data.behindCommits };
+  const outgoing = { count: data.aheadCount, commits: data.aheadCommits };
+
   return (
     <div className="flex flex-col flex-1 overflow-y-auto">
-      {/* Ahead section */}
-      <div className="flex flex-col">
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface sticky top-0 z-10">
-          <ArrowUp className="w-4 h-4 text-primary" />
-          <span className="text-sm font-medium text-foreground">
-            {t("compare.ahead")}
-          </span>
-          <span className="bg-primary/10 text-primary text-xs font-semibold rounded-full px-2 py-0.5">
-            {data.aheadCount}
-          </span>
-        </div>
-        {data.aheadCommits.length > 0 ? (
-          data.aheadCommits.map((commit) => (
-            <CommitRow
-              key={commit.id}
-              commit={commit}
-              isSelected={commit.id === selectedCommitId}
-              onClick={() => onSelectCommit(commit.id)}
-            />
-          ))
-        ) : (
-          <div className="px-4 py-3 text-sm text-muted-foreground">
-            {t("compare.noAheadCommits")}
-          </div>
-        )}
-      </div>
+      {/* Incoming section first — more actionable */}
+      <CommitSection
+        icon={<ArrowDownToLine className="w-4 h-4 text-info" />}
+        label={t("compare.incomingFrom", { branch: compareBranch })}
+        count={incoming.count}
+        badgeClass="bg-info/10 text-info"
+        commits={incoming.commits}
+        emptyMessage={t("compare.noIncomingCommits")}
+        selectedCommitId={selectedCommitId}
+        onSelectCommit={onSelectCommit}
+        tooltip={t("compare.incomingTooltip", {
+          count: incoming.count,
+          branch: compareBranch,
+        })}
+      />
 
-      {/* Behind section */}
-      <div className="flex flex-col">
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-surface sticky top-0 z-10">
-          <ArrowDown className="w-4 h-4 text-warning" />
-          <span className="text-sm font-medium text-foreground">
-            {t("compare.behind")}
-          </span>
-          <span className="bg-warning/10 text-warning text-xs font-semibold rounded-full px-2 py-0.5">
-            {data.behindCount}
-          </span>
-        </div>
-        {data.behindCommits.length > 0 ? (
-          data.behindCommits.map((commit) => (
-            <CommitRow
-              key={commit.id}
-              commit={commit}
-              isSelected={commit.id === selectedCommitId}
-              onClick={() => onSelectCommit(commit.id)}
-            />
-          ))
-        ) : (
-          <div className="px-4 py-3 text-sm text-muted-foreground">
-            {t("compare.noBehindCommits")}
-          </div>
-        )}
-      </div>
+      {/* Outgoing section */}
+      <CommitSection
+        icon={<ArrowUpFromLine className="w-4 h-4 text-success" />}
+        label={t("compare.outgoingTo", { branch: compareBranch })}
+        count={outgoing.count}
+        badgeClass="bg-success/10 text-success"
+        commits={outgoing.commits}
+        emptyMessage={t("compare.noOutgoingCommits")}
+        selectedCommitId={selectedCommitId}
+        onSelectCommit={onSelectCommit}
+        tooltip={t("compare.outgoingTooltip", {
+          count: outgoing.count,
+          branch: compareBranch,
+        })}
+      />
     </div>
   );
 }

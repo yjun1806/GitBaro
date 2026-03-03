@@ -12,6 +12,8 @@ import type {
   AppSettings,
   Theme,
   EditorInfo,
+  TerminalInfo,
+  AiCliInfo,
   BranchCompareResult,
   MergeStrategy,
   WorktreeInfo,
@@ -547,6 +549,20 @@ export async function openInTerminal(repoPath: string): Promise<void> {
 
 export async function openRepoInEditor(repoPath: string): Promise<void> {
   return invoke("open_repo_in_editor", { repoPath });
+}
+
+// Terminals
+export async function detectInstalledTerminals(): Promise<TerminalInfo[]> {
+  return invoke("detect_installed_terminals");
+}
+
+// AI CLIs
+export async function detectInstalledAiClis(): Promise<AiCliInfo[]> {
+  return invoke("detect_installed_ai_clis");
+}
+
+export async function openAiCliInTerminal(repoPath: string, cliId: string): Promise<void> {
+  return invoke("open_ai_cli_in_terminal", { repoPath, cliId });
 }
 
 // Worktrees

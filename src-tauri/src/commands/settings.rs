@@ -3,11 +3,12 @@ use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
     pub theme: String,
     pub default_editor: String,
     pub default_shell: String,
+    pub default_ai_cli: String,
     pub auto_fetch_interval: u64,
     pub language: String,
 }
@@ -22,12 +23,32 @@ pub struct EditorInfo {
     pub icon: Option<String>,
 }
 
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalInfo {
+    pub id: String,
+    pub name: String,
+    pub installed: bool,
+    /// base64-encoded PNG app icon (data URI)
+    pub icon: Option<String>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AiCliInfo {
+    pub id: String,
+    pub name: String,
+    pub command: String,
+    pub installed: bool,
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         AppSettings {
             theme: "system".to_string(),
             default_editor: "vscode".to_string(),
             default_shell: "terminal".to_string(),
+            default_ai_cli: "claude".to_string(),
             auto_fetch_interval: 0,
             language: "en".to_string(),
         }
@@ -215,6 +236,9 @@ fn terminal_app_name(shell_id: &str) -> Option<&'static str> {
         "warp" => Some("Warp"),
         "ghostty" => Some("Ghostty"),
         "alacritty" => Some("Alacritty"),
+        "kitty" => Some("kitty"),
+        "hyper" => Some("Hyper"),
+        "rio" => Some("Rio"),
         _ => None,
     }
 }
@@ -311,4 +335,248 @@ pub async fn detect_installed_editors() -> Result<Vec<EditorInfo>, AppError> {
     }
 
     Ok(editors)
+}
+
+/// macOS에서 설치된 터미널 앱 목록을 감지합니다.
+#[tauri::command]
+pub async fn detect_installed_terminals() -> Result<Vec<TerminalInfo>, AppError> {
+    // (id, 표시 이름, macOS .app 번들 이름, 검색 경로)
+    let candidates: Vec<(&str, &str, &str, &str)> = vec![
+        ("terminal", "Terminal", "Terminal.app", "/System/Applications/Utilities/Terminal.app"),
+        ("iterm", "iTerm2", "iTerm.app", "/Applications/iTerm.app"),
+        ("warp", "Warp", "Warp.app", "/Applications/Warp.app"),
+        ("ghostty", "Ghostty", "Ghostty.app", "/Applications/Ghostty.app"),
+        ("alacritty", "Alacritty", "Alacritty.app", "/Applications/Alacritty.app"),
+        ("kitty", "kitty", "kitty.app", "/Applications/kitty.app"),
+        ("hyper", "Hyper", "Hyper.app", "/Applications/Hyper.app"),
+        ("rio", "Rio", "Rio.app", "/Applications/Rio.app"),
+    ];
+
+    let mut terminals = Vec::new();
+
+    for (id, name, app_bundle, full_path) in candidates {
+        let has_app = tokio::fs::metadata(full_path).await.is_ok();
+
+        if has_app {
+            // Terminal.app은 Utilities 폴더에 있으므로 /Applications/ 경로와 별도 처리
+            let icon = if id == "terminal" {
+                extract_app_icon_at(full_path).await
+            } else {
+                extract_app_icon(app_bundle).await
+            };
+
+            terminals.push(TerminalInfo {
+                id: id.to_string(),
+                name: name.to_string(),
+                installed: true,
+                icon,
+            });
+        }
+    }
+
+    Ok(terminals)
+}
+
+/// 지정된 절대 경로의 .app 번들에서 아이콘을 추출합니다.
+async fn extract_app_icon_at(app_path: &str) -> Option<String> {
+    let plist_path = format!("{}/Contents/Info.plist", app_path);
+
+    let output = tokio::process::Command::new("defaults")
+        .args(["read", &plist_path, "CFBundleIconFile"])
+        .output()
+        .await
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let icon_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let icon_file = if icon_name.ends_with(".icns") {
+        icon_name
+    } else {
+        format!("{}.icns", icon_name)
+    };
+    let icns_path = format!("{}/Contents/Resources/{}", app_path, icon_file);
+
+    let tmp_path = format!("/tmp/gitbaro_icon_{}.png", std::process::id());
+    let sips_ok = tokio::process::Command::new("sips")
+        .args([
+            "-s", "format", "png",
+            &icns_path,
+            "--out", &tmp_path,
+            "--resampleHeightWidth", "64", "64",
+        ])
+        .output()
+        .await
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if !sips_ok {
+        let _ = tokio::fs::remove_file(&tmp_path).await;
+        return None;
+    }
+
+    let png_bytes = tokio::fs::read(&tmp_path).await.ok()?;
+    let _ = tokio::fs::remove_file(&tmp_path).await;
+
+    let base64_str = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
+    Some(format!("data:image/png;base64,{}", base64_str))
+}
+
+/// 설치된 AI CLI 도구 목록을 감지합니다.
+#[tauri::command]
+pub async fn detect_installed_ai_clis() -> Result<Vec<AiCliInfo>, AppError> {
+    let candidates: Vec<(&str, &str, &str)> = vec![
+        ("claude", "Claude Code", "claude"),
+        ("codex", "OpenAI Codex CLI", "codex"),
+        ("gemini", "Gemini CLI", "gemini"),
+        ("aider", "Aider", "aider"),
+        ("copilot", "GitHub Copilot CLI", "github-copilot-cli"),
+    ];
+
+    let mut clis = Vec::new();
+
+    for (id, name, command) in candidates {
+        let installed = tokio::process::Command::new("which")
+            .arg(command)
+            .output()
+            .await
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        clis.push(AiCliInfo {
+            id: id.to_string(),
+            name: name.to_string(),
+            command: command.to_string(),
+            installed,
+        });
+    }
+
+    Ok(clis)
+}
+
+/// 터미널 ID에서 .app 번들 내 바이너리 경로를 반환합니다.
+fn terminal_binary_path(shell_id: &str) -> Option<&'static str> {
+    match shell_id {
+        "ghostty" => Some("/Applications/Ghostty.app/Contents/MacOS/ghostty"),
+        "alacritty" => Some("/Applications/Alacritty.app/Contents/MacOS/alacritty"),
+        "kitty" => Some("/Applications/kitty.app/Contents/MacOS/kitty"),
+        "rio" => Some("/Applications/Rio.app/Contents/MacOS/rio"),
+        "hyper" => Some("/Applications/Hyper.app/Contents/MacOS/Hyper"),
+        "warp" => Some("/Applications/Warp.app/Contents/MacOS/stable"),
+        _ => None,
+    }
+}
+
+/// AI CLI ID에서 실행할 커맨드를 조회합니다.
+fn ai_cli_command(cli_id: &str) -> Option<&'static str> {
+    match cli_id {
+        "claude" => Some("claude"),
+        "codex" => Some("codex"),
+        "gemini" => Some("gemini"),
+        "aider" => Some("aider"),
+        "copilot" => Some("github-copilot-cli"),
+        _ => None,
+    }
+}
+
+/// 설정된 기본 터미널에서 AI CLI를 실행합니다.
+#[tauri::command]
+pub async fn open_ai_cli_in_terminal(repo_path: String, cli_id: String) -> Result<(), AppError> {
+    let settings = load_settings().await?;
+
+    let cli_command = ai_cli_command(&cli_id).ok_or_else(|| AppError::GitCli {
+        message: format!("Unknown AI CLI: {}", cli_id),
+        exit_code: None,
+    })?;
+
+    let shell_id = &settings.default_shell;
+    let escaped_path = repo_path.replace('\'', "'\\''");
+    let script_cmd = format!("cd '{}' && {}", escaped_path, cli_command);
+
+    tracing::info!("[ai-cli] Opening {} in terminal '{}' at {}", cli_command, shell_id, repo_path);
+
+    match shell_id.as_str() {
+        "terminal" => {
+            // Terminal.app — AppleScript do script (가장 안정적)
+            let apple_script = format!(
+                r#"tell application "Terminal"
+    activate
+    do script "{}"
+end tell"#,
+                script_cmd.replace('"', "\\\"")
+            );
+            tokio::process::Command::new("osascript")
+                .args(["-e", &apple_script])
+                .output()
+                .await
+                .map_err(AppError::Io)?;
+        }
+        "iterm" => {
+            // iTerm2 — AppleScript로 새 창을 만들고 write text로 명령 전달
+            // (create window with command는 로그인 셸을 거치지 않아 PATH 문제 발생)
+            let apple_script = format!(
+                r#"tell application "iTerm"
+    activate
+    set newWindow to (create window with default profile)
+    tell current session of newWindow
+        write text "{}"
+    end tell
+end tell"#,
+                script_cmd.replace('"', "\\\"")
+            );
+            tokio::process::Command::new("osascript")
+                .args(["-e", &apple_script])
+                .output()
+                .await
+                .map_err(AppError::Io)?;
+        }
+        "ghostty" | "alacritty" | "rio" => {
+            // 바이너리 직접 실행 + -e 플래그
+            let binary = terminal_binary_path(shell_id).unwrap();
+            tokio::process::Command::new(binary)
+                .args(["-e", "/bin/zsh", "-l", "-i", "-c", &script_cmd])
+                .spawn()
+                .map_err(AppError::Io)?;
+        }
+        "kitty" => {
+            // kitty는 위치 인수로 명령 전달
+            let binary = terminal_binary_path("kitty").unwrap();
+            tokio::process::Command::new(binary)
+                .args(["/bin/zsh", "-l", "-i", "-c", &script_cmd])
+                .spawn()
+                .map_err(AppError::Io)?;
+        }
+        _ => {
+            // Warp, Hyper 등 — AppleScript로 앱 활성화 후 명령어 실행
+            let app_name = terminal_app_name(shell_id).unwrap_or("Terminal");
+
+            let paste_script = format!(
+                r#"tell application "{app}" to activate
+set the clipboard to "{cmd}"
+repeat 30 times
+    delay 0.2
+    tell application "System Events"
+        if frontmost of process "{app}" then
+            if (count of windows of process "{app}") > 0 then
+                delay 1.0
+                keystroke "v" using command down
+                key code 36
+                return
+            end if
+        end if
+    end tell
+end repeat"#,
+                app = app_name,
+                cmd = script_cmd.replace('"', "\\\""),
+            );
+            tokio::process::Command::new("osascript")
+                .args(["-e", &paste_script])
+                .spawn()
+                .map_err(AppError::Io)?;
+        }
+    }
+
+    Ok(())
 }

@@ -238,6 +238,8 @@
       "revealInFinder": "Reveal in Finder",
       "openInEditor": "Open in {{editor}}",
       "openInEditorFallback": "Open in Editor",
+      "openAiCli": "Open {{cli}} here",
+      "openAiCliFallback": "Open AI CLI",
       "remove": "Remove…",
       "removeConfirmTitle": "Remove Repository",
       "removeConfirmDetail": "Remove \"{{name}}\" from the list? The repository will not be deleted from disk.",
@@ -266,7 +268,15 @@
     "noEditors": "No installed editors found",
     "editorNotSet": "No default editor configured. Please select one in Settings.",
     "shell": "Default Shell",
-    "language": "Language"
+    "language": "Language",
+    "terminal": "Default Terminal",
+    "terminalDescription": "Choose the terminal app to use",
+    "detectingTerminals": "Detecting installed terminals",
+    "noTerminals": "No installed terminals found",
+    "ai": "AI Assistant",
+    "aiDescription": "Choose the AI CLI to use with repositories",
+    "detectingAiClis": "Detecting installed AI CLIs",
+    "noAiClis": "No installed AI CLIs found"
   },
   "diff": {
     "unified": "Unified",
@@ -407,7 +417,21 @@
     "branchNotFound": "Branch not found — it may have been deleted",
     "loading": "Comparing branches",
     "comparingWith": "Comparing with {{branch}}",
-    "noBranches": "No branches available"
+    "noBranches": "No branches available",
+    "incoming": "Incoming",
+    "outgoing": "Outgoing",
+    "incomingFrom": "Incoming from {{branch}}",
+    "outgoingTo": "Outgoing to {{branch}}",
+    "incomingTooltip_one": "{{count}} commit from {{branch}} that you can merge",
+    "incomingTooltip_other": "{{count}} commits from {{branch}} that you can merge",
+    "outgoingTooltip_one": "{{count}} commit not yet in {{branch}}",
+    "outgoingTooltip_other": "{{count}} commits not yet in {{branch}}",
+    "selectorIncomingTooltip_one": "{{count}} commit you can pull from this branch",
+    "selectorIncomingTooltip_other": "{{count}} commits you can pull from this branch",
+    "selectorOutgoingTooltip_one": "{{count}} commit ahead of this branch",
+    "selectorOutgoingTooltip_other": "{{count}} commits ahead of this branch",
+    "noIncomingCommits": "No incoming commits",
+    "noOutgoingCommits": "No outgoing commits"
   },
   "merge": {
     "title": "Merge",
