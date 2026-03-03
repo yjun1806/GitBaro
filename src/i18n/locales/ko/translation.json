@@ -418,10 +418,10 @@
     "loading": "Branch 비교 중",
     "comparingWith": "{{branch}}와 비교 중",
     "noBranches": "사용 가능한 Branch가 없습니다",
-    "incoming": "수신",
-    "outgoing": "발신",
-    "incomingFrom": "{{branch}}에서 수신",
-    "outgoingTo": "{{branch}}(으)로 발신",
+    "incoming": "가져옴",
+    "outgoing": "내보냄",
+    "incomingFrom": "{{branch}}에서 가져옴",
+    "outgoingTo": "{{branch}}(으)로 내보냄",
     "incomingTooltip_one": "{{branch}}에서 Merge할 수 있는 {{count}}개 커밋",
     "incomingTooltip_other": "{{branch}}에서 Merge할 수 있는 {{count}}개 커밋",
     "outgoingTooltip_one": "{{branch}}에 없는 {{count}}개 커밋",
@@ -430,8 +430,8 @@
     "selectorIncomingTooltip_other": "이 Branch에서 가져올 수 있는 {{count}}개 커밋",
     "selectorOutgoingTooltip_one": "이 Branch보다 {{count}}개 커밋 앞섬",
     "selectorOutgoingTooltip_other": "이 Branch보다 {{count}}개 커밋 앞섬",
-    "noIncomingCommits": "수신할 커밋 없음",
-    "noOutgoingCommits": "발신할 커밋 없음"
+    "noIncomingCommits": "가져올 커밋 없음",
+    "noOutgoingCommits": "내보낼 커밋 없음"
   },
   "merge": {
     "title": "Merge",
@@ -453,6 +453,9 @@
     "failed": "Merge 실패: {{error}}",
     "rebaseFailed": "Rebase 실패: {{error}}",
     "squashFailed": "Squash Merge 실패: {{error}}",
-    "nothingToMerge": "Merge할 내용 없음 — 현재 Branch가 최신 상태입니다"
+    "nothingToMerge": "Merge할 내용 없음 — 현재 Branch가 최신 상태입니다",
+    "upToDate": "{{branch}} 대비 최신 상태입니다",
+    "incomingCount_one": "{{branch}}에서 {{count}}개 커밋 Merge",
+    "incomingCount_other": "{{branch}}에서 {{count}}개 커밋 Merge"
   }
 }

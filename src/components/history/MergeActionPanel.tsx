@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { GitMerge, Loader2, AlertCircle } from "lucide-react";
+import {
+  GitMerge,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  ArrowDownToLine,
+  Layers,
+  GitBranch,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -16,10 +24,15 @@ interface MergeActionPanelProps {
   isDirty: boolean;
 }
 
-const STRATEGIES: { value: MergeStrategy; labelKey: string; descKey: string }[] = [
-  { value: "merge", labelKey: "merge.mergeCommit", descKey: "merge.mergeCommitDesc" },
-  { value: "squash", labelKey: "merge.squash", descKey: "merge.squashDesc" },
-  { value: "rebase", labelKey: "merge.rebase", descKey: "merge.rebaseDesc" },
+const STRATEGIES: {
+  value: MergeStrategy;
+  labelKey: string;
+  descKey: string;
+  icon: typeof GitMerge;
+}[] = [
+  { value: "merge", labelKey: "merge.mergeCommit", descKey: "merge.mergeCommitDesc", icon: GitMerge },
+  { value: "squash", labelKey: "merge.squash", descKey: "merge.squashDesc", icon: Layers },
+  { value: "rebase", labelKey: "merge.rebase", descKey: "merge.rebaseDesc", icon: GitBranch },
 ];
 
 export function MergeActionPanel({
@@ -37,8 +50,6 @@ export function MergeActionPanel({
 
   const [strategy, setStrategy] = useState<MergeStrategy>("merge");
   const [isLoading, setIsLoading] = useState(false);
-
-  const isDisabled = behindCount === 0 || isDirty || isLoading;
 
   const handleMerge = async () => {
     setIsLoading(true);
@@ -65,42 +76,63 @@ export function MergeActionPanel({
     }
   };
 
+  // No incoming commits — show compact "up to date" notice
+  if (behindCount === 0) {
+    return (
+      <div className="border-t border-border bg-surface px-3 py-2.5 shrink-0">
+        <div className="flex items-center gap-2 text-xs text-success">
+          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+          <span>{t("merge.upToDate", { branch: compareBranch })}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="border-t border-border bg-surface px-3 py-3 shrink-0">
       {/* Direction indicator */}
-      <div className="flex items-center gap-1.5 mb-2 text-xs text-muted-foreground">
-        <GitMerge className="w-3.5 h-3.5" />
+      <div className="flex items-center gap-1.5 mb-2 text-xs text-info">
+        <ArrowDownToLine className="w-3.5 h-3.5 shrink-0" />
         <span className="truncate font-medium">{compareBranch}</span>
-        <span>→</span>
+        <span className="text-muted-foreground">{"\u2192"}</span>
         <span className="truncate font-medium">{currentBranch}</span>
       </div>
 
       {/* Strategy selector */}
       <div className="space-y-1.5 mb-3">
-        {STRATEGIES.map((s) => (
-          <label
-            key={s.value}
-            className={cn(
-              "flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-colors",
-              strategy === s.value
-                ? "border-primary bg-primary/5"
-                : "border-border hover:bg-accent",
-            )}
-          >
-            <input
-              type="radio"
-              name="mergeStrategy"
-              value={s.value}
-              checked={strategy === s.value}
-              onChange={() => setStrategy(s.value)}
-              className="mt-0.5 accent-primary"
-            />
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{t(s.labelKey)}</p>
-              <p className="text-xs text-muted-foreground">{t(s.descKey)}</p>
-            </div>
-          </label>
-        ))}
+        {STRATEGIES.map((s) => {
+          const Icon = s.icon;
+          return (
+            <label
+              key={s.value}
+              className={cn(
+                "flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-colors",
+                strategy === s.value
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:bg-accent",
+              )}
+            >
+              <input
+                type="radio"
+                name="mergeStrategy"
+                value={s.value}
+                checked={strategy === s.value}
+                onChange={() => setStrategy(s.value)}
+                className="mt-0.5 accent-primary"
+              />
+              <Icon
+                className={cn(
+                  "w-3.5 h-3.5 shrink-0 mt-0.5",
+                  strategy === s.value ? "text-primary" : "text-muted-foreground",
+                )}
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{t(s.labelKey)}</p>
+                <p className="text-xs text-muted-foreground">{t(s.descKey)}</p>
+              </div>
+            </label>
+          );
+        })}
       </div>
 
       {/* Warning for dirty workdir */}
@@ -114,10 +146,10 @@ export function MergeActionPanel({
       {/* Merge button */}
       <button
         onClick={handleMerge}
-        disabled={isDisabled}
+        disabled={isDirty || isLoading}
         className={cn(
           "w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-          isDisabled
+          isDirty || isLoading
             ? "bg-muted text-muted-foreground cursor-not-allowed"
             : "bg-primary text-primary-foreground hover:bg-primary/90",
         )}
@@ -130,9 +162,7 @@ export function MergeActionPanel({
         ) : (
           <>
             <GitMerge className="w-4 h-4" />
-            {behindCount === 0
-              ? t("merge.nothingToMerge")
-              : t("merge.mergeInto", { source: compareBranch, target: currentBranch })}
+            {t("merge.incomingCount", { count: behindCount, branch: compareBranch })}
           </>
         )}
       </button>
