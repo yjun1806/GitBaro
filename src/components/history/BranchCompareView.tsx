@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDownToLine, ArrowUpFromLine, Loader2 } from "lucide-react";
+import { useSelectionStore } from "@/stores/selection";
 import { useBranchComparison } from "@/api/queries";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { getErrorMessage } from "@/lib/utils";
@@ -10,8 +11,6 @@ interface BranchCompareViewProps {
   repoPath: string;
   baseBranch: string;
   compareBranch: string;
-  selectedCommitId: string | null;
-  onSelectCommit: (id: string) => void;
   resolveAvatarUrl?: (email: string) => string | undefined;
 }
 
@@ -21,8 +20,6 @@ export function BranchCompareView({
   repoPath,
   baseBranch,
   compareBranch,
-  selectedCommitId,
-  onSelectCommit,
   resolveAvatarUrl,
 }: BranchCompareViewProps) {
   const { t } = useTranslation();
@@ -32,6 +29,9 @@ export function BranchCompareView({
     baseBranch,
     compareBranch,
   );
+
+  const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
+  const selectCommit = useSelectionStore((s) => s.selectCommit);
 
   if (isLoading) {
     return (
@@ -61,9 +61,9 @@ export function BranchCompareView({
   }
 
   /**
-   * Git ↔ UI 용어 매핑:
-   * - aheadCount / aheadCommits  → "Outgoing" (현재 브랜치에만 있는 커밋, push 대상)
-   * - behindCount / behindCommits → "Incoming" (비교 브랜치에만 있는 커밋, merge 대상)
+   * Git <-> UI term mapping:
+   * - aheadCount / aheadCommits  -> "Outgoing" (commits only on current branch, push target)
+   * - behindCount / behindCommits -> "Incoming" (commits only on compare branch, merge target)
    */
   const incoming = { count: data.behindCount, commits: data.behindCommits };
   const outgoing = { count: data.aheadCount, commits: data.aheadCommits };
@@ -109,7 +109,7 @@ export function BranchCompareView({
               commit={commit}
               isSelected={commit.id === selectedCommitId}
               avatarUrl={resolveAvatarUrl?.(commit.author.email ?? "")}
-              onClick={() => onSelectCommit(commit.id)}
+              onClick={() => selectCommit(commit.id)}
             />
           ))
         ) : (

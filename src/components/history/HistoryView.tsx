@@ -4,6 +4,7 @@ import { ArrowUp } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useUIStore } from "@/stores/ui";
+import { useSelectionStore } from "@/stores/selection";
 import { useCommitHistory, useCommitAvatars, useBranches, useBranchComparison, useStatus } from "@/api/queries";
 import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
 import { BranchCompareView } from "@/components/history/BranchCompareView";
@@ -12,12 +13,7 @@ import { CommitItem } from "@/components/history/CommitItem";
 import { cn } from "@/lib/utils";
 import type { CommitInfo } from "@/types";
 
-export interface HistoryViewProps {
-  selectedCommitId: string | null;
-  onSelectCommit: (id: string) => void;
-}
-
-export function HistoryView({ selectedCommitId, onSelectCommit }: HistoryViewProps) {
+export function HistoryView() {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const accounts = useAccountStore((s) => s.accounts);
@@ -35,6 +31,9 @@ export function HistoryView({ selectedCommitId, onSelectCommit }: HistoryViewPro
     currentBranchName,
     compareBranch,
   );
+
+  const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
+  const selectCommit = useSelectionStore((s) => s.selectCommit);
 
   const accountAvatarMap = useMemo(
     () => new Map(accounts.map((a) => [a.email.toLowerCase(), a.avatarUrl])),
@@ -78,8 +77,6 @@ export function HistoryView({ selectedCommitId, onSelectCommit }: HistoryViewPro
             repoPath={activeRepoPath}
             baseBranch={currentBranchName}
             compareBranch={compareBranch}
-            selectedCommitId={selectedCommitId}
-            onSelectCommit={onSelectCommit}
             resolveAvatarUrl={(email) => {
               const key = email.toLowerCase();
               return accountAvatarMap.get(key) || githubAvatarMap[key] || undefined;
@@ -108,7 +105,7 @@ export function HistoryView({ selectedCommitId, onSelectCommit }: HistoryViewPro
                 commit={commit}
                 isSelected={selectedCommitId === commit.id}
                 avatarUrl={avatarSrc}
-                onClick={() => onSelectCommit(commit.id)}
+                onClick={() => selectCommit(commit.id)}
                 trailing={
                   isUnpushed ? (
                     <div

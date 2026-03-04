@@ -30,21 +30,7 @@ const fetchedRepos = new Set<string>();
 
 /* ─── Sidebar ─── */
 
-export function Sidebar({
-  selectedFile,
-  onSelectFile,
-  selectedCommitId,
-  onSelectCommit,
-  selectedStashIndex,
-  onSelectStash,
-}: {
-  selectedFile: string | null;
-  onSelectFile: (path: string, staged: boolean) => void;
-  selectedCommitId: string | null;
-  onSelectCommit: (id: string) => void;
-  selectedStashIndex: number | null;
-  onSelectStash: (index: number | null) => void;
-}) {
+export function Sidebar() {
   const { t } = useTranslation();
   const repoListOpen = useUIStore((s) => s.repoListOpen);
   const setRepoListOpen = useUIStore((s) => s.setRepoListOpen);
@@ -185,20 +171,11 @@ export function Sidebar({
           {/* Tab content */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {activeTab === "changes" ? (
-              <ChangesView
-                selectedFile={selectedFile}
-                onSelectFile={onSelectFile}
-              />
+              <ChangesView />
             ) : activeTab === "history" ? (
-              <HistoryView
-                selectedCommitId={selectedCommitId}
-                onSelectCommit={onSelectCommit}
-              />
+              <HistoryView />
             ) : (
-              <StashView
-                selectedIndex={selectedStashIndex}
-                onSelectStash={onSelectStash}
-              />
+              <StashView />
             )}
           </div>
         </>

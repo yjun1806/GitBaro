@@ -3,23 +3,23 @@ import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useToastStore } from "@/stores/toast";
+import { useSelectionStore } from "@/stores/selection";
 import { useStashList, useStashMutations } from "@/api/queries";
 import { getErrorMessage } from "@/lib/utils";
 import { StashList } from "./StashList";
 import { StashSaveDialog } from "./StashSaveDialog";
 
-interface StashViewProps {
-  selectedIndex: number | null;
-  onSelectStash: (index: number | null) => void;
-}
-
-export function StashView({ selectedIndex, onSelectStash }: StashViewProps) {
+export function StashView() {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const addToast = useToastStore((s) => s.addToast);
   const { data: stashes = [] } = useStashList(activeRepoPath);
   const mutations = useStashMutations(activeRepoPath);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+
+  const selectedStashIndex = useSelectionStore((s) => s.selectedStashIndex);
+  const selectStash = useSelectionStore((s) => s.selectStash);
+  const clearFileSelection = useSelectionStore((s) => s.clearFileSelection);
 
   const handleApply = async (index: number) => {
     try {
@@ -33,7 +33,7 @@ export function StashView({ selectedIndex, onSelectStash }: StashViewProps) {
   const handlePop = async (_index: number) => {
     try {
       await mutations.pop.mutateAsync();
-      onSelectStash(null);
+      selectStash(null);
       addToast(t("stash.popped"), "success");
     } catch (err) {
       addToast(t("stash.failedToPop", { error: getErrorMessage(err) }), "error");
@@ -43,8 +43,8 @@ export function StashView({ selectedIndex, onSelectStash }: StashViewProps) {
   const handleDrop = async (index: number) => {
     try {
       await mutations.drop.mutateAsync(index);
-      if (selectedIndex === index) {
-        onSelectStash(null);
+      if (selectedStashIndex === index) {
+        selectStash(null);
       }
       addToast(t("stash.dropped"), "success");
     } catch (err) {
@@ -60,6 +60,7 @@ export function StashView({ selectedIndex, onSelectStash }: StashViewProps) {
         await mutations.push.mutateAsync(message);
       }
       setShowSaveDialog(false);
+      clearFileSelection();
       addToast(t("stash.saved"), "success");
     } catch (err) {
       addToast(t("stash.failedToSave", { error: getErrorMessage(err) }), "error");
@@ -73,7 +74,7 @@ export function StashView({ selectedIndex, onSelectStash }: StashViewProps) {
         <span className="text-xs font-medium">{t("stash.title")}</span>
         <button
           onClick={() => setShowSaveDialog(true)}
-          className="flex items-center gap-1 px-2 py-1 text-xs rounded-md hover:bg-accent transition-colors"
+          className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-md hover:bg-accent transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
           {t("stash.save")}
@@ -83,8 +84,8 @@ export function StashView({ selectedIndex, onSelectStash }: StashViewProps) {
       {/* Stash List */}
       <StashList
         stashes={stashes}
-        selectedIndex={selectedIndex}
-        onSelectStash={onSelectStash}
+        selectedIndex={selectedStashIndex}
+        onSelectStash={selectStash}
         onApply={handleApply}
         onPop={handlePop}
         onDrop={handleDrop}

@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useBranchStore } from "@/stores/branch";
 import { useAccountStore } from "@/stores/account";
+import { useSelectionStore } from "@/stores/selection";
 import { useStatus } from "@/api/queries";
 import { createCommit, stageFiles, unstageFiles, openInEditor } from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
@@ -13,12 +14,7 @@ import { cn, getErrorMessage } from "@/lib/utils";
 import { groupFilesByDirectory } from "@/lib/group-files";
 import { useToastStore } from "@/stores/toast";
 
-export interface ChangesViewProps {
-  selectedFile: string | null;
-  onSelectFile: (path: string, staged: boolean) => void;
-}
-
-export function ChangesView({ selectedFile, onSelectFile }: ChangesViewProps) {
+export function ChangesView() {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const currentBranch = useBranchStore((s) => s.currentBranch);
@@ -27,6 +23,10 @@ export function ChangesView({ selectedFile, onSelectFile }: ChangesViewProps) {
   const activeAccount = accounts.find((a) => a.id === activeAccountId);
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
   const queryClient = useQueryClient();
+
+  const selectedFile = useSelectionStore((s) => s.selectedFile);
+  const selectFile = useSelectionStore((s) => s.selectFile);
+  const clearFileSelection = useSelectionStore((s) => s.clearFileSelection);
 
   const addToast = useToastStore((s) => s.addToast);
   const [commitSummary, setCommitSummary] = useState("");
@@ -101,6 +101,7 @@ export function ChangesView({ selectedFile, onSelectFile }: ChangesViewProps) {
       await createCommit(activeRepoPath, message, false, activeAccountId);
       setCommitSummary("");
       setCommitDescription("");
+      clearFileSelection();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["status"] }),
         queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
@@ -166,7 +167,7 @@ export function ChangesView({ selectedFile, onSelectFile }: ChangesViewProps) {
                       key={`${entry.path}-staged`}
                       entry={entry}
                       isSelected={selectedFile === entry.path}
-                      onClick={() => onSelectFile(entry.path, entry.staged)}
+                      onClick={() => selectFile(entry.path, entry.staged)}
                       onDoubleClick={() => handleOpenInEditor(entry.path)}
                       onToggleStage={async () => {
                         if (!activeRepoPath) return;
@@ -231,7 +232,7 @@ export function ChangesView({ selectedFile, onSelectFile }: ChangesViewProps) {
                       key={`${entry.path}-unstaged`}
                       entry={entry}
                       isSelected={selectedFile === entry.path}
-                      onClick={() => onSelectFile(entry.path, entry.staged)}
+                      onClick={() => selectFile(entry.path, entry.staged)}
                       onDoubleClick={() => handleOpenInEditor(entry.path)}
                       onToggleStage={async () => {
                         if (!activeRepoPath) return;

@@ -2,16 +2,15 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FileText, Plus, Minus } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
-import { useStashShow, useCommitFileDiff } from "@/api/queries";
+import { useToastStore } from "@/stores/toast";
+import { useSelectionStore } from "@/stores/selection";
+import { useStashShow, useCommitFileDiff, useStashMutations } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
-import { formatRelativeTime } from "@/lib/utils";
+import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import type { StashFileSummary } from "@/types";
 
 interface StashDetailViewProps {
   stashIndex: number;
-  onApply: (index: number) => void;
-  onPop: (index: number) => void;
-  onDrop: (index: number) => void;
 }
 
 function FileStatusBadge({ status }: { status: string }) {
@@ -71,15 +70,13 @@ function FileSummaryRow({
   );
 }
 
-export function StashDetailView({
-  stashIndex,
-  onApply,
-  onPop,
-  onDrop,
-}: StashDetailViewProps) {
+export function StashDetailView({ stashIndex }: StashDetailViewProps) {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const addToast = useToastStore((s) => s.addToast);
+  const selectStash = useSelectionStore((s) => s.selectStash);
   const { data: showResult, isLoading } = useStashShow(activeRepoPath, stashIndex);
+  const mutations = useStashMutations(activeRepoPath);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
 
   // Use commit file diff with stash commit ID
@@ -89,6 +86,35 @@ export function StashDetailView({
     commitId,
     selectedFilePath,
   );
+
+  const handleApply = async () => {
+    try {
+      await mutations.apply.mutateAsync(stashIndex);
+      addToast(t("stash.applied"), "success");
+    } catch (err) {
+      addToast(t("stash.failedToApply", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
+  const handlePop = async () => {
+    try {
+      await mutations.pop.mutateAsync();
+      selectStash(null);
+      addToast(t("stash.popped"), "success");
+    } catch (err) {
+      addToast(t("stash.failedToPop", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
+  const handleDrop = async () => {
+    try {
+      await mutations.drop.mutateAsync(stashIndex);
+      selectStash(null);
+      addToast(t("stash.dropped"), "success");
+    } catch (err) {
+      addToast(t("stash.failedToDrop", { error: getErrorMessage(err) }), "error");
+    }
+  };
 
   if (isLoading || !showResult) {
     return (
@@ -125,22 +151,22 @@ export function StashDetailView({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
-              onClick={() => onApply(stashIndex)}
-              className="px-2.5 py-1.5 text-xs rounded-md hover:bg-accent transition-colors"
+              onClick={handleApply}
+              className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent transition-colors"
             >
               {t("stash.apply")}
             </button>
             <button
-              onClick={() => onPop(stashIndex)}
-              className="px-2.5 py-1.5 text-xs rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
+              onClick={handlePop}
+              className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
             >
               {t("stash.pop")}
             </button>
             <button
-              onClick={() => onDrop(stashIndex)}
-              className="px-2.5 py-1.5 text-xs rounded-md text-danger hover:bg-danger/10 transition-colors"
+              onClick={handleDrop}
+              className="px-3 py-1.5 text-xs rounded-md border border-danger/30 text-danger hover:bg-danger/10 transition-colors"
             >
               {t("stash.drop")}
             </button>

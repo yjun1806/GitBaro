@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useToastStore } from "@/stores/toast";
+import { useSelectionStore } from "@/stores/selection";
 import { useStatus, useFileDiff, useCommitDetail, useCommitFileDiff, useCommitAvatars } from "@/api/queries";
 import { stopWorktreePreview } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
@@ -102,27 +103,20 @@ function CommitDetailView({ commitId }: { commitId: string }) {
 
 interface ContentAreaProps {
   activeTab: "changes" | "history" | "stash";
-  selectedFile: string | null;
-  selectedFileStaged: boolean;
-  selectedCommitId: string | null;
-  selectedStashIndex: number | null;
-  onStashAction: (index: number | null) => void;
 }
 
-export function ContentArea({
-  activeTab,
-  selectedFile,
-  selectedFileStaged,
-  selectedCommitId,
-  selectedStashIndex,
-  onStashAction,
-}: ContentAreaProps) {
+export function ContentArea({ activeTab }: ContentAreaProps) {
   const { t } = useTranslation();
   const compareBranch = useUIStore((s) => s.compareBranch);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const setPreviewBranch = useUIStore((s) => s.setPreviewBranch);
   const addToast = useToastStore((s) => s.addToast);
   const queryClient = useQueryClient();
+
+  const selectedFile = useSelectionStore((s) => s.selectedFile);
+  const selectedFileStaged = useSelectionStore((s) => s.selectedFileStaged);
+  const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
+  const selectedStashIndex = useSelectionStore((s) => s.selectedStashIndex);
 
   const handleStopPreview = async () => {
     if (!activeRepoPath) return;
@@ -151,10 +145,8 @@ export function ContentArea({
         {activeTab === "stash" ? (
           selectedStashIndex !== null ? (
             <StashDetailView
+              key={selectedStashIndex}
               stashIndex={selectedStashIndex}
-              onApply={() => {}}
-              onPop={() => onStashAction(null)}
-              onDrop={() => onStashAction(null)}
             />
           ) : (
             <EmptyState
@@ -174,7 +166,7 @@ export function ContentArea({
             />
           )
         ) : selectedCommitId ? (
-          <CommitDetailView commitId={selectedCommitId} />
+          <CommitDetailView key={selectedCommitId} commitId={selectedCommitId} />
         ) : compareBranch ? (
           <EmptyState
             icon={GitCompare}
