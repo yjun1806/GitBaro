@@ -342,7 +342,9 @@
     "readOnlyDesc": "이 저장소에 Push 권한이 없습니다",
     "publishBranch": "Branch 게시",
     "publishBranchDesc": "이 Branch를 Remote에 Push하여 공유합니다",
-    "noUpstreamError": "이 브랜치는 리모트에 게시되지 않았습니다. Publish Branch를 먼저 해주세요."
+    "noUpstreamError": "이 브랜치는 리모트에 게시되지 않았습니다. Publish Branch를 먼저 해주세요.",
+    "forcePushWarning": "원격 히스토리를 덮어씁니다. 이 작업은 되돌릴 수 없습니다.",
+    "forcePushConfirmTitle": "강제 푸시 확인"
   },
   "time": {
     "justNow": "방금",
@@ -545,9 +547,5 @@
     "noChanges": "이미 최신 상태입니다",
     "progress": "{{percent}}%",
     "loadMore": "더 보기 ({{remaining}}개 남음)"
-  },
-  "sync": {
-    "forcePushWarning": "원격 히스토리를 덮어씁니다. 이 작업은 되돌릴 수 없습니다.",
-    "forcePushConfirmTitle": "강제 푸시 확인"
   }
 }

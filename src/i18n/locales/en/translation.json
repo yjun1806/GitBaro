@@ -342,7 +342,9 @@
     "readOnlyDesc": "No push permission for this repo",
     "publishBranch": "Publish Branch",
     "publishBranchDesc": "Push this branch to remote to share with others",
-    "noUpstreamError": "This branch has no upstream. Please publish the branch first."
+    "noUpstreamError": "This branch has no upstream. Please publish the branch first.",
+    "forcePushWarning": "This will overwrite remote history. This action cannot be undone.",
+    "forcePushConfirmTitle": "Confirm Force Push"
   },
   "time": {
     "justNow": "just now",
@@ -545,9 +547,5 @@
     "noChanges": "Already up to date",
     "progress": "{{percent}}%",
     "loadMore": "Load more ({{remaining}} remaining)"
-  },
-  "sync": {
-    "forcePushWarning": "This will overwrite remote history. This action cannot be undone.",
-    "forcePushConfirmTitle": "Confirm Force Push"
   }
 }
