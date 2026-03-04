@@ -7,6 +7,7 @@ import { useSelectionStore } from "@/stores/selection";
 import { useStashShow, useCommitFileDiff, useStashMutations } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
+import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import type { StashFileSummary } from "@/types";
 
 interface StashDetailViewProps {
@@ -32,17 +33,26 @@ function FileStatusBadge({ status }: { status: string }) {
 function FileSummaryRow({
   file,
   isSelected,
+  isHighlighted,
   onClick,
+  ref,
 }: {
   file: StashFileSummary;
   isSelected: boolean;
+  isHighlighted?: boolean;
   onClick: () => void;
+  ref?: React.Ref<HTMLButtonElement>;
 }) {
   return (
     <button
+      ref={ref}
       onClick={onClick}
       className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
-        isSelected ? "bg-primary/10 text-primary" : "hover:bg-accent"
+        isSelected
+          ? "bg-primary/10 text-primary"
+          : !isSelected && isHighlighted
+            ? "bg-accent ring-1 ring-primary/30"
+            : "hover:bg-accent"
       }`}
     >
       <FileText className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
@@ -78,6 +88,15 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
   const { data: showResult, isLoading } = useStashShow(activeRepoPath, stashIndex);
   const mutations = useStashMutations(activeRepoPath);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+
+  const stashFiles = showResult?.files ?? [];
+  const selectedFileIdx = stashFiles.findIndex((f) => f.path === selectedFilePath);
+
+  const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
+    items: stashFiles,
+    onSelect: (f) => setSelectedFilePath(f.path),
+    selectedIndex: selectedFileIdx,
+  });
 
   // Use commit file diff with stash commit ID
   const commitId = showResult?.entry.commitId ?? null;
@@ -177,7 +196,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
       {/* Content: file list + diff */}
       <div className="flex-1 flex min-h-0">
         {/* File list panel */}
-        <div className="w-[260px] shrink-0 border-r border-border overflow-y-auto">
+        <div className="w-[260px] shrink-0 border-r border-border overflow-y-auto" {...containerProps}>
           <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
             {t("stash.detail.files")} ({files.length})
           </div>
@@ -186,11 +205,13 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
               {t("stash.detail.noFiles")}
             </p>
           ) : (
-            files.map((file) => (
+            files.map((file, index) => (
               <FileSummaryRow
                 key={file.path}
+                ref={itemRef(index)}
                 file={file}
                 isSelected={selectedFilePath === file.path}
+                isHighlighted={activeIndex === index}
                 onClick={() => setSelectedFilePath(file.path)}
               />
             ))

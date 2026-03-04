@@ -4,8 +4,10 @@ import type { StashEntry } from "@/types";
 interface StashItemProps {
   entry: StashEntry;
   isSelected?: boolean;
+  isHighlighted?: boolean;
   onClick?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  ref?: React.Ref<HTMLButtonElement>;
 }
 
 /** Extract a short summary from a stash message (mirrors Rust stash_short_message). */
@@ -22,18 +24,23 @@ function shortMessage(message: string): string {
 export function StashItem({
   entry,
   isSelected,
+  isHighlighted,
   onClick,
   onContextMenu,
+  ref,
 }: StashItemProps) {
   return (
     <button
+      ref={ref}
       onClick={onClick}
       onContextMenu={onContextMenu}
       className={cn(
         "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors border-b border-border select-none",
         isSelected
           ? "bg-primary/10 text-primary font-semibold"
-          : "hover:bg-accent",
+          : !isSelected && isHighlighted
+            ? "bg-accent ring-1 ring-primary/30"
+            : "hover:bg-accent",
       )}
     >
       <div className="flex-1 min-w-0">

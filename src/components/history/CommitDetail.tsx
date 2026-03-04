@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { GitCommit, Clock, Copy, Check, ChevronDown } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import { FileStatusBadge } from "@/lib/file-status";
+import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import type { CommitInfo, DiffOutput, FileStatus } from "@/types";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 
@@ -98,6 +99,14 @@ export function CommitDetail({
     onSelectFile?.(path);
   };
 
+  const selectedFileIdx = changedFiles.findIndex((f) => f.path === selectedPath);
+
+  const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
+    items: changedFiles,
+    onSelect: (f) => handleFileClick(f.path),
+    selectedIndex: selectedFileIdx,
+  });
+
   const handleCopyHash = async () => {
     await navigator.clipboard.writeText(commit.id);
     setCopied(true);
@@ -180,9 +189,10 @@ export function CommitDetail({
               {changedFiles.length}
             </span>
           </div>
-          <div className="flex-1 overflow-y-auto">
-            {changedFiles.map((f) => {
+          <div className="flex-1 overflow-y-auto" {...containerProps}>
+            {changedFiles.map((f, index) => {
               const isSelected = selectedPath === f.path;
+              const isHighlighted = activeIndex === index;
               const lastSlash = f.path.lastIndexOf("/");
               const dir = lastSlash >= 0 ? f.path.substring(0, lastSlash) : "";
               const filename = lastSlash >= 0
@@ -191,13 +201,16 @@ export function CommitDetail({
               return (
                 <button
                   key={f.path}
+                  ref={itemRef(index)}
                   title={f.path}
                   onClick={() => handleFileClick(f.path)}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors",
                     isSelected
                       ? "bg-primary/10"
-                      : "hover:bg-accent",
+                      : !isSelected && isHighlighted
+                        ? "bg-accent ring-1 ring-primary/30"
+                        : "hover:bg-accent",
                   )}
                 >
                   <FileStatusBadge status={f.status} />

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Archive } from "lucide-react";
 import { StashItem } from "./StashItem";
+import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import type { StashEntry } from "@/types";
 
 interface StashListProps {
@@ -22,6 +23,15 @@ export function StashList({
   onDrop,
 }: StashListProps) {
   const { t } = useTranslation();
+
+  const selectedStashIdx = stashes.findIndex((s) => s.index === selectedIndex);
+
+  const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
+    items: stashes,
+    onSelect: (e) => onSelectStash(e.index),
+    selectedIndex: selectedStashIdx,
+  });
+
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -56,12 +66,14 @@ export function StashList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      {stashes.map((entry) => (
+    <div className="flex-1 overflow-y-auto" {...containerProps}>
+      {stashes.map((entry, index) => (
         <StashItem
           key={entry.index}
+          ref={itemRef(index)}
           entry={entry}
           isSelected={selectedIndex === entry.index}
+          isHighlighted={activeIndex === index}
           onClick={() => onSelectStash(entry.index)}
           onContextMenu={(e) => {
             e.preventDefault();

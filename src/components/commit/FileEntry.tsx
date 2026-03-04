@@ -12,17 +12,21 @@ export interface FileEntryProps {
     modifiedAt?: number | null;
   };
   isSelected: boolean;
+  isHighlighted?: boolean;
   onClick: () => void;
   onDoubleClick?: () => void;
   onToggleStage: () => void;
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 export function FileEntry({
   entry,
   isSelected,
+  isHighlighted,
   onClick,
   onDoubleClick,
   onToggleStage,
+  ref,
 }: FileEntryProps) {
   const filename = entry.path.includes("/")
     ? entry.path.substring(entry.path.lastIndexOf("/") + 1)
@@ -30,6 +34,7 @@ export function FileEntry({
 
   return (
     <div
+      ref={ref}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
@@ -42,7 +47,9 @@ export function FileEntry({
         "flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors select-none border-b border-border",
         isSelected
           ? "bg-primary/10 text-primary font-semibold"
-          : "hover:bg-accent",
+          : !isSelected && isHighlighted
+            ? "bg-accent ring-1 ring-primary/30"
+            : "hover:bg-accent",
       )}
     >
       <input

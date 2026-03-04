@@ -12,6 +12,7 @@ import { FileEntry } from "@/components/commit/FileEntry";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { groupFilesByDirectory } from "@/lib/group-files";
+import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
 
 export function ChangesView() {
@@ -76,6 +77,48 @@ export function ChangesView() {
     });
   }, []);
 
+  // Flat list of visible files for keyboard navigation
+  const visibleFiles = useMemo(() => {
+    const result: Array<{ entry: typeof statusEntries[number]; section: "staged" | "unstaged" }> = [];
+    for (const group of stagedGroups) {
+      const dirKey = `staged:${group.directory}`;
+      if (!collapsedDirs.has(dirKey)) {
+        for (const entry of group.files) {
+          result.push({ entry, section: "staged" });
+        }
+      }
+    }
+    for (const group of unstagedGroups) {
+      const dirKey = `unstaged:${group.directory}`;
+      if (!collapsedDirs.has(dirKey)) {
+        for (const entry of group.files) {
+          result.push({ entry, section: "unstaged" });
+        }
+      }
+    }
+    return result;
+  }, [stagedGroups, unstagedGroups, collapsedDirs]);
+
+  // Map "section:path" -> nav index for O(1) lookup
+  const navIdxMap = useMemo(() => {
+    const map = new Map<string, number>();
+    visibleFiles.forEach((item, i) => {
+      map.set(`${item.section}:${item.entry.path}`, i);
+    });
+    return map;
+  }, [visibleFiles]);
+
+  const selectedVisibleIdx = visibleFiles.findIndex(
+    (item) => item.entry.path === selectedFile,
+  );
+
+  const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
+    items: visibleFiles,
+    onSelect: (item) => selectFile(item.entry.path, item.entry.staged),
+    selectedIndex: selectedVisibleIdx,
+    enabled: statusEntries.length > 0,
+  });
+
   const handleStageAll = async () => {
     if (!activeRepoPath || unstagedFiles.length === 0) return;
     try {
@@ -129,7 +172,7 @@ export function ChangesView() {
   return (
     <div className="flex flex-col h-full">
       {/* File list */}
-      <div className="flex-1 overflow-y-auto bg-background">
+      <div className="flex-1 overflow-y-auto bg-background" {...containerProps}>
         {statusEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
             <p className="text-sm">{t("changes.noChanges")}</p>
@@ -173,27 +216,32 @@ export function ChangesView() {
                       <span className="text-[10px] text-muted-foreground/70">{group.files.length}</span>
                     </div>
                   )}
-                  {!isCollapsed && group.files.map((entry) => (
-                    <FileEntry
-                      key={`${entry.path}-staged`}
-                      entry={entry}
-                      isSelected={selectedFile === entry.path}
-                      onClick={() => selectFile(entry.path, entry.staged)}
-                      onDoubleClick={() => handleOpenInEditor(entry.path)}
-                      onToggleStage={async () => {
-                        if (!activeRepoPath) return;
-                        try {
-                          await unstageFiles(activeRepoPath, [entry.path]);
-                          await Promise.all([
-                            queryClient.invalidateQueries({ queryKey: ["status"] }),
-                            queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-                          ]);
-                        } catch (err) {
-                          addToast(t("commit.unstageFailed", { error: getErrorMessage(err) }), "error");
-                        }
-                      }}
-                    />
-                  ))}
+                  {!isCollapsed && group.files.map((entry) => {
+                    const navIdx = navIdxMap.get(`staged:${entry.path}`) ?? -1;
+                    return (
+                      <FileEntry
+                        key={`${entry.path}-staged`}
+                        ref={navIdx >= 0 ? itemRef(navIdx) : undefined}
+                        entry={entry}
+                        isSelected={selectedFile === entry.path}
+                        isHighlighted={activeIndex === navIdx && navIdx >= 0}
+                        onClick={() => selectFile(entry.path, entry.staged)}
+                        onDoubleClick={() => handleOpenInEditor(entry.path)}
+                        onToggleStage={async () => {
+                          if (!activeRepoPath) return;
+                          try {
+                            await unstageFiles(activeRepoPath, [entry.path]);
+                            await Promise.all([
+                              queryClient.invalidateQueries({ queryKey: ["status"] }),
+                              queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+                            ]);
+                          } catch (err) {
+                            addToast(t("commit.unstageFailed", { error: getErrorMessage(err) }), "error");
+                          }
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               );
             })}
@@ -238,27 +286,32 @@ export function ChangesView() {
                       <span className="text-[10px] text-muted-foreground/70">{group.files.length}</span>
                     </div>
                   )}
-                  {!isCollapsed && group.files.map((entry) => (
-                    <FileEntry
-                      key={`${entry.path}-unstaged`}
-                      entry={entry}
-                      isSelected={selectedFile === entry.path}
-                      onClick={() => selectFile(entry.path, entry.staged)}
-                      onDoubleClick={() => handleOpenInEditor(entry.path)}
-                      onToggleStage={async () => {
-                        if (!activeRepoPath) return;
-                        try {
-                          await stageFiles(activeRepoPath, [entry.path]);
-                          await Promise.all([
-                            queryClient.invalidateQueries({ queryKey: ["status"] }),
-                            queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-                          ]);
-                        } catch (err) {
-                          addToast(t("commit.stageFailed", { error: getErrorMessage(err) }), "error");
-                        }
-                      }}
-                    />
-                  ))}
+                  {!isCollapsed && group.files.map((entry) => {
+                    const navIdx = navIdxMap.get(`unstaged:${entry.path}`) ?? -1;
+                    return (
+                      <FileEntry
+                        key={`${entry.path}-unstaged`}
+                        ref={navIdx >= 0 ? itemRef(navIdx) : undefined}
+                        entry={entry}
+                        isSelected={selectedFile === entry.path}
+                        isHighlighted={activeIndex === navIdx && navIdx >= 0}
+                        onClick={() => selectFile(entry.path, entry.staged)}
+                        onDoubleClick={() => handleOpenInEditor(entry.path)}
+                        onToggleStage={async () => {
+                          if (!activeRepoPath) return;
+                          try {
+                            await stageFiles(activeRepoPath, [entry.path]);
+                            await Promise.all([
+                              queryClient.invalidateQueries({ queryKey: ["status"] }),
+                              queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+                            ]);
+                          } catch (err) {
+                            addToast(t("commit.stageFailed", { error: getErrorMessage(err) }), "error");
+                          }
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               );
             })}

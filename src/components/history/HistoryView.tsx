@@ -11,6 +11,7 @@ import { BranchCompareView } from "@/components/history/BranchCompareView";
 import { MergeActionPanel } from "@/components/history/MergeActionPanel";
 import { CommitItem } from "@/components/history/CommitItem";
 import { cn } from "@/lib/utils";
+import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import type { CommitInfo } from "@/types";
 
 export function HistoryView() {
@@ -39,6 +40,17 @@ export function HistoryView() {
     () => new Map(accounts.map((a) => [a.email.toLowerCase(), a.avatarUrl])),
     [accounts],
   );
+
+  const selectedCommitIdx = useMemo(
+    () => commits.findIndex((c) => c.id === selectedCommitId),
+    [commits, selectedCommitId],
+  );
+
+  const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
+    items: commits,
+    onSelect: (c) => selectCommit(c.id),
+    selectedIndex: selectedCommitIdx,
+  });
 
   if (isLoading) {
     return (
@@ -91,7 +103,7 @@ export function HistoryView() {
           />
         </>
       ) : (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" {...containerProps}>
           {commits.map((commit: CommitInfo, index: number) => {
             const isUnpushed = index < ahead;
             const emailKey = commit.author.email?.toLowerCase() ?? "";
@@ -102,8 +114,10 @@ export function HistoryView() {
             return (
               <CommitItem
                 key={commit.id}
+                ref={itemRef(index)}
                 commit={commit}
                 isSelected={selectedCommitId === commit.id}
+                isHighlighted={activeIndex === index}
                 avatarUrl={avatarSrc}
                 onClick={() => selectCommit(commit.id)}
                 trailing={

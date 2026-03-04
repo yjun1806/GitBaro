@@ -5,28 +5,35 @@ import type { CommitInfo } from "@/types";
 interface CommitItemProps {
   commit: CommitInfo;
   isSelected?: boolean;
+  isHighlighted?: boolean;
   avatarUrl?: string;
   trailing?: ReactNode;
   onClick?: () => void;
+  ref?: React.Ref<HTMLButtonElement>;
 }
 
 export function CommitItem({
   commit,
   isSelected,
+  isHighlighted,
   avatarUrl,
   trailing,
   onClick,
+  ref,
 }: CommitItemProps) {
   const resolvedAvatar = avatarUrl ?? commit.author.avatarUrl;
 
   return (
     <button
+      ref={ref}
       onClick={onClick}
       className={cn(
         "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors border-b border-border select-none",
         isSelected
           ? "bg-primary/10 text-primary font-semibold"
-          : "hover:bg-accent",
+          : !isSelected && isHighlighted
+            ? "bg-accent ring-1 ring-primary/30"
+            : "hover:bg-accent",
       )}
     >
       {/* Content */}

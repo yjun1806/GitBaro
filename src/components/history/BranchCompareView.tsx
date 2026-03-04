@@ -5,6 +5,7 @@ import { useSelectionStore } from "@/stores/selection";
 import { useBranchComparison } from "@/api/queries";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { getErrorMessage } from "@/lib/utils";
+import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { CommitItem } from "./CommitItem";
 
 interface BranchCompareViewProps {
@@ -32,6 +33,19 @@ export function BranchCompareView({
 
   const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
   const selectCommit = useSelectionStore((s) => s.selectCommit);
+
+  const activeCommitsForNav =
+    activeTab === "incoming"
+      ? (data?.behindCommits ?? [])
+      : (data?.aheadCommits ?? []);
+
+  const selectedNavIdx = activeCommitsForNav.findIndex((c) => c.id === selectedCommitId);
+
+  const { activeIndex, setActiveIndex, containerProps, itemRef } = useListKeyboardNav({
+    items: activeCommitsForNav,
+    onSelect: (c) => selectCommit(c.id),
+    selectedIndex: selectedNavIdx,
+  });
 
   if (isLoading) {
     return (
@@ -80,7 +94,7 @@ export function BranchCompareView({
       <TabGroup className="shrink-0">
         <Tab
           active={activeTab === "incoming"}
-          onClick={() => setActiveTab("incoming")}
+          onClick={() => { setActiveTab("incoming"); setActiveIndex(-1); }}
           icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
           count={incoming.count}
           color="info"
@@ -90,7 +104,7 @@ export function BranchCompareView({
         </Tab>
         <Tab
           active={activeTab === "outgoing"}
-          onClick={() => setActiveTab("outgoing")}
+          onClick={() => { setActiveTab("outgoing"); setActiveIndex(-1); }}
           icon={<ArrowUpFromLine className="w-3.5 h-3.5" />}
           count={outgoing.count}
           color="success"
@@ -101,13 +115,15 @@ export function BranchCompareView({
       </TabGroup>
 
       {/* Commit list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" {...containerProps}>
         {activeCommits.length > 0 ? (
-          activeCommits.map((commit) => (
+          activeCommits.map((commit, index) => (
             <CommitItem
               key={commit.id}
+              ref={itemRef(index)}
               commit={commit}
               isSelected={commit.id === selectedCommitId}
+              isHighlighted={activeIndex === index}
               avatarUrl={resolveAvatarUrl?.(commit.author.email ?? "")}
               onClick={() => selectCommit(commit.id)}
             />

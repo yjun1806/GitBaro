@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
@@ -30,6 +30,7 @@ import { addLocalRepository, cloneRepository, getRepoVisibility, getOwnerType, v
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import type { GitHubAccount, RepoInfo } from "@/types";
@@ -273,6 +274,27 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
     ? [{ label: t("repo.favorites"), repos: favRepos }, ...ownerGroups]
     : ownerGroups;
 
+  // Flat list of visible repos for keyboard navigation
+  const flatItems = useMemo(() => {
+    const result: RepoInfo[] = [];
+    for (const group of groups) {
+      if (!collapsedGroups.includes(group.label)) {
+        for (const repo of group.repos) {
+          result.push(repo);
+        }
+      }
+    }
+    return result;
+  }, [groups, collapsedGroups]);
+
+  const selectedRepoIdx = flatItems.findIndex((r) => r.path === activeRepo?.path);
+
+  const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
+    items: flatItems,
+    onSelect: (repo) => onSelectRepo(repo.path),
+    selectedIndex: selectedRepoIdx,
+  });
+
   useEffect(() => {
     const state = useRepositoryStore.getState();
     for (const repo of repos) {
@@ -358,7 +380,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
       </div>
 
       {/* Grouped repo list */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-1">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-1" {...containerProps}>
         {groups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
             <Search className="w-6 h-6 opacity-40" />
@@ -405,6 +427,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
               {!collapsedGroups.includes(group.label) && (
                 <div className="flex flex-col gap-0.5 ml-3 pl-3 border-l border-border/50">
                   {group.repos.map((repo) => {
+                    const navIdx = flatItems.indexOf(repo);
                     const isActive = repo.path === activeRepo?.path;
                     const linkedAccount = repo.accountId
                       ? accounts.find((a) => a.id === repo.accountId)
@@ -431,12 +454,15 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                     return (
                       <div key={repo.path} className="relative">
                         <button
+                          ref={navIdx >= 0 ? itemRef(navIdx) : undefined}
                           onClick={() => onSelectRepo(repo.path)}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-colors min-w-0 rounded-md",
                             isActive
                               ? "bg-primary/10 text-primary font-semibold"
-                              : "hover:bg-accent",
+                              : !isActive && activeIndex === navIdx && navIdx >= 0
+                                ? "bg-accent ring-1 ring-primary/30"
+                                : "hover:bg-accent",
                           )}
                         >
                           <div className={cn(
