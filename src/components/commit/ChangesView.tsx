@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
@@ -29,6 +29,17 @@ export function ChangesView() {
   const clearFileSelection = useSelectionStore((s) => s.clearFileSelection);
 
   const addToast = useToastStore((s) => s.addToast);
+
+  // 외부(CLI 등)에서 커밋되어 파일이 사라지면 선택 초기화
+  useEffect(() => {
+    if (selectedFile && statusEntries.length >= 0) {
+      const stillExists = statusEntries.some((e) => e.path === selectedFile);
+      if (!stillExists) {
+        clearFileSelection();
+      }
+    }
+  }, [statusEntries, selectedFile, clearFileSelection]);
+
   const [commitSummary, setCommitSummary] = useState("");
   const [commitDescription, setCommitDescription] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
