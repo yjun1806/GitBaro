@@ -176,8 +176,12 @@ pub async fn create_branch(
 }
 
 #[tauri::command]
-pub async fn switch_branch(repo_path: String, name: String) -> Result<(), AppError> {
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+pub async fn switch_branch(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    name: String,
+) -> Result<(), AppError> {
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     engine.switch_branch(&name).await?;
     tracing::info!("Switched to branch: {}", name);
     Ok(())
@@ -513,15 +517,23 @@ pub async fn get_conflict_file_diff(
 }
 
 #[tauri::command]
-pub async fn get_recent_branches(repo_path: String, limit: usize) -> Result<Vec<String>, AppError> {
+pub async fn get_recent_branches(
+    repo_path: String,
+    limit: usize,
+) -> Result<Vec<String>, AppError> {
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
     let output = engine.get_reflog_branches(limit).await?;
     Ok(output)
 }
 
 #[tauri::command]
-pub async fn rename_branch(repo_path: String, old_name: String, new_name: String) -> Result<(), AppError> {
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+pub async fn rename_branch(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    old_name: String,
+    new_name: String,
+) -> Result<(), AppError> {
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     engine.rename_branch(&old_name, &new_name).await?;
     tracing::info!("Renamed branch: {} -> {}", old_name, new_name);
     Ok(())

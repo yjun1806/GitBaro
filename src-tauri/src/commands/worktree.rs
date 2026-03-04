@@ -3,7 +3,9 @@ use crate::git::branch::validate_branch_name;
 use crate::git::cli::{GitCliEngine, WorktreeEntry};
 
 #[tauri::command]
-pub async fn get_worktrees(repo_path: String) -> Result<Vec<WorktreeEntry>, AppError> {
+pub async fn get_worktrees(
+    repo_path: String,
+) -> Result<Vec<WorktreeEntry>, AppError> {
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
     let mut entries = engine.list_worktrees().await?;
 
@@ -36,6 +38,7 @@ pub async fn get_worktrees(repo_path: String) -> Result<Vec<WorktreeEntry>, AppE
 
 #[tauri::command]
 pub async fn add_worktree(
+    app_handle: tauri::AppHandle,
     repo_path: String,
     path: String,
     branch: Option<String>,
@@ -45,7 +48,7 @@ pub async fn add_worktree(
     if let Some(ref name) = new_branch {
         validate_branch_name(name)?;
     }
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     engine
         .add_worktree(&path, branch.as_deref(), new_branch.as_deref(), base_branch.as_deref())
         .await?;
@@ -55,11 +58,12 @@ pub async fn add_worktree(
 
 #[tauri::command]
 pub async fn remove_worktree(
+    app_handle: tauri::AppHandle,
     repo_path: String,
     path: String,
     force: bool,
 ) -> Result<(), AppError> {
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     engine.remove_worktree(&path, force).await?;
     tracing::info!("Removed worktree: {}", path);
     Ok(())
@@ -77,7 +81,9 @@ pub async fn start_worktree_preview(
 }
 
 #[tauri::command]
-pub async fn stop_worktree_preview(repo_path: String) -> Result<(), AppError> {
+pub async fn stop_worktree_preview(
+    repo_path: String,
+) -> Result<(), AppError> {
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
     engine.stop_preview().await?;
     tracing::info!("Stopped preview");
@@ -85,7 +91,9 @@ pub async fn stop_worktree_preview(repo_path: String) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub async fn check_preview_active(repo_path: String) -> Result<bool, AppError> {
+pub async fn check_preview_active(
+    repo_path: String,
+) -> Result<bool, AppError> {
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
     engine.is_merging().await
 }

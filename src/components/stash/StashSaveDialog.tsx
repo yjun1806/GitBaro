@@ -177,14 +177,14 @@ export function StashSaveDialog({ onSave, onClose }: StashSaveDialogProps) {
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-xs rounded-md hover:bg-accent transition-colors"
+            className="px-3 py-1.5 text-xs rounded-md hover:bg-accent transition-colors"
           >
             {t("stash.saveDialog.cancel")}
           </button>
           <button
             onClick={handleSave}
             disabled={!canSave}
-            className="px-4 py-2 text-xs rounded-md bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {t("stash.saveDialog.save")}
           </button>

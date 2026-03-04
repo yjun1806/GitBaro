@@ -100,16 +100,25 @@ function EntryRow({ entry }: { entry: GitCommandEntry }) {
   );
 }
 
+const PAGE_SIZE = 50;
+
 export function ActivityLogPanel() {
   const { t } = useTranslation();
   const entries = useActivityStore((s) => s.entries);
   const clearLog = useActivityStore((s) => s.clearLog);
   const setActivityLogOpen = useUIStore((s) => s.setActivityLogOpen);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  const visibleEntries = entries.slice(0, visibleCount);
+  const hasMore = entries.length > visibleCount;
 
   return (
     <div className="h-[280px] border-t border-border bg-surface flex flex-col">
       <div className="flex items-center justify-between px-3 h-8 shrink-0 border-b border-border">
-        <span className="text-xs font-semibold text-foreground">{t("activity.title")}</span>
+        <span className="text-xs font-semibold text-foreground">
+          {t("activity.title")}
+          <span className="ml-1.5 text-muted-foreground font-normal">({entries.length})</span>
+        </span>
         <div className="flex items-center gap-1">
           <button
             className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
@@ -134,9 +143,19 @@ export function ActivityLogPanel() {
             {t("activity.noActivity")}
           </div>
         ) : (
-          entries.map((entry) => (
-            <EntryRow key={entry.id} entry={entry} />
-          ))
+          <>
+            {visibleEntries.map((entry) => (
+              <EntryRow key={entry.id} entry={entry} />
+            ))}
+            {hasMore && (
+              <button
+                className="w-full py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              >
+                {t("activity.loadMore", { remaining: entries.length - visibleCount })}
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

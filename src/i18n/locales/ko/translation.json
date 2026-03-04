@@ -507,7 +507,7 @@
     },
     "apply": "적용",
     "applyDescription": "Stash를 적용하되 목록에서 제거하지 않음",
-    "pop": "꺼내기",
+    "pop": "적용 후 삭제",
     "popDescription": "Stash를 적용하고 목록에서 제거",
     "drop": "삭제",
     "dropDescription": "이 Stash를 영구적으로 삭제",
@@ -543,7 +543,8 @@
     "pushSummary": "{{branch}}에 {{count}}개 커밋 푸시",
     "mergeSummary": "머지 ({{mergeType}}), {{files}}개 파일 변경",
     "noChanges": "이미 최신 상태입니다",
-    "progress": "{{percent}}%"
+    "progress": "{{percent}}%",
+    "loadMore": "더 보기 ({{remaining}}개 남음)"
   },
   "sync": {
     "forcePushWarning": "원격 히스토리를 덮어씁니다. 이 작업은 되돌릴 수 없습니다.",

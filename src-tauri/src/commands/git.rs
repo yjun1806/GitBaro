@@ -5,10 +5,14 @@
 
 use crate::commands::auth::resolve_token;
 use crate::error::AppError;
+use crate::events::{
+    GitCommandCompleteEvent, GitCommandStartEvent, GIT_COMMAND_COMPLETE, GIT_COMMAND_START,
+};
 use crate::git::cli::GitCliEngine;
 use crate::git::engine::{GitEngine, GitRemoteEngine};
 use crate::state::TokenStore;
 use serde_json::{json, Value};
+use tauri::Emitter;
 
 #[tauri::command]
 pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
@@ -170,7 +174,25 @@ pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
 }
 
 #[tauri::command]
-pub async fn stage_files(repo_path: String, paths: Vec<String>) -> Result<(), AppError> {
+pub async fn stage_files(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    paths: Vec<String>,
+) -> Result<(), AppError> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let started_at = chrono::Utc::now().timestamp_millis();
+    let path_list = paths.join(", ");
+    let _ = app_handle.emit(
+        GIT_COMMAND_START,
+        GitCommandStartEvent {
+            id: id.clone(),
+            command: format!("git add {}", path_list),
+            operation: "stage".to_string(),
+            repo_path: repo_path.clone(),
+            started_at,
+        },
+    );
+
     tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
         let mut index = repo.index()?;
@@ -200,11 +222,44 @@ pub async fn stage_files(repo_path: String, paths: Vec<String>) -> Result<(), Ap
     .await
     .map_err(|e| AppError::Channel(e.to_string()))??;
 
+    let duration_ms = (chrono::Utc::now().timestamp_millis() - started_at) as u64;
+    let _ = app_handle.emit(
+        GIT_COMMAND_COMPLETE,
+        GitCommandCompleteEvent {
+            id,
+            operation: "stage".to_string(),
+            success: true,
+            duration_ms,
+            stdout: String::new(),
+            stderr: String::new(),
+            exit_code: Some(0),
+            result_summary: None,
+        },
+    );
+
     Ok(())
 }
 
 #[tauri::command]
-pub async fn unstage_files(repo_path: String, paths: Vec<String>) -> Result<(), AppError> {
+pub async fn unstage_files(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    paths: Vec<String>,
+) -> Result<(), AppError> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let started_at = chrono::Utc::now().timestamp_millis();
+    let path_list = paths.join(", ");
+    let _ = app_handle.emit(
+        GIT_COMMAND_START,
+        GitCommandStartEvent {
+            id: id.clone(),
+            command: format!("git reset HEAD {}", path_list),
+            operation: "unstage".to_string(),
+            repo_path: repo_path.clone(),
+            started_at,
+        },
+    );
+
     tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
 
@@ -233,11 +288,27 @@ pub async fn unstage_files(repo_path: String, paths: Vec<String>) -> Result<(), 
     .await
     .map_err(|e| AppError::Channel(e.to_string()))??;
 
+    let duration_ms = (chrono::Utc::now().timestamp_millis() - started_at) as u64;
+    let _ = app_handle.emit(
+        GIT_COMMAND_COMPLETE,
+        GitCommandCompleteEvent {
+            id,
+            operation: "unstage".to_string(),
+            success: true,
+            duration_ms,
+            stdout: String::new(),
+            stderr: String::new(),
+            exit_code: Some(0),
+            result_summary: None,
+        },
+    );
+
     Ok(())
 }
 
 #[tauri::command]
 pub async fn create_commit(
+    app_handle: tauri::AppHandle,
     repo_path: String,
     message: String,
     amend: bool,
@@ -257,7 +328,7 @@ pub async fn create_commit(
         None
     };
 
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     let author = account_info.as_ref().map(|(n, e)| (n.as_str(), e.as_str()));
     let oid = engine.commit(&message, amend, author).await?;
     tracing::info!("Committed {}", oid);
@@ -486,16 +557,23 @@ pub async fn git_pull(
 }
 
 #[tauri::command]
-pub async fn stash_push(repo_path: String, message: Option<String>) -> Result<(), AppError> {
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+pub async fn stash_push(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    message: Option<String>,
+) -> Result<(), AppError> {
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     engine.stash_save(message.as_deref()).await?;
     tracing::info!("Stash saved");
     Ok(())
 }
 
 #[tauri::command]
-pub async fn stash_pop(repo_path: String) -> Result<(), AppError> {
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+pub async fn stash_pop(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+) -> Result<(), AppError> {
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     engine.stash_pop().await?;
     tracing::info!("Stash popped");
     Ok(())
@@ -516,16 +594,24 @@ pub async fn stash_list(
 }
 
 #[tauri::command]
-pub async fn stash_apply(repo_path: String, index: usize) -> Result<(), AppError> {
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+pub async fn stash_apply(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    index: usize,
+) -> Result<(), AppError> {
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     engine.stash_apply(index).await?;
     tracing::info!("Stash applied: stash@{{{}}}", index);
     Ok(())
 }
 
 #[tauri::command]
-pub async fn stash_drop(repo_path: String, index: usize) -> Result<(), AppError> {
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+pub async fn stash_drop(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    index: usize,
+) -> Result<(), AppError> {
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     engine.stash_drop(index).await?;
     tracing::info!("Stash dropped: stash@{{{}}}", index);
     Ok(())
@@ -548,11 +634,12 @@ pub async fn stash_show(
 
 #[tauri::command]
 pub async fn stash_push_partial(
+    app_handle: tauri::AppHandle,
     repo_path: String,
     paths: Vec<String>,
     message: Option<String>,
 ) -> Result<(), AppError> {
-    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     engine.stash_push_paths(message.as_deref(), &paths).await?;
     tracing::info!("Stash pushed (partial): {} files", paths.len());
     Ok(())

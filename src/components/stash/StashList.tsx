@@ -124,7 +124,7 @@ export function StashList({
                 {t("common.cancel")}
               </button>
               <button
-                className="px-3 py-1.5 text-xs rounded-md bg-danger text-white hover:bg-danger/90 transition-colors"
+                className="px-3 py-1.5 text-xs rounded-md bg-danger text-danger-foreground hover:bg-danger/90 transition-colors"
                 onClick={() => {
                   onDrop(confirmDrop);
                   setConfirmDrop(null);

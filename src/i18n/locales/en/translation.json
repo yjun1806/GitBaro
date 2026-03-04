@@ -507,7 +507,7 @@
     },
     "apply": "Apply",
     "applyDescription": "Apply stash changes without removing from list",
-    "pop": "Pop",
+    "pop": "Apply & Delete",
     "popDescription": "Apply stash changes and remove from list",
     "drop": "Drop",
     "dropDescription": "Delete this stash permanently",
@@ -543,7 +543,8 @@
     "pushSummary": "Pushed {{count}} commits to {{branch}}",
     "mergeSummary": "Merged ({{mergeType}}), {{files}} files changed",
     "noChanges": "Already up to date",
-    "progress": "{{percent}}%"
+    "progress": "{{percent}}%",
+    "loadMore": "Load more ({{remaining}} remaining)"
   },
   "sync": {
     "forcePushWarning": "This will overwrite remote history. This action cannot be undone.",
