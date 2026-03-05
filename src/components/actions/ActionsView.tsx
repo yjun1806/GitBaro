@@ -20,6 +20,7 @@ export function ActionsView() {
   const { data: runs = [], isLoading } = useWorkflowRuns(
     hasRemote ? activeRepoPath : null,
     accountId,
+    { polling: true },
   );
 
   return (

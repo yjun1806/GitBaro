@@ -75,13 +75,20 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
     return null;
   })();
 
-  const invalidateAll = () =>
-    Promise.all([
+  const invalidateAll = (includeActions = false) => {
+    const queries = Promise.all([
       queryClient.invalidateQueries({ queryKey: ["branches"] }),
       queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
       queryClient.invalidateQueries({ queryKey: ["status"] }),
       queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
     ]);
+    if (includeActions) {
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["workflowRuns"] });
+      }, 5000);
+    }
+    return queries;
+  };
 
   const handleSync = async () => {
     if (!activeRepoPath || !activeAccountId || isSyncing) return;
@@ -103,7 +110,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
         addToast(t("sync.fetchCompleted"), "success");
       }
       setLastFetchedAt(Math.floor(Date.now() / 1000));
-      await invalidateAll();
+      await invalidateAll(action === "push");
     } catch (err) {
       const msg = getErrorMessage(err);
       if (msg.startsWith("no_upstream:")) {
@@ -161,7 +168,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
     setSyncingAction("push");
     try {
       await gitPush(activeRepoPath, activeAccountId, false);
-      await invalidateAll();
+      await invalidateAll(true);
       addToast(t("sync.pushCompleted"), "success");
     } catch (err) {
       addToast(t("sync.pushFailed", { error: getErrorMessage(err) }), "error");
@@ -175,7 +182,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
     setSyncingAction("push");
     try {
       await gitPush(activeRepoPath, activeAccountId, true);
-      await invalidateAll();
+      await invalidateAll(true);
       addToast(t("sync.forcePushCompleted"), "success");
     } catch (err) {
       addToast(t("sync.pushFailed", { error: getErrorMessage(err) }), "error");

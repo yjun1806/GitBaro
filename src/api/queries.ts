@@ -189,12 +189,17 @@ export function useStashShow(repoPath: string | null, index: number | null) {
 
 // ── Actions (GitHub Actions) ────────────────────────────────────────────────
 
-export function useWorkflowRuns(repoPath: string | null, accountId: string | null) {
+export function useWorkflowRuns(
+  repoPath: string | null,
+  accountId: string | null,
+  options?: { polling?: boolean },
+) {
+  const polling = options?.polling ?? false;
   return useQuery({
     queryKey: ["workflowRuns", repoPath, accountId],
     queryFn: () => listWorkflowRuns(repoPath!, accountId!),
     enabled: repoPath !== null && accountId !== null,
-    refetchInterval: 30_000,
+    refetchInterval: polling ? 30_000 : false,
     refetchIntervalInBackground: false,
     staleTime: 10_000,
   });

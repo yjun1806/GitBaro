@@ -16,7 +16,7 @@ import {
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
-import { useStatus, useSettings, useStashList } from "@/api/queries";
+import { useStatus, useSettings, useStashList, useWorkflowRuns } from "@/api/queries";
 import { gitFetch } from "@/api/commands";
 import { RepoHeaderContextMenu } from "@/components/repository/RepoHeaderContextMenu";
 import { RepoListView } from "@/components/repository/RepoListView";
@@ -48,12 +48,20 @@ export function Sidebar() {
   const changesCount = statusEntries.length;
   const { data: stashes = [] } = useStashList(activeRepoPath);
   const stashCount = stashes.length;
+  const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const queryClient = useQueryClient();
   const [isFetching, setIsFetching] = useState(false);
   const [repoMenuPos, setRepoMenuPos] = useState<{ x: number; y: number } | null>(null);
   const { data: settingsData = null } = useSettings();
 
   const hasRemote = activeRepo ? activeRepo.remotes.length > 0 : false;
+  const { data: workflowRuns = [] } = useWorkflowRuns(
+    hasRemote ? activeRepoPath : null,
+    activeAccountId,
+  );
+  const activeRunCount = workflowRuns.filter(
+    (r) => r.status === "in_progress" || r.status === "queued",
+  ).length;
   const activeVisibility = activeRepoPath ? repoVisibility[activeRepoPath] : undefined;
   const RepoHeaderIcon = !activeRepo
     ? GitFork
@@ -172,6 +180,7 @@ export function Sidebar() {
               active={activeTab === "actions"}
               onClick={() => setActiveTab("actions")}
               icon={<Play className="w-3.5 h-3.5" />}
+              count={activeRunCount > 0 ? activeRunCount : undefined}
             >
               {t("actions.title")}
             </Tab>
