@@ -664,3 +664,22 @@ export async function stopWorktreePreview(repoPath: string): Promise<void> {
 export async function checkPreviewActive(repoPath: string): Promise<boolean> {
   return invoke("check_preview_active", { repoPath });
 }
+
+// ── Actions (GitHub Actions) ──
+
+import type { WorkflowRun, WorkflowJob } from "@/types";
+
+export async function listWorkflowRuns(
+  repoPath: string,
+  accountId: string,
+): Promise<WorkflowRun[]> {
+  return invoke("list_workflow_runs", { repoPath, accountId });
+}
+
+export async function getWorkflowRunJobs(
+  repoPath: string,
+  accountId: string,
+  runId: number,
+): Promise<WorkflowJob[]> {
+  return invoke("get_workflow_run_jobs", { repoPath, accountId, runId });
+}

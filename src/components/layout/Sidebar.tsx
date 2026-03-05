@@ -11,6 +11,7 @@ import {
   Lock,
   FileText,
   Clock,
+  Play,
 } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
@@ -22,6 +23,7 @@ import { RepoListView } from "@/components/repository/RepoListView";
 import { ChangesView } from "@/components/commit/ChangesView";
 import { HistoryView } from "@/components/history/HistoryView";
 import { StashView } from "@/components/stash/StashView";
+import { ActionsView } from "@/components/actions/ActionsView";
 import { useQueryClient } from "@tanstack/react-query";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 
@@ -166,6 +168,13 @@ export function Sidebar() {
             >
               {t("stash.title")}
             </Tab>
+            <Tab
+              active={activeTab === "actions"}
+              onClick={() => setActiveTab("actions")}
+              icon={<Play className="w-3.5 h-3.5" />}
+            >
+              {t("actions.title")}
+            </Tab>
           </TabGroup>
 
           {/* Tab content */}
@@ -174,8 +183,10 @@ export function Sidebar() {
               <ChangesView />
             ) : activeTab === "history" ? (
               <HistoryView />
-            ) : (
+            ) : activeTab === "stash" ? (
               <StashView />
+            ) : (
+              <ActionsView />
             )}
           </div>
         </>

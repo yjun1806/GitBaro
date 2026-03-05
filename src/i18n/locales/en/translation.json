@@ -532,6 +532,26 @@
       "noFiles": "No files changed"
     }
   },
+  "actions": {
+    "title": "Actions",
+    "noRuns": "No workflow runs",
+    "noRunsDescription": "No GitHub Actions runs found for this repository",
+    "selectRun": "Select a run to view details",
+    "viewOnGithub": "View on GitHub",
+    "noRemote": "No remote repository to check Actions",
+    "noAccount": "Connect a GitHub account to view Actions",
+    "job": "Job",
+    "step": "Step",
+    "duration": "Duration",
+    "status": {
+      "success": "Success",
+      "failure": "Failure",
+      "inProgress": "In Progress",
+      "queued": "Queued",
+      "cancelled": "Cancelled",
+      "skipped": "Skipped"
+    }
+  },
   "activity": {
     "title": "Activity Log",
     "clear": "Clear",

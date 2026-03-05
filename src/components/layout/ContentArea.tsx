@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, GitCommit, GitCompare, Archive } from "lucide-react";
+import { FileText, GitCommit, GitCompare, Archive, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
@@ -12,6 +12,7 @@ import { getErrorMessage } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { CommitDetail } from "@/components/history/CommitDetail";
 import { StashDetailView } from "@/components/stash/StashDetailView";
+import { ActionsDetailView } from "@/components/actions/ActionsDetailView";
 import { ToolbarRoot } from "@/components/toolbar";
 import { PreviewBanner } from "@/components/worktree/PreviewBanner";
 import type { FileStatus } from "@/types";
@@ -102,7 +103,7 @@ function CommitDetailView({ commitId }: { commitId: string }) {
 /* --- ContentArea (main export) --- */
 
 interface ContentAreaProps {
-  activeTab: "changes" | "history" | "stash";
+  activeTab: "changes" | "history" | "stash" | "actions";
 }
 
 export function ContentArea({ activeTab }: ContentAreaProps) {
@@ -117,6 +118,7 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
   const selectedFileStaged = useSelectionStore((s) => s.selectedFileStaged);
   const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
   const selectedStashIndex = useSelectionStore((s) => s.selectedStashIndex);
+  const selectedRunId = useSelectionStore((s) => s.selectedRunId);
 
   const handleStopPreview = async () => {
     if (!activeRepoPath) return;
@@ -142,7 +144,20 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
 
       {/* Diff / Detail content */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {activeTab === "stash" ? (
+        {activeTab === "actions" ? (
+          selectedRunId !== null ? (
+            <ActionsDetailView
+              key={selectedRunId}
+              runId={selectedRunId}
+            />
+          ) : (
+            <EmptyState
+              icon={Play}
+              title={t("actions.selectRun")}
+              description={t("actions.selectRun")}
+            />
+          )
+        ) : activeTab === "stash" ? (
           selectedStashIndex !== null ? (
             <StashDetailView
               key={selectedStashIndex}

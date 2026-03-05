@@ -10,11 +10,15 @@ interface SelectionState {
   selectedCommitId: string | null;
   // Stash tab
   selectedStashIndex: number | null;
+  // Actions tab
+  selectedRunId: number | null;
 
   // Actions
   selectFile: (path: string, staged: boolean) => void;
   selectCommit: (id: string) => void;
   selectStash: (index: number | null) => void;
+  selectRun: (id: number) => void;
+  clearRunSelection: () => void;
   clearFileSelection: () => void;
   clearCommitSelection: () => void;
   clearStashSelection: () => void;
@@ -26,6 +30,7 @@ export const useSelectionStore = create<SelectionState>()((set) => ({
   selectedFileStaged: false,
   selectedCommitId: null,
   selectedStashIndex: null,
+  selectedRunId: null,
 
   selectFile: (path, staged) =>
     set({ selectedFile: path, selectedFileStaged: staged }),
@@ -35,6 +40,12 @@ export const useSelectionStore = create<SelectionState>()((set) => ({
 
   selectStash: (index) =>
     set({ selectedStashIndex: index }),
+
+  selectRun: (id) =>
+    set({ selectedRunId: id }),
+
+  clearRunSelection: () =>
+    set({ selectedRunId: null }),
 
   clearFileSelection: () =>
     set({ selectedFile: null, selectedFileStaged: false }),
@@ -51,6 +62,7 @@ export const useSelectionStore = create<SelectionState>()((set) => ({
       selectedFileStaged: false,
       selectedCommitId: null,
       selectedStashIndex: null,
+      selectedRunId: null,
     }),
 }));
 

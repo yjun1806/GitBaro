@@ -3,7 +3,7 @@ import type { Theme } from "@/types";
 
 interface UIState {
   theme: Theme;
-  activeTab: "changes" | "history" | "stash";
+  activeTab: "changes" | "history" | "stash" | "actions";
   sidebarWidth: number;
   isSidebarCollapsed: boolean;
   repoListOpen: boolean;
@@ -11,7 +11,7 @@ interface UIState {
   previewBranch: string | null;
   isActivityLogOpen: boolean;
   setTheme: (theme: Theme) => void;
-  setActiveTab: (tab: "changes" | "history" | "stash") => void;
+  setActiveTab: (tab: "changes" | "history" | "stash" | "actions") => void;
   setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
   setRepoListOpen: (open: boolean) => void;

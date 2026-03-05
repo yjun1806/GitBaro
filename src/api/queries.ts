@@ -23,6 +23,8 @@ import {
   stashPush,
   stashPop,
   stashPushPartial,
+  listWorkflowRuns,
+  getWorkflowRunJobs,
 } from "./commands";
 
 export function useStatus(repoPath: string | null) {
@@ -184,6 +186,33 @@ export function useStashShow(repoPath: string | null, index: number | null) {
     enabled: repoPath !== null && index !== null,
   });
 }
+
+// ── Actions (GitHub Actions) ────────────────────────────────────────────────
+
+export function useWorkflowRuns(repoPath: string | null, accountId: string | null) {
+  return useQuery({
+    queryKey: ["workflowRuns", repoPath, accountId],
+    queryFn: () => listWorkflowRuns(repoPath!, accountId!),
+    enabled: repoPath !== null && accountId !== null,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    staleTime: 10_000,
+  });
+}
+
+export function useWorkflowRunJobs(
+  repoPath: string | null,
+  accountId: string | null,
+  runId: number | null,
+) {
+  return useQuery({
+    queryKey: ["workflowRunJobs", repoPath, accountId, runId],
+    queryFn: () => getWorkflowRunJobs(repoPath!, accountId!, runId!),
+    enabled: repoPath !== null && accountId !== null && runId !== null,
+  });
+}
+
+// ── Stash Mutations ─────────────────────────────────────────────────────────
 
 export function useStashMutations(repoPath: string | null) {
   const queryClient = useQueryClient();

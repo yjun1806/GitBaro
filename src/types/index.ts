@@ -238,6 +238,38 @@ export interface StashShowResult {
   files: StashFileSummary[];
 }
 
+// ── Actions (GitHub Actions) ──
+
+export interface WorkflowRun {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  headBranch: string;
+  headSha: string;
+  htmlUrl: string;
+  createdAt: string;
+  updatedAt: string;
+  runNumber: number;
+}
+
+export interface WorkflowJob {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  steps: JobStep[];
+}
+
+export interface JobStep {
+  name: string;
+  status: string;
+  conclusion: string | null;
+  number: number;
+}
+
 // ── Activity ──
 
 export type OperationType =

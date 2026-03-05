@@ -368,7 +368,7 @@ pub(crate) async fn resolve_token(
 }
 
 /// Resolve owner/repo from a local repo path by reading its origin remote URL.
-async fn resolve_repo_owner(repo_path: &str) -> Option<(String, String)> {
+pub(crate) async fn resolve_repo_owner(repo_path: &str) -> Option<(String, String)> {
     tracing::info!("[git] git remote get-url origin (cwd: {})", repo_path);
     let output = tokio::process::Command::new("git")
         .args(["remote", "get-url", "origin"])
