@@ -81,6 +81,9 @@ pub async fn clone_repository(
     app_handle: tauri::AppHandle,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<Value, AppError> {
+    // Reject dangerous transports (ext::, file://, -flag) before clone.
+    crate::git::remote::validate_clone_url(&url)?;
+
     let token = if let Some(ref id) = account_id {
         Some(resolve_token(&token_store, id).await?)
     } else {
@@ -94,8 +97,18 @@ pub async fn clone_repository(
         engine.clone_repo(&url, std::path::Path::new(&path), tok).await?;
     } else {
         tracing::info!("[git] git clone {} {} (no auth)", url, path);
+        // `--` separates options from positional args; `protocol.ext.allow=never`
+        // is defense-in-depth against the ext:: remote helper.
         let output = tokio::process::Command::new("git")
-            .args(["clone", &url, &path])
+            .args([
+                "-c",
+                "protocol.ext.allow=never",
+                "clone",
+                "--",
+                &url,
+                &path,
+            ])
+            .env("GIT_TERMINAL_PROMPT", "0")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .output()
@@ -127,7 +140,19 @@ pub async fn search_github_repos(
 ) -> Result<Value, AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
     let client = crate::github::client::GitHubClient::new();
-    let repos = client.list_repos(&token, 1).await?;
+
+    // Paginate through the user's repositories (100 per page). Stops at a partial
+    // page or a safety cap so users with >100 repos can still find clone targets.
+    const MAX_PAGES: u32 = 10;
+    let mut repos: Vec<Value> = Vec::new();
+    for page in 1..=MAX_PAGES {
+        let batch = client.list_repos(&token, page).await?;
+        let batch_len = batch.len();
+        repos.extend(batch);
+        if batch_len < 100 {
+            break;
+        }
+    }
 
     let query_lower = query.to_lowercase();
     let filtered: Vec<Value> = repos

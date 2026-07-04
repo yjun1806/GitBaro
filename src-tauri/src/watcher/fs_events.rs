@@ -20,11 +20,11 @@ impl RepoWatcher {
         let mut watcher = notify::recommended_watcher(move |res| {
             let _ = tx.send(res);
         })
-        .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+        .map_err(|e| AppError::Io(std::io::Error::other(e.to_string())))?;
 
         watcher
             .watch(&repo_path, RecursiveMode::Recursive)
-            .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+            .map_err(|e| AppError::Io(std::io::Error::other(e.to_string())))?;
 
         // Spawn a debounce thread
         std::thread::spawn(move || {
@@ -35,12 +35,19 @@ impl RepoWatcher {
             loop {
                 match rx.recv_timeout(debounce) {
                     Ok(Ok(event)) => {
-                        // Filter out .git directory events
-                        let is_git_internal = event.paths.iter().all(|p| {
-                            p.components().any(|c| c.as_os_str() == ".git")
+                        // Ignore events inside directories that don't affect git
+                        // status (`.git` internals) or that produce high-volume
+                        // noise (dependency/build output). git status never
+                        // reports ignored paths, so watching them wastes cycles.
+                        const IGNORED_DIRS: [&str; 6] =
+                            [".git", "node_modules", "target", "dist", ".next", "build"];
+                        let is_ignored = event.paths.iter().all(|p| {
+                            p.components().any(|c| {
+                                IGNORED_DIRS.contains(&c.as_os_str().to_string_lossy().as_ref())
+                            })
                         });
 
-                        if !is_git_internal {
+                        if !is_ignored {
                             pending = Some(event);
                             last_received = std::time::Instant::now();
                         }

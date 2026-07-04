@@ -16,13 +16,12 @@ const queryClient = new QueryClient({
   },
 });
 
-// Tauri 윈도우 포커스 이벤트를 React Query에 연동
-// 포커스 시 모든 쿼리를 invalidate하여 staleTime과 관계없이 즉시 갱신
+// Tauri 윈도우 포커스 이벤트를 React Query에 연동.
+// focusManager만 갱신하면 refetchOnWindowFocus가 stale된 쿼리만 선택적으로
+// refetch한다. 전역 invalidateQueries()는 staleTime을 무력화해 아바타·워크플로우
+// 실행 등 비용이 큰 네트워크 쿼리까지 포커스마다 재실행시키므로 사용하지 않는다.
 getCurrentWindow().onFocusChanged(({ payload: focused }) => {
   focusManager.setFocused(focused);
-  if (focused) {
-    queryClient.invalidateQueries();
-  }
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

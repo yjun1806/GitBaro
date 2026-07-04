@@ -17,9 +17,6 @@ pub enum AppError {
     #[error("Token expired for account {account_id}")]
     TokenExpired { account_id: String },
 
-    #[error("Keychain error: {0}")]
-    Keychain(String),
-
     #[error("GitHub API error ({status}): {message}")]
     GithubApi { status: u16, message: String },
 
@@ -74,7 +71,6 @@ impl serde::Serialize for AppError {
             AppError::TokenExpired { account_id } => {
                 ("TokenExpired", format!("Token expired for {}", account_id))
             }
-            AppError::Keychain(msg) => ("Keychain", msg.clone()),
             AppError::GithubApi { status, message } => {
                 ("GithubApi", format!("HTTP {}: {}", status, message))
             }

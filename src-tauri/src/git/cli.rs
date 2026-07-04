@@ -142,6 +142,43 @@ impl GitCliEngine {
         Ok(output)
     }
 
+    /// Run a local git command with extra environment variables (e.g. committer
+    /// identity). Emits start/complete events like `run_local`.
+    async fn run_local_with_env(
+        &self,
+        args: &[&str],
+        envs: &[(&str, String)],
+    ) -> Result<std::process::Output, AppError> {
+        let operation = args.first().copied().unwrap_or("unknown");
+        let id = Uuid::new_v4().to_string();
+        let start = Instant::now();
+        let started_at = chrono::Utc::now().timestamp_millis();
+
+        tracing::info!(
+            "[git] git {} (cwd: {})",
+            args.join(" "),
+            self.repo_path.display()
+        );
+
+        self.emit_command_start(&id, args, operation, started_at);
+
+        let mut cmd = Command::new("git");
+        cmd.args(args)
+            .current_dir(&self.repo_path)
+            .env("GIT_TERMINAL_PROMPT", "0");
+        for (key, value) in envs {
+            cmd.env(*key, value.as_str());
+        }
+        let output = cmd.output().await.map_err(map_io_err)?;
+
+        log_output(&output);
+
+        let duration_ms = start.elapsed().as_millis() as u64;
+        self.emit_command_complete(&id, operation, &output, duration_ms, None);
+
+        Ok(output)
+    }
+
     /// Run a local git command with a custom summary builder, emitting a richer event.
     async fn run_local_with_summary<F>(
         &self,
@@ -196,6 +233,13 @@ impl GitCliEngine {
     }
 
     /// Create a commit via git CLI so that hooks (pre-commit, commit-msg, post-commit) run.
+    ///
+    /// When an `author` is provided (per-repository GitHub account), both the
+    /// author *and* committer identity are set to that account. `--author` alone
+    /// only sets the author; the committer field would otherwise fall back to the
+    /// global `git config user.*`, leaking the global identity into GitHub — which
+    /// defeats GitBaro's per-repo account isolation. GitHub Desktop sets the
+    /// `GIT_COMMITTER_*` environment variables for exactly this reason.
     pub async fn commit(
         &self,
         message: &str,
@@ -209,17 +253,44 @@ impl GitCliEngine {
             args.push("--amend");
         }
         let author_str;
+        let mut envs: Vec<(&str, String)> = Vec::new();
         if let Some((name, email)) = author {
             author_str = format!("{} <{}>", name, email);
             args.push("--author");
             args.push(&author_str);
+            envs.push(("GIT_COMMITTER_NAME", name.to_string()));
+            envs.push(("GIT_COMMITTER_EMAIL", email.to_string()));
         }
-        self.run_local_checked(&args).await?;
+        let output = self.run_local_with_env(&args, &envs).await?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(AppError::GitCli {
+                message: parse_git_error(&stderr),
+                exit_code: output.status.code(),
+            });
+        }
         self.run_local_checked(&["rev-parse", "HEAD"]).await
+    }
+
+    /// Discard working-tree changes for specific paths via git CLI.
+    /// Restores the given paths from the index (`git checkout -- <paths>`).
+    pub async fn discard_paths(&self, paths: &[String]) -> Result<(), AppError> {
+        if paths.is_empty() {
+            return Ok(());
+        }
+        let mut args = vec!["checkout", "--"];
+        let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+        args.extend(path_refs);
+        self.run_local_checked(&args).await?;
+        Ok(())
     }
 
     /// Switch branch via git CLI so that post-checkout hook runs.
     pub async fn switch_branch(&self, name: &str) -> Result<(), AppError> {
+        // NOTE: `--` cannot be used here — `git checkout -- <name>` restores a
+        // pathspec instead of switching branch. `validate_branch_name` rejects
+        // leading '-' and other option-injection characters instead.
+        crate::git::branch::validate_branch_name(name)?;
         self.run_local_checked(&["checkout", name]).await?;
         Ok(())
     }
@@ -319,8 +390,56 @@ impl GitCliEngine {
 
     /// Rename a branch via git CLI.
     pub async fn rename_branch(&self, old_name: &str, new_name: &str) -> Result<(), AppError> {
+        crate::git::branch::validate_branch_name(old_name)?;
+        crate::git::branch::validate_branch_name(new_name)?;
         self.run_local_checked(&["branch", "-m", old_name, new_name]).await?;
         Ok(())
+    }
+
+    /// Abort an in-progress merge (`git merge --abort`), restoring the pre-merge state.
+    pub async fn merge_abort(&self) -> Result<(), AppError> {
+        self.run_local_checked(&["merge", "--abort"]).await?;
+        Ok(())
+    }
+
+    /// Continue an in-progress merge after conflicts are resolved and staged.
+    /// Commits the merge without opening an editor.
+    pub async fn merge_continue(&self) -> Result<(), AppError> {
+        self.run_local_checked(&["commit", "--no-edit"]).await?;
+        Ok(())
+    }
+
+    /// Abort an in-progress rebase (`git rebase --abort`).
+    pub async fn rebase_abort(&self) -> Result<(), AppError> {
+        self.run_local_checked(&["rebase", "--abort"]).await?;
+        Ok(())
+    }
+
+    /// Continue an in-progress rebase after conflicts are resolved and staged.
+    pub async fn rebase_continue(&self) -> Result<(), AppError> {
+        // -c core.editor=true prevents git from opening an interactive editor.
+        self.run_local_checked(&["-c", "core.editor=true", "rebase", "--continue"])
+            .await?;
+        Ok(())
+    }
+
+    /// Report whether a merge or rebase is in progress by checking for the
+    /// marker files git creates in the git dir.
+    pub async fn operation_in_progress(&self) -> Result<Option<&'static str>, AppError> {
+        let git_dir = self.run_local_checked(&["rev-parse", "--git-dir"]).await?;
+        let git_dir_path = {
+            let p = PathBuf::from(&git_dir);
+            if p.is_absolute() { p } else { self.repo_path.join(p) }
+        };
+        if git_dir_path.join("MERGE_HEAD").exists() {
+            Ok(Some("merge"))
+        } else if git_dir_path.join("rebase-merge").exists()
+            || git_dir_path.join("rebase-apply").exists()
+        {
+            Ok(Some("rebase"))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Get recently checked-out branches from reflog.
@@ -381,6 +500,9 @@ impl GitCliEngine {
             args.push("-b");
             args.push(&nb_flag);
         }
+        // `--` ends option parsing so a path/branch beginning with `-` cannot be
+        // interpreted as a flag.
+        args.push("--");
         args.push(path);
         if let Some(base) = base_branch {
             args.push(base);
@@ -397,6 +519,7 @@ impl GitCliEngine {
         if force {
             args.push("--force");
         }
+        args.push("--");
         args.push(path);
         self.run_local_checked(&args).await?;
         Ok(())
@@ -605,7 +728,16 @@ impl GitRemoteEngine for GitCliEngine {
     async fn clone_repo(&self, url: &str, path: &Path, token: &str) -> Result<(), AppError> {
         let askpass = AskpassScript::create(token).await?;
         let path_str = path.to_string_lossy().into_owned();
-        let args = ["-c", "credential.helper=", "clone", "--", url, &path_str];
+        let args = [
+            "-c",
+            "credential.helper=",
+            "-c",
+            "protocol.ext.allow=never",
+            "clone",
+            "--",
+            url,
+            &path_str,
+        ];
 
         let id = Uuid::new_v4().to_string();
         let start = Instant::now();
@@ -664,7 +796,9 @@ impl GitRemoteEngine for GitCliEngine {
 
         let mut args = vec!["-c", "credential.helper=", "push", "--set-upstream"];
         if force {
-            args.push("--force");
+            // --force-with-lease refuses to overwrite remote work the local repo
+            // hasn't seen, unlike the blunt --force. Matches GitHub Desktop.
+            args.push("--force-with-lease");
         }
         args.push(remote);
         args.push(branch);
@@ -674,7 +808,7 @@ impl GitRemoteEngine for GitCliEngine {
         let started_at = chrono::Utc::now().timestamp_millis();
         let mut display_args = vec!["push", "--set-upstream"];
         if force {
-            display_args.push("--force");
+            display_args.push("--force-with-lease");
         }
         display_args.push(remote);
         display_args.push(branch);
@@ -778,12 +912,29 @@ impl AskpassScript {
             token
         );
 
-        tokio::fs::write(&path, &script).await?;
-
+        // Create the file with owner-only permissions BEFORE writing the token,
+        // so there is never a window where the token-bearing script is
+        // world/group-readable (avoids the write-then-chmod TOCTOU).
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            tokio::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).await?;
+            use std::io::Write;
+            use std::os::unix::fs::OpenOptionsExt;
+            let path_clone = path.clone();
+            let script_bytes = script.into_bytes();
+            tokio::task::spawn_blocking(move || {
+                let mut file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .mode(0o700)
+                    .open(&path_clone)?;
+                file.write_all(&script_bytes)
+            })
+            .await
+            .map_err(|e| AppError::Channel(e.to_string()))??;
+        }
+        #[cfg(not(unix))]
+        {
+            tokio::fs::write(&path, &script).await?;
         }
 
         Ok(Self { path })
@@ -791,6 +942,30 @@ impl AskpassScript {
 
     fn path(&self) -> &Path {
         &self.path
+    }
+
+}
+
+/// Best-effort cleanup of stale askpass scripts left behind by a previous
+/// process that was force-killed before `Drop` could run. Called once at
+/// startup. Only removes files in the per-user temp dir matching our prefix and
+/// NOT belonging to the current process.
+pub(crate) fn sweep_stale_askpass() {
+    let current_pid = std::process::id().to_string();
+    let prefix = "gitbaro-askpass-";
+    let dir = std::env::temp_dir();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if let Some(rest) = name.strip_prefix(prefix) {
+                // rest = "<pid>-<nanos>"; skip files owned by this process.
+                let file_pid = rest.split('-').next().unwrap_or("");
+                if file_pid != current_pid {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
     }
 }
 

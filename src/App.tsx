@@ -19,10 +19,13 @@ import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 import { ErrorToast } from "@/components/error/ErrorToast";
 import { useToastStore } from "@/stores/toast";
 import { useGitEvents } from "@/hooks/useGitEvents";
+import { useRepoWatcher } from "@/hooks/useRepoWatcher";
 
 function AppContent() {
   const { t } = useTranslation();
   useGitEvents();
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  useRepoWatcher(activeRepoPath);
   const accounts = useAccountStore((s) => s.accounts);
   const setAccounts = useAccountStore((s) => s.setAccounts);
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);

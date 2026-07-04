@@ -6,9 +6,10 @@ import { useBranchStore } from "@/stores/branch";
 import { useAccountStore } from "@/stores/account";
 import { useSelectionStore } from "@/stores/selection";
 import { useStatus } from "@/api/queries";
-import { createCommit, stageFiles, unstageFiles, openInEditor } from "@/api/commands";
+import { createCommit, stageFiles, unstageFiles, openInEditor, discardChanges } from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
 import { FileEntry } from "@/components/commit/FileEntry";
+import { MergeConflictBanner } from "@/components/conflict/MergeConflictBanner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { groupFilesByDirectory } from "@/lib/group-files";
@@ -45,6 +46,22 @@ export function ChangesView() {
   const [commitDescription, setCommitDescription] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
+  const [discardTarget, setDiscardTarget] = useState<string | null>(null);
+
+  const handleConfirmDiscard = useCallback(async () => {
+    if (!activeRepoPath || !discardTarget) return;
+    const path = discardTarget;
+    setDiscardTarget(null);
+    try {
+      await discardChanges(activeRepoPath, [path]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["status"] }),
+        queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+      ]);
+    } catch (err) {
+      addToast(t("changes.discardFailed", { error: getErrorMessage(err) }), "error");
+    }
+  }, [activeRepoPath, discardTarget, queryClient, addToast, t]);
 
   const handleOpenInEditor = async (filePath: string) => {
     if (!activeRepoPath) return;
@@ -60,8 +77,17 @@ export function ChangesView() {
     }
   };
 
-  const stagedFiles = statusEntries.filter((e) => e.staged);
-  const unstagedFiles = statusEntries.filter((e) => !e.staged);
+  // Memoize the split so downstream group memos aren't invalidated by a new
+  // array identity on every keystroke in the commit message inputs.
+  const stagedFiles = useMemo(() => statusEntries.filter((e) => e.staged), [statusEntries]);
+  const unstagedFiles = useMemo(
+    () => statusEntries.filter((e) => !e.staged),
+    [statusEntries],
+  );
+  const conflictCount = useMemo(
+    () => statusEntries.filter((e) => e.status === "conflicted").length,
+    [statusEntries],
+  );
 
   const stagedGroups = useMemo(() => groupFilesByDirectory(stagedFiles), [stagedFiles]);
   const unstagedGroups = useMemo(() => groupFilesByDirectory(unstagedFiles), [unstagedFiles]);
@@ -171,6 +197,8 @@ export function ChangesView() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Merge/rebase recovery banner (abort / continue) */}
+      <MergeConflictBanner repoPath={activeRepoPath} conflictCount={conflictCount} />
       {/* File list */}
       <div className="flex-1 overflow-y-auto bg-background" {...containerProps}>
         {statusEntries.length === 0 ? (
@@ -297,6 +325,11 @@ export function ChangesView() {
                         isHighlighted={activeIndex === navIdx && navIdx >= 0}
                         onClick={() => selectFile(entry.path, entry.staged)}
                         onDoubleClick={() => handleOpenInEditor(entry.path)}
+                        onDiscard={
+                          entry.status === "conflicted"
+                            ? undefined
+                            : () => setDiscardTarget(entry.path)
+                        }
                         onToggleStage={async () => {
                           if (!activeRepoPath) return;
                           try {
@@ -388,6 +421,39 @@ export function ChangesView() {
           />
         )}
       </div>
+
+      {discardTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setDiscardTarget(null)}
+        >
+          <div
+            className="w-[380px] max-w-[90vw] rounded-xl border border-border bg-card p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-foreground">
+              {t("changes.discardConfirmTitle")}
+            </h3>
+            <p className="mt-2 text-xs text-muted-foreground break-all">
+              {t("changes.discardConfirmMessage", { file: discardTarget })}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setDiscardTarget(null)}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
+              >
+                {t("changes.cancel")}
+              </button>
+              <button
+                onClick={handleConfirmDiscard}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              >
+                {t("changes.discardConfirm")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

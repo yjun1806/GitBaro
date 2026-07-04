@@ -8,7 +8,6 @@ pub mod libgit;
 pub mod merge;
 pub mod output_parser;
 pub mod remote;
-pub mod repository;
 pub mod stash;
 
 // Convenient re-exports for callers
@@ -17,4 +16,3 @@ pub use engine::{
     DiffOutput, DiffSpec, FileDiff, FileStatus, GitEngine, GitRemoteEngine, LogOptions,
     MergeResult, RemoteInfo, StashEntry, StatusEntry,
 };
-pub use repository::GitRepository;

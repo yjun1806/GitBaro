@@ -4,6 +4,15 @@ use serde::Serialize;
 pub const GIT_COMMAND_START: &str = "git:command-start";
 pub const GIT_COMMAND_COMPLETE: &str = "git:command-complete";
 pub const GIT_COMMAND_PROGRESS: &str = "git:command-progress";
+pub const FS_CHANGE: &str = "fs:change";
+
+/// Emitted when the working tree of a watched repository changes (debounced).
+/// The frontend uses this to invalidate the status query instead of polling.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FsChangeEvent {
+    pub repo_path: String,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

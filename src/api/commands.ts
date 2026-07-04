@@ -29,6 +29,7 @@ interface RawStatusEntry {
   path: string;
   staged: boolean;
   unstaged: boolean;
+  conflicted: boolean;
   indexStatus: string;
   worktreeStatus: string;
   modifiedAt: number | null;
@@ -42,6 +43,20 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
   const entries: StatusEntry[] = [];
 
   for (const entry of raw) {
+    // A conflicted (unmerged) file has neither staged nor unstaged flags set,
+    // so it must be surfaced explicitly or it would be dropped entirely.
+    if (entry.conflicted) {
+      entries.push({
+        path: entry.path,
+        status: "conflicted",
+        staged: false,
+        modifiedAt: entry.modifiedAt,
+        insertions: entry.insertions,
+        deletions: entry.deletions,
+        sizeBytes: entry.sizeBytes,
+      });
+      continue;
+    }
     if (entry.staged && entry.indexStatus !== "unchanged") {
       entries.push({
         path: entry.path,
@@ -232,6 +247,19 @@ export async function checkMergeConflicts(
   branch: string,
 ): Promise<MergePreCheckResult> {
   return invoke("check_merge_conflicts", { repoPath, branch });
+}
+
+/** "merge" | "rebase" | null — the operation currently in progress, if any. */
+export async function getMergeState(repoPath: string): Promise<string | null> {
+  return invoke("get_merge_state", { repoPath });
+}
+
+export async function abortMergeOrRebase(repoPath: string): Promise<void> {
+  return invoke("abort_merge_or_rebase", { repoPath });
+}
+
+export async function continueMergeOrRebase(repoPath: string): Promise<void> {
+  return invoke("continue_merge_or_rebase", { repoPath });
 }
 
 export async function getConflictFileDiff(
@@ -682,4 +710,14 @@ export async function getWorkflowRunJobs(
   runId: number,
 ): Promise<WorkflowJob[]> {
   return invoke("get_workflow_run_jobs", { repoPath, accountId, runId });
+}
+
+// ── FS Watcher ──
+
+export async function startRepoWatch(repoPath: string): Promise<void> {
+  return invoke("start_repo_watch", { repoPath });
+}
+
+export async function stopRepoWatch(): Promise<void> {
+  return invoke("stop_repo_watch");
 }

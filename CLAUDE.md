@@ -64,23 +64,24 @@ GitBaro/
 │   │   │   ├── history.rs         # commit history, detail, file diff, avatars
 │   │   │   ├── auth.rs            # gh CLI auth, account CRUD, per-repo account assignment
 │   │   │   ├── diff.rs            # File diff with binary/image preview
-│   │   │   ├── repo.rs            # open, clone, add, close, search GitHub repos
-│   │   │   ├── settings.rs        # app settings, theme, editor detection/launch
+│   │   │   ├── repo.rs            # open, clone (URL-validated), add, close, search GitHub repos
+│   │   │   ├── settings.rs        # app settings, theme, editor/terminal/AI-CLI detection & launch
+│   │   │   ├── watch.rs           # start/stop FS watcher for the active repo (emits fs:change)
+│   │   │   ├── actions.rs         # GitHub Actions workflow runs & jobs
 │   │   │   └── worktree.rs        # worktree add/remove/preview
 │   │   ├── github/                # GitHub REST API client (reqwest)
-│   │   │   ├── client.rs          # HTTP client with auth headers
-│   │   │   ├── issue.rs           # Issues API
-│   │   │   ├── pull_request.rs    # Pull Requests API
-│   │   │   └── notifications.rs   # Notifications API
+│   │   │   ├── client.rs          # HTTP client, auth headers, path-segment validation
+│   │   │   ├── issue.rs           # Issues API (client ready; not yet wired to a command)
+│   │   │   ├── pull_request.rs    # Pull Requests API (client ready; not yet wired to a command)
+│   │   │   ├── actions.rs         # GitHub Actions API
+│   │   │   └── notifications.rs   # Notifications API (client ready; not yet wired to a command)
 │   │   ├── gh/                    # GitHub CLI (gh) integration
 │   │   │   └── cli.rs             # gh binary discovery, version check (≥2.40), auth status
 │   │   ├── state/                 # Application state
 │   │   │   ├── app_state.rs       # Window bounds persistence, open repos, sidebar width
-│   │   │   └── token_store.rs     # GitHub token storage (Tauri plugin keychain)
-│   │   ├── concurrency/
-│   │   │   └── repo_thread.rs     # RepoWorker — dedicated thread per git2::Repository (mpsc)
+│   │   │   └── token_store.rs     # In-memory token cache (Zeroizing); source of truth is `gh` CLI
 │   │   └── watcher/
-│   │       └── fs_events.rs       # File system watcher (notify crate)
+│   │       └── fs_events.rs       # FS watcher (notify crate), wired via commands/watch.rs
 │   ├── Cargo.toml
 │   └── tauri.conf.json            # Tauri window config, plugins, bundle settings
 ├── package.json
@@ -143,7 +144,8 @@ cd src-tauri && cargo build          # Build
 - All serializable types use `#[serde(rename_all = "camelCase")]` for JS interop
 - Logging via `tracing` crate (debug level for gitbaro, warn for git2)
 - CPU-intensive git ops use `tokio::task::spawn_blocking()`
-- `RepoWorker` serializes git2 operations on a dedicated thread via mpsc channel
+- Each command opens its own `git2::Repository` (cheap) inside `spawn_blocking`; there is no long-lived per-repo worker
+- Working-tree changes are pushed to the frontend via the FS watcher (`commands/watch.rs` + `watcher/fs_events.rs`) emitting `fs:change`; the status query keeps a slow poll as a fallback
 
 ### TypeScript / React
 
@@ -196,7 +198,7 @@ Backend: Add a module under `src-tauri/src/` and expose commands through `src-ta
 
 - **함수/메서드**: `snake_case`, 도메인 의도 기반 (`switch_branch`, `stash_save` — git 명령어명 아님)
 - **구조체/열거형**: `PascalCase` (`GitCliEngine`, `StatusEntry`, `MergeResult`)
-- **모듈**: `snake_case` (`repo_thread`, `app_state`)
+- **모듈**: `snake_case` (`app_state`, `fs_events`)
 - **불리언 반환 함수**: `is_` 접두사 (`is_auth_error`, `is_binary`)
 - **변환 함수**: `_to_`/`_from_` 패턴 (`signature_to_author`, `repo_info_from_path`)
 

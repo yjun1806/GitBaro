@@ -1,3 +1,6 @@
+import { memo } from "react";
+import { useTranslation } from "react-i18next";
+import { Undo2 } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { FileStatusBadge } from "@/lib/file-status";
 import type { FileStatus } from "@/types";
@@ -16,18 +19,22 @@ export interface FileEntryProps {
   onClick: () => void;
   onDoubleClick?: () => void;
   onToggleStage: () => void;
+  /** Discard working-tree changes for this file (unstaged files only). */
+  onDiscard?: () => void;
   ref?: React.Ref<HTMLDivElement>;
 }
 
-export function FileEntry({
+function FileEntryComponent({
   entry,
   isSelected,
   isHighlighted,
   onClick,
   onDoubleClick,
   onToggleStage,
+  onDiscard,
   ref,
 }: FileEntryProps) {
+  const { t } = useTranslation();
   const filename = entry.path.includes("/")
     ? entry.path.substring(entry.path.lastIndexOf("/") + 1)
     : entry.path;
@@ -44,7 +51,7 @@ export function FileEntry({
         onDoubleClick?.();
       }}
       className={cn(
-        "flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors select-none border-b border-border",
+        "group flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors select-none border-b border-border",
         isSelected
           ? "bg-primary/10 text-primary font-semibold"
           : !isSelected && isHighlighted
@@ -74,6 +81,22 @@ export function FileEntry({
       {entry.modifiedAt != null && (
         <span className="text-xs text-muted-foreground shrink-0">{formatRelativeTime(entry.modifiedAt)}</span>
       )}
+      {onDiscard && (
+        <button
+          type="button"
+          title={t("changes.discard")}
+          aria-label={t("changes.discard")}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDiscard();
+          }}
+          className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+        >
+          <Undo2 className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   );
 }
+
+export const FileEntry = memo(FileEntryComponent);

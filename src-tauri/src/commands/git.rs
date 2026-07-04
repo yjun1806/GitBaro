@@ -39,16 +39,14 @@ pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
             let staged_diff = repo.diff_tree_to_index(head_tree.as_ref(), None, None)?;
 
             for idx in 0..staged_diff.deltas().count() {
-                if let Ok(patch) = git2::Patch::from_diff(&staged_diff, idx) {
-                    if let Some(patch) = patch {
-                        let path = patch.delta().new_file().path()
-                            .or_else(|| patch.delta().old_file().path())
-                            .map(|p| p.to_string_lossy().to_string());
-                        if let (Some(path), Ok((_, ins, del))) = (path, patch.line_stats()) {
-                            let entry = diff_stats.entry(path).or_insert((0, 0));
-                            entry.0 += ins;
-                            entry.1 += del;
-                        }
+                if let Ok(Some(patch)) = git2::Patch::from_diff(&staged_diff, idx) {
+                    let path = patch.delta().new_file().path()
+                        .or_else(|| patch.delta().old_file().path())
+                        .map(|p| p.to_string_lossy().to_string());
+                    if let (Some(path), Ok((_, ins, del))) = (path, patch.line_stats()) {
+                        let entry = diff_stats.entry(path).or_insert((0, 0));
+                        entry.0 += ins;
+                        entry.1 += del;
                     }
                 }
             }
@@ -59,16 +57,14 @@ pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
             let unstaged_diff = repo.diff_index_to_workdir(None, Some(&mut unstaged_opts))?;
 
             for idx in 0..unstaged_diff.deltas().count() {
-                if let Ok(patch) = git2::Patch::from_diff(&unstaged_diff, idx) {
-                    if let Some(patch) = patch {
-                        let path = patch.delta().new_file().path()
-                            .or_else(|| patch.delta().old_file().path())
-                            .map(|p| p.to_string_lossy().to_string());
-                        if let (Some(path), Ok((_, ins, del))) = (path, patch.line_stats()) {
-                            let entry = diff_stats.entry(path).or_insert((0, 0));
-                            entry.0 += ins;
-                            entry.1 += del;
-                        }
+                if let Ok(Some(patch)) = git2::Patch::from_diff(&unstaged_diff, idx) {
+                    let path = patch.delta().new_file().path()
+                        .or_else(|| patch.delta().old_file().path())
+                        .map(|p| p.to_string_lossy().to_string());
+                    if let (Some(path), Ok((_, ins, del))) = (path, patch.line_stats()) {
+                        let entry = diff_stats.entry(path).or_insert((0, 0));
+                        entry.0 += ins;
+                        entry.1 += del;
                     }
                 }
             }
@@ -79,6 +75,8 @@ pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
             .filter_map(|entry| {
                 let path = entry.path()?.to_string();
                 let status = entry.status();
+
+                let conflicted = status.contains(git2::Status::CONFLICTED);
 
                 let staged = status.intersects(
                     git2::Status::INDEX_NEW
@@ -155,6 +153,7 @@ pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
                     "path": path,
                     "staged": staged,
                     "unstaged": unstaged,
+                    "conflicted": conflicted,
                     "indexStatus": index_status,
                     "worktreeStatus": wt_status,
                     "modifiedAt": modified_at,
@@ -390,19 +389,10 @@ pub async fn get_diff(repo_path: String, staged: bool) -> Result<Value, AppError
 
 #[tauri::command]
 pub async fn discard_changes(repo_path: String, paths: Vec<String>) -> Result<(), AppError> {
-    tokio::task::spawn_blocking(move || {
-        let repo = git2::Repository::open(&repo_path)?;
-        let mut checkout_opts = git2::build::CheckoutBuilder::new();
-        checkout_opts.force();
-        for path in &paths {
-            checkout_opts.path(path);
-        }
-        repo.checkout_index(None, Some(&mut checkout_opts))?;
-        Ok::<_, AppError>(())
-    })
-    .await
-    .map_err(|e| AppError::Channel(e.to_string()))??;
-
+    // Discarding is a write op → go through git CLI (hybrid strategy) instead of
+    // git2 checkout_index, keeping hook behaviour consistent with other writes.
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    engine.discard_paths(&paths).await?;
     Ok(())
 }
 

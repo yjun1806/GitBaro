@@ -8,11 +8,7 @@ pub fn parse_github_url(url: &str) -> Option<(String, String)> {
     // Strip protocol prefix
     let path = if let Some(s) = url.strip_prefix("https://github.com/") {
         s
-    } else if let Some(s) = url.strip_prefix("git@github.com:") {
-        s
-    } else {
-        return None;
-    };
+    } else { url.strip_prefix("git@github.com:")? };
 
     let path = path.trim_end_matches('/');
     let path = path.strip_suffix(".git").unwrap_or(path);
@@ -25,31 +21,33 @@ pub fn parse_github_url(url: &str) -> Option<(String, String)> {
     }
 }
 
-/// Build an authenticated HTTPS clone URL using a token.
-/// Result: https://x-access-token:{token}@github.com/{owner}/{repo}.git
-pub fn authenticated_url(base_url: &str, token: &str) -> String {
-    // Strip any existing userinfo (credentials) from the URL.
-    // e.g. "https://old-token@github.com/..." -> "https://github.com/..."
-    let clean = if let Some(proto_end) = base_url.find("://") {
-        let after_proto = &base_url[proto_end + 3..];
-        if let Some(at_pos) = after_proto.find('@') {
-            // There are existing credentials — remove them.
-            let host_onward = &after_proto[at_pos + 1..];
-            format!("{}{}", &base_url[..proto_end + 3], host_onward)
-        } else {
-            base_url.to_string()
-        }
+/// Validate a clone URL before handing it to `git clone`.
+///
+/// git's remote helpers include dangerous transports (`ext::` runs an arbitrary
+/// command, `fd::`, `file://` reads local paths). A URL beginning with `-` would
+/// also be parsed as a flag. We restrict clone URLs to the network transports a
+/// GUI user actually needs.
+pub fn validate_clone_url(url: &str) -> Result<(), AppError> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() || trimmed.starts_with('-') {
+        return Err(AppError::GitCli {
+            message: "Invalid clone URL".to_string(),
+            exit_code: None,
+        });
+    }
+    let allowed = trimmed.starts_with("https://")
+        || trimmed.starts_with("http://")
+        || trimmed.starts_with("git://")
+        || trimmed.starts_with("ssh://")
+        // scp-like syntax: user@host:path
+        || (trimmed.contains('@') && trimmed.contains(':') && !trimmed.contains("://"));
+    if allowed {
+        Ok(())
     } else {
-        base_url.to_string()
-    };
-
-    // Insert token credentials after the protocol.
-    if let Some(proto_end) = clean.find("://") {
-        let proto = &clean[..proto_end + 3];
-        let rest = &clean[proto_end + 3..];
-        format!("{}x-access-token:{}@{}", proto, token, rest)
-    } else {
-        clean
+        Err(AppError::GitCli {
+            message: "Unsupported clone URL scheme".to_string(),
+            exit_code: None,
+        })
     }
 }
 
@@ -71,4 +69,42 @@ pub fn list_remotes(repo: &git2::Repository) -> Result<Vec<RemoteInfo>, AppError
         remotes.push(remote_to_info(&remote));
     }
     Ok(remotes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_github_urls() {
+        assert_eq!(
+            parse_github_url("https://github.com/owner/repo.git"),
+            Some(("owner".to_string(), "repo".to_string()))
+        );
+        assert_eq!(
+            parse_github_url("git@github.com:owner/repo"),
+            Some(("owner".to_string(), "repo".to_string()))
+        );
+        assert_eq!(parse_github_url("https://example.com/x/y"), None);
+    }
+
+    #[test]
+    fn accepts_safe_clone_urls() {
+        assert!(validate_clone_url("https://github.com/owner/repo.git").is_ok());
+        assert!(validate_clone_url("http://host/repo.git").is_ok());
+        assert!(validate_clone_url("git://host/repo.git").is_ok());
+        assert!(validate_clone_url("ssh://git@host/repo.git").is_ok());
+        assert!(validate_clone_url("git@github.com:owner/repo.git").is_ok());
+    }
+
+    #[test]
+    fn rejects_dangerous_clone_urls() {
+        // ext:: runs an arbitrary command; file:/fd: read local resources.
+        assert!(validate_clone_url("ext::sh -c 'touch /tmp/pwned'").is_err());
+        assert!(validate_clone_url("file:///etc/passwd").is_err());
+        assert!(validate_clone_url("fd::17/foo").is_err());
+        // Leading dash → parsed as a git flag.
+        assert!(validate_clone_url("--upload-pack=evil").is_err());
+        assert!(validate_clone_url("").is_err());
+    }
 }

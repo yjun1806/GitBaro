@@ -1,5 +1,4 @@
 pub mod commands;
-pub mod concurrency;
 pub mod error;
 pub mod events;
 pub mod gh;
@@ -20,6 +19,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .manage(state::TokenStore::new())
+        .manage(commands::watch::WatcherState::new())
         .invoke_handler(tauri::generate_handler![
             commands::git::get_status,
             commands::git::stage_files,
@@ -56,6 +56,9 @@ pub fn run() {
             commands::branch::rename_branch,
             commands::branch::check_merge_conflicts,
             commands::branch::get_conflict_file_diff,
+            commands::branch::abort_merge_or_rebase,
+            commands::branch::continue_merge_or_rebase,
+            commands::branch::get_merge_state,
             commands::history::get_commit_history,
             commands::history::get_commit_detail,
             commands::history::get_commit_file_diff,
@@ -88,9 +91,14 @@ pub fn run() {
             commands::worktree::check_preview_active,
             commands::actions::list_workflow_runs,
             commands::actions::get_workflow_run_jobs,
+            commands::watch::start_repo_watch,
+            commands::watch::stop_repo_watch,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");
+
+            // Clean up any askpass scripts left behind by a force-killed process.
+            git::cli::sweep_stale_askpass();
 
             // 저장된 window bounds 복원
             let app_handle_for_restore = app.handle().clone();
