@@ -6,4 +6,5 @@ pub mod git;
 pub mod history;
 pub mod repo;
 pub mod settings;
+pub mod watch;
 pub mod worktree;

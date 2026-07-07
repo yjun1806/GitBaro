@@ -26,6 +26,14 @@ pub fn validate_branch_name(name: &str) -> Result<(), AppError> {
             exit_code: None,
         });
     }
+    // A leading '-' would be parsed as a CLI flag (option injection) and is not a
+    // valid git ref anyway.
+    if name.starts_with('-') {
+        return Err(AppError::GitCli {
+            message: "Branch name cannot start with '-'".to_string(),
+            exit_code: None,
+        });
+    }
     if name == "HEAD" {
         return Err(AppError::GitCli {
             message: "Branch name cannot be 'HEAD'".to_string(),
@@ -62,5 +70,42 @@ pub fn ahead_behind_label(ahead: usize, behind: usize) -> String {
         (a, 0) => format!("↑{}", a),
         (0, b) => format!("↓{}", b),
         (a, b) => format!("↑{} ↓{}", a, b),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_valid_branch_names() {
+        assert!(validate_branch_name("main").is_ok());
+        assert!(validate_branch_name("feature/foo-bar").is_ok());
+        assert!(validate_branch_name("release-1.2").is_ok());
+    }
+
+    #[test]
+    fn rejects_leading_dash_option_injection() {
+        // A leading '-' would be parsed as a git CLI flag.
+        assert!(validate_branch_name("-f").is_err());
+        assert!(validate_branch_name("--force").is_err());
+        assert!(validate_branch_name("-D").is_err());
+    }
+
+    #[test]
+    fn rejects_git_forbidden_patterns() {
+        assert!(validate_branch_name("").is_err());
+        assert!(validate_branch_name("foo..bar").is_err());
+        assert!(validate_branch_name("foo bar").is_err());
+        assert!(validate_branch_name("foo~1").is_err());
+        assert!(validate_branch_name("HEAD").is_err());
+        assert!(validate_branch_name("/foo").is_err());
+        assert!(validate_branch_name("foo.").is_err());
+    }
+
+    #[test]
+    fn strips_remote_prefix() {
+        assert_eq!(strip_remote_prefix("origin/main"), "main");
+        assert_eq!(strip_remote_prefix("main"), "main");
     }
 }

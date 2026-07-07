@@ -325,6 +325,44 @@ pub async fn merge_branch_into_current(
     Ok(format!("Successfully merged '{}' into current branch", branch))
 }
 
+/// Abort an in-progress merge or rebase, returning the working tree to its
+/// pre-operation state. Lets users escape a conflicted merge/rebase from the GUI.
+#[tauri::command]
+pub async fn abort_merge_or_rebase(
+    repo_path: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), AppError> {
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    match engine.operation_in_progress().await? {
+        Some("rebase") => engine.rebase_abort().await,
+        Some("merge") => engine.merge_abort().await,
+        _ => Ok(()),
+    }
+}
+
+/// Continue an in-progress merge or rebase after the user has resolved and
+/// staged the conflicted files.
+#[tauri::command]
+pub async fn continue_merge_or_rebase(
+    repo_path: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), AppError> {
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    match engine.operation_in_progress().await? {
+        Some("rebase") => engine.rebase_continue().await,
+        Some("merge") => engine.merge_continue().await,
+        _ => Ok(()),
+    }
+}
+
+/// Report whether a merge or rebase is currently in progress (`"merge"`,
+/// `"rebase"`, or `null`), so the UI can show a conflict-resolution banner.
+#[tauri::command]
+pub async fn get_merge_state(repo_path: String) -> Result<Option<String>, AppError> {
+    let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+    Ok(engine.operation_in_progress().await?.map(|s| s.to_string()))
+}
+
 #[tauri::command]
 pub async fn check_merge_conflicts(
     repo_path: String,

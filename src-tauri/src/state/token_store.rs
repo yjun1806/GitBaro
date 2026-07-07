@@ -17,6 +17,12 @@ pub struct TokenStore {
     cache: Arc<RwLock<HashMap<String, Zeroizing<String>>>>,
 }
 
+impl Default for TokenStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TokenStore {
     pub fn new() -> Self {
         Self {

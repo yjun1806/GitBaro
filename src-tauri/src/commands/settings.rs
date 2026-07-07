@@ -156,11 +156,24 @@ pub async fn open_in_editor(repo_path: String, file_path: String) -> Result<(), 
         }
     })?;
 
-    let full_path = std::path::Path::new(&repo_path).join(&file_path);
+    // Guard against path traversal: the resolved file must stay within the repo.
+    let repo_root = tokio::fs::canonicalize(&repo_path)
+        .await
+        .map_err(|_| AppError::RepoNotFound(format!("Not a directory: {}", repo_path)))?;
+    let full_path = repo_root.join(&file_path);
+    let canonical = tokio::fs::canonicalize(&full_path)
+        .await
+        .map_err(|_| AppError::RepoNotFound(format!("File not found: {}", file_path)))?;
+    if !canonical.starts_with(&repo_root) {
+        return Err(AppError::GitCli {
+            message: "File is outside the repository".to_string(),
+            exit_code: None,
+        });
+    }
 
     tokio::process::Command::new("open")
         .args(["-a", app_name])
-        .arg(&full_path)
+        .arg(&canonical)
         .spawn()
         .map_err(AppError::Io)?;
 
@@ -192,7 +205,9 @@ async fn extract_app_icon(app_bundle: &str) -> Option<String> {
     let icns_path = format!("{}/Contents/Resources/{}", app_path, icon_file);
 
     // sips로 icns → 64x64 PNG 변환
-    let tmp_path = format!("/tmp/gitbaro_icon_{}.png", std::process::id());
+    let tmp_path = unique_temp_path("gitbaro_icon", "png")
+        .to_string_lossy()
+        .into_owned();
     let sips_ok = tokio::process::Command::new("sips")
         .args([
             "-s", "format", "png",
@@ -399,7 +414,9 @@ async fn extract_app_icon_at(app_path: &str) -> Option<String> {
     };
     let icns_path = format!("{}/Contents/Resources/{}", app_path, icon_file);
 
-    let tmp_path = format!("/tmp/gitbaro_icon_{}.png", std::process::id());
+    let tmp_path = unique_temp_path("gitbaro_icon", "png")
+        .to_string_lossy()
+        .into_owned();
     let sips_ok = tokio::process::Command::new("sips")
         .args([
             "-s", "format", "png",
@@ -469,6 +486,24 @@ fn terminal_binary_path(shell_id: &str) -> Option<&'static str> {
     }
 }
 
+/// Build a unique temp file path in the per-user temp dir (not the shared,
+/// world-writable `/tmp`) to avoid predictable-path symlink races.
+fn unique_temp_path(prefix: &str, ext: &str) -> std::path::PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    std::env::temp_dir().join(format!("{}_{}_{}.{}", prefix, std::process::id(), nanos, ext))
+}
+
+/// Escape a string for embedding inside an AppleScript double-quoted literal.
+/// Backslashes MUST be escaped before quotes, otherwise a path containing `\"`
+/// can break out of the literal and inject arbitrary AppleScript (→ `do shell
+/// script` → RCE).
+fn applescript_escape(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 /// AI CLI ID에서 실행할 커맨드를 조회합니다.
 fn ai_cli_command(cli_id: &str) -> Option<&'static str> {
     match cli_id {
@@ -491,7 +526,18 @@ pub async fn open_ai_cli_in_terminal(repo_path: String, cli_id: String) -> Resul
         exit_code: None,
     })?;
 
+    // Validate the path is a real directory and canonicalize it. This rejects
+    // crafted values and gives us a concrete filesystem path to embed.
+    let canonical = tokio::fs::canonicalize(&repo_path)
+        .await
+        .ok()
+        .filter(|p| p.is_dir())
+        .ok_or_else(|| AppError::RepoNotFound(format!("Not a directory: {}", repo_path)))?;
+    let repo_path = canonical.to_string_lossy().into_owned();
+
     let shell_id = &settings.default_shell;
+    // Shell-escape the path for the `cd '...'`, then AppleScript-escape the whole
+    // command below when it is interpolated into an osascript literal.
     let escaped_path = repo_path.replace('\'', "'\\''");
     let script_cmd = format!("cd '{}' && {}", escaped_path, cli_command);
 
@@ -505,7 +551,7 @@ pub async fn open_ai_cli_in_terminal(repo_path: String, cli_id: String) -> Resul
     activate
     do script "{}"
 end tell"#,
-                script_cmd.replace('"', "\\\"")
+                applescript_escape(&script_cmd)
             );
             tokio::process::Command::new("osascript")
                 .args(["-e", &apple_script])
@@ -524,7 +570,7 @@ end tell"#,
         write text "{}"
     end tell
 end tell"#,
-                script_cmd.replace('"', "\\\"")
+                applescript_escape(&script_cmd)
             );
             tokio::process::Command::new("osascript")
                 .args(["-e", &apple_script])
@@ -569,7 +615,7 @@ repeat 30 times
     end tell
 end repeat"#,
                 app = app_name,
-                cmd = script_cmd.replace('"', "\\\""),
+                cmd = applescript_escape(&script_cmd),
             );
             tokio::process::Command::new("osascript")
                 .args(["-e", &paste_script])
@@ -579,4 +625,19 @@ end repeat"#,
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn applescript_escape_escapes_backslash_before_quote() {
+        // Backslash must be doubled first so a `\"` sequence cannot break out
+        // of the AppleScript string literal (RCE vector).
+        assert_eq!(applescript_escape(r#"a"b"#), r#"a\"b"#);
+        assert_eq!(applescript_escape(r"a\b"), r"a\\b");
+        // A crafted path segment stays inside the literal after escaping.
+        assert_eq!(applescript_escape(r#"\""#), r#"\\\""#);
+    }
 }

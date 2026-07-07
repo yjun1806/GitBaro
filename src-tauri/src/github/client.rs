@@ -6,6 +6,26 @@ use serde_json::Value;
 const GITHUB_API_BASE: &str = "https://api.github.com";
 const GITHUB_API_VERSION: &str = "2022-11-28";
 
+/// Validate a GitHub path segment (owner/repo/login) so it cannot alter the
+/// request path or query. GitHub names only allow `[A-Za-z0-9._-]`, so anything
+/// containing `/`, `?`, `#`, `..`, or other characters is rejected before it is
+/// interpolated into an API path.
+pub(crate) fn validate_path_segment(segment: &str) -> Result<(), AppError> {
+    let valid = !segment.is_empty()
+        && segment != ".."
+        && segment
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+    if valid {
+        Ok(())
+    } else {
+        Err(AppError::GithubApi {
+            status: 0,
+            message: format!("Invalid GitHub identifier: {}", segment),
+        })
+    }
+}
+
 pub struct GitHubClient {
     http: reqwest::Client,
     base_url: String,
@@ -24,21 +44,28 @@ impl GitHubClient {
         }
     }
 
-    fn auth_headers(&self, token: &str) -> reqwest::header::HeaderMap {
+    fn auth_headers(&self, token: &str) -> Result<reqwest::header::HeaderMap, AppError> {
         let mut headers = reqwest::header::HeaderMap::new();
+        // 정적 문자열은 항상 유효하므로 unwrap 허용.
         headers.insert(
             reqwest::header::ACCEPT,
             "application/vnd.github+json".parse().unwrap(),
         );
-        headers.insert(
-            reqwest::header::AUTHORIZATION,
-            format!("Bearer {}", token).parse().unwrap(),
-        );
+        // 토큰은 외부(keychain) 입력이므로 개행 등 비가시 문자가 섞이면 파싱이
+        // 실패할 수 있다. unwrap으로 앱 전체를 패닉시키지 않고 에러로 전파한다.
+        let mut auth_value: reqwest::header::HeaderValue = format!("Bearer {}", token)
+            .parse()
+            .map_err(|_| AppError::GithubApi {
+                status: 0,
+                message: "Invalid authentication token format".to_string(),
+            })?;
+        auth_value.set_sensitive(true);
+        headers.insert(reqwest::header::AUTHORIZATION, auth_value);
         headers.insert(
             "X-GitHub-Api-Version".parse::<reqwest::header::HeaderName>().unwrap(),
             GITHUB_API_VERSION.parse().unwrap(),
         );
-        headers
+        Ok(headers)
     }
 
     async fn get(&self, token: &str, path: &str) -> Result<Value, AppError> {
@@ -46,7 +73,7 @@ impl GitHubClient {
         let response = self
             .http
             .get(&url)
-            .headers(self.auth_headers(token))
+            .headers(self.auth_headers(token)?)
             .send()
             .await?;
 
@@ -63,7 +90,7 @@ impl GitHubClient {
         let response = self
             .http
             .get(&url)
-            .headers(self.auth_headers(token))
+            .headers(self.auth_headers(token)?)
             .query(query)
             .send()
             .await?;
@@ -119,7 +146,7 @@ impl GitHubClient {
         let response = self
             .http
             .patch(&url)
-            .headers(self.auth_headers(token))
+            .headers(self.auth_headers(token)?)
             .header("Content-Length", "0")
             .send()
             .await?;
@@ -139,6 +166,7 @@ impl GitHubClient {
     }
 
     pub async fn get_user_by_login(&self, token: &str, login: &str) -> Result<Value, AppError> {
+        validate_path_segment(login)?;
         let path = format!("/users/{}", login);
         self.get(token, &path).await
     }
@@ -170,6 +198,8 @@ impl GitHubClient {
         owner: &str,
         repo: &str,
     ) -> Result<Value, AppError> {
+        validate_path_segment(owner)?;
+        validate_path_segment(repo)?;
         let path = format!("/repos/{}/{}", owner, repo);
         self.get(token, &path).await
     }
@@ -182,6 +212,8 @@ impl GitHubClient {
         owner: &str,
         repo: &str,
     ) -> Result<HashMap<String, String>, AppError> {
+        validate_path_segment(owner)?;
+        validate_path_segment(repo)?;
         let path = format!("/repos/{}/{}/commits", owner, repo);
         let body = self
             .get_with_query(token, &path, &[("per_page", "100")])
@@ -212,5 +244,27 @@ impl GitHubClient {
 impl Default for GitHubClient {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_valid_github_identifiers() {
+        assert!(validate_path_segment("octocat").is_ok());
+        assert!(validate_path_segment("my-repo.js").is_ok());
+        assert!(validate_path_segment("under_score").is_ok());
+    }
+
+    #[test]
+    fn rejects_path_altering_identifiers() {
+        assert!(validate_path_segment("").is_err());
+        assert!(validate_path_segment("..").is_err());
+        assert!(validate_path_segment("owner/repo").is_err());
+        assert!(validate_path_segment("repo?query").is_err());
+        assert!(validate_path_segment("repo#frag").is_err());
+        assert!(validate_path_segment("../../etc").is_err());
     }
 }

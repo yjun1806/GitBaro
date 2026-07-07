@@ -35,6 +35,11 @@
     "unstageAll": "Unstage All",
     "noChanges": "로컬 변경 사항 없음",
     "discard": "변경 사항 버리기",
+    "discardConfirmTitle": "변경 사항을 버릴까요?",
+    "discardConfirmMessage": "\"{{file}}\"의 모든 변경 사항을 버립니다. 되돌릴 수 없습니다.",
+    "discardConfirm": "버리기",
+    "discardFailed": "버리기 실패: {{error}}",
+    "cancel": "취소",
     "rootFiles": "루트",
     "filesCount": "{{count}}개 파일"
   },
@@ -412,6 +417,16 @@
     "title": "Merge 충돌",
     "openTool": "외부 Merge 도구에서 열기",
     "files": "{{count}}개의 충돌 파일"
+  },
+  "mergeRecovery": {
+    "mergeInProgress": "Merge 진행 중",
+    "rebaseInProgress": "Rebase 진행 중",
+    "resolveHint": "충돌 파일 {{count}}개를 해결하고 스테이징한 뒤 계속하세요.",
+    "readyHint": "모든 충돌이 해결됐습니다. 작업을 계속할 수 있습니다.",
+    "continue": "계속",
+    "abort": "중단",
+    "abortFailed": "중단 실패: {{error}}",
+    "continueFailed": "계속 실패: {{error}}"
   },
   "compare": {
     "title": "Branch 비교",

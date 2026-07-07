@@ -25,6 +25,9 @@ import {
   stashPushPartial,
   listWorkflowRuns,
   getWorkflowRunJobs,
+  getMergeState,
+  abortMergeOrRebase,
+  continueMergeOrRebase,
 } from "./commands";
 
 export function useStatus(repoPath: string | null) {
@@ -33,8 +36,11 @@ export function useStatus(repoPath: string | null) {
     queryFn: () => getStatus(repoPath!),
     enabled: repoPath !== null,
     staleTime: 0,
-    refetchInterval: 3000,
-    refetchIntervalInBackground: true,
+    // The FS watcher (useRepoWatcher) invalidates this query on file changes,
+    // so tight polling is unnecessary. Keep a slow, foreground-only poll as a
+    // safety net for changes the watcher might miss (network drives, etc.).
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -218,6 +224,40 @@ export function useWorkflowRunJobs(
 }
 
 // ── Stash Mutations ─────────────────────────────────────────────────────────
+
+/** "merge" | "rebase" | null — the git operation currently in progress. */
+export function useMergeState(repoPath: string | null) {
+  return useQuery({
+    queryKey: ["mergeState", repoPath],
+    queryFn: () => getMergeState(repoPath!),
+    enabled: repoPath !== null,
+    staleTime: 0,
+  });
+}
+
+export function useMergeRecoveryMutations(repoPath: string | null) {
+  const queryClient = useQueryClient();
+
+  const invalidateAll = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["status"] }),
+      queryClient.invalidateQueries({ queryKey: ["mergeState"] }),
+      queryClient.invalidateQueries({ queryKey: ["branches"] }),
+      queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
+    ]);
+
+  const abort = useMutation({
+    mutationFn: () => abortMergeOrRebase(repoPath!),
+    onSuccess: invalidateAll,
+  });
+
+  const conclude = useMutation({
+    mutationFn: () => continueMergeOrRebase(repoPath!),
+    onSuccess: invalidateAll,
+  });
+
+  return { abort, conclude };
+}
 
 export function useStashMutations(repoPath: string | null) {
   const queryClient = useQueryClient();

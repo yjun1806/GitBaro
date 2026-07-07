@@ -35,6 +35,11 @@
     "unstageAll": "Unstage All",
     "noChanges": "No local changes",
     "discard": "Discard Changes",
+    "discardConfirmTitle": "Discard changes?",
+    "discardConfirmMessage": "Discard all changes to \"{{file}}\"? This cannot be undone.",
+    "discardConfirm": "Discard",
+    "discardFailed": "Failed to discard: {{error}}",
+    "cancel": "Cancel",
     "rootFiles": "Root",
     "filesCount": "{{count}} files"
   },
@@ -412,6 +417,16 @@
     "title": "Merge Conflicts",
     "openTool": "Open in External Merge Tool",
     "files": "{{count}} conflicted files"
+  },
+  "mergeRecovery": {
+    "mergeInProgress": "Merge in progress",
+    "rebaseInProgress": "Rebase in progress",
+    "resolveHint": "Resolve and stage {{count}} conflicted file(s), then continue.",
+    "readyHint": "All conflicts resolved. You can continue the operation.",
+    "continue": "Continue",
+    "abort": "Abort",
+    "abortFailed": "Failed to abort: {{error}}",
+    "continueFailed": "Failed to continue: {{error}}"
   },
   "compare": {
     "title": "Compare Branches",
