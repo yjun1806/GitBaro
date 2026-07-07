@@ -321,8 +321,6 @@
     "sizeDiff": "Diff: {{diff}} ({{percent}}%)",
     "dimensions": "{{width}} × {{height}}",
     "fileSize": "{{size}}",
-    "largeDiff": "Large diff ({{lines}} lines). Not rendered for performance.",
-    "showAnyway": "Show diff",
     "highlightDisabled": "Syntax highlighting disabled for performance ({{lines}} lines).",
     "enableHighlight": "Enable highlighting"
   },

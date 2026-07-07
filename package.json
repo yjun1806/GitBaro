@@ -29,6 +29,7 @@
     "@git-diff-view/react": "^0.0.39",
     "@tailwindcss/postcss": "^4.2.0",
     "@tanstack/react-query": "^5.0.0",
+    "@tanstack/react-virtual": "^3.14.5",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.6.0",
     "@tauri-apps/plugin-opener": "^2.0.0",
