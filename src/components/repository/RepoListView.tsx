@@ -30,50 +30,11 @@ import { addLocalRepository, cloneRepository, getRepoVisibility, getOwnerType, v
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { extractOwnerFromRemoteUrl, groupReposByOwner, type GroupedRepos } from "@/lib/group-repos";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import type { GitHubAccount, RepoInfo } from "@/types";
-
-/* ─── Types ─── */
-
-interface GroupedRepos {
-  label: string;
-  repos: RepoInfo[];
-}
-
-/* ─── Helpers ─── */
-
-function extractOwnerFromRemoteUrl(url: string): string | null {
-  const httpsMatch = url.match(/github\.com\/([^/]+)\//);
-  if (httpsMatch) return httpsMatch[1];
-  const sshMatch = url.match(/github\.com:([^/]+)\//);
-  if (sshMatch) return sshMatch[1];
-  return null;
-}
-
-function groupReposByOwner(
-  repos: RepoInfo[],
-  accounts: { id: string; username: string }[],
-): GroupedRepos[] {
-  const accountMap = new Map(accounts.map((a) => [a.id, a.username]));
-  const groups = new Map<string, RepoInfo[]>();
-
-  for (const repo of repos) {
-    const originRemote = repo.remotes.find((r) => r.name === "origin");
-    const owner = originRemote ? extractOwnerFromRemoteUrl(originRemote.url) : null;
-    const key = owner
-      ?? (repo.accountId ? (accountMap.get(repo.accountId) ?? "Other") : "Local");
-
-    const existing = groups.get(key) ?? [];
-    groups.set(key, [...existing, repo]);
-  }
-
-  return Array.from(groups.entries()).map(([label, repoList]) => ({
-    label,
-    repos: repoList,
-  }));
-}
 
 /* ─── RepoContextMenu ─── */
 

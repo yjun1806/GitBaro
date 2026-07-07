@@ -1,5 +1,7 @@
 {
-  "app": { "name": "GitBaro" },
+  "app": {
+    "name": "GitBaro"
+  },
   "common": {
     "cancel": "취소",
     "delete": "삭제",
@@ -255,6 +257,14 @@
     "selectDefaultAccount": "기본 계정 선택",
     "selectDefaultAccountDesc": "이 저장소에서 사용할 기본 GitHub 계정을 선택하세요.",
     "skipAccountSelect": "건너뛰기"
+  },
+  "rail": {
+    "repositories": "저장소",
+    "allRepos": "전체 저장소",
+    "sidebarControl": "사이드바 설정",
+    "expanded": "펼침",
+    "collapsed": "접힘",
+    "expandOnHover": "호버 시 펼침"
   },
   "settings": {
     "title": "설정",

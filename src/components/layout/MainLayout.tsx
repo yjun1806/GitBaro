@@ -2,6 +2,7 @@ import { useRef, useCallback } from "react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import "@/stores/selection"; // ensure cross-store subscriptions are registered
+import { RepoRail } from "./RepoRail";
 import { Sidebar } from "./Sidebar";
 import { ContentArea } from "./ContentArea";
 import { StatusBar } from "./StatusBar";
@@ -58,6 +59,9 @@ export function MainLayout() {
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* Main content row */}
       <div className="flex flex-1 overflow-hidden">
+        {/* Repo quick-switch rail (Supabase-style) */}
+        <RepoRail />
+
         {/* Left panel — Repo header + Changes/History or Repo list */}
         <div
           style={{ width: sidebarWidth }}

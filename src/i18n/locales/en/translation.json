@@ -1,5 +1,7 @@
 {
-  "app": { "name": "GitBaro" },
+  "app": {
+    "name": "GitBaro"
+  },
   "common": {
     "cancel": "Cancel",
     "delete": "Delete",
@@ -255,6 +257,14 @@
     "selectDefaultAccount": "Select Default Account",
     "selectDefaultAccountDesc": "Choose the default GitHub account to use with this repository.",
     "skipAccountSelect": "Skip"
+  },
+  "rail": {
+    "repositories": "Repositories",
+    "allRepos": "All repositories",
+    "sidebarControl": "Sidebar control",
+    "expanded": "Expanded",
+    "collapsed": "Collapsed",
+    "expandOnHover": "Expand on hover"
   },
   "settings": {
     "title": "Settings",

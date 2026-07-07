@@ -17,18 +17,14 @@ import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useStatus, useSettings, useStashList, useWorkflowRuns } from "@/api/queries";
-import { gitFetch } from "@/api/commands";
+import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { RepoHeaderContextMenu } from "@/components/repository/RepoHeaderContextMenu";
 import { RepoListView } from "@/components/repository/RepoListView";
 import { ChangesView } from "@/components/commit/ChangesView";
 import { HistoryView } from "@/components/history/HistoryView";
 import { StashView } from "@/components/stash/StashView";
 import { ActionsView } from "@/components/actions/ActionsView";
-import { useQueryClient } from "@tanstack/react-query";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
-
-/* ─── Module-level fetch tracker (resets on app restart) ─── */
-const fetchedRepos = new Set<string>();
 
 /* ─── Sidebar ─── */
 
@@ -41,16 +37,14 @@ export function Sidebar() {
   const activeRepo = useRepositoryStore((s) => s.activeRepo);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const repoVisibility = useRepositoryStore((s) => s.repoVisibility);
-  const setActiveRepo = useRepositoryStore((s) => s.setActiveRepo);
-  const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
   const removeRepo = useRepositoryStore((s) => s.removeRepo);
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
   const changesCount = statusEntries.length;
   const { data: stashes = [] } = useStashList(activeRepoPath);
   const stashCount = stashes.length;
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
-  const queryClient = useQueryClient();
-  const [isFetching, setIsFetching] = useState(false);
+  const { selectRepo, fetchingPath } = useSelectRepo();
+  const isFetching = fetchingPath !== null;
   const [repoMenuPos, setRepoMenuPos] = useState<{ x: number; y: number } | null>(null);
   const { data: settingsData = null } = useSettings();
 
@@ -72,34 +66,6 @@ export function Sidebar() {
         : activeVisibility?.isFork
           ? GitFork
           : Globe;
-
-  const handleSelectRepo = (path: string) => {
-    setActiveRepo(path);
-    const latestRepos = useRepositoryStore.getState().repos;
-    const repo = latestRepos.find((r) => r.path === path);
-    if (repo?.accountId) {
-      setActiveAccount(repo.accountId);
-    }
-    setRepoListOpen(false);
-
-    const repoHasRemote = repo?.remotes && repo.remotes.length > 0;
-    if (repo?.accountId && repoHasRemote && !fetchedRepos.has(path)) {
-      setIsFetching(true);
-      gitFetch(path, repo.accountId)
-        .then(() => {
-          fetchedRepos.add(path);
-          queryClient.invalidateQueries({ queryKey: ["branches"] });
-          queryClient.invalidateQueries({ queryKey: ["commitHistory"] });
-          queryClient.invalidateQueries({ queryKey: ["status"] });
-        })
-        .catch(() => {
-          // fetch 실패는 무시 (네트워크 문제 등)
-        })
-        .finally(() => {
-          setIsFetching(false);
-        });
-    }
-  };
 
   return (
     <div className="flex flex-col h-full min-w-0 overflow-hidden bg-surface">
@@ -147,7 +113,7 @@ export function Sidebar() {
 
       {repoListOpen ? (
         /* ─── Repo list view ─── */
-        <RepoListView onSelectRepo={handleSelectRepo} />
+        <RepoListView onSelectRepo={selectRepo} />
       ) : (
         /* ─── Changes / History view ─── */
         <>
