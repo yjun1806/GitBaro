@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   DiffFile,
@@ -22,11 +22,22 @@ import {
 // 만들어 가상화한다.
 
 const MONO_FONT = "Menlo, Consolas, monospace";
+const CHAR_WIDTH_RATIO = 0.6; // Menlo 고정폭 글리프 advance ≈ 0.6em (가로 트랙 폭 추정용)
+const NUM_COL_PAD = 16;
+const CONTENT_PAD = 12;
 
 type Operator = "add" | "del" | undefined;
 type SyntaxLineT = SyntaxLine & { template?: string };
 type SplitLine = { lineNumber?: number; value?: string; diff?: DiffLine };
-type Row = { kind: "hunk"; text: string } | { kind: "line"; index: number };
+export type DiffRow = { kind: "hunk"; text: string } | { kind: "line"; index: number };
+
+export interface DiffLayout {
+  rows: DiffRow[];
+  maxLineNo: number;
+  maxUnifiedChars: number;
+  maxOldChars: number;
+  maxNewChars: number;
+}
 
 function operatorOf(type: DiffLineType | undefined): Operator {
   if (type === DiffLineType.Add) return "add";
@@ -37,6 +48,46 @@ function operatorOf(type: DiffLineType | undefined): Operator {
 function hunkText(h: DiffHunkItem): string {
   const info = (h.unifiedInfo ?? h.splitInfo) as { plainText?: string } | undefined;
   return info?.plainText ?? "";
+}
+
+function lineChars(value: string | undefined): number {
+  // 표시 폭 추정 — 후행 개행은 폭에 무관하므로 제외.
+  return value ? value.replace(/\n$/, "").length : 0;
+}
+
+// 평탄한 행 배열(hunk 헤더 삽입) + 가로 트랙/줄번호 폭 추정치를 한 번의 순회로 계산한다.
+// 순수 함수 — 렌더 밖에서 테스트 가능.
+export function buildDiffLayout(diffFile: DiffFile, isSplit: boolean): DiffLayout {
+  const rows: DiffRow[] = [];
+  let maxLineNo = 1;
+  let maxUnifiedChars = 0;
+  let maxOldChars = 0;
+  let maxNewChars = 0;
+  const len = isSplit ? diffFile.splitLineLength : diffFile.unifiedLineLength;
+
+  for (let i = 0; i < len; i++) {
+    if (isSplit) {
+      const left = diffFile.getSplitLeftLine(i);
+      const right = diffFile.getSplitRightLine(i);
+      const prevHunk = left.diff?.prevHunkLine ?? right.diff?.prevHunkLine;
+      if (prevHunk) rows.push({ kind: "hunk", text: hunkText(prevHunk) });
+      rows.push({ kind: "line", index: i });
+      if (left.lineNumber) maxLineNo = Math.max(maxLineNo, left.lineNumber);
+      if (right.lineNumber) maxLineNo = Math.max(maxLineNo, right.lineNumber);
+      maxOldChars = Math.max(maxOldChars, lineChars(left.value));
+      maxNewChars = Math.max(maxNewChars, lineChars(right.value));
+    } else {
+      const line = diffFile.getUnifiedLine(i);
+      const prevHunk = line.diff?.prevHunkLine;
+      if (prevHunk) rows.push({ kind: "hunk", text: hunkText(prevHunk) });
+      rows.push({ kind: "line", index: i });
+      if (line.oldLineNumber) maxLineNo = Math.max(maxLineNo, line.oldLineNumber);
+      if (line.newLineNumber) maxLineNo = Math.max(maxLineNo, line.newLineNumber);
+      maxUnifiedChars = Math.max(maxUnifiedChars, lineChars(line.value));
+    }
+  }
+
+  return { rows, maxLineNo, maxUnifiedChars, maxOldChars, maxNewChars };
 }
 
 // 라인 배경색 — diff-theme.css의 CSS 변수를 재사용(테마 자동 대응).
@@ -54,14 +105,16 @@ function numberBg(type: DiffLineType | undefined): string {
   return "var(--diff-plain-content--)";
 }
 
-// DiffFile이 라인별로 만들어 둔 HTML 템플릿(신택스 + intra-line 변경 강조)을 그대로 꺼낸다.
-// 없으면 라이브러리와 동일한 빌더로 lazy 생성해 캐시한다.
 interface RenderedContent {
   html?: string;
   text?: string;
   cls: string;
 }
 
+// DiffFile이 라인별로 만들어 둔 HTML 템플릿(신택스 + intra-line 변경 강조)을 꺼낸다.
+// 주의(의도된 side-effect): 라이브러리와 동일하게 diffLine/syntaxLine의 template 필드를
+// lazy 캐시로 채운다. 외부(라이브러리 소유) 객체에 대한 idempotent 쓰기이며 재렌더를
+// 유발하지 않으므로, 보이는 행만 필요할 때 파싱하도록 렌더 경로에서 호출한다.
 function resolveContent(
   diffFile: DiffFile,
   diffLine: DiffLine | undefined,
@@ -141,40 +194,27 @@ export function VirtualizedDiffView({
   const rowHeight = Math.round(fontSize * 1.6);
   const isSplit = viewMode === "split";
 
-  // 고정폭(monospace) 기준 픽셀 계산 — 가로 스크롤 트랙 폭과 줄번호 칸 폭 산정.
+  const layout = useMemo(() => buildDiffLayout(diffFile, isSplit), [diffFile, isSplit]);
+
   const metrics = useMemo(() => {
-    const ch = fontSize * 0.6;
-    const oldLines = diffFile.getOldFileContent().split("\n");
-    const newLines = diffFile.getNewFileContent().split("\n");
-    const maxOldChars = oldLines.reduce((m, l) => Math.max(m, l.length), 0);
-    const maxNewChars = newLines.reduce((m, l) => Math.max(m, l.length), 0);
-    const maxLineNo = Math.max(oldLines.length, newLines.length, 1);
-    const digits = String(maxLineNo).length;
-    const numColPx = Math.max(2, digits) * ch + 16;
-    const contentPad = 12;
+    const ch = fontSize * CHAR_WIDTH_RATIO;
+    const digits = String(layout.maxLineNo).length;
+    const numColPx = Math.max(2, digits) * ch + NUM_COL_PAD;
     return {
       numColPx,
-      unifiedInner: numColPx * 2 + Math.max(maxOldChars, maxNewChars) * ch + contentPad,
-      splitLeftContentPx: maxOldChars * ch + contentPad,
-      splitRightContentPx: maxNewChars * ch + contentPad,
-      splitInner: numColPx * 2 + (maxOldChars + maxNewChars) * ch + contentPad * 2,
+      unifiedInner: numColPx * 2 + layout.maxUnifiedChars * ch + CONTENT_PAD,
+      splitLeftContentPx: layout.maxOldChars * ch + CONTENT_PAD,
+      splitRightContentPx: layout.maxNewChars * ch + CONTENT_PAD,
+      splitInner: numColPx * 2 + (layout.maxOldChars + layout.maxNewChars) * ch + CONTENT_PAD * 2,
     };
-  }, [diffFile, fontSize]);
+  }, [layout, fontSize]);
 
-  // 평탄한 행 배열 — hunk 헤더를 content 라인 사이에 삽입.
-  const rows = useMemo<Row[]>(() => {
-    const out: Row[] = [];
-    const len = isSplit ? diffFile.splitLineLength : diffFile.unifiedLineLength;
-    for (let i = 0; i < len; i++) {
-      const prevHunk = isSplit
-        ? diffFile.getSplitLeftLine(i).diff?.prevHunkLine ??
-          diffFile.getSplitRightLine(i).diff?.prevHunkLine
-        : diffFile.getUnifiedLine(i).diff?.prevHunkLine;
-      if (prevHunk) out.push({ kind: "hunk", text: hunkText(prevHunk) });
-      out.push({ kind: "line", index: i });
-    }
-    return out;
-  }, [diffFile, isSplit]);
+  const rows = layout.rows;
+
+  // 파일이 바뀌면 이전 파일의 스크롤 오프셋이 남지 않도록 맨 위로 리셋.
+  useEffect(() => {
+    parentRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [diffFile]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -194,6 +234,15 @@ export function VirtualizedDiffView({
     lineHeight: `${rowHeight}px`,
     whiteSpace: "pre",
   };
+
+  // unified 줄번호는 가로 스크롤 시 고정(행이 transform이 아니라 top으로 배치돼 sticky가 동작).
+  const stickyNum = (left: number, bg: string): React.CSSProperties => ({
+    ...numStyle,
+    position: "sticky",
+    left,
+    zIndex: 1,
+    background: bg,
+  });
 
   const contentStyle: React.CSSProperties = {
     display: "inline-block",
@@ -230,8 +279,8 @@ export function VirtualizedDiffView({
 
     return (
       <div className="flex" style={{ height: rowHeight, background: contentBg(type) }}>
-        <span style={{ ...numStyle, background: numberBg(type) }}>{line.oldLineNumber ?? ""}</span>
-        <span style={{ ...numStyle, background: numberBg(type) }}>{line.newLineNumber ?? ""}</span>
+        <span style={stickyNum(0, numberBg(type))}>{line.oldLineNumber ?? ""}</span>
+        <span style={stickyNum(metrics.numColPx, numberBg(type))}>{line.newLineNumber ?? ""}</span>
         <ContentCell content={content} style={contentStyle} />
       </div>
     );
@@ -286,7 +335,7 @@ export function VirtualizedDiffView({
     );
   };
 
-  const renderRow = (row: Row) => {
+  const renderRow = (row: DiffRow) => {
     if (row.kind === "hunk") return renderHunkRow(row.text);
     return isSplit ? renderSplitRow(row.index) : renderUnifiedRow(row.index);
   };
@@ -315,10 +364,9 @@ export function VirtualizedDiffView({
             key={v.key}
             style={{
               position: "absolute",
-              top: 0,
+              top: v.start,
               left: 0,
               width: "100%",
-              transform: `translateY(${v.start}px)`,
             }}
           >
             {renderRow(rows[v.index])}

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DiffFile, DiffLineType } from "@git-diff-view/core";
+import { buildDiffLayout } from "../VirtualizedDiffView";
 
 // VirtualizedDiffView가 의존하는 DiffFile의 행 모델 계약을 검증한다.
 // 렌더러는 0..unifiedLineLength(및 splitLineLength)를 인덱스로 순회하며
@@ -66,6 +67,62 @@ describe("DiffFile unified row model", () => {
     }
     expect(sawDelete).toBe(true);
     expect(sawAdd).toBe(true);
+  });
+});
+
+// 여러 hunk를 가진 diff — 헤더 삽입 개수 검증용.
+const OLD2 = "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk\n";
+const NEW2 = "a\nB\nc\nd\ne\nf\ng\nh\ni\nJ\nk\n";
+const UNIFIED2 = [
+  "--- a/f",
+  "+++ b/f",
+  "@@ -1,3 +1,3 @@",
+  " a",
+  "-b",
+  "+B",
+  " c",
+  "@@ -9,3 +9,3 @@",
+  " i",
+  "-j",
+  "+J",
+  " k",
+].join("\n");
+
+describe("buildDiffLayout", () => {
+  it("각 hunk 앞에 헤더 행을 삽입한다 (2 hunk → 헤더 2개)", () => {
+    const file = new DiffFile("f", OLD2, "f", NEW2, [UNIFIED2], "text", "text");
+    file.initRaw();
+    file.buildUnifiedDiffLines();
+
+    const { rows } = buildDiffLayout(file, false);
+    const hunkRows = rows.filter((r) => r.kind === "hunk");
+    const lineRows = rows.filter((r) => r.kind === "line");
+
+    expect(hunkRows).toHaveLength(2);
+    expect(lineRows).toHaveLength(file.unifiedLineLength);
+    // 첫 행은 hunk 헤더, 그 텍스트는 @@ 를 포함한다.
+    expect(rows[0].kind).toBe("hunk");
+    expect(rows[0].kind === "hunk" && rows[0].text).toContain("@@");
+  });
+
+  it("줄번호·문자폭 추정치를 라인 데이터에서 산출한다", () => {
+    const file = new DiffFile("f", OLD2, "f", NEW2, [UNIFIED2], "text", "text");
+    file.initRaw();
+    file.buildUnifiedDiffLines();
+
+    const layout = buildDiffLayout(file, false);
+    expect(layout.maxLineNo).toBe(11); // 11줄 파일
+    expect(layout.maxUnifiedChars).toBeGreaterThan(0);
+  });
+
+  it("split 모드에서도 헤더 행을 삽입하고 라인 행 수가 splitLineLength와 같다", () => {
+    const file = new DiffFile("f", OLD2, "f", NEW2, [UNIFIED2], "text", "text");
+    file.initRaw();
+    file.buildSplitDiffLines();
+
+    const { rows } = buildDiffLayout(file, true);
+    expect(rows.filter((r) => r.kind === "hunk")).toHaveLength(2);
+    expect(rows.filter((r) => r.kind === "line")).toHaveLength(file.splitLineLength);
   });
 });
 
