@@ -20,8 +20,16 @@ import { groupReposByOwner, type GroupedRepos } from "@/lib/group-repos";
 import { cn } from "@/lib/utils";
 import type { RepoInfo } from "@/types";
 
-const COLLAPSED_WIDTH = 56;
-const EXPANDED_WIDTH = 220;
+export const RAIL_COLLAPSED_WIDTH = 56;
+export const RAIL_EXPANDED_WIDTH = 220;
+const COLLAPSED_WIDTH = RAIL_COLLAPSED_WIDTH;
+const EXPANDED_WIDTH = RAIL_EXPANDED_WIDTH;
+
+// rail이 flex 흐름에서 실제로 차지하는 가로 폭 (hover 모드는 확장 패널이 절대배치로
+// 떠서 흐름 폭은 collapsed와 같다). sidebar 오른쪽에 붙는 fixed 패널의 left 계산에 사용.
+export function railFlowWidth(railMode: RailMode): number {
+  return railMode === "expanded" ? RAIL_EXPANDED_WIDTH : RAIL_COLLAPSED_WIDTH;
+}
 
 /* ─── Sidebar control popover (Expanded / Collapsed / Expand on hover) ─── */
 

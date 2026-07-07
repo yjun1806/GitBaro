@@ -15,6 +15,7 @@ import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
 import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog";
 import { DeleteBranchDialog } from "@/components/branch/DeleteBranchDialog";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
+import { railFlowWidth } from "@/components/layout/RepoRail";
 
 interface BranchZoneProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
+  const railMode = useUIStore((s) => s.railMode);
   const previewBranch = useUIStore((s) => s.previewBranch);
   const { isInWorktree, mainWorktree, worktreeByBranch } = useWorktreeContext(activeRepoPath, worktrees);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -254,7 +256,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           {/* Full-height panel — 사이드바 오른쪽, 툴바 아래부터 하단까지 */}
           <div
             className="fixed z-50 flex flex-col bg-popover border-r border-border shadow-2xl"
-            style={{ left: sidebarWidth + 1, top: 52, bottom: 0, width: '28rem' }}
+            style={{ left: railFlowWidth(railMode) + sidebarWidth + 1, top: 52, bottom: 0, width: '28rem' }}
           >
             <BranchDropdown
               branches={branches}
