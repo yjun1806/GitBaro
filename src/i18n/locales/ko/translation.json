@@ -320,7 +320,11 @@
     "svgPreview": "SVG 미리보기",
     "sizeDiff": "차이: {{diff}} ({{percent}}%)",
     "dimensions": "{{width}} × {{height}}",
-    "fileSize": "{{size}}"
+    "fileSize": "{{size}}",
+    "largeDiff": "큰 diff입니다 ({{lines}}줄). 성능을 위해 렌더링하지 않았습니다.",
+    "showAnyway": "diff 표시",
+    "highlightDisabled": "성능을 위해 구문 강조를 껐습니다 ({{lines}}줄).",
+    "enableHighlight": "구문 강조 켜기"
   },
   "sync": {
     "fetchOrigin": "Fetch origin",

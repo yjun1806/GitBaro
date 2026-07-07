@@ -320,7 +320,11 @@
     "svgPreview": "SVG Preview",
     "sizeDiff": "Diff: {{diff}} ({{percent}}%)",
     "dimensions": "{{width}} × {{height}}",
-    "fileSize": "{{size}}"
+    "fileSize": "{{size}}",
+    "largeDiff": "Large diff ({{lines}} lines). Not rendered for performance.",
+    "showAnyway": "Show diff",
+    "highlightDisabled": "Syntax highlighting disabled for performance ({{lines}} lines).",
+    "enableHighlight": "Enable highlighting"
   },
   "sync": {
     "fetchOrigin": "Fetch origin",
