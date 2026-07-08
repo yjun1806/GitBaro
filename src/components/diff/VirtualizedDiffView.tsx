@@ -1,5 +1,6 @@
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { DiffOverviewRuler } from "./DiffOverviewRuler";
 import {
   DiffFile,
   DiffLineType,
@@ -31,8 +32,18 @@ type SyntaxLineT = SyntaxLine & { template?: string };
 type SplitLine = { lineNumber?: number; value?: string; diff?: DiffLine };
 export type DiffRow = { kind: "hunk"; text: string } | { kind: "line"; index: number };
 
+// A contiguous run of changed rows, for the overview ruler. start/end are
+// inclusive indices into DiffLayout.rows.
+export type ChangeKind = "add" | "del" | "mix";
+export interface ChangeBlock {
+  start: number;
+  end: number;
+  kind: ChangeKind;
+}
+
 export interface DiffLayout {
   rows: DiffRow[];
+  changeBlocks: ChangeBlock[];
   maxLineNo: number;
   maxUnifiedChars: number;
   maxOldChars: number;
@@ -59,19 +70,45 @@ function lineChars(value: string | undefined): number {
 // 순수 함수 — 렌더 밖에서 테스트 가능.
 export function buildDiffLayout(diffFile: DiffFile, isSplit: boolean): DiffLayout {
   const rows: DiffRow[] = [];
+  const changeBlocks: ChangeBlock[] = [];
+  let block: ChangeBlock | null = null;
   let maxLineNo = 1;
   let maxUnifiedChars = 0;
   let maxOldChars = 0;
   let maxNewChars = 0;
   const len = isSplit ? diffFile.splitLineLength : diffFile.unifiedLineLength;
 
+  // Extend/close the current change block based on a line row's add/del state.
+  const trackChange = (hasAdd: boolean, hasDel: boolean) => {
+    if (!hasAdd && !hasDel) {
+      block = null; // context line ends the run
+      return;
+    }
+    const kind: ChangeKind = hasAdd && hasDel ? "mix" : hasAdd ? "add" : "del";
+    const rowIdx = rows.length - 1;
+    if (block) {
+      block.end = rowIdx;
+      if (block.kind !== kind) block.kind = "mix";
+    } else {
+      block = { start: rowIdx, end: rowIdx, kind };
+      changeBlocks.push(block);
+    }
+  };
+
   for (let i = 0; i < len; i++) {
     if (isSplit) {
       const left = diffFile.getSplitLeftLine(i);
       const right = diffFile.getSplitRightLine(i);
       const prevHunk = left.diff?.prevHunkLine ?? right.diff?.prevHunkLine;
-      if (prevHunk) rows.push({ kind: "hunk", text: hunkText(prevHunk) });
+      if (prevHunk) {
+        rows.push({ kind: "hunk", text: hunkText(prevHunk) });
+        block = null; // a hunk header separates change runs
+      }
       rows.push({ kind: "line", index: i });
+      trackChange(
+        right.diff?.type === DiffLineType.Add,
+        left.diff?.type === DiffLineType.Delete,
+      );
       if (left.lineNumber) maxLineNo = Math.max(maxLineNo, left.lineNumber);
       if (right.lineNumber) maxLineNo = Math.max(maxLineNo, right.lineNumber);
       maxOldChars = Math.max(maxOldChars, lineChars(left.value));
@@ -79,15 +116,22 @@ export function buildDiffLayout(diffFile: DiffFile, isSplit: boolean): DiffLayou
     } else {
       const line = diffFile.getUnifiedLine(i);
       const prevHunk = line.diff?.prevHunkLine;
-      if (prevHunk) rows.push({ kind: "hunk", text: hunkText(prevHunk) });
+      if (prevHunk) {
+        rows.push({ kind: "hunk", text: hunkText(prevHunk) });
+        block = null;
+      }
       rows.push({ kind: "line", index: i });
+      trackChange(
+        line.diff?.type === DiffLineType.Add,
+        line.diff?.type === DiffLineType.Delete,
+      );
       if (line.oldLineNumber) maxLineNo = Math.max(maxLineNo, line.oldLineNumber);
       if (line.newLineNumber) maxLineNo = Math.max(maxLineNo, line.newLineNumber);
       maxUnifiedChars = Math.max(maxUnifiedChars, lineChars(line.value));
     }
   }
 
-  return { rows, maxLineNo, maxUnifiedChars, maxOldChars, maxNewChars };
+  return { rows, changeBlocks, maxLineNo, maxUnifiedChars, maxOldChars, maxNewChars };
 }
 
 // 라인 배경색 — diff-theme.css의 CSS 변수를 재사용(테마 자동 대응).
@@ -190,6 +234,7 @@ export function VirtualizedDiffView({
   fontSize,
 }: VirtualizedDiffViewProps) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const [scrollable, setScrollable] = useState(false);
 
   const rowHeight = Math.round(fontSize * 1.6);
   const isSplit = viewMode === "split";
@@ -222,6 +267,17 @@ export function VirtualizedDiffView({
     estimateSize: () => rowHeight,
     overscan: 24,
   });
+
+  // Show the overview ruler only when the content actually overflows.
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    const check = () => setScrollable(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [layout, rowHeight]);
 
   const numStyle: React.CSSProperties = {
     width: metrics.numColPx,
@@ -341,38 +397,47 @@ export function VirtualizedDiffView({
   };
 
   return (
-    <div
-      ref={parentRef}
-      className="flex-1 min-h-0 overflow-auto diff-tailwindcss-wrapper"
-      data-theme={isDark ? "dark" : "light"}
-    >
+    <div className="flex-1 min-h-0 relative">
       <div
-        className="diff-style-root"
-        style={{
-          position: "relative",
-          height: virtualizer.getTotalSize(),
-          width: isSplit
-            ? `max(100%, ${Math.ceil(metrics.splitInner)}px)`
-            : `max(100%, ${Math.ceil(metrics.unifiedInner)}px)`,
-          fontFamily: MONO_FONT,
-          fontSize,
-          background: "var(--diff-plain-content--)",
-        }}
+        ref={parentRef}
+        className="absolute inset-0 overflow-auto diff-tailwindcss-wrapper"
+        data-theme={isDark ? "dark" : "light"}
       >
-        {virtualizer.getVirtualItems().map((v) => (
-          <div
-            key={v.key}
-            style={{
-              position: "absolute",
-              top: v.start,
-              left: 0,
-              width: "100%",
-            }}
-          >
-            {renderRow(rows[v.index])}
-          </div>
-        ))}
+        <div
+          className="diff-style-root"
+          style={{
+            position: "relative",
+            height: virtualizer.getTotalSize(),
+            width: isSplit
+              ? `max(100%, ${Math.ceil(metrics.splitInner)}px)`
+              : `max(100%, ${Math.ceil(metrics.unifiedInner)}px)`,
+            fontFamily: MONO_FONT,
+            fontSize,
+            background: "var(--diff-plain-content--)",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((v) => (
+            <div
+              key={v.key}
+              style={{
+                position: "absolute",
+                top: v.start,
+                left: 0,
+                width: "100%",
+              }}
+            >
+              {renderRow(rows[v.index])}
+            </div>
+          ))}
+        </div>
       </div>
+      {scrollable && (
+        <DiffOverviewRuler
+          blocks={layout.changeBlocks}
+          rowCount={rows.length}
+          onJump={(i) => virtualizer.scrollToIndex(i, { align: "center" })}
+        />
+      )}
     </div>
   );
 }

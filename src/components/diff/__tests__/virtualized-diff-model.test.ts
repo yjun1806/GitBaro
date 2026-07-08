@@ -115,6 +115,32 @@ describe("buildDiffLayout", () => {
     expect(layout.maxUnifiedChars).toBeGreaterThan(0);
   });
 
+  it("변경 블록: 연속 삭제+추가는 mix 한 블록, context로 끊긴 추가는 별도 add 블록", () => {
+    const file = buildFile(); // -line2/+line2 changed, (context), +line4
+    file.buildUnifiedDiffLines();
+
+    const { changeBlocks, rows } = buildDiffLayout(file, false);
+    expect(changeBlocks).toHaveLength(2);
+    expect(changeBlocks[0].kind).toBe("mix"); // 삭제 다음 추가가 연속
+    expect(changeBlocks[1].kind).toBe("add"); // context 뒤 순수 추가
+    for (const b of changeBlocks) {
+      expect(b.end).toBeGreaterThanOrEqual(b.start);
+      expect(rows[b.start].kind).toBe("line");
+      expect(rows[b.end].kind).toBe("line");
+    }
+  });
+
+  it("변경 블록: hunk 경계가 변경 run을 분리한다 (2 hunk → 블록 2개)", () => {
+    const file = new DiffFile("f", OLD2, "f", NEW2, [UNIFIED2], "text", "text");
+    file.initRaw();
+    file.buildUnifiedDiffLines();
+
+    const { changeBlocks } = buildDiffLayout(file, false);
+    expect(changeBlocks).toHaveLength(2);
+    expect(changeBlocks[0].kind).toBe("mix");
+    expect(changeBlocks[1].kind).toBe("mix");
+  });
+
   it("split 모드에서도 헤더 행을 삽입하고 라인 행 수가 splitLineLength와 같다", () => {
     const file = new DiffFile("f", OLD2, "f", NEW2, [UNIFIED2], "text", "text");
     file.initRaw();
