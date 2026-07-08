@@ -462,7 +462,10 @@
     "selectorOutgoingTooltip_one": "이 Branch보다 {{count}}개 커밋 앞섬",
     "selectorOutgoingTooltip_other": "이 Branch보다 {{count}}개 커밋 앞섬",
     "noIncomingCommits": "Incoming 커밋 없음",
-    "noOutgoingCommits": "Outgoing 커밋 없음"
+    "noOutgoingCommits": "Outgoing 커밋 없음",
+    "kindSynced": "로컬 ⇄ 리모트 동기화됨",
+    "kindLocal": "로컬 전용 Branch",
+    "kindRemote": "리모트 전용 Branch"
   },
   "merge": {
     "title": "Merge",

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { GitBranch, GitCompareArrows, Search, X, Check } from "lucide-react";
+import { ArrowLeftRight, Cloud, GitCompareArrows, Search, X, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { BranchInfo } from "@/types";
@@ -12,22 +12,30 @@ interface BranchCompareSelectorProps {
 }
 
 /**
- * aheadBehindHead 기준 dot 색상:
- * - ahead(incoming) + behind(outgoing) 모두 → warning
- * - ahead(incoming)만 → info
- * - behind(outgoing)만 → success
+ * Branch identity relative to its remote:
+ * - synced: local branch that tracks a remote (local ⇄ remote)
+ * - local:  local branch with no upstream (local-only)
+ * - remote: remote branch with no local counterpart (remote-only)
  */
-type CompareStatus = "both" | "incoming" | "outgoing";
-const compareDotStyles: Record<CompareStatus, string> = {
-  both: "bg-warning",
-  incoming: "bg-info",
-  outgoing: "bg-success",
-};
+type BranchKind = "synced" | "local" | "remote";
 
-function getCompareStatus(ahead: number, behind: number): CompareStatus {
-  if (ahead > 0 && behind > 0) return "both";
-  if (ahead > 0) return "incoming";
-  return "outgoing";
+function getBranchKind(b: BranchInfo): BranchKind {
+  if (b.isRemote) return "remote";
+  return b.upstream ? "synced" : "local";
+}
+
+function BranchKindIcon({ kind }: { kind: BranchKind }) {
+  if (kind === "remote") {
+    return <Cloud className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />;
+  }
+  if (kind === "synced") {
+    return <ArrowLeftRight className="w-3.5 h-3.5 shrink-0 text-info" />;
+  }
+  return (
+    <span className="w-3.5 shrink-0 flex justify-center">
+      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+    </span>
+  );
 }
 
 export function BranchCompareSelector({
@@ -53,13 +61,22 @@ export function BranchCompareSelector({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [isOpen]);
 
-  // Filter branches: exclude current branch, only local branches
+  // Remote branches already tracked by a local branch are shown once as the
+  // local "synced" entry, so drop those remotes to avoid duplication.
+  const trackedUpstreams = new Set(
+    branches
+      .filter((b) => !b.isRemote && b.upstream)
+      .map((b) => b.upstream as string),
+  );
+
+  // Filter branches: exclude the current branch and remotes that duplicate a
+  // tracked local branch; keep local-only, synced, and remote-only.
   const lowerQuery = query.toLowerCase();
   const filteredBranches = branches.filter(
     (b) =>
-      !b.isRemote &&
       b.name !== currentBranch &&
-      b.name.toLowerCase().includes(lowerQuery),
+      b.name.toLowerCase().includes(lowerQuery) &&
+      !(b.isRemote && trackedUpstreams.has(b.name)),
   );
 
   const handleSelect = (branchName: string) => {
@@ -129,6 +146,13 @@ export function BranchCompareSelector({
               filteredBranches.map((branch) => {
                 const isSelected = branch.name === compareBranch;
                 const ab = branch.aheadBehindHead;
+                const kind = getBranchKind(branch);
+                const kindTitle =
+                  kind === "synced"
+                    ? t("compare.kindSynced")
+                    : kind === "local"
+                      ? t("compare.kindLocal")
+                      : t("compare.kindRemote");
                 return (
                   <button
                     key={branch.name}
@@ -140,21 +164,9 @@ export function BranchCompareSelector({
                         : "hover:bg-accent",
                     )}
                   >
-                    <GitBranch
-                      className={cn(
-                        "w-3.5 h-3.5 shrink-0",
-                        isSelected ? "text-primary" : "text-muted-foreground",
-                      )}
-                    />
-                    {/* Dot indicator */}
-                    {ab && (ab.ahead > 0 || ab.behind > 0) && (
-                      <span
-                        className={cn(
-                          "w-1.5 h-1.5 rounded-full shrink-0",
-                          compareDotStyles[getCompareStatus(ab.ahead, ab.behind)],
-                        )}
-                      />
-                    )}
+                    <span className="flex items-center shrink-0" title={kindTitle}>
+                      <BranchKindIcon kind={kind} />
+                    </span>
                     <span className="flex-1 truncate text-left">
                       {branch.name}
                     </span>

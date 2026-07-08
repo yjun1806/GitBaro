@@ -237,8 +237,11 @@ pub async fn compare_branches(
             .peel_to_commit()?
             .id();
 
+        // Resolve local branches first (refs/heads), falling back to
+        // remote-tracking branches (refs/remotes) so origin/* can be compared.
         let compare_oid = repo
-            .revparse_single(&format!("refs/heads/{}", compare))?
+            .revparse_single(&format!("refs/heads/{}", compare))
+            .or_else(|_| repo.revparse_single(&format!("refs/remotes/{}", compare)))?
             .peel_to_commit()?
             .id();
 

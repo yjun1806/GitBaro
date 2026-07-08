@@ -462,7 +462,10 @@
     "selectorOutgoingTooltip_one": "{{count}} commit ahead of this branch",
     "selectorOutgoingTooltip_other": "{{count}} commits ahead of this branch",
     "noIncomingCommits": "No incoming commits",
-    "noOutgoingCommits": "No outgoing commits"
+    "noOutgoingCommits": "No outgoing commits",
+    "kindSynced": "Synced with remote",
+    "kindLocal": "Local-only branch",
+    "kindRemote": "Remote-only branch"
   },
   "merge": {
     "title": "Merge",
