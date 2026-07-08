@@ -304,6 +304,24 @@ impl GitCliEngine {
         Ok(())
     }
 
+    /// Check out a remote-tracking branch by creating a local branch that
+    /// tracks it, mirroring GitHub Desktop:
+    ///   git checkout <start_point> -b <local_name> --
+    /// Branching from a remote-tracking start point makes git set the upstream
+    /// automatically, so the branch lands in a synced (not "publishable") state.
+    /// `start_point` comes from the branch list (a real remote ref), not user
+    /// input, so only the new local name is validated for option injection.
+    pub async fn checkout_tracking_branch(
+        &self,
+        start_point: &str,
+        local_name: &str,
+    ) -> Result<(), AppError> {
+        crate::git::branch::validate_branch_name(local_name)?;
+        self.run_local_checked(&["checkout", start_point, "-b", local_name, "--"])
+            .await?;
+        Ok(())
+    }
+
     /// Stash working changes via git CLI.
     pub async fn stash_save(&self, message: Option<&str>) -> Result<(), AppError> {
         let mut args = vec!["stash", "push"];

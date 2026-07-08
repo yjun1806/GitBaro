@@ -175,14 +175,75 @@ pub async fn create_branch(
     Ok(())
 }
 
+enum SwitchTarget {
+    /// Check out an existing local branch as-is.
+    Local(String),
+    /// Create a local branch tracking a remote-tracking branch, then check out.
+    TrackRemote { start_point: String, local: String },
+}
+
+/// Strip the configured remote's prefix from a remote-tracking branch name,
+/// e.g. "origin/feature/x" -> "feature/x".
+fn remote_branch_short_name(repo: &git2::Repository, name: &str) -> Option<String> {
+    let remotes = repo.remotes().ok()?;
+    for remote in remotes.iter().flatten() {
+        let prefix = format!("{remote}/");
+        if let Some(short) = name.strip_prefix(&prefix) {
+            if !short.is_empty() {
+                return Some(short.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Classify a switch target: an existing local branch is checked out directly;
+/// a remote-tracking branch with no local counterpart becomes a new local
+/// tracking branch (GitHub Desktop behavior) instead of a detached HEAD.
+async fn resolve_switch_target(repo_path: &str, name: &str) -> Result<SwitchTarget, AppError> {
+    let rp = repo_path.to_string();
+    let name = name.to_string();
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&rp)?;
+
+        if repo.find_branch(&name, git2::BranchType::Local).is_ok() {
+            return Ok(SwitchTarget::Local(name));
+        }
+
+        if repo.find_branch(&name, git2::BranchType::Remote).is_ok() {
+            if let Some(short) = remote_branch_short_name(&repo, &name) {
+                // A local branch of that name already exists → just switch to it.
+                if repo.find_branch(&short, git2::BranchType::Local).is_ok() {
+                    return Ok(SwitchTarget::Local(short));
+                }
+                return Ok(SwitchTarget::TrackRemote {
+                    start_point: name,
+                    local: short,
+                });
+            }
+        }
+
+        // Unknown ref: preserve prior behavior; git surfaces a clear error.
+        Ok(SwitchTarget::Local(name))
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
+}
+
 #[tauri::command]
 pub async fn switch_branch(
     app_handle: tauri::AppHandle,
     repo_path: String,
     name: String,
 ) -> Result<(), AppError> {
+    let target = resolve_switch_target(&repo_path, &name).await?;
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
-    engine.switch_branch(&name).await?;
+    match target {
+        SwitchTarget::Local(branch) => engine.switch_branch(&branch).await?,
+        SwitchTarget::TrackRemote { start_point, local } => {
+            engine.checkout_tracking_branch(&start_point, &local).await?
+        }
+    }
     tracing::info!("Switched to branch: {}", name);
     Ok(())
 }
