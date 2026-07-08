@@ -424,16 +424,90 @@ pub async fn git_fetch(
     match engine.fetch("origin", &token).await {
         Ok(()) => {
             tracing::info!("Fetched origin for {}", repo_path);
-            Ok(())
         }
         Err(e) if is_auth_error(&e) => {
             tracing::warn!("Fetch auth failed, refreshing token for {}", account_id);
             let new_token = token_store.refresh_token(&account_id).await?;
             engine.fetch("origin", &new_token).await?;
             tracing::info!("Fetched origin for {} (after token refresh)", repo_path);
-            Ok(())
         }
-        Err(e) => Err(e),
+        Err(e) => return Err(e),
+    }
+
+    // GitHub Desktop parity: advance eligible non-current local branches so a
+    // fetch from any branch keeps the others (e.g. main) up to date.
+    fast_forward_local_branches(&engine, &repo_path).await;
+    Ok(())
+}
+
+/// Compute local branches that can be fast-forwarded to their upstream after a
+/// fetch: has an upstream, is not the current HEAD, and is strictly behind
+/// (ahead == 0, behind > 0). Returns `(branch_name, from_oid, to_oid)`.
+async fn fast_forward_candidates(
+    repo_path: &str,
+) -> Result<Vec<(String, String, String)>, AppError> {
+    let rp = repo_path.to_string();
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&rp)?;
+        let head_name = repo
+            .head()
+            .ok()
+            .and_then(|h| h.shorthand().map(|s| s.to_string()));
+
+        let mut candidates = Vec::new();
+        for branch_result in repo.branches(Some(git2::BranchType::Local))? {
+            let (branch, _) = branch_result?;
+            let name = match branch.name()? {
+                Some(n) => n.to_string(),
+                None => continue,
+            };
+            if head_name.as_deref() == Some(name.as_str()) {
+                continue; // never move the checked-out branch
+            }
+            let upstream = match branch.upstream() {
+                Ok(u) => u,
+                Err(_) => continue, // no upstream configured
+            };
+            let (local_oid, up_oid) = match (branch.get().target(), upstream.get().target()) {
+                (Some(l), Some(u)) => (l, u),
+                _ => continue,
+            };
+            if local_oid == up_oid {
+                continue; // already up to date
+            }
+            // Pure fast-forward only: local must be a strict ancestor of upstream.
+            let (ahead, behind) = repo.graph_ahead_behind(local_oid, up_oid).unwrap_or((0, 0));
+            if ahead == 0 && behind > 0 {
+                candidates.push((name, local_oid.to_string(), up_oid.to_string()));
+            }
+        }
+        Ok::<_, AppError>(candidates)
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
+}
+
+/// After fetching, fast-forward every eligible non-current local branch to its
+/// upstream. Failures are non-fatal — a successful fetch must not fail because
+/// one branch could not be advanced (e.g. it is checked out in a worktree).
+async fn fast_forward_local_branches(engine: &GitCliEngine, repo_path: &str) {
+    let candidates = match fast_forward_candidates(repo_path).await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("[git] fast-forward scan failed: {}", e);
+            return;
+        }
+    };
+    for (name, from, to) in candidates {
+        match engine.fast_forward_branch(&name, &to).await {
+            Ok(()) => tracing::info!(
+                "[git] fast-forwarded {} {}..{}",
+                name,
+                &from[..from.len().min(7)],
+                &to[..to.len().min(7)]
+            ),
+            Err(e) => tracing::warn!("[git] skipped fast-forward for {}: {}", name, e),
+        }
     }
 }
 

@@ -232,6 +232,15 @@ impl GitCliEngine {
         }
     }
 
+    /// Fast-forward a local branch to `target_oid` via `git branch -f`.
+    /// git refuses to move a branch that is checked out in any worktree, so
+    /// such branches are safely skipped (surfaced as an error for the caller to
+    /// log). Runs no hooks and does not touch any working tree.
+    pub async fn fast_forward_branch(&self, name: &str, target_oid: &str) -> Result<(), AppError> {
+        self.run_local_checked(&["branch", "-f", name, target_oid]).await?;
+        Ok(())
+    }
+
     /// Create a commit via git CLI so that hooks (pre-commit, commit-msg, post-commit) run.
     ///
     /// When an `author` is provided (per-repository GitHub account), both the
