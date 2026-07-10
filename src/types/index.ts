@@ -153,6 +153,8 @@ export interface RepoSyncStatus {
   ahead: number;
   behind: number;
   hasUpstream: boolean;
+  /** working-tree에 커밋되지 않은 변경이 있는지 (RepoInfo.isDirty와 동일 기준). */
+  isDirty: boolean;
 }
 
 export interface RemoteInfo {

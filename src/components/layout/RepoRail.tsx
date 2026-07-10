@@ -188,6 +188,7 @@ function RailItem({
   onHoverStart?: (name: string, rect: DOMRect) => void;
   onHoverEnd?: () => void;
 }) {
+  const { t } = useTranslation();
   const color = avatarColor(repo.path);
   const initial = avatarInitial(repo.name);
 
@@ -218,12 +219,19 @@ function RailItem({
         >
           {initial}
         </span>
-        {/* Collapsed 모드는 이름/카운트 공간이 없어 아바타 코너에 점만 표시 */}
+        {/* Collapsed 모드는 이름/카운트 공간이 없어 아바타 코너에 점만 표시:
+            우상단 = push/pull 상태, 우하단 = 커밋되지 않은 변경 */}
         {!expanded && (
           <RepoSyncIndicator
             status={syncStatus}
             variant="dot"
             className="absolute -top-0.5 -right-0.5 ring-2 ring-surface"
+          />
+        )}
+        {!expanded && syncStatus?.isDirty && (
+          <span
+            className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-warning ring-2 ring-surface"
+            title={t("repo.uncommittedChanges")}
           />
         )}
       </span>
@@ -239,12 +247,21 @@ function RailItem({
         </span>
       )}
 
-      {expanded &&
-        (isFetching ? (
-          <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
-        ) : (
-          <RepoSyncIndicator status={syncStatus} variant="badge" />
-        ))}
+      {expanded && (
+        <span className="flex items-center gap-1.5 shrink-0">
+          {syncStatus?.isDirty && (
+            <span
+              className="w-2 h-2 rounded-full bg-warning shrink-0"
+              title={t("repo.uncommittedChanges")}
+            />
+          )}
+          {isFetching ? (
+            <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+          ) : (
+            <RepoSyncIndicator status={syncStatus} variant="badge" />
+          )}
+        </span>
+      )}
     </button>
   );
 }

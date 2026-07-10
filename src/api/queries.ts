@@ -67,6 +67,10 @@ export function useRepoSyncStatuses(repoPaths: string[]) {
     queryFn: () => getRepoSyncStatus(sortedPaths),
     enabled: sortedPaths.length > 0,
     staleTime: 15_000,
+    // 오프라인 libgit2 계산이라 저비용 — 전체 레포의 dirty/ahead가 이벤트 없이도
+    // 주기적으로 갱신되도록 포그라운드 폴링을 둔다. behind는 별도 background fetch가 갱신.
+    refetchInterval: 20_000,
+    refetchIntervalInBackground: false,
     select: (statuses): Record<string, RepoSyncStatus> =>
       Object.fromEntries(statuses.map((s) => [s.path, s])),
   });

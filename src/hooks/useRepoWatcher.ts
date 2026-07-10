@@ -40,6 +40,8 @@ export function useRepoWatcher(repoPath: string | null) {
       queryClient.invalidateQueries({
         queryKey: ["status", event.payload.repoPath],
       });
+      // rail/목록의 dirty·ahead/behind 인디케이터도 함께 갱신 (오프라인 계산)
+      queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
     }).then((fn) => {
       if (mounted) {
         unlisten = fn;

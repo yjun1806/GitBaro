@@ -399,6 +399,8 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                       : null;
                     const isPickerOpen = accountPickerRepo === repo.path;
                     const hasRemote = repo.remotes.length > 0;
+                    // 신선한 dirty 값(전체 레포 배치 조회) 우선, 없으면 스토어 값
+                    const isDirty = syncMap?.[repo.path]?.isDirty ?? repo.isDirty;
                     const visibility = repoVisibility[repo.path];
                     const permission = repoPermissions[repo.path];
                     const isValidating = validatingRepo === repo.path;
@@ -502,7 +504,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                           {/* State indicators + actions */}
                           <div className="flex items-center gap-1 shrink-0">
                             <RepoSyncIndicator status={syncMap?.[repo.path]} variant="badge" />
-                            {repo.isDirty && (
+                            {isDirty && (
                               <Circle
                                 className={cn(
                                   "w-2 h-2 fill-current shrink-0",

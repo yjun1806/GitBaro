@@ -166,38 +166,53 @@ pub async fn repo_sync_status(repo_paths: Vec<String>) -> Result<Vec<Value>, App
     .map_err(|e| AppError::Channel(e.to_string()))?
 }
 
-/// 단일 레포의 HEAD ahead/behind 상태를 계산한다. 계산 불가 시 `None`.
+/// 단일 레포의 HEAD ahead/behind 및 working-tree dirty 상태를 계산한다.
+/// 레포를 열 수 없을 때만 `None`. detached HEAD여도 dirty는 계산해 반환한다.
 fn head_sync_status(path: &str) -> Option<Value> {
     let repo = git2::Repository::open(path).ok()?;
-    let head = repo.head().ok()?;
-    // detached HEAD 등 브랜치가 아닌 경우 제외
-    if !head.is_branch() {
-        return None;
-    }
-    let head_name = head.shorthand()?;
-    let branch = repo.find_branch(head_name, git2::BranchType::Local).ok()?;
 
-    let (ahead, behind, has_upstream) = match branch.upstream().ok() {
-        Some(upstream) => {
-            let local = branch.get().target();
-            let remote = upstream.get().target();
-            match (local, remote) {
-                (Some(l), Some(r)) => {
-                    let (a, b) = repo.graph_ahead_behind(l, r).unwrap_or((0, 0));
-                    (a, b, true)
-                }
-                _ => (0, 0, true),
-            }
+    // working-tree 변경 여부 — RepoInfo.isDirty와 동일한 옵션으로 계산
+    let is_dirty = {
+        let mut opts = git2::StatusOptions::new();
+        opts.include_untracked(false).exclude_submodules(true);
+        repo.statuses(Some(&mut opts))
+            .map(|s| !s.is_empty())
+            .unwrap_or(false)
+    };
+
+    // 현재 브랜치 기준 ahead/behind (detached HEAD·upstream 없으면 0/0)
+    let head_branch = repo
+        .head()
+        .ok()
+        .filter(|h| h.is_branch())
+        .and_then(|h| h.shorthand().map(|s| s.to_string()))
+        .and_then(|name| repo.find_branch(&name, git2::BranchType::Local).ok());
+
+    let (branch_name, ahead, behind, has_upstream) = match head_branch {
+        Some(branch) => {
+            let name = branch.name().ok().flatten().unwrap_or("").to_string();
+            let (ahead, behind, has_upstream) = match branch.upstream().ok() {
+                Some(upstream) => match (branch.get().target(), upstream.get().target()) {
+                    (Some(l), Some(r)) => {
+                        let (a, b) = repo.graph_ahead_behind(l, r).unwrap_or((0, 0));
+                        (a, b, true)
+                    }
+                    _ => (0, 0, true),
+                },
+                None => (0, 0, false),
+            };
+            (name, ahead, behind, has_upstream)
         }
-        None => (0, 0, false),
+        None => (String::new(), 0, 0, false),
     };
 
     Some(json!({
         "path": path,
-        "branch": head_name,
+        "branch": branch_name,
         "ahead": ahead,
         "behind": behind,
         "hasUpstream": has_upstream,
+        "isDirty": is_dirty,
     }))
 }
 
