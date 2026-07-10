@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getStatus,
   getBranches,
@@ -76,11 +76,25 @@ export function useRepoSyncStatuses(repoPaths: string[]) {
   });
 }
 
-export function useCommitHistory(repoPath: string | null, limit = 50) {
-  return useQuery({
-    queryKey: ["commitHistory", repoPath, limit],
-    queryFn: () => getCommitHistory(repoPath!, limit),
+/** 커밋 히스토리 페이지 크기 — 스크롤 시 이 단위로 추가 로드한다. */
+const COMMIT_HISTORY_PAGE_SIZE = 50;
+
+/**
+ * 커밋 히스토리를 무한 스크롤로 조회한다. 백엔드 get_commit_history의 offset을
+ * 활용해 스크롤 시 다음 페이지를 이어 붙인다. 마지막 페이지가 페이지 크기보다
+ * 적으면 끝으로 판단한다. 키 접두어를 ["commitHistory"]로 유지해 기존 무효화
+ * (commit·switch·fetch 등)가 그대로 적용된다.
+ */
+export function useCommitHistoryInfinite(repoPath: string | null) {
+  return useInfiniteQuery({
+    queryKey: ["commitHistory", repoPath],
+    queryFn: ({ pageParam }) => getCommitHistory(repoPath!, COMMIT_HISTORY_PAGE_SIZE, pageParam),
     enabled: repoPath !== null,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length === COMMIT_HISTORY_PAGE_SIZE
+        ? allPages.length * COMMIT_HISTORY_PAGE_SIZE
+        : undefined,
   });
 }
 

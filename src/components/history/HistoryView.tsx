@@ -1,11 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
-import { useCommitHistory, useCommitAvatars, useBranches, useBranchComparison, useStatus } from "@/api/queries";
+import { useCommitHistoryInfinite, useCommitAvatars, useBranches, useBranchComparison, useStatus } from "@/api/queries";
 import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
 import { BranchCompareView } from "@/components/history/BranchCompareView";
 import { MergeActionPanel } from "@/components/history/MergeActionPanel";
@@ -18,7 +18,17 @@ export function HistoryView() {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const accounts = useAccountStore((s) => s.accounts);
-  const { data: commits = [], isLoading } = useCommitHistory(activeRepoPath);
+  const {
+    data: historyData,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useCommitHistoryInfinite(activeRepoPath);
+  const commits = useMemo(
+    () => historyData?.pages.flat() ?? [],
+    [historyData],
+  );
   const { data: branches = [] } = useBranches(activeRepoPath);
   const { data: githubAvatarMap = {} } = useCommitAvatars(activeRepoPath);
   const compareBranch = useUIStore((s) => s.compareBranch);
@@ -51,6 +61,32 @@ export function HistoryView() {
     onSelect: (c) => selectCommit(c.id),
     selectedIndex: selectedCommitIdx,
   });
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  // 옵저버 콜백이 항상 최신 상태를 읽도록 ref에 보관 (옵저버 재생성 방지)
+  const loadState = useRef({ hasNextPage, isFetchingNextPage, fetchNextPage });
+  useEffect(() => {
+    loadState.current = { hasNextPage, isFetchingNextPage, fetchNextPage };
+  });
+
+  // 하단 sentinel이 뷰포트(스크롤 컨테이너)에 들어오면 다음 페이지를 이어 로드
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    const root = scrollRef.current;
+    if (!sentinel || !root) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        const { hasNextPage: more, isFetchingNextPage: busy, fetchNextPage: load } =
+          loadState.current;
+        if (more && !busy) load();
+      },
+      { root, rootMargin: "300px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [isLoading, compareBranch, activeRepoPath]);
 
   if (isLoading) {
     return (
@@ -103,7 +139,7 @@ export function HistoryView() {
           />
         </>
       ) : (
-        <div className="flex-1 overflow-y-auto" {...containerProps}>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto" {...containerProps}>
           {commits.map((commit: CommitInfo, index: number) => {
             const isUnpushed = index < ahead;
             const emailKey = commit.author.email?.toLowerCase() ?? "";
@@ -140,6 +176,13 @@ export function HistoryView() {
               />
             );
           })}
+          {/* 무한 스크롤 sentinel + 다음 페이지 로딩 표시 */}
+          <div ref={loadMoreRef} />
+          {isFetchingNextPage && (
+            <div className="flex items-center justify-center py-3 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+            </div>
+          )}
         </div>
       )}
     </div>
