@@ -147,6 +147,60 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
     Ok(result)
 }
 
+/// HEAD 브랜치가 upstream 대비 얼마나 앞서/뒤처졌는지를 레포별로 계산한다.
+/// 마지막 fetch 시점의 원격 상태 기준(읽기 전용, 네트워크 없음)이므로 사이드바
+/// 인디케이터처럼 여러 레포를 한 번에 훑는 용도에 적합하다.
+///
+/// 하나의 레포에서 오류가 나도 전체가 실패하지 않도록, 열 수 없거나 HEAD가
+/// 없는(detached·bare 등) 레포는 결과에서 조용히 건너뛴다.
+#[tauri::command]
+pub async fn repo_sync_status(repo_paths: Vec<String>) -> Result<Vec<Value>, AppError> {
+    tokio::task::spawn_blocking(move || {
+        let statuses = repo_paths
+            .iter()
+            .filter_map(|path| head_sync_status(path))
+            .collect::<Vec<Value>>();
+        Ok::<_, AppError>(statuses)
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
+}
+
+/// 단일 레포의 HEAD ahead/behind 상태를 계산한다. 계산 불가 시 `None`.
+fn head_sync_status(path: &str) -> Option<Value> {
+    let repo = git2::Repository::open(path).ok()?;
+    let head = repo.head().ok()?;
+    // detached HEAD 등 브랜치가 아닌 경우 제외
+    if !head.is_branch() {
+        return None;
+    }
+    let head_name = head.shorthand()?;
+    let branch = repo.find_branch(head_name, git2::BranchType::Local).ok()?;
+
+    let (ahead, behind, has_upstream) = match branch.upstream().ok() {
+        Some(upstream) => {
+            let local = branch.get().target();
+            let remote = upstream.get().target();
+            match (local, remote) {
+                (Some(l), Some(r)) => {
+                    let (a, b) = repo.graph_ahead_behind(l, r).unwrap_or((0, 0));
+                    (a, b, true)
+                }
+                _ => (0, 0, true),
+            }
+        }
+        None => (0, 0, false),
+    };
+
+    Some(json!({
+        "path": path,
+        "branch": head_name,
+        "ahead": ahead,
+        "behind": behind,
+        "hasUpstream": has_upstream,
+    }))
+}
+
 #[tauri::command]
 pub async fn create_branch(
     repo_path: String,

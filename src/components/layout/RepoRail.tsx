@@ -15,10 +15,12 @@ import { useUIStore, type RailMode } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
+import { useRepoSyncStatuses } from "@/api/queries";
+import { RepoSyncIndicator } from "@/components/repository/RepoSyncIndicator";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import { groupReposByOwner, type GroupedRepos } from "@/lib/group-repos";
 import { cn } from "@/lib/utils";
-import type { RepoInfo } from "@/types";
+import type { RepoInfo, RepoSyncStatus } from "@/types";
 
 export const RAIL_COLLAPSED_WIDTH = 56;
 export const RAIL_EXPANDED_WIDTH = 220;
@@ -172,6 +174,7 @@ function RailItem({
   isActive,
   isFetching,
   expanded,
+  syncStatus,
   onSelect,
   onHoverStart,
   onHoverEnd,
@@ -180,6 +183,7 @@ function RailItem({
   isActive: boolean;
   isFetching: boolean;
   expanded: boolean;
+  syncStatus?: RepoSyncStatus;
   onSelect: () => void;
   onHoverStart?: (name: string, rect: DOMRect) => void;
   onHoverEnd?: () => void;
@@ -207,11 +211,21 @@ function RailItem({
       {isActive && (
         <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary" />
       )}
-      <span
-        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs font-semibold"
-        style={{ backgroundColor: color.background, color: color.foreground }}
-      >
-        {initial}
+      <span className="relative shrink-0">
+        <span
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-semibold"
+          style={{ backgroundColor: color.background, color: color.foreground }}
+        >
+          {initial}
+        </span>
+        {/* Collapsed 모드는 이름/카운트 공간이 없어 아바타 코너에 점만 표시 */}
+        {!expanded && (
+          <RepoSyncIndicator
+            status={syncStatus}
+            variant="dot"
+            className="absolute -top-0.5 -right-0.5 ring-2 ring-surface"
+          />
+        )}
       </span>
 
       {expanded && (
@@ -225,9 +239,12 @@ function RailItem({
         </span>
       )}
 
-      {expanded && isFetching && (
-        <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
-      )}
+      {expanded &&
+        (isFetching ? (
+          <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
+        ) : (
+          <RepoSyncIndicator status={syncStatus} variant="badge" />
+        ))}
     </button>
   );
 }
@@ -243,6 +260,8 @@ export function RepoRail() {
   const favoriteRepos = useRepositoryStore((s) => s.favoriteRepos);
   const ownerTypes = useRepositoryStore((s) => s.ownerTypes);
   const accounts = useAccountStore((s) => s.accounts);
+  const repoPaths = useMemo(() => repos.map((r) => r.path), [repos]);
+  const { data: syncMap } = useRepoSyncStatuses(repoPaths);
   const { selectRepo, fetchingPath } = useSelectRepo();
   const [hovered, setHovered] = useState(false);
   const [tip, setTip] = useState<{ name: string; y: number } | null>(null);
@@ -325,6 +344,7 @@ export function RepoRail() {
                   isActive={repo.path === activeRepoPath}
                   isFetching={fetchingPath === repo.path}
                   expanded={isExpanded}
+                  syncStatus={syncMap?.[repo.path]}
                   onSelect={() => selectRepo(repo.path)}
                   onHoverStart={handleHoverStart}
                   onHoverEnd={handleHoverEnd}

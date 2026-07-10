@@ -64,6 +64,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const invalidateAll = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["branches"] }),
+      queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] }),
       queryClient.invalidateQueries({ queryKey: ["status"] }),
       queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
       queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),

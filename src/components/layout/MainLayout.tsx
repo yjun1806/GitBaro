@@ -1,6 +1,7 @@
 import { useRef, useCallback } from "react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
+import { useBackgroundFetch } from "@/hooks/useBackgroundFetch";
 import "@/stores/selection"; // ensure cross-store subscriptions are registered
 import { RepoRail } from "./RepoRail";
 import { Sidebar } from "./Sidebar";
@@ -19,6 +20,9 @@ export function MainLayout() {
   const setRepoListOpen = useUIStore((s) => s.setRepoListOpen);
 
   useRepositoryStore((s) => s.activeRepoPath);
+
+  // 열린 모든 레포를 주기적으로 fetch해 사이드바 push/pull 인디케이터를 최신화
+  useBackgroundFetch();
 
   const isDragging = useRef(false);
   const startX = useRef(0);

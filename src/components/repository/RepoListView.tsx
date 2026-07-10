@@ -34,6 +34,8 @@ import { extractOwnerFromRemoteUrl, groupReposByOwner, type GroupedRepos } from 
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
+import { RepoSyncIndicator } from "@/components/repository/RepoSyncIndicator";
+import { useRepoSyncStatuses } from "@/api/queries";
 import type { GitHubAccount, RepoInfo } from "@/types";
 
 /* ─── RepoContextMenu ─── */
@@ -148,6 +150,8 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
   const addRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const repos = useRepositoryStore((s) => s.repos);
+  const repoPaths = useMemo(() => repos.map((r) => r.path), [repos]);
+  const { data: syncMap } = useRepoSyncStatuses(repoPaths);
   const addRepo = useRepositoryStore((s) => s.addRepo);
   const removeRepo = useRepositoryStore((s) => s.removeRepo);
   const activeRepo = useRepositoryStore((s) => s.activeRepo);
@@ -497,6 +501,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                           </div>
                           {/* State indicators + actions */}
                           <div className="flex items-center gap-1 shrink-0">
+                            <RepoSyncIndicator status={syncMap?.[repo.path]} variant="badge" />
                             {repo.isDirty && (
                               <Circle
                                 className={cn(

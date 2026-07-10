@@ -143,6 +143,18 @@ export interface RepoInfo {
   isWorktree?: boolean;
 }
 
+/**
+ * HEAD 브랜치가 upstream 대비 얼마나 앞서/뒤처졌는지. 마지막 fetch 시점의
+ * 원격 상태 기준이라 behind는 백그라운드 fetch 이후에 갱신된다.
+ */
+export interface RepoSyncStatus {
+  path: string;
+  branch: string;
+  ahead: number;
+  behind: number;
+  hasUpstream: boolean;
+}
+
 export interface RemoteInfo {
   name: string;
   url: string;

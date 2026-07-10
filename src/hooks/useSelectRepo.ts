@@ -37,6 +37,7 @@ export function useSelectRepo() {
           .then(() => {
             fetchedRepos.add(path);
             queryClient.invalidateQueries({ queryKey: ["branches"] });
+            queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
             queryClient.invalidateQueries({ queryKey: ["commitHistory"] });
             queryClient.invalidateQueries({ queryKey: ["status"] });
           })

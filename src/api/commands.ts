@@ -6,6 +6,7 @@ import type {
   BinaryPreview,
   RepoInfo,
   BranchInfo,
+  RepoSyncStatus,
   CommitInfo,
   GitHubAccount,
   GhStatus,
@@ -196,6 +197,10 @@ export async function getOwnerType(
 // Branches
 export async function getBranches(repoPath: string): Promise<BranchInfo[]> {
   return invoke("get_branches", { repoPath });
+}
+
+export async function getRepoSyncStatus(repoPaths: string[]): Promise<RepoSyncStatus[]> {
+  return invoke("repo_sync_status", { repoPaths });
 }
 
 export async function createBranch(

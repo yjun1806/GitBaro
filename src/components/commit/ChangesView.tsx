@@ -186,6 +186,7 @@ export function ChangesView() {
         queryClient.invalidateQueries({ queryKey: ["status"] }),
         queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
         queryClient.invalidateQueries({ queryKey: ["branches"] }),
+        queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] }),
         queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
       ]);
     } catch (err) {

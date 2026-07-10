@@ -78,6 +78,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const invalidateAll = (includeActions = false) => {
     const queries = Promise.all([
       queryClient.invalidateQueries({ queryKey: ["branches"] }),
+      queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] }),
       queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
       queryClient.invalidateQueries({ queryKey: ["status"] }),
       queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),

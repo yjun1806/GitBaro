@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getStatus,
   getBranches,
+  getRepoSyncStatus,
   getRecentBranches,
   getCommitHistory,
   getCommitDetail,
@@ -29,6 +30,7 @@ import {
   abortMergeOrRebase,
   continueMergeOrRebase,
 } from "./commands";
+import type { RepoSyncStatus } from "@/types";
 
 export function useStatus(repoPath: string | null) {
   return useQuery({
@@ -49,6 +51,24 @@ export function useBranches(repoPath: string | null) {
     queryKey: ["branches", repoPath],
     queryFn: () => getBranches(repoPath!),
     enabled: repoPath !== null,
+  });
+}
+
+/**
+ * 여러 레포의 push/pull 필요 상태(ahead/behind)를 한 번에 조회한다.
+ * 경로별 `RepoSyncStatus` 맵으로 반환하며, 마지막 fetch 시점 기준이므로
+ * 백그라운드 fetch(useBackgroundFetch) 완료 시 `["repoSyncStatus"]` 무효화로
+ * 갱신된다. 키를 정렬된 경로 목록으로 삼아 레포 목록 변화에만 반응한다.
+ */
+export function useRepoSyncStatuses(repoPaths: string[]) {
+  const sortedPaths = [...repoPaths].sort();
+  return useQuery({
+    queryKey: ["repoSyncStatus", sortedPaths],
+    queryFn: () => getRepoSyncStatus(sortedPaths),
+    enabled: sortedPaths.length > 0,
+    staleTime: 15_000,
+    select: (statuses): Record<string, RepoSyncStatus> =>
+      Object.fromEntries(statuses.map((s) => [s.path, s])),
   });
 }
 
