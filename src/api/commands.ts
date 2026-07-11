@@ -110,6 +110,30 @@ export async function discardChanges(repoPath: string, paths: string[]): Promise
   return invoke("discard_changes", { repoPath, paths });
 }
 
+export async function addToGitignore(repoPath: string, pattern: string): Promise<void> {
+  return invoke("add_to_gitignore", { repoPath, pattern });
+}
+
+// ── Commit operations (checkout/reset/revert/cherry-pick) ────────────────────
+
+export async function checkoutCommit(repoPath: string, oid: string): Promise<void> {
+  return invoke("checkout_commit", { repoPath, oid });
+}
+
+export type ResetMode = "soft" | "mixed" | "hard";
+
+export async function resetToCommit(repoPath: string, oid: string, mode: ResetMode): Promise<void> {
+  return invoke("reset_to_commit", { repoPath, oid, mode });
+}
+
+export async function revertCommit(repoPath: string, oid: string): Promise<void> {
+  return invoke("revert_commit", { repoPath, oid });
+}
+
+export async function cherryPickCommit(repoPath: string, oid: string): Promise<void> {
+  return invoke("cherry_pick_commit", { repoPath, oid });
+}
+
 export async function gitFetch(repoPath: string, accountId: string): Promise<void> {
   return invoke("git_fetch", { repoPath, accountId });
 }

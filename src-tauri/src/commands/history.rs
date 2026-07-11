@@ -383,3 +383,74 @@ pub async fn resolve_commit_avatars(
         Err(_) => Ok(HashMap::new()),
     }
 }
+
+// ─── Commit operations (checkout/reset/revert/cherry-pick) ───────────────────
+// Write ops that may trigger hooks → GitCliEngine (not libgit2). The oid comes
+// from the history list but is validated as hex to prevent option injection.
+
+/// Check out a commit as a detached HEAD.
+#[tauri::command]
+pub async fn checkout_commit(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    oid: String,
+) -> Result<(), AppError> {
+    crate::git::commit::validate_commit_oid(&oid)?;
+    let engine =
+        crate::git::cli::GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    engine.checkout_commit(&oid).await?;
+    tracing::info!("Checked out commit: {}", oid);
+    Ok(())
+}
+
+/// Reset the current branch to a commit. `mode` is "soft" | "mixed" | "hard".
+#[tauri::command]
+pub async fn reset_to_commit(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    oid: String,
+    mode: String,
+) -> Result<(), AppError> {
+    crate::git::commit::validate_commit_oid(&oid)?;
+    if !matches!(mode.as_str(), "soft" | "mixed" | "hard") {
+        return Err(AppError::GitCli {
+            message: format!("Invalid reset mode: '{}'", mode),
+            exit_code: None,
+        });
+    }
+    let engine =
+        crate::git::cli::GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    engine.reset_to_commit(&oid, &mode).await?;
+    tracing::info!("Reset to commit {} ({})", oid, mode);
+    Ok(())
+}
+
+/// Create a commit that reverts a commit.
+#[tauri::command]
+pub async fn revert_commit(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    oid: String,
+) -> Result<(), AppError> {
+    crate::git::commit::validate_commit_oid(&oid)?;
+    let engine =
+        crate::git::cli::GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    engine.revert_commit(&oid).await?;
+    tracing::info!("Reverted commit: {}", oid);
+    Ok(())
+}
+
+/// Cherry-pick a commit onto the current branch.
+#[tauri::command]
+pub async fn cherry_pick_commit(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    oid: String,
+) -> Result<(), AppError> {
+    crate::git::commit::validate_commit_oid(&oid)?;
+    let engine =
+        crate::git::cli::GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    engine.cherry_pick_commit(&oid).await?;
+    tracing::info!("Cherry-picked commit: {}", oid);
+    Ok(())
+}

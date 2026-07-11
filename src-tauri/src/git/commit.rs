@@ -12,6 +12,20 @@ pub fn validate_message(message: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Validate a commit id (oid) for use as a git CLI argument.
+/// Must be hex only and 4..=64 chars — this both rejects garbage and prevents
+/// option injection (a leading '-' is not a hex digit).
+pub fn validate_commit_oid(oid: &str) -> Result<(), AppError> {
+    let valid = (4..=64).contains(&oid.len()) && oid.chars().all(|c| c.is_ascii_hexdigit());
+    if !valid {
+        return Err(AppError::GitCli {
+            message: format!("Invalid commit id: '{}'", oid),
+            exit_code: None,
+        });
+    }
+    Ok(())
+}
+
 /// Extract the subject line (first line) from a commit message.
 pub fn subject_line(message: &str) -> &str {
     message.lines().next().unwrap_or("").trim()
@@ -60,5 +74,42 @@ pub fn commit_to_info(commit: &git2::Commit<'_>) -> CommitInfo {
         committer,
         timestamp,
         parent_ids,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_full_length_lowercase_hex_oid() {
+        let oid = "0123456789abcdef0123456789abcdef01234567"; // 40 chars
+        assert!(validate_commit_oid(oid).is_ok());
+    }
+
+    #[test]
+    fn accepts_short_hex_oid() {
+        assert!(validate_commit_oid("1a2b3c4").is_ok()); // 7 chars
+    }
+
+    #[test]
+    fn rejects_too_short_oid() {
+        assert!(validate_commit_oid("abc").is_err()); // 3 chars
+    }
+
+    #[test]
+    fn rejects_too_long_oid() {
+        let oid = "a".repeat(65); // 65 chars
+        assert!(validate_commit_oid(&oid).is_err());
+    }
+
+    #[test]
+    fn rejects_non_hex_chars() {
+        assert!(validate_commit_oid("zzzz1234").is_err());
+    }
+
+    #[test]
+    fn rejects_leading_dash_option_injection() {
+        assert!(validate_commit_oid("-rf").is_err());
     }
 }

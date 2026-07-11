@@ -708,3 +708,50 @@ pub async fn stash_push_partial(
     tracing::info!("Stash pushed (partial): {} files", paths.len());
     Ok(())
 }
+
+/// Append `pattern` to the repo's `.gitignore` (creating it if absent).
+/// Skips when an identical trimmed line already exists. Pure file write — no
+/// git invocation needed.
+#[tauri::command]
+pub async fn add_to_gitignore(repo_path: String, pattern: String) -> Result<(), AppError> {
+    let log_pattern = pattern.clone();
+    tokio::task::spawn_blocking(move || {
+        let entry = pattern.trim();
+        if entry.is_empty() {
+            return Err(AppError::GitCli {
+                message: "gitignore pattern cannot be empty".to_string(),
+                exit_code: None,
+            });
+        }
+        // 정확히 이 파일만 무시하도록 루트 기준으로 앵커링한다. 선행 슬래시가
+        // 없으면 같은 이름의 모든 경로가 무시되므로 '/'를 붙인다.
+        let anchored = if entry.starts_with('/') {
+            entry.to_string()
+        } else {
+            format!("/{entry}")
+        };
+        let path = std::path::Path::new(&repo_path).join(".gitignore");
+        // NotFound는 "새로 생성"으로, 그 외 읽기 오류는 전파한다. unwrap_or_default로
+        // 삼키면 읽기 실패 시 기존 .gitignore를 통째로 덮어써 내용이 유실될 수 있다.
+        let existing = match std::fs::read_to_string(&path) {
+            Ok(s) => s,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(e) => return Err(e.into()),
+        };
+        if existing.lines().any(|line| line.trim() == anchored) {
+            return Ok(()); // 이미 무시 목록에 있음
+        }
+        let mut content = existing;
+        if !content.is_empty() && !content.ends_with('\n') {
+            content.push('\n');
+        }
+        content.push_str(&anchored);
+        content.push('\n');
+        std::fs::write(&path, content)?;
+        Ok::<_, AppError>(())
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+    tracing::info!("Added to .gitignore: {}", log_pattern);
+    Ok(())
+}

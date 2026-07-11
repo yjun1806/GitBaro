@@ -322,6 +322,41 @@ impl GitCliEngine {
         Ok(())
     }
 
+    /// Check out a specific commit as a detached HEAD. Runs post-checkout hook.
+    /// `oid` must be a validated hex commit id (see `validate_commit_oid`), so no
+    /// `--` separator is needed to guard against option injection.
+    pub async fn checkout_commit(&self, oid: &str) -> Result<(), AppError> {
+        self.run_local_checked(&["checkout", oid]).await?;
+        Ok(())
+    }
+
+    /// Move HEAD (and optionally index/working tree) to `oid`.
+    /// `mode` is one of "soft" | "mixed" | "hard"; unknown values fall back to
+    /// "mixed" (git's default). `oid` must be a validated hex commit id.
+    pub async fn reset_to_commit(&self, oid: &str, mode: &str) -> Result<(), AppError> {
+        let flag = match mode {
+            "soft" => "--soft",
+            "hard" => "--hard",
+            _ => "--mixed",
+        };
+        self.run_local_checked(&["reset", flag, oid]).await?;
+        Ok(())
+    }
+
+    /// Create a new commit that undoes `oid`. `--no-edit` keeps the default
+    /// revert message. `oid` must be a validated hex commit id.
+    pub async fn revert_commit(&self, oid: &str) -> Result<(), AppError> {
+        self.run_local_checked(&["revert", "--no-edit", oid]).await?;
+        Ok(())
+    }
+
+    /// Apply the changes introduced by `oid` on top of the current branch.
+    /// `oid` must be a validated hex commit id.
+    pub async fn cherry_pick_commit(&self, oid: &str) -> Result<(), AppError> {
+        self.run_local_checked(&["cherry-pick", oid]).await?;
+        Ok(())
+    }
+
     /// Stash working changes via git CLI.
     pub async fn stash_save(&self, message: Option<&str>) -> Result<(), AppError> {
         let mut args = vec!["stash", "push"];
