@@ -15,8 +15,9 @@ import { useUIStore, type RailMode } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
-import { useRepoSyncStatuses } from "@/api/queries";
+import { useRepoSyncStatuses, useSettings } from "@/api/queries";
 import { RepoSyncIndicator } from "@/components/repository/RepoSyncIndicator";
+import { RepoHeaderContextMenu } from "@/components/repository/RepoHeaderContextMenu";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import { groupReposByOwner, type GroupedRepos } from "@/lib/group-repos";
 import { cn } from "@/lib/utils";
@@ -176,6 +177,7 @@ function RailItem({
   expanded,
   syncStatus,
   onSelect,
+  onContextMenu,
   onHoverStart,
   onHoverEnd,
 }: {
@@ -185,6 +187,7 @@ function RailItem({
   expanded: boolean;
   syncStatus?: RepoSyncStatus;
   onSelect: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   onHoverStart?: (name: string, rect: DOMRect) => void;
   onHoverEnd?: () => void;
 }) {
@@ -195,6 +198,7 @@ function RailItem({
   return (
     <button
       onClick={onSelect}
+      onContextMenu={onContextMenu}
       title={expanded ? repo.name : undefined}
       onMouseEnter={
         onHoverStart
@@ -279,9 +283,12 @@ export function RepoRail() {
   const accounts = useAccountStore((s) => s.accounts);
   const repoPaths = useMemo(() => repos.map((r) => r.path), [repos]);
   const { data: syncMap } = useRepoSyncStatuses(repoPaths);
+  const { data: settingsData = null } = useSettings();
+  const removeRepo = useRepositoryStore((s) => s.removeRepo);
   const { selectRepo, fetchingPath } = useSelectRepo();
   const [hovered, setHovered] = useState(false);
   const [tip, setTip] = useState<{ name: string; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ repo: RepoInfo; x: number; y: number } | null>(null);
 
   const isExpanded = railMode === "expanded" || (railMode === "hover" && hovered);
   const flowWidth = railMode === "expanded" ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
@@ -363,6 +370,10 @@ export function RepoRail() {
                   expanded={isExpanded}
                   syncStatus={syncMap?.[repo.path]}
                   onSelect={() => selectRepo(repo.path)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({ repo, x: e.clientX, y: e.clientY });
+                  }}
                   onHoverStart={handleHoverStart}
                   onHoverEnd={handleHoverEnd}
                 />
@@ -383,6 +394,20 @@ export function RepoRail() {
         >
           {tip.name}
         </div>
+      )}
+
+      {/* Repo 우클릭 메뉴 — 사이드바 헤더와 동일 액션 재사용 */}
+      {menu && (
+        <RepoHeaderContextMenu
+          repo={menu.repo}
+          settings={settingsData}
+          position={{ x: menu.x, y: menu.y }}
+          onRemove={() => {
+            removeRepo(menu.repo.path);
+            setMenu(null);
+          }}
+          onClose={() => setMenu(null)}
+        />
       )}
     </div>
   );

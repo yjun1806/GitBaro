@@ -14,6 +14,7 @@ interface ActionsRunItemProps {
   isSelected?: boolean;
   isHighlighted?: boolean;
   onClick?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   ref?: React.Ref<HTMLButtonElement>;
 }
 
@@ -43,6 +44,7 @@ export function ActionsRunItem({
   isSelected,
   isHighlighted,
   onClick,
+  onContextMenu,
   ref,
 }: ActionsRunItemProps) {
   const createdTimestamp = Math.floor(new Date(run.createdAt).getTime() / 1000);
@@ -51,6 +53,7 @@ export function ActionsRunItem({
     <button
       ref={ref}
       onClick={onClick}
+      onContextMenu={onContextMenu}
       className={cn(
         "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors border-b border-border select-none",
         isSelected

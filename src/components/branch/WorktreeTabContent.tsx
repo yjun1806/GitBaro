@@ -2,6 +2,7 @@ import { useState } from "react";
 import { GitBranch, Trash2, Lock } from "lucide-react";
 import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { useTranslation } from "react-i18next";
+import { WorktreeContextMenu } from "@/components/branch/WorktreeContextMenu";
 import type { WorktreeInfo } from "@/types";
 
 interface WorktreeTabContentProps {
@@ -17,6 +18,7 @@ export function WorktreeTabContent({
 }: WorktreeTabContentProps) {
   const { t } = useTranslation();
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ wt: WorktreeInfo; x: number; y: number } | null>(null);
 
   if (worktrees.length === 0) {
     return (
@@ -38,6 +40,10 @@ export function WorktreeTabContent({
           <div key={wt.path} className="relative group">
             <button
               onClick={() => onOpen(wt.path)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setMenu({ wt, x: e.clientX, y: e.clientY });
+              }}
               className="w-full flex items-start gap-2.5 px-3 py-2 text-left hover:bg-accent transition-colors"
             >
               <WorktreeIcon className="w-4 h-4 mt-0.5" />
@@ -124,6 +130,17 @@ export function WorktreeTabContent({
           </div>
         );
       })}
+
+      {menu && (
+        <WorktreeContextMenu
+          isLocked={menu.wt.isLocked}
+          position={{ x: menu.x, y: menu.y }}
+          onOpen={() => onOpen(menu.wt.path)}
+          onCopyPath={() => navigator.clipboard.writeText(menu.wt.path)}
+          onRemove={() => setConfirmRemove(menu.wt.path)}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 }

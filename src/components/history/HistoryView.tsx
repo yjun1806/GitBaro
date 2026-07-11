@@ -1,16 +1,24 @@
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, Loader2 } from "lucide-react";
+import { ask } from "@tauri-apps/plugin-dialog";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
 import { useCommitHistoryInfinite, useCommitAvatars, useBranches, useBranchComparison, useStatus } from "@/api/queries";
+import { createBranch, type ResetMode } from "@/api/commands";
+import { useCommitActions } from "@/hooks/useCommitActions";
+import { useToastStore } from "@/stores/toast";
 import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
 import { BranchCompareView } from "@/components/history/BranchCompareView";
 import { MergeActionPanel } from "@/components/history/MergeActionPanel";
 import { CommitItem } from "@/components/history/CommitItem";
-import { cn } from "@/lib/utils";
+import { CommitContextMenu } from "@/components/history/CommitContextMenu";
+import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
+import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import type { CommitInfo } from "@/types";
 
@@ -69,6 +77,60 @@ export function HistoryView() {
   useEffect(() => {
     loadState.current = { hasNextPage, isFetchingNextPage, fetchNextPage };
   });
+
+  const queryClient = useQueryClient();
+  const addToast = useToastStore((s) => s.addToast);
+  const { checkout, reset, revert, cherryPick } = useCommitActions(activeRepoPath);
+  // 우클릭 메뉴 대상 커밋 + 좌표
+  const [menu, setMenu] = useState<{ commit: CommitInfo; x: number; y: number } | null>(null);
+  // 모드 선택이 필요한 reset, 이름 입력이 필요한 브랜치 생성 다이얼로그 대상 커밋
+  const [resetTarget, setResetTarget] = useState<CommitInfo | null>(null);
+  const [branchTarget, setBranchTarget] = useState<CommitInfo | null>(null);
+
+  const handleCheckout = async (commit: CommitInfo) => {
+    const ok = await ask(t("history.checkoutConfirm", { shortId: commit.shortId }), {
+      title: t("history.contextMenu.checkout"),
+      kind: "warning",
+    });
+    if (ok) checkout(commit.id);
+  };
+
+  const handleRevert = async (commit: CommitInfo) => {
+    const ok = await ask(t("history.revertConfirm", { shortId: commit.shortId }), {
+      title: t("history.contextMenu.revert"),
+      kind: "warning",
+    });
+    if (ok) revert(commit.id);
+  };
+
+  const handleCherryPick = async (commit: CommitInfo) => {
+    const ok = await ask(t("history.cherryPickConfirm", { shortId: commit.shortId }), {
+      title: t("history.contextMenu.cherryPick"),
+      kind: "warning",
+    });
+    if (ok) cherryPick(commit.id);
+  };
+
+  const handleCreateBranchFromCommit = async (name: string) => {
+    if (!activeRepoPath || !branchTarget) return;
+    const oid = branchTarget.id;
+    setBranchTarget(null);
+    try {
+      await createBranch(activeRepoPath, name, oid);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["branches"] }),
+        queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] }),
+      ]);
+      addToast(t("history.branchCreated", { name }), "success");
+    } catch (err) {
+      addToast(getErrorMessage(err), "error");
+    }
+  };
+
+  const handleResetConfirm = (mode: ResetMode) => {
+    if (resetTarget) reset(resetTarget.id, mode);
+    setResetTarget(null);
+  };
 
   // 하단 sentinel이 뷰포트(스크롤 컨테이너)에 들어오면 다음 페이지를 이어 로드
   useEffect(() => {
@@ -156,6 +218,11 @@ export function HistoryView() {
                 isHighlighted={activeIndex === index}
                 avatarUrl={avatarSrc}
                 onClick={() => selectCommit(commit.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  selectCommit(commit.id);
+                  setMenu({ commit, x: e.clientX, y: e.clientY });
+                }}
                 trailing={
                   isUnpushed ? (
                     <div
@@ -184,6 +251,37 @@ export function HistoryView() {
             </div>
           )}
         </div>
+      )}
+
+      {/* 커밋 우클릭 메뉴 */}
+      {menu && (
+        <CommitContextMenu
+          position={{ x: menu.x, y: menu.y }}
+          onCopyHash={() => navigator.clipboard.writeText(menu.commit.id)}
+          onCopyMessage={() => navigator.clipboard.writeText(menu.commit.message)}
+          onCreateBranch={() => setBranchTarget(menu.commit)}
+          onCheckout={() => handleCheckout(menu.commit)}
+          onReset={() => setResetTarget(menu.commit)}
+          onRevert={() => handleRevert(menu.commit)}
+          onCherryPick={() => handleCherryPick(menu.commit)}
+          onClose={() => setMenu(null)}
+        />
+      )}
+
+      {resetTarget && (
+        <ResetCommitDialog
+          shortId={resetTarget.shortId}
+          onConfirm={handleResetConfirm}
+          onClose={() => setResetTarget(null)}
+        />
+      )}
+
+      {branchTarget && (
+        <CommitBranchDialog
+          shortId={branchTarget.shortId}
+          onCreate={handleCreateBranchFromCommit}
+          onClose={() => setBranchTarget(null)}
+        />
       )}
     </div>
   );

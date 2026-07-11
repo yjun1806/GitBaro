@@ -6,9 +6,10 @@ import { useBranchStore } from "@/stores/branch";
 import { useAccountStore } from "@/stores/account";
 import { useSelectionStore } from "@/stores/selection";
 import { useStatus } from "@/api/queries";
-import { createCommit, stageFiles, unstageFiles, openInEditor, discardChanges } from "@/api/commands";
+import { createCommit, stageFiles, unstageFiles, openInEditor, discardChanges, revealInFinder, addToGitignore } from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
 import { FileEntry } from "@/components/commit/FileEntry";
+import { FileContextMenu } from "@/components/commit/FileContextMenu";
 import { MergeConflictBanner } from "@/components/conflict/MergeConflictBanner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -76,6 +77,57 @@ export function ChangesView() {
       }
     }
   };
+
+  // 우클릭 메뉴 대상 파일 + 좌표
+  const [fileMenu, setFileMenu] = useState<
+    { entry: (typeof statusEntries)[number]; x: number; y: number } | null
+  >(null);
+
+  const refreshStatus = useCallback(
+    () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["status"] }),
+        queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+      ]),
+    [queryClient],
+  );
+
+  const handleToggleStage = useCallback(
+    async (entry: (typeof statusEntries)[number]) => {
+      if (!activeRepoPath) return;
+      try {
+        if (entry.staged) await unstageFiles(activeRepoPath, [entry.path]);
+        else await stageFiles(activeRepoPath, [entry.path]);
+        await refreshStatus();
+      } catch (err) {
+        const key = entry.staged ? "commit.unstageFailed" : "commit.stageFailed";
+        addToast(t(key, { error: getErrorMessage(err) }), "error");
+      }
+    },
+    [activeRepoPath, refreshStatus, addToast, t],
+  );
+
+  const handleRevealFile = useCallback(
+    (path: string) => {
+      if (!activeRepoPath) return;
+      revealInFinder(`${activeRepoPath}/${path}`);
+    },
+    [activeRepoPath],
+  );
+
+  const handleAddToGitignore = useCallback(
+    async (path: string) => {
+      if (!activeRepoPath) return;
+      try {
+        await addToGitignore(activeRepoPath, path);
+        await refreshStatus();
+        addToast(t("changes.addedToGitignore", { path }), "success");
+      } catch (err) {
+        addToast(getErrorMessage(err), "error");
+      }
+    },
+    [activeRepoPath, refreshStatus, addToast, t],
+  );
 
   // Memoize the split so downstream group memos aren't invalidated by a new
   // array identity on every keystroke in the commit message inputs.
@@ -256,18 +308,12 @@ export function ChangesView() {
                         isHighlighted={activeIndex === navIdx && navIdx >= 0}
                         onClick={() => selectFile(entry.path, entry.staged)}
                         onDoubleClick={() => handleOpenInEditor(entry.path)}
-                        onToggleStage={async () => {
-                          if (!activeRepoPath) return;
-                          try {
-                            await unstageFiles(activeRepoPath, [entry.path]);
-                            await Promise.all([
-                              queryClient.invalidateQueries({ queryKey: ["status"] }),
-                              queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-                            ]);
-                          } catch (err) {
-                            addToast(t("commit.unstageFailed", { error: getErrorMessage(err) }), "error");
-                          }
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          selectFile(entry.path, entry.staged);
+                          setFileMenu({ entry, x: e.clientX, y: e.clientY });
                         }}
+                        onToggleStage={() => handleToggleStage(entry)}
                       />
                     );
                   })}
@@ -326,23 +372,17 @@ export function ChangesView() {
                         isHighlighted={activeIndex === navIdx && navIdx >= 0}
                         onClick={() => selectFile(entry.path, entry.staged)}
                         onDoubleClick={() => handleOpenInEditor(entry.path)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          selectFile(entry.path, entry.staged);
+                          setFileMenu({ entry, x: e.clientX, y: e.clientY });
+                        }}
                         onDiscard={
                           entry.status === "conflicted"
                             ? undefined
                             : () => setDiscardTarget(entry.path)
                         }
-                        onToggleStage={async () => {
-                          if (!activeRepoPath) return;
-                          try {
-                            await stageFiles(activeRepoPath, [entry.path]);
-                            await Promise.all([
-                              queryClient.invalidateQueries({ queryKey: ["status"] }),
-                              queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-                            ]);
-                          } catch (err) {
-                            addToast(t("commit.stageFailed", { error: getErrorMessage(err) }), "error");
-                          }
-                        }}
+                        onToggleStage={() => handleToggleStage(entry)}
                       />
                     );
                   })}
@@ -454,6 +494,22 @@ export function ChangesView() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 파일 우클릭 메뉴 */}
+      {fileMenu && (
+        <FileContextMenu
+          staged={fileMenu.entry.staged}
+          canDiscard={!fileMenu.entry.staged && fileMenu.entry.status !== "conflicted"}
+          position={{ x: fileMenu.x, y: fileMenu.y }}
+          onToggleStage={() => handleToggleStage(fileMenu.entry)}
+          onOpenEditor={() => handleOpenInEditor(fileMenu.entry.path)}
+          onReveal={() => handleRevealFile(fileMenu.entry.path)}
+          onCopyPath={() => navigator.clipboard.writeText(fileMenu.entry.path)}
+          onAddToGitignore={() => handleAddToGitignore(fileMenu.entry.path)}
+          onDiscard={() => setDiscardTarget(fileMenu.entry.path)}
+          onClose={() => setFileMenu(null)}
+        />
       )}
     </div>
   );

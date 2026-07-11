@@ -41,7 +41,17 @@
     "discardFailed": "Failed to discard: {{error}}",
     "cancel": "Cancel",
     "rootFiles": "Root",
-    "filesCount": "{{count}} files"
+    "filesCount": "{{count}} files",
+    "addedToGitignore": "Added \"{{path}}\" to .gitignore",
+    "contextMenu": {
+      "stage": "Stage file",
+      "unstage": "Unstage file",
+      "openInEditor": "Open in editor",
+      "revealInFinder": "Reveal in Finder",
+      "copyPath": "Copy path",
+      "addToGitignore": "Add to .gitignore",
+      "discard": "Discard changes"
+    }
   },
   "commit": {
     "summary": "Summary (required)",
@@ -72,7 +82,36 @@
     "commitHash": "Commit",
     "parents": "Parents",
     "changedFiles": "Changed Files",
-    "loadingHistory": "Loading history"
+    "loadingHistory": "Loading history",
+    "contextMenu": {
+      "createBranch": "Create branch here…",
+      "checkout": "Check out this commit",
+      "reset": "Reset to this commit…",
+      "revert": "Revert this commit",
+      "cherryPick": "Cherry-pick to current branch",
+      "copyHash": "Copy commit SHA",
+      "copyMessage": "Copy commit message"
+    },
+    "createBranchFrom": "New branch from {{shortId}}",
+    "branchCreated": "Created branch {{name}}",
+    "checkoutConfirm": "Check out commit {{shortId}}? This detaches HEAD from any branch.",
+    "checkoutSuccess": "Checked out commit",
+    "revertConfirm": "Create a commit that reverts {{shortId}}?",
+    "revertSuccess": "Commit reverted",
+    "cherryPickConfirm": "Cherry-pick {{shortId}} onto the current branch?",
+    "cherryPickSuccess": "Commit cherry-picked",
+    "resetSuccess": "Branch reset",
+    "reset": {
+      "title": "Reset to {{shortId}}",
+      "soft": "Soft",
+      "softDesc": "Move HEAD only. Staged changes and working tree are kept.",
+      "mixed": "Mixed",
+      "mixedDesc": "Move HEAD and unstage changes. Working tree is kept.",
+      "hard": "Hard",
+      "hardDesc": "Move HEAD and discard all staged and working-tree changes.",
+      "hardWarning": "A hard reset permanently discards uncommitted changes.",
+      "confirm": "Reset"
+    }
   },
   "branch": {
     "title": "Branches",
@@ -134,6 +173,10 @@
   },
   "worktree": {
     "title": "Worktrees",
+    "contextMenu": {
+      "open": "Open worktree",
+      "copyPath": "Copy path"
+    },
     "newWorktree": "New worktree",
     "create": "Create Worktree",
     "remove": "Remove Worktree",
@@ -564,6 +607,10 @@
   },
   "actions": {
     "title": "Actions",
+    "contextMenu": {
+      "openInBrowser": "Open in browser",
+      "copyUrl": "Copy run URL"
+    },
     "noRuns": "No workflow runs",
     "noRunsDescription": "No GitHub Actions runs found for this repository",
     "selectRun": "Select a run to view details",

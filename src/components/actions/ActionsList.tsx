@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Play, Loader2 } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { ActionsRunItem } from "./ActionsRunItem";
+import { ActionsRunContextMenu } from "./ActionsRunContextMenu";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import type { WorkflowRun } from "@/types";
 
@@ -18,6 +21,7 @@ export function ActionsList({
   onSelectRun,
 }: ActionsListProps) {
   const { t } = useTranslation();
+  const [menu, setMenu] = useState<{ run: WorkflowRun; x: number; y: number } | null>(null);
 
   const selectedIdx = runs.findIndex((r) => r.id === selectedRunId);
 
@@ -60,8 +64,23 @@ export function ActionsList({
           isSelected={selectedRunId === run.id}
           isHighlighted={activeIndex === index}
           onClick={() => onSelectRun(run.id)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onSelectRun(run.id);
+            setMenu({ run, x: e.clientX, y: e.clientY });
+          }}
         />
       ))}
+
+      {menu && (
+        <ActionsRunContextMenu
+          hasUrl={!!menu.run.htmlUrl}
+          position={{ x: menu.x, y: menu.y }}
+          onOpenBrowser={() => openUrl(menu.run.htmlUrl)}
+          onCopyUrl={() => navigator.clipboard.writeText(menu.run.htmlUrl)}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 }

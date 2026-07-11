@@ -18,6 +18,7 @@ export interface FileEntryProps {
   isHighlighted?: boolean;
   onClick: () => void;
   onDoubleClick?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   onToggleStage: () => void;
   /** Discard working-tree changes for this file (unstaged files only). */
   onDiscard?: () => void;
@@ -30,6 +31,7 @@ function FileEntryComponent({
   isHighlighted,
   onClick,
   onDoubleClick,
+  onContextMenu,
   onToggleStage,
   onDiscard,
   ref,
@@ -50,6 +52,7 @@ function FileEntryComponent({
         e.stopPropagation();
         onDoubleClick?.();
       }}
+      onContextMenu={onContextMenu}
       className={cn(
         "group flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors select-none border-b border-border",
         isSelected
