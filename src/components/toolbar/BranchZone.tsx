@@ -175,14 +175,16 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   };
 
   const handleCompare = (branchName: string) => {
-    // Navigate to compare view — delegate to branch store
+    // 비교는 히스토리 탭의 비교 뷰에서 보이므로 그 탭으로 전환한다.
     useUIStore.getState().setCompareBranch(branchName);
+    useUIStore.getState().setActiveTab("history");
     onClose();
   };
 
   const handleMerge = (branchName: string) => {
-    // Navigate to compare view with merge intent
+    // 머지 의도의 비교도 동일하게 히스토리 탭의 비교 뷰로 이동한다.
     useUIStore.getState().setCompareBranch(branchName);
+    useUIStore.getState().setActiveTab("history");
     onClose();
   };
 
