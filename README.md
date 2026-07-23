@@ -64,6 +64,17 @@ GitHub Desktop은 가볍고 편하지만, 저장소마다 다른 계정을 쓸 �
 
 ## 시작하기
 
+### 빠른 설치
+
+한 줄로 저장소를 clone 하고 앱을 빌드해 `/Applications` 에 설치합니다.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yjun1806/GitBaro/main/install.sh | bash
+```
+
+> 사전 빌드 바이너리가 아니라 **소스에서 직접 빌드**하므로 아래 사전 요구 사항(Rust · pnpm · gh)이 필요합니다.
+> Rust 첫 컴파일은 수 분 걸릴 수 있습니다. 완료 후 `open -a GitBaro` 로 실행하세요.
+
 ### 사전 요구 사항
 
 | 도구 | 버전 |
@@ -73,7 +84,7 @@ GitHub Desktop은 가볍고 편하지만, 저장소마다 다른 계정을 쓸 �
 | [GitHub CLI (`gh`)](https://cli.github.com/) | `≥ 2.40` |
 | macOS | `10.15` 이상 |
 
-### 설치 & 실행
+### 수동 설치 & 실행
 
 ```bash
 # 1. 의존성 설치
