@@ -85,23 +85,38 @@ step "환경 확인"
 
 PREV_VERSION="$(installed_version)"
 
-missing=()
-check() { command -v "$1" >/dev/null 2>&1 || missing+=("$2"); }
-check git   "git"
-check cargo "Rust (https://www.rust-lang.org/tools/install)"
-check gh    "GitHub CLI (https://cli.github.com)"
+HAS_BREW=false; command -v brew >/dev/null 2>&1 && HAS_BREW=true
 
+# 누락 도구를 이름 + 설치 명령과 함께 수집 (자동 설치는 하지 않음 — 안내만)
+missing_name=(); missing_cmd=()
+need() {  # $1=확인할 명령, $2=표시 이름, $3=설치 명령/안내
+  command -v "$1" >/dev/null 2>&1 || { missing_name+=("$2"); missing_cmd+=("$3"); }
+}
+need git   "git"   "xcode-select --install"
+need cargo "Rust"  "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+if $HAS_BREW; then
+  need gh "GitHub CLI (gh)" "brew install gh"
+else
+  need gh "GitHub CLI (gh)" "https://cli.github.com 참고"
+fi
+
+# pnpm 은 corepack 으로 자동 활성화 시도 후에도 없으면 안내
 if ! command -v pnpm >/dev/null 2>&1; then
   if command -v corepack >/dev/null 2>&1; then
     info "corepack 으로 pnpm 을 활성화합니다."
     corepack enable >/dev/null 2>&1 || true
   fi
-  command -v pnpm >/dev/null 2>&1 || missing+=("pnpm (https://pnpm.io/installation)")
+  if ! command -v pnpm >/dev/null 2>&1; then
+    missing_name+=("pnpm"); missing_cmd+=("npm install -g pnpm  (또는 corepack enable)")
+  fi
 fi
 
-if [ ${#missing[@]} -gt 0 ]; then
-  warn "다음 도구를 먼저 설치해야 합니다:"
-  for m in "${missing[@]}"; do printf '     - %s\n' "$m"; done
+if [ ${#missing_name[@]} -gt 0 ]; then
+  warn "먼저 아래 도구를 설치한 뒤 다시 실행하세요:"
+  for i in "${!missing_name[@]}"; do
+    printf '     %s%s%s\n'   "$C_BLD" "${missing_name[i]}" "$C_RST"
+    printf '       %s$ %s%s\n' "$C_DIM" "${missing_cmd[i]}" "$C_RST"
+  done
   fail "필수 도구가 없어 중단합니다."
 fi
 ok "git · cargo · pnpm · gh 확인 완료"
