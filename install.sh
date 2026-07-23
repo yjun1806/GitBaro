@@ -69,11 +69,21 @@ run() {
   fi
 }
 
+# package.json 에서 버전 추출 (jq 없이 이식성 있게)
+read_version() { sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -1; }
+# 이미 설치된 앱 번들의 버전 (없으면 빈 문자열)
+installed_version() {
+  /usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' \
+    "$INSTALL_DIR/$APP_NAME/Contents/Info.plist" 2>/dev/null || true
+}
+
 banner
 
 # ── 1. 환경 확인 ─────────────────────────────────────────
 step "환경 확인"
 [ "$(uname)" = "Darwin" ] || fail "GitBaro 는 macOS 전용입니다."
+
+PREV_VERSION="$(installed_version)"
 
 missing=()
 check() { command -v "$1" >/dev/null 2>&1 || missing+=("$2"); }
@@ -95,6 +105,7 @@ if [ ${#missing[@]} -gt 0 ]; then
   fail "필수 도구가 없어 중단합니다."
 fi
 ok "git · cargo · pnpm · gh 확인 완료"
+[ -n "$PREV_VERSION" ] && info "이미 설치됨: GitBaro $PREV_VERSION (업데이트로 진행)"
 
 # ── 2. 저장소 준비 ───────────────────────────────────────
 step "저장소 준비"
@@ -107,6 +118,9 @@ else
 fi
 cd "$BUILD_DIR"
 
+NEW_VERSION="$(read_version package.json)"
+[ -n "$NEW_VERSION" ] && info "대상 버전: GitBaro $NEW_VERSION"
+
 # ── 3. 빌드 ──────────────────────────────────────────────
 step "빌드"
 run "의존성 설치 (pnpm)" pnpm install --frozen-lockfile
@@ -118,9 +132,16 @@ BUNDLED="src-tauri/target/release/bundle/macos/$APP_NAME"
 
 # ── 4. 설치 ──────────────────────────────────────────────
 step "설치"
+if [ -n "$PREV_VERSION" ]; then
+  info "업데이트  $PREV_VERSION → ${NEW_VERSION:-?}"
+else
+  info "새 설치  ${NEW_VERSION:-?}"
+fi
 rm -rf "${INSTALL_DIR:?}/$APP_NAME"
 ditto "$BUNDLED" "$INSTALL_DIR/$APP_NAME"
 ok "$INSTALL_DIR/$APP_NAME"
 
-printf '\n%s설치 완료!%s  %sopen -a GitBaro%s 로 실행하세요.\n\n' \
-  "$C_GRN$C_BLD" "$C_RST" "$C_BLD" "$C_RST"
+done_label="설치 완료!"
+[ -n "$PREV_VERSION" ] && done_label="업데이트 완료!"
+printf '\n%s%s%s  GitBaro %s  ·  %sopen -a GitBaro%s 로 실행하세요.\n\n' \
+  "$C_GRN$C_BLD" "$done_label" "$C_RST" "${NEW_VERSION:-}" "$C_BLD" "$C_RST"
