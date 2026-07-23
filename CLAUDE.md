@@ -116,18 +116,24 @@ Reference implementation: **GitHub Desktop** (https://github.com/desktop/desktop
 
 ## Development Commands
 
+The package manager is **pnpm** (`pnpm-lock.yaml`).
+
 ```bash
 # Frontend
-npm run dev              # Vite dev server (port 1420)
-npm run build            # tsc + vite build
-npm run lint             # ESLint (src/**/*.{ts,tsx})
-npm run typecheck        # tsc --noEmit
-npm run test             # vitest run
-npm run test:watch       # vitest watch mode
+pnpm dev                 # Vite dev server (port 1420)
+pnpm build               # tsc + vite build
+pnpm lint                # ESLint (src/**/*.{ts,tsx})
+pnpm typecheck           # tsc --noEmit
+pnpm test                # vitest run
+pnpm test:watch          # vitest watch mode
 
 # Tauri (full app)
-npm run tauri dev        # Dev mode with hot reload
-npm run tauri build      # Production build (.app bundle)
+pnpm tauri dev           # Dev mode with hot reload
+pnpm tauri build         # Production build (.app bundle)
+
+# Release (commit-and-tag-version)
+pnpm release             # Bump version (4 files), update CHANGELOG, create tag
+pnpm release --dry-run   # Preview the next release without writing
 
 # Rust only
 cd src-tauri && cargo check          # Type check
