@@ -1,0 +1,21 @@
+{
+  "packageFiles": [{ "filename": "package.json", "type": "json" }],
+  "bumpFiles": [
+    { "filename": "package.json", "type": "json" },
+    { "filename": "src-tauri/tauri.conf.json", "type": "json" },
+    { "filename": "src-tauri/Cargo.toml", "updater": "scripts/cargo-toml-updater.cjs" },
+    { "filename": "src-tauri/Cargo.lock", "updater": "scripts/cargo-lock-updater.cjs" }
+  ],
+  "types": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug Fixes" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "refactor", "section": "Refactoring" },
+    { "type": "docs", "section": "Documentation" },
+    { "type": "revert", "section": "Reverts" },
+    { "type": "chore", "hidden": true },
+    { "type": "style", "hidden": true },
+    { "type": "test", "hidden": true },
+    { "type": "ci", "hidden": true }
+  ]
+}
