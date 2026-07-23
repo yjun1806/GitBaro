@@ -1,5 +1,9 @@
+use std::collections::HashMap;
+
+use git2::Repository;
+
 use crate::error::AppError;
-use crate::git::engine::{AuthorInfo, CommitInfo};
+use crate::git::engine::{AuthorInfo, CommitInfo, RefKind, RefLabel};
 
 /// Validate a commit message — must not be empty or whitespace-only.
 pub fn validate_message(message: &str) -> Result<(), AppError> {
@@ -74,7 +78,69 @@ pub fn commit_to_info(commit: &git2::Commit<'_>) -> CommitInfo {
         committer,
         timestamp,
         parent_ids,
+        refs: Vec::new(),
     }
+}
+
+/// Build a map from commit OID → refs (tags/branches) pointing at it.
+/// Annotated tags are peeled to the commit they ultimately reference, so both
+/// lightweight and annotated tags land on the right commit. Symbolic refs like
+/// `origin/HEAD` are skipped since they are not real branches.
+pub fn build_ref_map(repo: &Repository) -> HashMap<git2::Oid, Vec<RefLabel>> {
+    // Name of the currently checked-out local branch, if HEAD is not detached.
+    let head_branch = repo
+        .head()
+        .ok()
+        .filter(|h| h.is_branch())
+        .and_then(|h| h.shorthand().map(String::from));
+
+    let mut map: HashMap<git2::Oid, Vec<RefLabel>> = HashMap::new();
+
+    let Ok(references) = repo.references() else {
+        return map;
+    };
+
+    for reference in references.flatten() {
+        // Resolve to the commit this ref ultimately points at.
+        let Ok(commit) = reference.peel_to_commit() else {
+            continue;
+        };
+        let oid = commit.id();
+        let short = reference.shorthand().unwrap_or("");
+        if short.is_empty() {
+            continue;
+        }
+
+        let (name, kind) = if reference.is_tag() {
+            (short.to_string(), RefKind::Tag)
+        } else if reference.is_remote() {
+            if short.ends_with("/HEAD") {
+                continue;
+            }
+            (short.to_string(), RefKind::RemoteBranch)
+        } else if reference.is_branch() {
+            (short.to_string(), RefKind::LocalBranch)
+        } else {
+            continue;
+        };
+
+        let is_head =
+            kind == RefKind::LocalBranch && head_branch.as_deref() == Some(name.as_str());
+
+        map.entry(oid).or_default().push(RefLabel { name, kind, is_head });
+    }
+
+    // Order within a commit: HEAD first, then local branches, remotes, tags.
+    for labels in map.values_mut() {
+        labels.sort_by_key(|l| match (l.is_head, &l.kind) {
+            (true, _) => 0,
+            (false, RefKind::LocalBranch) => 1,
+            (false, RefKind::RemoteBranch) => 2,
+            (false, RefKind::Tag) => 3,
+        });
+    }
+
+    map
 }
 
 #[cfg(test)]

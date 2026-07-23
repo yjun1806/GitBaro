@@ -22,8 +22,16 @@ pub async fn get_commit_history(
 ) -> Result<Vec<Value>, AppError> {
     let result = tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
+        let ref_map = crate::git::commit::build_ref_map(&repo);
         let mut revwalk = repo.revwalk()?;
-        revwalk.push_head()?;
+        // Include commits reachable from ALL refs (local + remote branches, tags),
+        // not just HEAD, so every tagged/branched commit appears in the timeline.
+        // push_glob peels annotated tags to their commit automatically; ignore
+        // errors so an empty category (e.g. no remotes) doesn't abort the walk.
+        let _ = revwalk.push_glob("refs/heads/*");
+        let _ = revwalk.push_glob("refs/remotes/*");
+        let _ = revwalk.push_glob("refs/tags/*");
+        let _ = revwalk.push_head(); // covers a detached HEAD not pointed at by any ref
         revwalk.set_sorting(git2::Sort::TIME)?;
 
         let limit = limit.unwrap_or(100);
@@ -39,6 +47,7 @@ pub async fn get_commit_history(
                 let timestamp = commit.time().seconds();
 
                 let author_email = author.email().unwrap_or("").to_string();
+                let refs = ref_map.get(&oid).cloned().unwrap_or_default();
                 Some(json!({
                     "oid": oid.to_string(),
                     "message": commit.message().unwrap_or("").trim().to_string(),
@@ -50,6 +59,7 @@ pub async fn get_commit_history(
                     },
                     "timestamp": timestamp,
                     "parentCount": commit.parent_count(),
+                    "refs": refs,
                 }))
             })
             .collect();

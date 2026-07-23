@@ -91,6 +91,28 @@ pub struct CommitInfo {
     pub committer: AuthorInfo,
     pub timestamp: i64,
     pub parent_ids: Vec<String>,
+    /// Refs (tags/branches) that point at this commit. Populated by `log()` and
+    /// `get_commit_history` (both via `build_ref_map`); empty elsewhere.
+    pub refs: Vec<RefLabel>,
+}
+
+/// A tag or branch label pointing at a commit, shown in the history list.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RefLabel {
+    /// Display name, e.g. "main", "origin/main", "v1.0.0".
+    pub name: String,
+    pub kind: RefKind,
+    /// True when this is the local branch currently checked out (HEAD).
+    pub is_head: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RefKind {
+    Tag,
+    LocalBranch,
+    RemoteBranch,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

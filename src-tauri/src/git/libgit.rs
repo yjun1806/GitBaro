@@ -5,7 +5,7 @@ use git2::{BranchType, MergeOptions, Repository, StashFlags, build::CheckoutBuil
 
 use crate::error::AppError;
 use crate::git::branch::validate_branch_name;
-use crate::git::commit::{commit_to_info, signature_to_author, validate_message};
+use crate::git::commit::{build_ref_map, commit_to_info, signature_to_author, validate_message};
 use crate::git::diff::convert_diff;
 use crate::git::engine::{
     BlameLine, BranchInfo, CommitInfo, ConflictFile, DiffOutput, DiffSpec, FileStatus,
@@ -150,6 +150,7 @@ impl GitEngine for LibGitEngine {
 
     fn log(&self, opts: &LogOptions) -> Result<Vec<CommitInfo>, AppError> {
         let repo = self.repo.borrow();
+        let ref_map = build_ref_map(&repo);
         let mut revwalk = repo.revwalk()?;
 
         if let Some(branch_name) = &opts.branch {
@@ -177,7 +178,11 @@ impl GitEngine for LibGitEngine {
                 break;
             }
             let commit = repo.find_commit(oid)?;
-            commits.push(commit_to_info(&commit));
+            let mut info = commit_to_info(&commit);
+            if let Some(labels) = ref_map.get(&oid) {
+                info.refs = labels.clone();
+            }
+            commits.push(info);
         }
 
         Ok(commits)

@@ -1,6 +1,34 @@
 import type { ReactNode } from "react";
+import { Tag, GitBranch } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import type { CommitInfo } from "@/types";
+import type { CommitInfo, RefLabel } from "@/types";
+
+function RefBadge({ label }: { label: RefLabel }) {
+  const isRemote = label.kind === "remoteBranch";
+  const isTag = label.kind === "tag";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 max-w-[140px] rounded px-1 py-px text-[10px] font-medium leading-none border",
+        // The currently checked-out branch (HEAD) is filled to stand out.
+        label.isHead
+          ? "bg-primary text-primary-foreground border-primary font-semibold"
+          : isTag
+            ? "bg-accent text-accent-foreground border-border"
+            : isRemote
+              ? "bg-muted text-muted-foreground border-border"
+              : "bg-primary/10 text-primary border-primary/20",
+      )}
+    >
+      {isTag ? (
+        <Tag className="w-2.5 h-2.5 shrink-0" />
+      ) : (
+        <GitBranch className="w-2.5 h-2.5 shrink-0" />
+      )}
+      <span className="truncate">{label.name}</span>
+    </span>
+  );
+}
 
 interface CommitItemProps {
   commit: CommitInfo;
@@ -41,6 +69,13 @@ export function CommitItem({
     >
       {/* Content */}
       <div className="flex-1 min-w-0">
+        {commit.refs.length > 0 && (
+          <div className="flex items-center gap-1 mb-1 flex-wrap">
+            {commit.refs.map((label) => (
+              <RefBadge key={`${label.kind}:${label.name}`} label={label} />
+            ))}
+          </div>
+        )}
         <p className="text-xs font-medium truncate">{commit.summary}</p>
         <div className="flex items-center gap-1 mt-0.5">
           {/* Avatar */}

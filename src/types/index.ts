@@ -103,6 +103,14 @@ export interface BinaryPreview {
   newBase64: string | null;
 }
 
+export type RefKind = "tag" | "localBranch" | "remoteBranch";
+
+export interface RefLabel {
+  name: string;
+  kind: RefKind;
+  isHead: boolean;
+}
+
 export interface CommitInfo {
   id: string;
   shortId: string;
@@ -112,6 +120,7 @@ export interface CommitInfo {
   committer: AuthorInfo;
   timestamp: number;
   parentIds: string[];
+  refs: RefLabel[];
 }
 
 export interface AuthorInfo {

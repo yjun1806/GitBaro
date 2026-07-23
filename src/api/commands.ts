@@ -8,6 +8,7 @@ import type {
   BranchInfo,
   RepoSyncStatus,
   CommitInfo,
+  RefLabel,
   GitHubAccount,
   GhStatus,
   AppSettings,
@@ -364,6 +365,7 @@ interface RawCommitHistory {
   author: RawAuthor;
   timestamp: number;
   parentCount: number;
+  refs: RefLabel[];
 }
 
 interface RawCommitDetailFile {
@@ -417,6 +419,7 @@ export async function getCommitHistory(
     committer: c.author,
     timestamp: c.timestamp,
     parentIds: [],
+    refs: c.refs,
   }));
 }
 
@@ -444,6 +447,7 @@ export async function getCommitDetail(
       committer: c.committer,
       timestamp: c.timestamp,
       parentIds: c.parents,
+      refs: [],
     },
     changedFiles: (c.diff?.files ?? []).map((f) => ({
       path: f.newPath ?? f.oldPath ?? "",
