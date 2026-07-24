@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, type RefObject } from "react";
 
-export type DropdownId = "branch" | "sync" | "account" | null;
+export type DropdownId = "branch" | "worktree" | "sync" | "account" | null;
 
 export function useToolbarDropdown() {
   const [activeDropdown, setActiveDropdown] = useState<DropdownId>(null);

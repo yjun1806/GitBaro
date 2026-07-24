@@ -1,21 +1,26 @@
 import { useState } from "react";
-import { GitBranch, Trash2, Lock } from "lucide-react";
+import { GitBranch, Trash2, Lock, Check } from "lucide-react";
 import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { useTranslation } from "react-i18next";
-import { WorktreeContextMenu } from "@/components/branch/WorktreeContextMenu";
+import { cn } from "@/lib/utils";
+import { WorktreeContextMenu } from "@/components/worktree/WorktreeContextMenu";
 import type { WorktreeInfo } from "@/types";
 
-interface WorktreeTabContentProps {
+interface WorktreeListProps {
   worktrees: WorktreeInfo[];
+  currentPath: string | null;
+  activeIndex?: number;
   onOpen: (path: string) => void;
   onRemove: (path: string) => void;
 }
 
-export function WorktreeTabContent({
+export function WorktreeList({
   worktrees,
+  currentPath,
+  activeIndex = -1,
   onOpen,
   onRemove,
-}: WorktreeTabContentProps) {
+}: WorktreeListProps) {
   const { t } = useTranslation();
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ wt: WorktreeInfo; x: number; y: number } | null>(null);
@@ -32,9 +37,13 @@ export function WorktreeTabContent({
 
   return (
     <div className="py-1">
-      {worktrees.map((wt) => {
+      {worktrees.map((wt, i) => {
         const dirName = wt.path.split("/").pop() ?? wt.path;
         const parentDir = wt.path.slice(0, wt.path.length - dirName.length - 1);
+        const isCurrent = wt.path === currentPath;
+        const isActive = i === activeIndex;
+        // 메인·잠김·현재 보고 있는 워크트리는 삭제 불가(git이 거부하거나 activeRepo가 dangling된다).
+        const canRemove = !wt.isLocked && !wt.isMain && !isCurrent;
 
         return (
           <div key={wt.path} className="relative group">
@@ -44,15 +53,37 @@ export function WorktreeTabContent({
                 e.preventDefault();
                 setMenu({ wt, x: e.clientX, y: e.clientY });
               }}
-              className="w-full flex items-start gap-2.5 px-3 py-2 text-left hover:bg-accent transition-colors"
+              className={cn(
+                "w-full flex items-start gap-2.5 px-3 py-2 text-left transition-colors",
+                isCurrent
+                  ? "bg-primary/8"
+                  : isActive
+                    ? "bg-accent"
+                    : "hover:bg-accent",
+              )}
             >
-              <WorktreeIcon className="w-4 h-4 mt-0.5" />
+              <WorktreeIcon
+                className={cn(
+                  "w-4 h-4 mt-0.5 shrink-0",
+                  isCurrent && "text-primary",
+                )}
+              />
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium text-foreground truncate">
+                  <span
+                    className={cn(
+                      "text-sm font-medium truncate",
+                      isCurrent ? "text-primary" : "text-foreground",
+                    )}
+                  >
                     {dirName}
                   </span>
+                  {wt.isMain && (
+                    <span className="text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                      {t("worktree.main")}
+                    </span>
+                  )}
                   {wt.isDirty && (
                     <span
                       className="w-1.5 h-1.5 rounded-full bg-warning shrink-0"
@@ -81,7 +112,11 @@ export function WorktreeTabContent({
                 </p>
               </div>
 
-              {!wt.isLocked && (
+              {isCurrent && (
+                <Check className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+              )}
+
+              {canRemove && (
                 <div
                   role="button"
                   tabIndex={0}
@@ -95,7 +130,7 @@ export function WorktreeTabContent({
                       setConfirmRemove(wt.path);
                     }
                   }}
-                  className="p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"
+                  className="p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-destructive/40 transition-colors opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"
                   title={t("worktree.remove")}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -133,7 +168,7 @@ export function WorktreeTabContent({
 
       {menu && (
         <WorktreeContextMenu
-          isLocked={menu.wt.isLocked}
+          isLocked={menu.wt.isLocked || menu.wt.isMain || menu.wt.path === currentPath}
           position={{ x: menu.x, y: menu.y }}
           onOpen={() => onOpen(menu.wt.path)}
           onCopyPath={() => navigator.clipboard.writeText(menu.wt.path)}

@@ -49,6 +49,7 @@ export function BranchRow({
     branch.aheadBehind &&
     (branch.aheadBehind.ahead > 0 || branch.aheadBehind.behind > 0);
   const isUnpublished = !branch.isRemote && !branch.upstream;
+  const worktree = worktreeByBranch?.get(branch.name);
 
   return (
     <button
@@ -119,8 +120,14 @@ export function BranchRow({
         </span>
       )}
 
-      {worktreeByBranch?.has(branch.name) && (
-        <WorktreeIcon className="w-3.5 h-3.5" />
+      {worktree && (
+        <Tooltip
+          label={t("branch.inWorktree", {
+            name: worktree.path.split("/").pop() ?? worktree.path,
+          })}
+        >
+          <WorktreeIcon className="w-3.5 h-3.5 text-info" />
+        </Tooltip>
       )}
       {isCurrent && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
     </button>

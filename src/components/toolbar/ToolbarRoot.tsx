@@ -16,6 +16,7 @@ import { GhLoginDialog } from "@/components/account/GhLoginDialog";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
 import { useToolbarDropdown } from "./useToolbarDropdown";
 import { BranchZone } from "./BranchZone";
+import { WorktreeZone } from "./WorktreeZone";
 import { SyncZone } from "./SyncZone";
 import { AccountZone } from "./AccountZone";
 import type { AppSettings } from "@/types";
@@ -116,6 +117,13 @@ export function ToolbarRoot() {
         <BranchZone
           isOpen={activeDropdown === "branch"}
           onToggle={() => toggle("branch")}
+          onClose={close}
+        />
+
+        {/* Zone A2: Worktree */}
+        <WorktreeZone
+          isOpen={activeDropdown === "worktree"}
+          onToggle={() => toggle("worktree")}
           onClose={close}
         />
 

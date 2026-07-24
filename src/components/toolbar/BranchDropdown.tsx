@@ -1,11 +1,6 @@
 import { useReducer, useState, useCallback } from "react";
-import {
-  GitBranch,
-  Search,
-} from "lucide-react";
+import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
-import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { useBranchGroups } from "@/hooks/useBranchGroups";
 import type { SortBy } from "@/hooks/useBranchGroups";
 import {
@@ -14,10 +9,7 @@ import {
   getBranchAtIndex,
 } from "@/components/branch/BranchTabContent";
 import { BranchContextMenu } from "@/components/branch/BranchContextMenu";
-import { WorktreeTabContent } from "@/components/branch/WorktreeTabContent";
 import type { BranchInfo, WorktreeInfo } from "@/types";
-
-type DropdownTab = "branches" | "worktrees";
 
 // ── Reducer ─────────────────────────────────────────────────────────────────
 
@@ -81,13 +73,10 @@ interface BranchDropdownProps {
   branches: BranchInfo[];
   currentBranch: string | null;
   recentBranchNames: string[];
-  worktrees: WorktreeInfo[];
   worktreeByBranch: Map<string, WorktreeInfo>;
   onSwitch: (branchName: string) => void;
   onCreateBranch: () => void;
-  onCreateWorktree: () => void;
   onOpenWorktree: (path: string) => void;
-  onRemoveWorktree: (path: string) => void;
   onDelete: (branchName: string) => void;
   onRename: (branchName: string) => void;
   onCompare: (branchName: string) => void;
@@ -102,13 +91,10 @@ export function BranchDropdown({
   branches,
   currentBranch,
   recentBranchNames,
-  worktrees,
   worktreeByBranch,
   onSwitch,
   onCreateBranch,
-  onCreateWorktree,
   onOpenWorktree,
-  onRemoveWorktree,
   onDelete,
   onRename,
   onCompare,
@@ -117,7 +103,6 @@ export function BranchDropdown({
   onClose,
 }: BranchDropdownProps) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<DropdownTab>("branches");
   const [sortBy, setSortBy] = useState<SortBy>("name");
   const [state, dispatch] = useReducer(reducer, {
     query: "",
@@ -136,6 +121,7 @@ export function BranchDropdown({
 
   const handleSelect = useCallback(
     (branch: BranchInfo) => {
+      // 워크트리에 체크아웃된 브랜치는 git상 전환 불가 → 해당 워크트리로 이동.
       const wt = worktreeByBranch.get(branch.name);
       if (wt && !wt.isMain) {
         onOpenWorktree(wt.path);
@@ -161,8 +147,6 @@ export function BranchDropdown({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (activeTab !== "branches") return;
-
       switch (e.key) {
         case "ArrowDown":
           e.preventDefault();
@@ -188,12 +172,7 @@ export function BranchDropdown({
           break;
       }
     },
-    [activeTab, flatCount, groups, state.activeIndex, state.contextMenu, handleSelect, onClose],
-  );
-
-  const activeWorktrees = worktrees.filter((w) => !w.isBare && !w.isMain);
-  const filteredWorktrees = activeWorktrees.filter((w) =>
-    (w.branch ?? w.path).toLowerCase().includes(state.query.toLowerCase()),
+    [flatCount, groups, state.activeIndex, state.contextMenu, handleSelect, onClose],
   );
 
   return (
@@ -203,26 +182,6 @@ export function BranchDropdown({
       className="flex flex-col h-full overflow-hidden"
       onKeyDown={handleKeyDown}
     >
-      {/* Tabs */}
-      <TabGroup>
-        <Tab
-          active={activeTab === "branches"}
-          onClick={() => setActiveTab("branches")}
-          icon={<GitBranch className="w-3.5 h-3.5" />}
-          count={branches.filter((b) => !b.isRemote).length}
-        >
-          {t("branch.title")}
-        </Tab>
-        <Tab
-          active={activeTab === "worktrees"}
-          onClick={() => setActiveTab("worktrees")}
-          icon={<WorktreeIcon className="w-3.5 h-3.5" />}
-          count={activeWorktrees.length}
-        >
-          {t("worktree.title")}
-        </Tab>
-      </TabGroup>
-
       {/* Search + Action */}
       <div className="flex items-center gap-2 p-2 border-b border-border">
         <div className="flex-1 flex items-center gap-2 px-2.5 py-2 rounded-lg bg-surface border border-border focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
@@ -234,52 +193,33 @@ export function BranchDropdown({
             onChange={(e) =>
               dispatch({ type: "SET_QUERY", query: e.target.value })
             }
-            placeholder={
-              activeTab === "branches"
-                ? t("branch.filterBranches")
-                : t("worktree.filterWorktrees")
-            }
+            placeholder={t("branch.filterBranches")}
             className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
           />
         </div>
         <button
           onClick={() => {
-            if (activeTab === "branches") {
-              onCreateBranch();
-            } else {
-              onCreateWorktree();
-            }
+            onCreateBranch();
             onClose();
           }}
           className="shrink-0 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary-hover rounded-lg transition-colors"
         >
-          {activeTab === "branches" ? t("branch.newBranch") : t("worktree.newWorktree")}
+          {t("branch.newBranch")}
         </button>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {activeTab === "branches" ? (
-          <BranchTabContent
-            groups={groups}
-            currentBranch={currentBranch}
-            activeIndex={state.activeIndex}
-            sortBy={sortBy}
-            worktreeByBranch={worktreeByBranch}
-            onSortChange={setSortBy}
-            onSelect={handleSelect}
-            onContextMenu={handleContextMenu}
-          />
-        ) : (
-          <WorktreeTabContent
-            worktrees={filteredWorktrees}
-            onOpen={(path) => {
-              onOpenWorktree(path);
-              onClose();
-            }}
-            onRemove={onRemoveWorktree}
-          />
-        )}
+        <BranchTabContent
+          groups={groups}
+          currentBranch={currentBranch}
+          activeIndex={state.activeIndex}
+          sortBy={sortBy}
+          worktreeByBranch={worktreeByBranch}
+          onSortChange={setSortBy}
+          onSelect={handleSelect}
+          onContextMenu={handleContextMenu}
+        />
       </div>
 
       {/* Context Menu */}
@@ -320,5 +260,3 @@ export function BranchDropdown({
     </div>
   );
 }
-
-
