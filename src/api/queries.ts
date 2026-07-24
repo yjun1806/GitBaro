@@ -26,6 +26,7 @@ import {
   stashPushPartial,
   listWorkflowRuns,
   getWorkflowRunJobs,
+  listRemoteTags,
   getMergeState,
   abortMergeOrRebase,
   continueMergeOrRebase,
@@ -95,6 +96,20 @@ export function useCommitHistoryInfinite(repoPath: string | null) {
       lastPage.length === COMMIT_HISTORY_PAGE_SIZE
         ? allPages.length * COMMIT_HISTORY_PAGE_SIZE
         : undefined,
+  });
+}
+
+/**
+ * origin에 존재하는 태그 이름 목록. 히스토리에서 로컬 전용 태그를 구분하는 데
+ * 쓴다. 네트워크 호출이므로 저장소·계정이 모두 있을 때만 실행하고, push/fetch
+ * 성공 시 ["remoteTags"] 키를 무효화해 갱신한다.
+ */
+export function useRemoteTags(repoPath: string | null, accountId: string | null) {
+  return useQuery({
+    queryKey: ["remoteTags", repoPath, accountId],
+    queryFn: () => listRemoteTags(repoPath!, accountId!),
+    enabled: repoPath !== null && accountId !== null,
+    staleTime: 60_000,
   });
 }
 

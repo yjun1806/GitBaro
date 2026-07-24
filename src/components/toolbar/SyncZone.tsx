@@ -82,6 +82,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
       queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
       queryClient.invalidateQueries({ queryKey: ["status"] }),
       queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+      queryClient.invalidateQueries({ queryKey: ["remoteTags"] }),
     ]);
     if (includeActions) {
       setTimeout(() => {

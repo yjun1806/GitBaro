@@ -784,6 +784,92 @@ impl GitCliEngine {
 
         Ok(final_output)
     }
+
+    /// Best-effort dry-run push that enumerates local tags which would be newly
+    /// created on the remote. Mirrors GitHub Desktop's `fetchTagsToPush`: it
+    /// never mutates the remote (`--dry-run`) and parses porcelain output.
+    ///
+    /// On any failure (auth, network, unexpected exit) it returns an empty list
+    /// so the real push still proceeds with the branch. When the token is stale,
+    /// the caller retries the whole `push` with a fresh token, which re-runs this
+    /// detection successfully.
+    async fn detect_tags_to_push(&self, remote: &str, branch: &str, token: &str) -> Vec<String> {
+        let askpass = match AskpassScript::create(token).await {
+            Ok(a) => a,
+            Err(e) => {
+                tracing::warn!("[git] tag detection skipped (askpass): {}", e);
+                return Vec::new();
+            }
+        };
+
+        let args = [
+            "-c",
+            "credential.helper=",
+            "push",
+            remote,
+            branch,
+            "--follow-tags",
+            "--dry-run",
+            "--no-verify",
+            "--porcelain",
+        ];
+        tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
+
+        let mut cmd = Command::new("git");
+        cmd.args(args)
+            .current_dir(&self.repo_path)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_ASKPASS", askpass.path())
+            // Force stable, non-localized porcelain summaries (e.g. "[new tag]").
+            .env("LC_ALL", "C");
+
+        let output = match cmd.output().await {
+            Ok(o) => o,
+            Err(e) => {
+                tracing::warn!("[git] tag detection failed to run: {}", e);
+                return Vec::new();
+            }
+        };
+
+        // git push exit codes: 0 = ok, 1 = some refs rejected (still parseable).
+        // Anything else (e.g. 128 auth/network) means no reliable tag list.
+        let code = output.status.code().unwrap_or(-1);
+        if code != 0 && code != 1 {
+            tracing::warn!(
+                "[git] tag detection dry-run exited {} — pushing without tags. stderr: {}",
+                code,
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+            return Vec::new();
+        }
+
+        output_parser::parse_tags_to_push(&String::from_utf8_lossy(&output.stdout))
+    }
+
+    /// List tag names that exist on the remote (`git ls-remote --tags`). Used to
+    /// distinguish local-only tags from pushed ones in the history timeline.
+    /// Requires network + auth; the caller handles token-refresh retry.
+    pub async fn list_remote_tags(
+        &self,
+        remote: &str,
+        token: &str,
+    ) -> Result<Vec<String>, AppError> {
+        let askpass = AskpassScript::create(token).await?;
+        let args = ["-c", "credential.helper=", "ls-remote", "--tags", remote];
+        tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
+
+        let mut cmd = Command::new("git");
+        cmd.args(args)
+            .current_dir(&self.repo_path)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_ASKPASS", askpass.path());
+        let output = cmd.output().await.map_err(map_io_err)?;
+
+        log_output(&output);
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        check_output(output)?;
+        Ok(output_parser::parse_remote_tags(&stdout))
+    }
 }
 
 impl GitRemoteEngine for GitCliEngine {
@@ -854,6 +940,10 @@ impl GitRemoteEngine for GitCliEngine {
         token: &str,
         force: bool,
     ) -> Result<(), AppError> {
+        // Enumerate the new tags this push should carry, like GitHub Desktop, then
+        // name them explicitly. Never `--tags` (which blindly pushes every local tag).
+        let tags = self.detect_tags_to_push(remote, branch, token).await;
+
         let askpass = AskpassScript::create(token).await?;
 
         let mut args = vec!["-c", "credential.helper=", "push", "--set-upstream"];
@@ -864,6 +954,9 @@ impl GitRemoteEngine for GitCliEngine {
         }
         args.push(remote);
         args.push(branch);
+        for tag in &tags {
+            args.push(tag);
+        }
 
         let id = Uuid::new_v4().to_string();
         let start = Instant::now();
@@ -874,6 +967,9 @@ impl GitRemoteEngine for GitCliEngine {
         }
         display_args.push(remote);
         display_args.push(branch);
+        for tag in &tags {
+            display_args.push(tag);
+        }
 
         tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
         self.emit_command_start(&id, &display_args, "push", started_at);

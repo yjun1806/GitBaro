@@ -7,7 +7,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
-import { useCommitHistoryInfinite, useCommitAvatars, useBranches, useBranchComparison, useStatus } from "@/api/queries";
+import { useCommitHistoryInfinite, useCommitAvatars, useBranches, useBranchComparison, useStatus, useRemoteTags } from "@/api/queries";
 import { createBranch, type ResetMode } from "@/api/commands";
 import { useCommitActions } from "@/hooks/useCommitActions";
 import { useToastStore } from "@/stores/toast";
@@ -26,6 +26,7 @@ export function HistoryView() {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const accounts = useAccountStore((s) => s.accounts);
+  const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const {
     data: historyData,
     isLoading,
@@ -38,6 +39,13 @@ export function HistoryView() {
     [historyData],
   );
   const { data: branches = [] } = useBranches(activeRepoPath);
+  const { data: remoteTagNames } = useRemoteTags(activeRepoPath, activeAccountId);
+  // null while the remote list is unknown (loading / no account) so tags aren't
+  // falsely flagged as local-only; a Set once origin's tags are known.
+  const remoteTags = useMemo(
+    () => (remoteTagNames ? new Set(remoteTagNames) : null),
+    [remoteTagNames],
+  );
   const { data: githubAvatarMap = {} } = useCommitAvatars(activeRepoPath);
   const compareBranch = useUIStore((s) => s.compareBranch);
   const setCompareBranch = useUIStore((s) => s.setCompareBranch);
@@ -214,6 +222,7 @@ export function HistoryView() {
                 key={commit.id}
                 ref={itemRef(index)}
                 commit={commit}
+                remoteTags={remoteTags}
                 isSelected={selectedCommitId === commit.id}
                 isHighlighted={activeIndex === index}
                 avatarUrl={avatarSrc}
@@ -227,7 +236,7 @@ export function HistoryView() {
                   isUnpushed ? (
                     <div
                       className={cn(
-                        "shrink-0 self-center flex items-center justify-center w-5 h-5 rounded-full",
+                        "shrink-0 self-center flex items-center justify-center w-5 h-5 rounded-full border border-primary/40",
                         selectedCommitId === commit.id
                           ? "bg-primary/20"
                           : "bg-primary/10",

@@ -590,6 +590,29 @@ pub async fn git_push(
     }
 }
 
+/// Tag names present on `origin`, used to mark local-only tags in the history
+/// timeline. Read-only network call; retries once on auth failure.
+#[tauri::command]
+pub async fn list_remote_tags(
+    repo_path: String,
+    account_id: String,
+    app_handle: tauri::AppHandle,
+    token_store: tauri::State<'_, TokenStore>,
+) -> Result<Vec<String>, AppError> {
+    let token = resolve_token(&token_store, &account_id).await?;
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+
+    match engine.list_remote_tags("origin", &token).await {
+        Ok(tags) => Ok(tags),
+        Err(e) if is_auth_error(&e) => {
+            tracing::warn!("ls-remote auth failed, refreshing token for {}", account_id);
+            let new_token = token_store.refresh_token(&account_id).await?;
+            engine.list_remote_tags("origin", &new_token).await
+        }
+        Err(e) => Err(e),
+    }
+}
+
 #[tauri::command]
 pub async fn git_pull(
     repo_path: String,

@@ -155,6 +155,14 @@ export async function gitPull(
   return invoke("git_pull", { repoPath, accountId, rebase });
 }
 
+/** Tag names that exist on origin — used to flag local-only tags in history. */
+export async function listRemoteTags(
+  repoPath: string,
+  accountId: string,
+): Promise<string[]> {
+  return invoke("list_remote_tags", { repoPath, accountId });
+}
+
 // Repository
 export async function openRepository(path: string): Promise<RepoInfo> {
   return invoke("open_repository", { path });

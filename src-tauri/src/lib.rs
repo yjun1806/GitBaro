@@ -31,6 +31,7 @@ pub fn run() {
             commands::git::git_fetch,
             commands::git::git_push,
             commands::git::git_pull,
+            commands::git::list_remote_tags,
             commands::git::stash_push,
             commands::git::stash_pop,
             commands::git::stash_list,
