@@ -1,6 +1,6 @@
 [package]
 name = "gitbaro"
-version = "0.1.0"
+version = "0.1.1"
 description = "A macOS Git GUI with per-repo GitHub account management"
 authors = ["GitBaro"]
 license = "GPL-3.0-or-later"
