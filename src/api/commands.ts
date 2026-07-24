@@ -6,6 +6,7 @@ import type {
   BinaryPreview,
   RepoInfo,
   BranchInfo,
+  BranchDivergence,
   RepoSyncStatus,
   CommitInfo,
   RefLabel,
@@ -232,6 +233,10 @@ export async function getBranches(repoPath: string): Promise<BranchInfo[]> {
   return invoke("get_branches", { repoPath });
 }
 
+export async function getBranchDivergence(repoPath: string): Promise<BranchDivergence[]> {
+  return invoke("get_branch_divergence", { repoPath });
+}
+
 export async function getRepoSyncStatus(repoPaths: string[]): Promise<RepoSyncStatus[]> {
   return invoke("repo_sync_status", { repoPaths });
 }
@@ -374,6 +379,7 @@ interface RawCommitHistory {
   timestamp: number;
   parentCount: number;
   refs: RefLabel[];
+  isUnpushed: boolean;
 }
 
 interface RawCommitDetailFile {
@@ -428,6 +434,7 @@ export async function getCommitHistory(
     timestamp: c.timestamp,
     parentIds: [],
     refs: c.refs,
+    isUnpushed: c.isUnpushed,
   }));
 }
 

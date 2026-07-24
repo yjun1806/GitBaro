@@ -52,7 +52,6 @@ export function HistoryView() {
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
   const headBranch = branches.find((b) => b.isHead);
   const currentBranchName = headBranch?.name ?? null;
-  const ahead = headBranch?.aheadBehind?.ahead ?? 0;
   const { data: comparisonData } = useBranchComparison(
     activeRepoPath,
     currentBranchName,
@@ -181,6 +180,7 @@ export function HistoryView() {
         <div className="px-3 py-2 border-b border-border shrink-0">
           <BranchCompareSelector
             branches={branches}
+            activeRepoPath={activeRepoPath}
             currentBranch={currentBranchName}
             compareBranch={compareBranch}
             onSelect={setCompareBranch}
@@ -211,7 +211,7 @@ export function HistoryView() {
       ) : (
         <div ref={scrollRef} className="flex-1 overflow-y-auto" {...containerProps}>
           {commits.map((commit: CommitInfo, index: number) => {
-            const isUnpushed = index < ahead;
+            const isUnpushed = commit.isUnpushed ?? false;
             const emailKey = commit.author.email?.toLowerCase() ?? "";
             const avatarSrc =
               accountAvatarMap.get(emailKey) ||

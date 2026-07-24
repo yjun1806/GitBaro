@@ -14,6 +14,55 @@ fn gravatar_url(email: &str) -> String {
     format!("https://www.gravatar.com/avatar/{:x}?s=64&d=retro", hash)
 }
 
+/// HEAD 브랜치에서 아직 리모트로 push되지 않은 커밋의 OID 집합을 구한다.
+/// GitHub Desktop의 `loadLocalCommits`와 동일한 판정:
+///   - upstream tracking 있음 → `upstream..HEAD` (upstream tip 이후의 커밋)
+///   - upstream 없음        → `HEAD --not --remotes` (모든 리모트에서 도달 불가능한 커밋)
+///
+/// 반환값 `None`은 "HEAD의 모든 커밋이 unpushed"를 뜻한다. 리모트 tracking
+/// 브랜치가 하나도 없으면(로컬 전용 저장소) hide 대상이 없어 전체 히스토리를
+/// 순회하게 되므로, 그 경우는 revwalk 없이 `None`으로 처리한다.
+fn compute_unpushed(repo: &git2::Repository) -> Option<std::collections::HashSet<git2::Oid>> {
+    use std::collections::HashSet;
+
+    // HEAD가 가리키는 로컬 브랜치의 upstream tip OID (없으면 None)
+    let upstream_oid = repo
+        .head()
+        .ok()
+        .filter(|h| h.is_branch())
+        .and_then(|h| h.shorthand().map(str::to_string))
+        .and_then(|name| repo.find_branch(&name, git2::BranchType::Local).ok())
+        .and_then(|b| b.upstream().ok())
+        .and_then(|up| up.get().target());
+
+    // upstream도 없고 리모트 tracking 브랜치도 없으면 전부 unpushed
+    if upstream_oid.is_none() {
+        let has_remote = repo
+            .branches(Some(git2::BranchType::Remote))
+            .map(|mut it| it.next().is_some())
+            .unwrap_or(false);
+        if !has_remote {
+            return None;
+        }
+    }
+
+    let Ok(mut walk) = repo.revwalk() else {
+        return Some(HashSet::new()); // revwalk 생성 실패 시 안전하게 "unpushed 없음"
+    };
+    if walk.push_head().is_err() {
+        return Some(HashSet::new()); // unborn HEAD(빈 저장소) 등
+    }
+    match upstream_oid {
+        Some(oid) => {
+            let _ = walk.hide(oid); // upstream..HEAD
+        }
+        None => {
+            let _ = walk.hide_glob("refs/remotes/*"); // HEAD --not --remotes
+        }
+    }
+    Some(walk.flatten().collect())
+}
+
 #[tauri::command]
 pub async fn get_commit_history(
     repo_path: String,
@@ -23,15 +72,14 @@ pub async fn get_commit_history(
     let result = tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
         let ref_map = crate::git::commit::build_ref_map(&repo);
+        // HEAD 기준 unpushed 커밋 집합. None이면 "모든 커밋이 unpushed".
+        let unpushed = compute_unpushed(&repo);
         let mut revwalk = repo.revwalk()?;
-        // Include commits reachable from ALL refs (local + remote branches, tags),
-        // not just HEAD, so every tagged/branched commit appears in the timeline.
-        // push_glob peels annotated tags to their commit automatically; ignore
-        // errors so an empty category (e.g. no remotes) doesn't abort the walk.
-        let _ = revwalk.push_glob("refs/heads/*");
-        let _ = revwalk.push_glob("refs/remotes/*");
-        let _ = revwalk.push_glob("refs/tags/*");
-        let _ = revwalk.push_head(); // covers a detached HEAD not pointed at by any ref
+        // 현재 체크아웃된 브랜치(HEAD)에서 도달 가능한 커밋만 시간순으로 조회한다.
+        // GitHub Desktop의 History 탭과 동일하게, 다른 브랜치·리모트의 커밋은
+        // 타임라인에 섞이지 않는다. detached HEAD도 그대로 처리된다. unborn HEAD
+        // (빈 저장소)면 push_head가 실패하므로 빈 히스토리가 된다.
+        let _ = revwalk.push_head();
         revwalk.set_sorting(git2::Sort::TIME)?;
 
         let limit = limit.unwrap_or(100);
@@ -48,6 +96,10 @@ pub async fn get_commit_history(
 
                 let author_email = author.email().unwrap_or("").to_string();
                 let refs = ref_map.get(&oid).cloned().unwrap_or_default();
+                let is_unpushed = match &unpushed {
+                    None => true,
+                    Some(set) => set.contains(&oid),
+                };
                 Some(json!({
                     "oid": oid.to_string(),
                     "message": commit.message().unwrap_or("").trim().to_string(),
@@ -60,6 +112,7 @@ pub async fn get_commit_history(
                     "timestamp": timestamp,
                     "parentCount": commit.parent_count(),
                     "refs": refs,
+                    "isUnpushed": is_unpushed,
                 }))
             })
             .collect();
@@ -463,4 +516,165 @@ pub async fn cherry_pick_commit(
     engine.cherry_pick_commit(&oid).await?;
     tracing::info!("Cherry-picked commit: {}", oid);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use git2::{BranchType, Oid, Repository, Signature};
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    static COUNTER: AtomicU32 = AtomicU32::new(0);
+
+    /// 새 의존성 없이 임시 디렉토리에 non-bare 저장소를 만들고, Drop에서 정리한다.
+    struct TempRepo {
+        path: PathBuf,
+    }
+
+    impl TempRepo {
+        fn new() -> Self {
+            let mut path = std::env::temp_dir();
+            path.push(format!(
+                "gitbaro-hist-test-{}-{}",
+                std::process::id(),
+                COUNTER.fetch_add(1, Ordering::SeqCst)
+            ));
+            std::fs::create_dir_all(&path).unwrap();
+            Repository::init(&path).unwrap();
+            TempRepo { path }
+        }
+
+        fn open(&self) -> Repository {
+            Repository::open(&self.path).unwrap()
+        }
+    }
+
+    impl Drop for TempRepo {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    /// 워킹트리에 파일을 쓰고 HEAD에 커밋한다. 생성된 커밋 OID를 반환.
+    fn commit(repo: &Repository, file: &str, content: &str) -> Oid {
+        let workdir = repo.workdir().unwrap();
+        std::fs::write(workdir.join(file), content).unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new(file)).unwrap();
+        index.write().unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let sig = Signature::now("Test", "test@example.com").unwrap();
+        let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        let parents: Vec<&git2::Commit> = parent.iter().collect();
+        repo.commit(Some("HEAD"), &sig, &sig, "msg", &tree, &parents)
+            .unwrap()
+    }
+
+    fn head_branch(repo: &Repository) -> String {
+        repo.head().unwrap().shorthand().unwrap().to_string()
+    }
+
+    /// 네트워크 없이 리모트 tracking ref(refs/remotes/<name>)를 특정 커밋에 만든다.
+    fn set_remote_ref(repo: &Repository, name: &str, oid: Oid) {
+        repo.reference(&format!("refs/remotes/{name}"), oid, true, "test")
+            .unwrap();
+    }
+
+    #[test]
+    fn unpushed_is_none_without_any_remote() {
+        // 리모트 tracking 브랜치가 하나도 없으면 전부 unpushed(None)
+        let tmp = TempRepo::new();
+        let repo = tmp.open();
+        commit(&repo, "a.txt", "1");
+        commit(&repo, "a.txt", "2");
+        assert!(compute_unpushed(&repo).is_none());
+    }
+
+    #[test]
+    fn unpushed_is_none_on_empty_repo() {
+        // unborn HEAD + 리모트 없음 → None
+        let tmp = TempRepo::new();
+        let repo = tmp.open();
+        assert!(compute_unpushed(&repo).is_none());
+    }
+
+    #[test]
+    fn unpushed_uses_upstream_range_when_tracking() {
+        // upstream 있음: upstream..HEAD 만 unpushed
+        let tmp = TempRepo::new();
+        let repo = tmp.open();
+        let c1 = commit(&repo, "a.txt", "1");
+        let c2 = commit(&repo, "a.txt", "2");
+        let branch = head_branch(&repo);
+
+        set_remote_ref(&repo, &format!("origin/{branch}"), c1);
+        repo.remote("origin", "https://example.invalid/r.git")
+            .unwrap();
+        let mut b = repo.find_branch(&branch, BranchType::Local).unwrap();
+        b.set_upstream(Some(&format!("origin/{branch}"))).unwrap();
+
+        let set = compute_unpushed(&repo).expect("tracking → Some");
+        assert!(set.contains(&c2), "c2(ahead) should be unpushed");
+        assert!(!set.contains(&c1), "c1(on remote) should be pushed");
+        assert_eq!(set.len(), 1);
+    }
+
+    #[test]
+    fn unpushed_uses_not_remotes_without_upstream() {
+        // upstream은 없지만 리모트 tracking ref가 있으면 HEAD --not --remotes
+        let tmp = TempRepo::new();
+        let repo = tmp.open();
+        let c1 = commit(&repo, "a.txt", "1");
+        let c2 = commit(&repo, "a.txt", "2");
+        let c3 = commit(&repo, "a.txt", "3");
+        set_remote_ref(&repo, "origin/main", c1); // 리모트엔 c1까지만
+
+        let set = compute_unpushed(&repo).expect("remote ref exists → Some");
+        assert!(set.contains(&c2));
+        assert!(set.contains(&c3));
+        assert!(!set.contains(&c1));
+        assert_eq!(set.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn history_shows_only_current_branch() {
+        // 다른 브랜치에만 있는 커밋은 현재 브랜치 타임라인에 나오지 않는다.
+        let tmp = TempRepo::new();
+        let repo_path = tmp.path.to_str().unwrap().to_string();
+        let (c1, c2, c3) = {
+            let repo = tmp.open();
+            let c1 = commit(&repo, "a.txt", "1");
+            let c2 = commit(&repo, "a.txt", "2");
+            let main_branch = head_branch(&repo);
+            // feature 브랜치를 c2에서 만들고 거기에만 c3 커밋
+            repo.branch("feature", &repo.find_commit(c2).unwrap(), false)
+                .unwrap();
+            repo.set_head("refs/heads/feature").unwrap();
+            let c3 = commit(&repo, "b.txt", "3");
+            // HEAD를 다시 원래 브랜치로 되돌린다
+            repo.set_head(&format!("refs/heads/{main_branch}")).unwrap();
+            (c1, c2, c3)
+        };
+
+        let commits = get_commit_history(repo_path, Some(100), Some(0))
+            .await
+            .unwrap();
+        let oids: std::collections::HashSet<String> = commits
+            .iter()
+            .map(|v| v["oid"].as_str().unwrap().to_string())
+            .collect();
+
+        assert!(oids.contains(&c1.to_string()));
+        assert!(oids.contains(&c2.to_string()));
+        assert!(
+            !oids.contains(&c3.to_string()),
+            "feature 전용 커밋은 현재 브랜치 히스토리에 없어야 한다"
+        );
+        assert_eq!(commits.len(), 2);
+
+        // 리모트가 없으므로 모든 커밋이 unpushed(true)로 표시된다
+        assert!(commits.iter().all(|v| v["isUnpushed"].as_bool().unwrap()));
+    }
 }

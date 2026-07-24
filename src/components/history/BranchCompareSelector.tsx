@@ -1,11 +1,13 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { ArrowLeftRight, Cloud, GitCompareArrows, Search, X, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { useBranchDivergence } from "@/api/queries";
 import type { BranchInfo } from "@/types";
 
 interface BranchCompareSelectorProps {
   branches: BranchInfo[];
+  activeRepoPath: string | null;
   currentBranch: string | null;
   compareBranch: string | null;
   onSelect: (branchName: string | null) => void;
@@ -40,6 +42,7 @@ function BranchKindIcon({ kind }: { kind: BranchKind }) {
 
 export function BranchCompareSelector({
   branches,
+  activeRepoPath,
   currentBranch,
   compareBranch,
   onSelect,
@@ -48,6 +51,13 @@ export function BranchCompareSelector({
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ↓N/↑N 배지용 divergence는 셀렉터가 열릴 때만 조회한다(지연 계산).
+  const { data: divergence = [] } = useBranchDivergence(activeRepoPath, isOpen);
+  const divergenceMap = useMemo(
+    () => new Map(divergence.map((d) => [d.name, d])),
+    [divergence],
+  );
 
   // Close on outside click
   useEffect(() => {
@@ -145,7 +155,7 @@ export function BranchCompareSelector({
             {filteredBranches.length > 0 ? (
               filteredBranches.map((branch) => {
                 const isSelected = branch.name === compareBranch;
-                const ab = branch.aheadBehindHead;
+                const ab = divergenceMap.get(branch.name);
                 const kind = getBranchKind(branch);
                 const kindTitle =
                   kind === "synced"

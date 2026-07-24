@@ -15,6 +15,8 @@ interface UIState {
   compareBranch: string | null;
   previewBranch: string | null;
   isActivityLogOpen: boolean;
+  /** 브랜치 전환(checkout + 재조회) 진행 중 여부. 로딩 피드백 표시에 사용. */
+  isSwitchingBranch: boolean;
   setTheme: (theme: Theme) => void;
   setActiveTab: (tab: "changes" | "history" | "stash" | "actions") => void;
   setSidebarWidth: (width: number) => void;
@@ -24,6 +26,7 @@ interface UIState {
   setCompareBranch: (branch: string | null) => void;
   setPreviewBranch: (branch: string | null) => void;
   setActivityLogOpen: (open: boolean) => void;
+  setSwitchingBranch: (switching: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -38,6 +41,7 @@ export const useUIStore = create<UIState>()(
       compareBranch: null,
       previewBranch: null,
       isActivityLogOpen: false,
+      isSwitchingBranch: false,
 
       setTheme: (theme) => set({ theme }),
 
@@ -55,6 +59,7 @@ export const useUIStore = create<UIState>()(
       setCompareBranch: (branch) => set({ compareBranch: branch }),
       setPreviewBranch: (branch) => set({ previewBranch: branch }),
       setActivityLogOpen: (open) => set({ isActivityLogOpen: open }),
+      setSwitchingBranch: (switching) => set({ isSwitchingBranch: switching }),
     }),
     {
       name: "gitbaro-ui",

@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { GitBranch, ChevronDown, ChevronUp } from "lucide-react";
+import { GitBranch, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
@@ -7,6 +7,7 @@ import { useBranches, useRecentBranches, useStatus, useWorktrees } from "@/api/q
 import { switchBranch, createBranch, deleteBranch, renameBranch, stashPush, stashPop } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
+import { useSelectionStore } from "@/stores/selection";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { useClickOutside } from "./useToolbarDropdown";
 import { BranchDropdown } from "./BranchDropdown";
@@ -44,6 +45,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
 
   const headBranch = branches.find((b) => b.isHead);
   const currentBranch = headBranch?.name ?? null;
+  const isSwitchingBranch = useUIStore((s) => s.isSwitchingBranch);
   const ahead = headBranch?.aheadBehind?.ahead ?? 0;
   const behind = headBranch?.aheadBehind?.behind ?? 0;
   const hasChanges = ahead > 0 || behind > 0;
@@ -58,11 +60,25 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
       queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
     ]);
 
+  // 브랜치가 바뀌면 이전 브랜치 기준의 파일·커밋 선택은 무효이므로 초기화한다.
+  const clearBranchScopedSelection = () => {
+    const { clearFileSelection, clearCommitSelection } = useSelectionStore.getState();
+    clearFileSelection();
+    clearCommitSelection();
+  };
+
   const doSwitch = async (branchName: string) => {
     if (!activeRepoPath) return;
-    await switchBranch(activeRepoPath, branchName);
-    await invalidateAll();
-    addToast(t("branch.switchedTo", { name: branchName }), "success");
+    const { setSwitchingBranch } = useUIStore.getState();
+    setSwitchingBranch(true);
+    try {
+      await switchBranch(activeRepoPath, branchName);
+      clearBranchScopedSelection();
+      await invalidateAll();
+      addToast(t("branch.switchedTo", { name: branchName }), "success");
+    } finally {
+      setSwitchingBranch(false);
+    }
   };
 
   const handleSwitch = async (branchName: string) => {
@@ -100,6 +116,8 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
 
   const handleCreate = async (name: string, fromBranch: string) => {
     if (!activeRepoPath) return;
+    const { setSwitchingBranch } = useUIStore.getState();
+    setSwitchingBranch(true);
     try {
       if (isDirty) {
         await stashPush(activeRepoPath);
@@ -109,11 +127,14 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
       if (isDirty) {
         await stashPop(activeRepoPath);
       }
+      clearBranchScopedSelection();
       await invalidateAll();
       addToast(t("branch.createdAndSwitched", { name }), "success");
       setShowCreateDialog(false);
     } catch (err) {
       addToast(t("branch.failedToCreate", { error: getErrorMessage(err) }), "error");
+    } finally {
+      setSwitchingBranch(false);
     }
   };
 
@@ -174,7 +195,11 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           isOpen ? "relative z-50 bg-accent" : "hover:bg-accent",
         )}
       >
-        <GitBranch className="w-4 h-4 shrink-0 opacity-50" />
+        {isSwitchingBranch ? (
+          <Loader2 className="w-4 h-4 shrink-0 animate-spin text-primary" />
+        ) : (
+          <GitBranch className="w-4 h-4 shrink-0 opacity-50" />
+        )}
         <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground leading-tight">{t("branch.current")}</p>
           <div className="flex items-center gap-1.5">

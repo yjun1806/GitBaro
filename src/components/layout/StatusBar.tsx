@@ -1,14 +1,14 @@
 import { GitBranch, Wifi, WifiOff, Loader2, Terminal } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useBranchStore } from "@/stores/branch";
 import { useActivityStore } from "@/stores/activity";
 import { useUIStore } from "@/stores/ui";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useCurrentBranch } from "@/hooks/useCurrentBranch";
 import { formatRelativeTime, cn } from "@/lib/utils";
 
 export function StatusBar() {
   const { t } = useTranslation();
-  const currentBranch = useBranchStore((s) => s.currentBranch);
+  const currentBranch = useCurrentBranch();
   const { isOnline } = useOnlineStatus();
   const isActivityLogOpen = useUIStore((s) => s.isActivityLogOpen);
   const setActivityLogOpen = useUIStore((s) => s.setActivityLogOpen);

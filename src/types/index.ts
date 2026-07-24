@@ -121,6 +121,12 @@ export interface CommitInfo {
   timestamp: number;
   parentIds: string[];
   refs: RefLabel[];
+  /**
+   * 아직 리모트로 push되지 않은 커밋인지 (히스토리 업로드 화살표 표시용).
+   * 히스토리 타임라인(getCommitHistory)에서만 채워지며, 커밋 상세·브랜치 비교
+   * 컨텍스트에서는 undefined다.
+   */
+  isUnpushed?: boolean;
 }
 
 export interface AuthorInfo {
@@ -136,10 +142,19 @@ export interface BranchInfo {
   isDefault: boolean;
   upstream: string | null;
   aheadBehind: { ahead: number; behind: number } | null;
-  aheadBehindHead: { ahead: number; behind: number } | null;
   lastCommitTime: number | null;
   isFullyMerged: boolean;
   lastCommitAuthor: { name: string; email: string } | null;
+}
+
+/**
+ * 각 브랜치가 현재 HEAD 대비 앞선/뒤처진 커밋 수. 브랜치 비교 셀렉터 전용이며,
+ * `get_branch_divergence`로 비교 셀렉터가 열릴 때만 조회한다(지연 계산).
+ */
+export interface BranchDivergence {
+  name: string;
+  ahead: number;
+  behind: number;
 }
 
 export interface RepoInfo {

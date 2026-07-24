@@ -25,6 +25,7 @@ import { HistoryView } from "@/components/history/HistoryView";
 import { StashView } from "@/components/stash/StashView";
 import { ActionsView } from "@/components/actions/ActionsView";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
+import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 
 /* ─── Sidebar ─── */
 
@@ -153,7 +154,7 @@ export function Sidebar() {
           </TabGroup>
 
           {/* Tab content */}
-          <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="relative flex-1 overflow-hidden flex flex-col">
             {activeTab === "changes" ? (
               <ChangesView />
             ) : activeTab === "history" ? (
@@ -163,6 +164,7 @@ export function Sidebar() {
             ) : (
               <ActionsView />
             )}
+            <SwitchingOverlay />
           </div>
         </>
       )}

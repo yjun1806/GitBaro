@@ -2,6 +2,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tansta
 import {
   getStatus,
   getBranches,
+  getBranchDivergence,
   getRepoSyncStatus,
   getRecentBranches,
   getCommitHistory,
@@ -52,6 +53,22 @@ export function useBranches(repoPath: string | null) {
     queryKey: ["branches", repoPath],
     queryFn: () => getBranches(repoPath!),
     enabled: repoPath !== null,
+  });
+}
+
+/**
+ * 각 브랜치의 현재 HEAD 대비 ahead/behind. 브랜치 수가 많은 저장소에서 비싼
+ * 계산이라 `get_branches`에서 분리했고, 비교 셀렉터가 열릴 때(enabled)만 조회한다.
+ *
+ * 값이 HEAD에 의존하므로 캐시를 신선하게 유지하지 않는다(staleTime 0). 브랜치
+ * 전환·커밋으로 HEAD가 바뀐 뒤 셀렉터를 다시 열면 항상 최신 HEAD 기준으로
+ * 재계산된다. enabled=isOpen이라 열지 않으면 계산 자체가 일어나지 않는다.
+ */
+export function useBranchDivergence(repoPath: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["branchDivergence", repoPath],
+    queryFn: () => getBranchDivergence(repoPath!),
+    enabled: repoPath !== null && enabled,
   });
 }
 

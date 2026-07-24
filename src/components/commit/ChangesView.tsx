@@ -2,10 +2,10 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
-import { useBranchStore } from "@/stores/branch";
 import { useAccountStore } from "@/stores/account";
 import { useSelectionStore } from "@/stores/selection";
 import { useStatus } from "@/api/queries";
+import { useCurrentBranch } from "@/hooks/useCurrentBranch";
 import { createCommit, stageFiles, unstageFiles, openInEditor, discardChanges, revealInFinder, addToGitignore } from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
 import { FileEntry } from "@/components/commit/FileEntry";
@@ -20,7 +20,7 @@ import { useToastStore } from "@/stores/toast";
 export function ChangesView() {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
-  const currentBranch = useBranchStore((s) => s.currentBranch);
+  const currentBranch = useCurrentBranch();
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
   const accounts = useAccountStore((s) => s.accounts);
   const activeAccount = accounts.find((a) => a.id === activeAccountId);
@@ -452,7 +452,7 @@ export function ChangesView() {
               {t("commit.committing")}
             </span>
           ) : (
-            t("commit.submit", { branch: currentBranch ?? "main" })
+            t("commit.submit", { branch: currentBranch ?? "HEAD" })
           )}
         </button>
         {commitError && (

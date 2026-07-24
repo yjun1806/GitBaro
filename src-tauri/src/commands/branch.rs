@@ -34,9 +34,6 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
             .ok()
             .and_then(|h| h.shorthand().map(|s| s.to_string()));
 
-        // HEAD의 OID (현재 브랜치 기준 ahead/behind 계산용)
-        let head_oid = repo.head().ok().and_then(|h| h.target());
-
         let mut list: Vec<Value> = Vec::new();
         for item in branches {
             let (branch, branch_type) = item?;
@@ -88,21 +85,6 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
                 None
             };
 
-            // 현재 브랜치(HEAD) 기준 ahead/behind
-            let ahead_behind_head = if !is_head {
-                let branch_oid = branch.get().target();
-                match (branch_oid, head_oid) {
-                    (Some(b), Some(h)) => {
-                        repo.graph_ahead_behind(b, h)
-                            .ok()
-                            .map(|(ahead, behind)| json!({ "ahead": ahead, "behind": behind }))
-                    }
-                    _ => None,
-                }
-            } else {
-                None
-            };
-
             let is_default = !is_remote
                 && default_branch_name.as_deref() == Some(name.as_str());
 
@@ -125,7 +107,6 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
                 "isDefault": is_default,
                 "upstream": upstream,
                 "aheadBehind": ahead_behind,
-                "aheadBehindHead": ahead_behind_head,
                 "lastCommitTime": last_commit_time,
                 "lastCommitAuthor": last_commit_author,
                 "isFullyMerged": fully_merged,
@@ -139,6 +120,82 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
             tb.cmp(&ta)
         });
 
+        Ok::<_, AppError>(list)
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+
+    Ok(result)
+}
+
+/// 각 브랜치가 현재 HEAD(체크아웃된 브랜치) 대비 얼마나 앞서/뒤처졌는지 계산한다.
+/// 브랜치 비교 셀렉터의 ↓N/↑N 배지 전용 값이다. 브랜치가 많은 저장소에서 이를
+/// `get_branches`에 포함하면 목록 로드(=브랜치 전환)마다 수천 번의 그래프 비교가
+/// 일어나므로, 비교 셀렉터가 열릴 때만 별도로 조회한다(지연 계산).
+///
+/// 내부 최적화: 동일 tip OID는 한 번만 `graph_ahead_behind`를 호출하도록
+/// 메모이제이션하고, HEAD와 같은 커밋이면 계산 없이 (0, 0)으로 처리한다.
+#[tauri::command]
+pub async fn get_branch_divergence(repo_path: String) -> Result<Vec<Value>, AppError> {
+    let result = tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&repo_path)?;
+        let Some(head_oid) = repo.head().ok().and_then(|h| h.target()) else {
+            return Ok::<_, AppError>(Vec::new());
+        };
+        let head_name = repo
+            .head()
+            .ok()
+            .and_then(|h| h.shorthand().map(|s| s.to_string()));
+
+        // 로컬 브랜치가 추적하는 리모트(upstream)는 비교 셀렉터에서 로컬 항목으로
+        // 한 번만 노출되므로, 중복 리모트 항목은 계산에서 제외한다(프론트 필터와 일치).
+        let mut tracked_upstreams: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for item in repo.branches(Some(git2::BranchType::Local))? {
+            let (branch, _) = item?;
+            if let Some(up) = branch
+                .upstream()
+                .ok()
+                .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()))
+            {
+                tracked_upstreams.insert(up);
+            }
+        }
+
+        // 동일 tip OID의 중복 계산을 피하는 메모이제이션 캐시
+        let mut cache: std::collections::HashMap<git2::Oid, (usize, usize)> =
+            std::collections::HashMap::new();
+        let mut list: Vec<Value> = Vec::new();
+        for item in repo.branches(None)? {
+            let (branch, branch_type) = item?;
+            let name = match branch.name()? {
+                Some(n) => n.to_string(),
+                None => continue,
+            };
+            let is_remote = branch_type == git2::BranchType::Remote;
+            if is_remote && name.ends_with("/HEAD") {
+                continue;
+            }
+            // 로컬이 추적하는 리모트는 중복이므로 제외
+            if is_remote && tracked_upstreams.contains(&name) {
+                continue;
+            }
+            // 현재 브랜치 자신은 비교 의미가 없어 제외
+            if !is_remote && head_name.as_deref() == Some(name.as_str()) {
+                continue;
+            }
+            let Some(oid) = branch.get().target() else {
+                continue;
+            };
+            let (ahead, behind) = if oid == head_oid {
+                (0, 0)
+            } else {
+                *cache
+                    .entry(oid)
+                    .or_insert_with(|| repo.graph_ahead_behind(oid, head_oid).unwrap_or((0, 0)))
+            };
+            list.push(json!({ "name": name, "ahead": ahead, "behind": behind }));
+        }
         Ok::<_, AppError>(list)
     })
     .await
