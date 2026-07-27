@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.2](https://github.com/yjun1806/GitBaro/compare/v0.1.1...v0.1.2) (2026-07-27)
+
+
+### Features
+
+* **diff:** add markdown document diff engine ([bd2f678](https://github.com/yjun1806/GitBaro/commit/bd2f67874b99d92d029b3666ef6691bf35ef6e8e))
+* **diff:** show markdown files in a rendered document view by default ([e1c7333](https://github.com/yjun1806/GitBaro/commit/e1c7333393a1375a1bff68e3d991cabeef95955a))
+
+
+### Performance
+
+* **diff:** stop recomputing and rebuilding what the document view never uses ([404c790](https://github.com/yjun1806/GitBaro/commit/404c790ae98b9a38517482474c9ad819ff64ad44))
+
 ## [0.1.1](https://github.com/yjun1806/GitBaro/compare/v0.1.0...v0.1.1) (2026-07-24)
 
 
