@@ -35,3 +35,10 @@ open = "5"
 zeroize = { version = "1", features = ["derive"] }
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
+# Syntax parsing for the verify tree-sitter layer:
+# structural diff (V1 · V17) and the symbol index (V7 · V8 · V9).
+# Versions fixed by docs/verify-treesitter-design.md §1.1.
+tree-sitter = "0.26.11"
+tree-sitter-typescript = "0.23.2"
+tree-sitter-javascript = "0.25.0"
+tree-sitter-rust = "0.24.2"

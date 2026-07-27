@@ -5,6 +5,21 @@ pub const GIT_COMMAND_START: &str = "git:command-start";
 pub const GIT_COMMAND_COMPLETE: &str = "git:command-complete";
 pub const GIT_COMMAND_PROGRESS: &str = "git:command-progress";
 pub const FS_CHANGE: &str = "fs:change";
+pub const VERIFY_TEST_PROGRESS: &str = "verify:test-progress";
+/// Symbol-index build progress. The payload is `verify::context::IndexProgress`,
+/// which is already `Serialize` + camelCase and is forwarded verbatim.
+pub const VERIFY_INDEX_PROGRESS: &str = "verify:index-progress";
+
+/// Streams a running test command's output to the verification panel (V11).
+/// Only the last line is carried — the full output stays in the evidence tail.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyTestProgressEvent {
+    pub repo_path: String,
+    /// Last output line, cut at 2048 characters.
+    pub line: String,
+    pub running: bool,
+}
 
 /// Emitted when the working tree of a watched repository changes (debounced).
 /// The frontend uses this to invalidate the status query instead of polling.

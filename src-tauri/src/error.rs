@@ -49,6 +49,15 @@ pub enum AppError {
 
     #[error("Repository not found: {0}")]
     RepoNotFound(String),
+
+    #[error("Verification failed: {0}")]
+    Verify(String),
+
+    /// Only for a command that was handed a specific session file it cannot
+    /// open. Ordinary parse failures are absorbed as `Ok(None)` / empty results
+    /// so a session-log format change never surfaces as an error toast.
+    #[error("Session log unreadable ({path}): {message}")]
+    SessionParse { path: String, message: String },
 }
 
 impl From<reqwest::Error> for AppError {
@@ -86,6 +95,10 @@ impl serde::Serialize for AppError {
             AppError::GhVersionTooOld(msg) => ("GhVersionTooOld", msg.clone()),
             AppError::Channel(msg) => ("Channel", msg.clone()),
             AppError::RepoNotFound(path) => ("RepoNotFound", path.clone()),
+            AppError::Verify(msg) => ("Verify", msg.clone()),
+            AppError::SessionParse { path, message } => {
+                ("SessionParse", format!("{}: {}", path, message))
+            }
         };
 
         let mut s = serializer.serialize_struct("AppError", 2)?;

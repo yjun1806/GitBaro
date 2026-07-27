@@ -1,10 +1,17 @@
 pub mod actions;
 pub mod auth;
+pub mod bisect;
 pub mod branch;
 pub mod diff;
+pub mod evidence;
 pub mod git;
 pub mod history;
+pub mod hooks;
 pub mod repo;
+pub mod review;
+pub mod session;
 pub mod settings;
+pub mod syntax;
+pub mod verify;
 pub mod watch;
 pub mod worktree;

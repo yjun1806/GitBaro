@@ -6,6 +6,7 @@ pub mod gh;
 pub mod git;
 pub mod github;
 pub mod state;
+pub mod verify;
 pub mod watcher;
 
 use tauri::{LogicalPosition, LogicalSize, Manager};
@@ -21,6 +22,9 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(state::TokenStore::new())
         .manage(commands::watch::WatcherState::new())
+        // Incremental symbol index (V7 · V8 · V9). Deliberately long-lived
+        // state: an index that is rebuilt per command is not incremental.
+        .manage(verify::context::SymbolIndexStore::default())
         .invoke_handler(tauri::generate_handler![
             commands::git::get_status,
             commands::git::stage_files,
@@ -102,6 +106,44 @@ pub fn run() {
             commands::actions::get_workflow_run_jobs,
             commands::watch::start_repo_watch,
             commands::watch::stop_repo_watch,
+            commands::verify::verify_working_tree,
+            commands::verify::verify_commit,
+            commands::verify::verify_commit_range,
+            commands::verify::get_verify_rules,
+            commands::verify::set_verify_rule_enabled,
+            commands::verify::check_dependencies,
+            commands::review::get_file_review_states,
+            commands::review::mark_file_reviewed,
+            commands::review::unmark_file_reviewed,
+            commands::review::get_commit_review_states,
+            commands::review::mark_commit_reviewed,
+            commands::review::unmark_commit_reviewed,
+            commands::review::get_review_queue,
+            commands::review::get_push_gate_summary,
+            commands::review::get_ledger_enabled,
+            commands::review::set_ledger_enabled,
+            commands::review::read_evidence_ledger,
+            commands::review::record_evidence_ledger,
+            commands::session::list_sessions_for_repo,
+            commands::session::get_session_summary,
+            commands::session::verify_session,
+            commands::session::correlate_sessions_to_commits,
+            commands::session::get_session_cumulative_diff,
+            commands::evidence::get_test_evidence,
+            commands::evidence::run_test_command,
+            commands::evidence::get_diff_coverage,
+            commands::syntax::build_symbol_index,
+            commands::syntax::cancel_symbol_index,
+            commands::syntax::get_symbol_index_status,
+            commands::syntax::get_structural_diff,
+            commands::syntax::get_blast_radius,
+            commands::syntax::verify_syntax,
+            commands::hooks::get_hook_status,
+            commands::hooks::preview_hook_install,
+            commands::hooks::install_verify_hooks,
+            commands::hooks::uninstall_verify_hooks,
+            commands::hooks::list_hook_sessions,
+            commands::bisect::run_sub_commit_bisect,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");
