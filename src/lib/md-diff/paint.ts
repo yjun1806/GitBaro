@@ -23,6 +23,23 @@ export interface PaintLabels {
 const INLINE_DELETE_LIMIT = 2;
 
 /**
+ * 살균 설정 — DOMPurify 기본값에서 **더 조여야 하는 것들**.
+ *
+ * 기본값은 XSS(스크립트 실행)를 막을 뿐, 화면을 속이는 마크업은 그대로 통과시킨다.
+ * 실측으로 확인한 두 구멍을 막는다:
+ *
+ * - `style` 속성: `position:fixed; width:100vw; height:100vh` 한 줄이면 저장소 README가
+ *   앱 창 전체를 덮는 가짜 UI가 된다. GitHub도 README에서 인라인 style을 제거한다.
+ *   가운데 정렬 같은 정당한 용도는 `align` 속성으로 이미 동작한다.
+ * - 폼 요소: README 안에서 **실제로 동작하는** 자격증명 입력창이 된다. 앱 CSP에
+ *   `form-action`이 없어 제출도 막히지 않는다.
+ */
+const SANITIZE: Parameters<typeof DOMPurify.sanitize>[1] = {
+  FORBID_ATTR: ["style"],
+  FORBID_TAGS: ["form", "input", "button", "select", "textarea"],
+};
+
+/**
  * 모델이 준 블록 HTML을 요소로. 한 겹 벗겨 문단·헤딩이 바로 앉게 한다.
  *
  * **여기가 신뢰 경계다.** 임의 저장소의 README가 그대로 앱 메인 컨텍스트로 들어오는
@@ -32,7 +49,7 @@ const INLINE_DELETE_LIMIT = 2;
  */
 function toElement(html: string): HTMLElement {
   const wrap = document.createElement("div");
-  wrap.innerHTML = DOMPurify.sanitize(html);
+  wrap.innerHTML = DOMPurify.sanitize(html, SANITIZE);
   const only = wrap.children.length === 1 ? wrap.firstElementChild : null;
   if (only instanceof HTMLElement) return only;
   const frag = document.createElement("div");

