@@ -189,6 +189,7 @@ pub async fn stage_files(
             operation: "stage".to_string(),
             repo_path: repo_path.clone(),
             started_at,
+            automatic: false,
         },
     );
 
@@ -256,6 +257,7 @@ pub async fn unstage_files(
             operation: "unstage".to_string(),
             repo_path: repo_path.clone(),
             started_at,
+            automatic: false,
         },
     );
 
@@ -415,11 +417,13 @@ pub(crate) fn is_auth_error(err: &AppError) -> bool {
 pub async fn git_fetch(
     repo_path: String,
     account_id: String,
+    automatic: Option<bool>,
     app_handle: tauri::AppHandle,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
-    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
+        .with_automatic(automatic.unwrap_or(false));
 
     match engine.fetch("origin", &token).await {
         Ok(()) => {

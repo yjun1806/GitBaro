@@ -136,8 +136,16 @@ export async function cherryPickCommit(repoPath: string, oid: string): Promise<v
   return invoke("cherry_pick_commit", { repoPath, oid });
 }
 
-export async function gitFetch(repoPath: string, accountId: string): Promise<void> {
-  return invoke("git_fetch", { repoPath, accountId });
+/**
+ * @param automatic 사용자가 직접 누른 fetch가 아니라 앱이 알아서 도는 fetch면 true.
+ *   성공한 자동 fetch는 활동 로그에 남지 않는다.
+ */
+export async function gitFetch(
+  repoPath: string,
+  accountId: string,
+  automatic = false,
+): Promise<void> {
+  return invoke("git_fetch", { repoPath, accountId, automatic });
 }
 
 export async function gitPush(

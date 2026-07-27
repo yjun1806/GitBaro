@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { createSafeStorage } from "@/lib/safe-storage";
 import type { GitHubAccount } from "@/types";
 
 interface AccountState {
@@ -55,6 +56,7 @@ export const useAccountStore = create<AccountState>()(
     }),
     {
       name: "gitbaro-accounts",
+      storage: createJSONStorage(() => createSafeStorage()),
       partialize: (state) => ({
         activeAccountId: state.activeAccountId,
       }),

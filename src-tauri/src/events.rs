@@ -22,6 +22,9 @@ pub struct GitCommandStartEvent {
     pub operation: String,
     pub repo_path: String,
     pub started_at: i64,
+    /// 사용자가 직접 실행한 작업이 아니라 앱이 주기적으로 도는 작업인지.
+    /// 프론트엔드는 성공한 자동 작업을 활동 로그에서 제외한다.
+    pub automatic: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { createSafeStorage } from "@/lib/safe-storage";
 import type { RepoInfo, StatusEntry } from "@/types";
 import type { RepoVisibility } from "@/api/commands";
 
@@ -141,6 +142,7 @@ export const useRepositoryStore = create<RepositoryState>()(
     }),
     {
       name: "gitbaro-repos",
+      storage: createJSONStorage(() => createSafeStorage()),
       partialize: (state) => ({
         repos: state.repos,
         activeRepoPath: state.activeRepoPath,

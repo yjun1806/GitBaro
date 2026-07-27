@@ -458,6 +458,7 @@
     "tryAgain": "Try again",
     "failedToLoadAccounts": "Failed to load accounts: {{error}}",
     "failedToOpenRepo": "Failed to open repository: {{error}}",
+    "storageFull": "Storage is full — changes can't be saved. Try clearing the activity log.",
     "failedToLogout": "Failed to log out: {{error}}",
     "failedToUpdateSettings": "Failed to update settings: {{error}}"
   },

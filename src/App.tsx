@@ -10,6 +10,7 @@ import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import i18n from "@/i18n/config";
 import { getErrorMessage } from "@/lib/utils";
+import { onStorageFailure } from "@/lib/safe-storage";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { WelcomeScreen } from "@/components/welcome/WelcomeScreen";
 import { GhLoginDialog } from "@/components/account/GhLoginDialog";
@@ -59,6 +60,14 @@ function AppContent() {
       addToast(t("error.failedToLoadAccounts", { error: getErrorMessage(err) }), "error");
     }
   }, [setAccounts, setActiveAccount, addToast]);
+
+  // 저장 실패는 조용히 넘어가면 사용자가 데이터 유실을 눈치채지 못한다.
+  // 다른 초기화 effect보다 먼저 등록해 초기 저장 실패도 놓치지 않는다.
+  useEffect(() => {
+    return onStorageFailure(() => {
+      addToast(t("error.storageFull"), "error");
+    });
+  }, [addToast, t]);
 
   // Load accounts and settings from backend on startup
   useEffect(() => {
@@ -186,12 +195,14 @@ function AppContent() {
   }, [addRepo, setActiveRepo, addToast]);
 
   const handleAccountSelectForRepo = useCallback((accountId: string | null) => {
+    // 다이얼로그 정리를 먼저 한다. 저장소 추가가 실패하더라도 다이얼로그가
+    // 열린 채로 남지 않도록 — 닫기가 추가 성공에 의존하면 안 된다.
+    setShowAccountSelectDialog(false);
+    setPendingLocalRepo(null);
     if (pendingLocalRepo) {
       addRepo({ ...pendingLocalRepo.repoInfo, accountId });
       setActiveRepo(pendingLocalRepo.repoInfo.path);
     }
-    setShowAccountSelectDialog(false);
-    setPendingLocalRepo(null);
   }, [pendingLocalRepo, addRepo, setActiveRepo]);
 
   const handleGhDetectedConfirm = useCallback((selected: import("@/types").GitHubAccount[]) => {

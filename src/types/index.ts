@@ -337,6 +337,12 @@ export interface GitCommandEntry {
   exitCode?: number | null;
   resultSummary?: OperationSummary;
   progress?: { message: string; percent?: number };
+  /**
+   * 사용자가 직접 실행한 작업이 아니라 앱이 주기적으로 도는 작업인지.
+   * 성공한 자동 작업은 활동 로그에 남기지 않는다(백그라운드 fetch가 로그를
+   * 뒤덮어 실제 사용자 행동을 파묻는 것을 막기 위해).
+   */
+  automatic?: boolean;
 }
 
 export type OperationSummary =

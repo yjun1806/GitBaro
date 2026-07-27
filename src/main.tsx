@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// 반드시 "./App"보다 위에 있어야 한다. App을 import하는 순간 zustand persist가
+// hydrate하므로, 비대해진 레거시 활동 로그는 그 전에 걷어내야 한다.
+// (import 순서는 storage-cleanup.test.ts가 검증한다)
+import "./lib/storage-cleanup";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";

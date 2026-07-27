@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { createSafeStorage } from "@/lib/safe-storage";
 import type { Theme } from "@/types";
 
 /** Repo rail display mode (Supabase-style sidebar control) */
@@ -63,6 +64,7 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "gitbaro-ui",
+      storage: createJSONStorage(() => createSafeStorage()),
       // Only the rail mode is persisted; all other UI state stays ephemeral.
       partialize: (state) => ({ railMode: state.railMode }),
     },

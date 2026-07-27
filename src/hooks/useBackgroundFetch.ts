@@ -49,7 +49,7 @@ export function useBackgroundFetch() {
       try {
         for (const repo of repos) {
           try {
-            await gitFetch(repo.path, repo.accountId!);
+            await gitFetch(repo.path, repo.accountId!, true);
           } catch {
             // 개별 레포 fetch 실패는 무시 (네트워크·인증 일시 오류 등)
           }

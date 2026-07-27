@@ -9,6 +9,7 @@ interface GitCommandStartPayload {
   operation: string;
   repoPath: string;
   startedAt: number;
+  automatic: boolean;
 }
 
 interface GitCommandCompletePayload {
@@ -50,6 +51,7 @@ export function useGitEvents() {
             operation: p.operation as GitCommandEntry["operation"],
             repoPath: p.repoPath,
             startedAt: p.startedAt,
+            automatic: p.automatic,
           });
         },
       );

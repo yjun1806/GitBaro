@@ -34,6 +34,9 @@ pub struct WorktreeEntry {
 pub struct GitCliEngine {
     pub repo_path: PathBuf,
     app_handle: Option<tauri::AppHandle>,
+    /// 사용자가 직접 실행한 작업이 아니라 앱이 주기적으로 도는 작업인지.
+    /// 프론트엔드는 이 값을 보고 성공한 자동 작업을 활동 로그에서 제외한다.
+    automatic: bool,
 }
 
 impl GitCliEngine {
@@ -41,6 +44,7 @@ impl GitCliEngine {
         Self {
             repo_path: repo_path.to_path_buf(),
             app_handle: None,
+            automatic: false,
         }
     }
 
@@ -48,7 +52,14 @@ impl GitCliEngine {
         Self {
             repo_path: repo_path.into(),
             app_handle: Some(app_handle),
+            automatic: false,
         }
+    }
+
+    /// 이 엔진이 실행하는 작업을 자동 작업으로 표시한다.
+    pub fn with_automatic(mut self, automatic: bool) -> Self {
+        self.automatic = automatic;
+        self
     }
 }
 
@@ -67,6 +78,7 @@ impl GitCliEngine {
                     operation: operation.to_string(),
                     repo_path: self.repo_path.to_string_lossy().to_string(),
                     started_at,
+                    automatic: self.automatic,
                 },
             );
         }
@@ -92,6 +104,27 @@ impl GitCliEngine {
                     stderr: String::from_utf8_lossy(&output.stderr).to_string(),
                     exit_code: output.status.code(),
                     result_summary: summary,
+                },
+            );
+        }
+    }
+
+    /// 명령이 출력을 남기지 못하고 실패했을 때(프로세스 spawn 실패, IO 오류 등)
+    /// 완료 이벤트를 발행한다. 이걸 빠뜨리면 프론트엔드의 진행 중 목록에 항목이
+    /// 영원히 남아 동기화 표시가 멈추지 않는다.
+    fn emit_command_aborted(&self, id: &str, operation: &str, error: &AppError, duration_ms: u64) {
+        if let Some(handle) = &self.app_handle {
+            let _ = handle.emit(
+                GIT_COMMAND_COMPLETE,
+                GitCommandCompleteEvent {
+                    id: id.to_string(),
+                    operation: operation.to_string(),
+                    success: false,
+                    duration_ms,
+                    stdout: String::new(),
+                    stderr: error.to_string(),
+                    exit_code: None,
+                    result_summary: None,
                 },
             );
         }
@@ -738,6 +771,7 @@ impl GitCliEngine {
         let self_op = operation.to_string();
         let app_handle = self.app_handle.clone();
         let repo_path = self.repo_path.clone();
+        let automatic = self.automatic;
 
         let stderr_task = tokio::spawn(async move {
             if let Some(stderr) = stderr_handle {
@@ -747,6 +781,7 @@ impl GitCliEngine {
                 let temp_engine = GitCliEngine {
                     repo_path,
                     app_handle,
+                    automatic,
                 };
 
                 while let Ok(Some(line)) = lines.next_line().await {
@@ -924,7 +959,15 @@ impl GitRemoteEngine for GitCliEngine {
             .current_dir(&self.repo_path)
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_ASKPASS", askpass.path());
-        let output = self.run_remote_with_progress(&mut cmd, &id, "fetch").await?;
+        // `?`로 곧장 반환하면 완료 이벤트가 발행되지 않아 진행 중 표시가 멈추지 않는다.
+        // 자동 fetch는 성공 시 로그에 남지 않으므로 이 경우 추적할 단서도 사라진다.
+        let output = match self.run_remote_with_progress(&mut cmd, &id, "fetch").await {
+            Ok(output) => output,
+            Err(e) => {
+                self.emit_command_aborted(&id, "fetch", &e, start.elapsed().as_millis() as u64);
+                return Err(e);
+            }
+        };
 
         log_output(&output);
         let duration_ms = start.elapsed().as_millis() as u64;

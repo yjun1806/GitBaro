@@ -33,7 +33,7 @@ export function useSelectRepo() {
       const repoHasRemote = repo?.remotes && repo.remotes.length > 0;
       if (repo?.accountId && repoHasRemote && !fetchedRepos.has(path)) {
         setFetchingPath(path);
-        gitFetch(path, repo.accountId)
+        gitFetch(path, repo.accountId, true)
           .then(() => {
             fetchedRepos.add(path);
             queryClient.invalidateQueries({ queryKey: ["branches"] });

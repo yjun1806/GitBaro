@@ -206,12 +206,14 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
   }, [accounts, addRepo, onSelectRepo, addToast, t]);
 
   const handleAccountSelectForRepo = useCallback((accountId: string | null) => {
+    // 다이얼로그 정리를 먼저 한다. 저장소 추가가 실패하더라도 다이얼로그가
+    // 열린 채로 남지 않도록 — 닫기가 추가 성공에 의존하면 안 된다.
+    setShowAccountSelectDialog(false);
+    setPendingLocalRepo(null);
     if (pendingLocalRepo) {
       addRepo({ ...pendingLocalRepo.repoInfo, accountId });
       onSelectRepo(pendingLocalRepo.repoInfo.path);
     }
-    setShowAccountSelectDialog(false);
-    setPendingLocalRepo(null);
   }, [pendingLocalRepo, addRepo, onSelectRepo]);
 
   useEffect(() => {
