@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { FileQuestion } from "lucide-react";
 import { DiffFile } from "@git-diff-view/core";
@@ -9,7 +9,10 @@ import type { DiffOutput, DiffHunk, FileStatus } from "@/types";
 import { DiffHeader } from "./DiffHeader";
 import { BinaryDiffViewer } from "./BinaryDiffViewer";
 import { VirtualizedDiffView } from "./VirtualizedDiffView";
+import { MarkdownDiffView } from "./MarkdownDiffView";
+import { availableModes, defaultMode, type DiffViewMode } from "./view-mode";
 import { useUIStore } from "@/stores/ui";
+import { useToastStore } from "@/stores/toast";
 
 const EXT_LANG_MAP: Record<string, string> = {
   ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
@@ -51,9 +54,32 @@ interface DiffViewerProps {
 
 export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
   const { t } = useTranslation();
-  const [viewMode, setViewMode] = useState<"unified" | "split">("unified");
+  const [viewMode, setViewMode] = useState<DiffViewMode>(() =>
+    defaultMode(diff?.filePath, diff?.binary ?? false),
+  );
   const theme = useUIStore((s) => s.theme);
   const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const addToast = useToastStore((s) => s.addToast);
+
+  const filePath = diff?.filePath;
+  const binary = diff?.binary ?? false;
+  const modes = useMemo(() => availableModes(filePath ?? "", binary), [filePath, binary]);
+
+  // 파일이 바뀌면 그 파일의 기본 모드로 되돌린다 — md는 문서 보기, 나머지는 통합 보기.
+  // 같은 파일이 워처로 갱신될 때는 경로가 그대로라 사용자의 선택이 유지된다.
+  useEffect(() => {
+    setViewMode(defaultMode(filePath, binary));
+  }, [filePath, binary]);
+
+  // 문서 모드가 실패하면(계산 오류·타임아웃) 빈 화면 대신 통합 보기로 물러선다.
+  // 조용히 바꾸면 "왜 문서 보기가 안 뜨지"가 되므로 이유를 말한다.
+  const handleDocError = useCallback(
+    (reason: string) => {
+      addToast(t(reason === "timeout" ? "mdDiff.timeout" : "mdDiff.failed"), "warning");
+      setViewMode("unified");
+    },
+    [addToast, t],
+  );
 
   // 큰 diff는 하이라이팅을 기본 off로 두되, 사용자가 켤 수 있다 — diff가 바뀌면 초기화.
   const [forceHighlight, setForceHighlight] = useState(false);
@@ -129,9 +155,6 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
     }
   }
 
-  const toggleView = () =>
-    setViewMode((v) => (v === "unified" ? "split" : "unified"));
-
   if (!diff) {
     return (
       <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
@@ -149,7 +172,8 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
           addedLines={0}
           removedLines={0}
           viewMode={viewMode}
-          onToggleView={toggleView}
+          modes={modes}
+          onSelectMode={setViewMode}
         />
         <div className="flex-1 min-h-0 overflow-auto">
           {diff.binaryPreview ? (
@@ -176,10 +200,11 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
         addedLines={stats.added}
         removedLines={stats.removed}
         viewMode={viewMode}
-        onToggleView={toggleView}
+        modes={modes}
+        onSelectMode={setViewMode}
       />
 
-      {!wantHighlight && (
+      {viewMode !== "document" && !wantHighlight && (
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs bg-surface border-b border-border text-muted-foreground">
           <span>{t("diff.highlightDisabled", { lines: stats.total })}</span>
           <button
@@ -192,7 +217,13 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
         </div>
       )}
 
-      {diffFile ? (
+      {viewMode === "document" ? (
+        <MarkdownDiffView
+          oldContent={diff.oldContent}
+          newContent={diff.newContent}
+          onError={handleDocError}
+        />
+      ) : diffFile ? (
         <VirtualizedDiffView
           diffFile={diffFile}
           viewMode={viewMode}

@@ -341,6 +341,7 @@
   "diff": {
     "unified": "Unified",
     "split": "Side by Side",
+    "document": "Document",
     "noSelection": "Select a file to view changes",
     "binary": "Binary file changed",
     "noFileSelected": "No file selected",
@@ -366,6 +367,15 @@
     "fileSize": "{{size}}",
     "highlightDisabled": "Syntax highlighting disabled for performance ({{lines}} lines).",
     "enableHighlight": "Enable highlighting"
+  },
+  "mdDiff": {
+    "rendering": "Computing document diff...",
+    "timeout": "The document is too large to render. Falling back to unified view.",
+    "failed": "Could not render the document view. Falling back to unified view.",
+    "deletedBlocks": "{{blocks}} deleted blocks · {{chars}} chars",
+    "moved": "Moved",
+    "tableStructureChanged": "Table structure changed",
+    "codeChanged": "Code changed"
   },
   "sync": {
     "fetchOrigin": "Fetch origin",

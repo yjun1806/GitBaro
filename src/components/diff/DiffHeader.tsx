@@ -1,16 +1,25 @@
 import { useTranslation } from "react-i18next";
+import { clsx } from "clsx";
 import { FileStatusBadge } from "@/lib/file-status";
 import type { FileStatus } from "@/types";
+import type { DiffViewMode } from "./view-mode";
+
+const MODE_LABEL: Record<DiffViewMode, string> = {
+  unified: "diff.unified",
+  split: "diff.split",
+  document: "diff.document",
+};
 
 interface DiffHeaderProps {
   filePath: string;
   status: FileStatus;
   addedLines: number;
   removedLines: number;
-  viewMode: "unified" | "split";
-  onToggleView: () => void;
+  viewMode: DiffViewMode;
+  /** 이 파일에서 고를 수 있는 모드들 — 안 되는 모드는 아예 나타나지 않는다. */
+  modes: DiffViewMode[];
+  onSelectMode: (mode: DiffViewMode) => void;
 }
-
 
 export function DiffHeader({
   filePath,
@@ -18,7 +27,8 @@ export function DiffHeader({
   addedLines,
   removedLines,
   viewMode,
-  onToggleView,
+  modes,
+  onSelectMode,
 }: DiffHeaderProps) {
   const { t } = useTranslation();
 
@@ -52,12 +62,24 @@ export function DiffHeader({
           </span>
         )}
 
-        <button
-          onClick={onToggleView}
-          className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded hover:bg-accent transition-colors"
-        >
-          {viewMode === "unified" ? t("diff.split") : t("diff.unified")}
-        </button>
+        <div className="flex items-center rounded border border-border overflow-hidden">
+          {modes.map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onSelectMode(mode)}
+              aria-pressed={mode === viewMode}
+              className={clsx(
+                "px-2 py-1 text-xs transition-colors",
+                mode === viewMode
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+              )}
+            >
+              {t(MODE_LABEL[mode])}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
