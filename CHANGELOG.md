@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.4](https://github.com/yjun1806/GitBaro/compare/v0.1.3...v0.1.4) (2026-07-27)
+
+
+### Bug Fixes
+
+* **diff:** position the overview ruler by measured height, not row count ([38434f7](https://github.com/yjun1806/GitBaro/commit/38434f7928de5d062ad8d69cf81ffd51495b3bf4))
+
 ## [0.1.3](https://github.com/yjun1806/GitBaro/compare/v0.1.2...v0.1.3) (2026-07-27)
 
 
