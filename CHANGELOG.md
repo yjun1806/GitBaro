@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.3](https://github.com/yjun1806/GitBaro/compare/v0.1.2...v0.1.3) (2026-07-27)
+
+
+### Features
+
+* **diff:** let hunk headers expand the collapsed context around them ([bf20474](https://github.com/yjun1806/GitBaro/commit/bf2047410a055792cb9f0ec445a78ce5d61d47ad))
+* **diff:** wrap long lines and show only the changed hunks ([2c05c0a](https://github.com/yjun1806/GitBaro/commit/2c05c0ad8eb83400211e32573de782203460c093))
+
+
+### Bug Fixes
+
+* **diff:** render raw HTML in markdown instead of escaping it ([359f8ef](https://github.com/yjun1806/GitBaro/commit/359f8efff2c7f590dc8a501d0d3448fe19a39bfb))
+* **diff:** strip inline styles and form elements from rendered markdown ([61b82d7](https://github.com/yjun1806/GitBaro/commit/61b82d73bedb82f851a5403469013b0088d782d9))
+
 ## [0.1.2](https://github.com/yjun1806/GitBaro/compare/v0.1.1...v0.1.2) (2026-07-27)
 
 
