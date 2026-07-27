@@ -111,8 +111,14 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
   // syntax가 이미 빌드된 파일 추적 — 하이라이팅 토글 시 중복 파싱 방지.
   const syntaxInitedRef = useRef(new WeakSet<DiffFile>());
 
+  // 문서 보기는 이 파이프라인을 전혀 쓰지 않는다. 그런데도 빌드하면 `initSyntax`가 파일
+  // 전체를 메인 스레드에서 파싱해, 문서 diff를 Worker로 밀어낸 이유를 그대로 되돌린다.
+  // (통합 ↔ 나란히 전환에는 재실행되지 않도록 boolean으로 좁혀 의존한다.)
+  const wantsLineDiff = viewMode !== "document";
+
   const diffFile = useMemo(() => {
     if (!diff || diff.binary || diff.hunks.length === 0) return null;
+    if (!wantsLineDiff) return null;
 
     const initSyntaxOnce = (file: DiffFile) => {
       if (wantHighlight && !syntaxInitedRef.current.has(file)) {
@@ -144,7 +150,7 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
     initSyntaxOnce(file);
     cacheRef.current.set(diff, file);
     return file;
-  }, [diff, isDark, wantHighlight]);
+  }, [diff, isDark, wantHighlight, wantsLineDiff]);
 
   // viewMode에 따라 필요한 라인만 빌드 (idempotent — 내부 플래그로 중복 실행 방지)
   if (diffFile) {
@@ -218,7 +224,10 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
       )}
 
       {viewMode === "document" ? (
+        // 파일이 바뀌면 새로 마운트한다 — 안 그러면 새 원문으로 계산이 끝나기 전 한 프레임
+        // 동안 이전 파일의 문서가 남는다.
         <MarkdownDiffView
+          key={diff.filePath}
           oldContent={diff.oldContent}
           newContent={diff.newContent}
           onError={handleDocError}

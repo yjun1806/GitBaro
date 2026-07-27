@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { findCached, putCached, type CachedResult } from "./model-cache";
 import type { DocDiffModel } from "./types";
 import type { DocDiffRequest, DocDiffResponse } from "./worker";
 
@@ -31,46 +32,57 @@ function spawn(): Worker {
 const TIMEOUT_MS = 8000;
 
 export type DocDiffState =
-  | { status: "idle" }
   | { status: "loading" }
   | { status: "ready"; model: DocDiffModel }
   | { status: "error"; error: string };
 
+function toState(result: CachedResult): DocDiffState {
+  return result.ok
+    ? { status: "ready", model: result.model }
+    : { status: "error", error: result.error };
+}
+
 /** 옛/새 마크다운 원문에서 문서 diff 모델을 만든다. */
 export function useDocDiff(oldSrc: string, newSrc: string): DocDiffState {
-  const [state, setState] = useState<DocDiffState>({ status: "idle" });
+  const [state, setState] = useState<DocDiffState>({ status: "loading" });
+
+  // 캐시는 **렌더 중에** 읽는다. effect로 미루면 이미 아는 결과에도 "계산 중"이 한 프레임
+  // 스친다. `findCached`가 부작용이 없는 건 이 때문이다.
+  const cached = findCached(oldSrc, newSrc);
 
   useEffect(() => {
+    if (findCached(oldSrc, newSrc)) return; // 캐시가 답한다 — Worker를 깨우지 않는다
+
     const id = nextId++;
     let done = false;
     setState({ status: "loading" });
 
     const w = spawn();
 
+    const settle = (result: CachedResult) => {
+      done = true;
+      cleanup();
+      putCached(oldSrc, newSrc, result);
+      setState(toState(result));
+    };
+
     const onMessage = (e: MessageEvent<DocDiffResponse>) => {
       // 취소된 요청의 뒤늦은 응답 — 화면을 되돌리면 안 된다.
       if (e.data.id !== id || done) return;
-      done = true;
-      cleanup();
-      if (e.data.ok) setState({ status: "ready", model: e.data.model });
-      else setState({ status: "error", error: e.data.error });
+      settle(e.data.ok ? { ok: true, model: e.data.model } : { ok: false, error: e.data.error });
     };
 
     const onError = (e: ErrorEvent) => {
       if (done) return;
-      done = true;
-      cleanup();
-      setState({ status: "error", error: e.message });
+      settle({ ok: false, error: e.message });
     };
 
     const timer = window.setTimeout(() => {
       if (done) return;
-      done = true;
-      cleanup();
       // 물고 늘어지는 Worker는 죽인다 — 다음 요청은 새 Worker에서 시작한다.
       w.terminate();
       if (worker === w) worker = null;
-      setState({ status: "error", error: "timeout" });
+      settle({ ok: false, error: "timeout" });
     }, TIMEOUT_MS);
 
     const cleanup = () => {
@@ -90,5 +102,8 @@ export function useDocDiff(oldSrc: string, newSrc: string): DocDiffState {
     };
   }, [oldSrc, newSrc]);
 
-  return state;
+  // **반환 참조를 안정시킨다.** 캐시 히트 경로는 렌더마다 `toState`를 다시 부르는데, 그대로
+  // 두면 매번 새 객체가 나와 이 값을 의존성으로 삼는 페인트 effect가 렌더마다 재실행된다
+  // (DOM이 통째로 다시 그려져 펼쳐 둔 삭제 묶음도 도로 접힌다).
+  return useMemo(() => (cached ? toState(cached) : state), [cached, state]);
 }
