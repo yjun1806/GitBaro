@@ -70,14 +70,14 @@ export function computeDocDiff(
     const old = olds[pair.o];
     let spans: TextSpans;
     let codeLines = false;
-    let wholeCode = false;
+    let atomicChange = false;
     let cells = null as DiffBlock["cells"];
 
     if (b.type === "html") {
       // 생 HTML 블록은 텍스트 프로젝션(= 소스)과 렌더된 `textContent`가 다르다.
       // 그 좌표로 칠하면 엉뚱한 글자가 칠해지므로 내부를 짚지 않는다.
       spans = { ins: [], del: [] };
-      wholeCode = true;
+      atomicChange = true;
     } else if (b.type === "code") {
       spans = codeLineSpans(old.text, b.text);
       codeLines = true;
@@ -85,7 +85,7 @@ export function computeDocDiff(
       cells = tableCellSpans(old.cells, b.cells, opts);
       // 칸 매칭이 안 되면(행·열 구조 변경) 통짜 변경으로 물러선다 — 지어내지 않는다.
       spans = { ins: [], del: [] };
-      wholeCode = cells === null;
+      atomicChange = cells === null;
     } else {
       spans = textSpans(old.text, b.text, opts);
     }
@@ -106,7 +106,7 @@ export function computeDocDiff(
       ins: spans.ins,
       del: spans.del,
       codeLines,
-      wholeCode,
+      atomicChange,
       cells,
     });
     stats.modified++;

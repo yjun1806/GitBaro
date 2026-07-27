@@ -283,7 +283,7 @@ function renderDeletedRun(run: DiffBlock[], labels: PaintLabels): HTMLElement[] 
 }
 
 function paintModified(placed: HTMLElement, b: DiffBlock, labels: PaintLabels): void {
-  if (b.wholeCode) {
+  if (b.atomicChange) {
     // 내부를 짚을 수 없는 경우에만 — 표의 행·열 구조가 바뀌면 칸 좌표를 지어낼 수 없다.
     const badge = document.createElement("div");
     badge.className = "d-atombadge";

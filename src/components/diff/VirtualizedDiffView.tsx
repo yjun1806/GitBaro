@@ -56,6 +56,27 @@ export interface DiffLayout {
   maxLineNo: number;
 }
 
+/**
+ * 본문 칸 스타일 — **가로 스크롤 대신 접기**가 이 뷰의 규칙이다.
+ *
+ * `pre-wrap`은 코드의 들여쓰기·연속 공백을 지키면서 폭이 모자랄 때만 접고,
+ * `anywhere`는 공백 없는 긴 토큰(URL·해시·미니파이 코드)까지 칸 안에 가둔다.
+ * `flex: 1` + `minWidth: 0`이 없으면 flex 자식이 내용 폭만큼 부풀어 접히지 않는다.
+ *
+ * 렌더 밖으로 뺀 이유는 이 조합이 깨지면 가로 스크롤이 조용히 되살아나기 때문이다 —
+ * 테스트가 붙잡을 수 있는 자리에 둔다.
+ */
+export function contentStyleFor(rowHeight: number): React.CSSProperties {
+  return {
+    flex: 1,
+    minWidth: 0,
+    padding: "0 6px",
+    lineHeight: `${rowHeight}px`,
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+  };
+}
+
 function operatorOf(type: DiffLineType | undefined): Operator {
   if (type === DiffLineType.Add) return "add";
   if (type === DiffLineType.Delete) return "del";
@@ -248,6 +269,7 @@ export function VirtualizedDiffView({
 }: VirtualizedDiffViewProps) {
   const { t } = useTranslation();
   const parentRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [scrollable, setScrollable] = useState(false);
 
   const rowHeight = Math.round(fontSize * 1.6);
@@ -341,17 +363,42 @@ export function VirtualizedDiffView({
     return () => ro.disconnect();
   }, [virtualizer]);
 
-  // Show the overview ruler only when the content actually overflows.
+  // 눈금자는 실제로 넘칠 때만 띄운다.
+  // 뷰포트와 **콘텐츠를 함께** 관찰한다. 총 높이를 의존성에 넣어 재구독하는 방법도 있지만,
+  // 행이 측정될 때마다 값이 바뀌어 스크롤 한 번에 옵저버를 수십 번 다시 만들게 된다.
   useEffect(() => {
     const el = parentRef.current;
-    if (!el) return;
+    const content = contentRef.current;
+    if (!el || !content) return;
     const check = () => setScrollable(el.scrollHeight > el.clientHeight + 1);
     check();
     const ro = new ResizeObserver(check);
     ro.observe(el);
+    ro.observe(content);
     return () => ro.disconnect();
-    // 행이 접히며 총 높이가 자라면 그때 넘치기 시작할 수 있다 — 총 높이도 신호로 본다.
-  }, [layout, rowHeight, virtualizer.getTotalSize()]);
+  }, []);
+
+  /**
+   * 눈금자용 — 행 인덱스를 문서 전체에서의 위치(0~1)로.
+   *
+   * `getOffsetForIndex`를 쓰면 안 된다. 그건 아이템의 위치가 아니라 "그 아이템을 보이게
+   * 하려면 얼마나 스크롤해야 하나"라서 스크롤 범위로 잘린다 — 문서 끝 근처 블록들이 전부
+   * 같은 자리에 겹친다(실측으로 확인했다).
+   *
+   * 아직 재지 않은 행은 균일 높이로 어림한다. 화면 밖 행이 추정치인 건 가상 스크롤의
+   * 본래 성질이라 피할 수 없고, 스크롤하면서 실제 값으로 대체된다.
+   */
+  const ratioOf = useCallback(
+    (rowIndex: number) => {
+      const total = virtualizer.getTotalSize();
+      if (!total) return 0;
+      if (rowIndex >= rows.length) return 1;
+      const measured = virtualizer.measurementsCache[rowIndex];
+      const start = measured ? measured.start : rowIndex * rowHeight;
+      return Math.min(1, Math.max(0, start / total));
+    },
+    [virtualizer, rows.length, rowHeight],
+  );
 
   const numStyle: React.CSSProperties = {
     width: numColPx,
@@ -361,22 +408,12 @@ export function VirtualizedDiffView({
     padding: "0 6px",
     userSelect: "none",
     color: "var(--diff-plain-lineNumber-color--)",
+    // 행이 여러 줄로 접혀도 번호는 첫 줄 높이에 놓인다(칸 배경은 flex가 알아서 늘린다).
     lineHeight: `${rowHeight}px`,
     whiteSpace: "pre",
-    // 접힌 행에서는 번호가 첫 줄에 붙어 있어야 어느 줄인지 읽힌다.
-    alignSelf: "stretch",
   };
 
-  // `pre-wrap`은 코드의 들여쓰기·연속 공백을 지키면서 폭이 모자랄 때만 접는다.
-  // `anywhere`는 공백 없는 긴 토큰(URL·해시·미니파이 코드)도 칸 안에 가둔다.
-  const contentStyle: React.CSSProperties = {
-    flex: 1,
-    minWidth: 0,
-    padding: "0 6px",
-    lineHeight: `${rowHeight}px`,
-    whiteSpace: "pre-wrap",
-    overflowWrap: "anywhere",
-  };
+  const contentStyle = contentStyleFor(rowHeight);
 
   const expandBtnStyle: React.CSSProperties = {
     display: "inline-flex",
@@ -523,6 +560,7 @@ export function VirtualizedDiffView({
         data-theme={isDark ? "dark" : "light"}
       >
         <div
+          ref={contentRef}
           className="diff-style-root"
           style={{
             position: "relative",
@@ -553,7 +591,7 @@ export function VirtualizedDiffView({
       {scrollable && (
         <DiffOverviewRuler
           blocks={layout.changeBlocks}
-          rowCount={rows.length}
+          ratioOf={ratioOf}
           onJump={(i) => virtualizer.scrollToIndex(i, { align: "center" })}
         />
       )}

@@ -155,7 +155,7 @@ describe("원자 블록 — 코드·표·리스트", () => {
     const code = computeDocDiff(a, b).blocks.find((x) => x.type === "code");
     expect(code?.kind).toBe("modified");
     expect(code?.codeLines).toBe(true);
-    expect(code?.wholeCode).not.toBe(true);
+    expect(code?.atomicChange).not.toBe(true);
     expect(covered(code?.ins)).toBeLessThan((code?.text ?? "").length);
   });
 
@@ -173,7 +173,7 @@ describe("원자 블록 — 코드·표·리스트", () => {
     const b = "| A | B | C |\n|---|---|---|\n| 1 | 2 | 3 |\n";
     const table = computeDocDiff(a, b).blocks.find((x) => x.type === "table");
     if (table?.kind === "modified") {
-      expect(table.wholeCode).toBe(true);
+      expect(table.atomicChange).toBe(true);
       expect(table.cells).toBeNull();
     }
   });

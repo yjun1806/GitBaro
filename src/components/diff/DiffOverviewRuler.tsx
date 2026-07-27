@@ -3,7 +3,13 @@ import type { ChangeBlock } from "./VirtualizedDiffView";
 
 interface DiffOverviewRulerProps {
   blocks: ChangeBlock[];
-  rowCount: number;
+  /**
+   * 행 인덱스 → 문서 전체에서 그 행이 시작하는 지점(0~1).
+   *
+   * 인덱스 비율(`start / rowCount`)로는 안 된다 — 긴 줄이 접히면서 행 높이가 제각각이라
+   * "몇 번째 행인가"와 "화면상 어디인가"가 어긋난다.
+   */
+  ratioOf: (rowIndex: number) => number;
   onJump: (rowIndex: number) => void;
 }
 
@@ -20,14 +26,15 @@ const kindColor: Record<ChangeBlock["kind"], string> = {
  * itself is click-through so it never blocks scrolling — only ticks are
  * interactive.
  */
-export function DiffOverviewRuler({ blocks, rowCount, onJump }: DiffOverviewRulerProps) {
-  if (rowCount === 0 || blocks.length === 0) return null;
+export function DiffOverviewRuler({ blocks, ratioOf, onJump }: DiffOverviewRulerProps) {
+  if (blocks.length === 0) return null;
 
   return (
     <div className="absolute inset-y-0 right-0 w-2.5 pointer-events-none z-10">
       {blocks.map((b) => {
-        const top = (b.start / rowCount) * 100;
-        const height = ((b.end - b.start + 1) / rowCount) * 100;
+        const top = ratioOf(b.start) * 100;
+        // 블록의 끝은 그다음 행이 시작하는 지점이다.
+        const height = Math.max(0, ratioOf(b.end + 1) * 100 - top);
         return (
           <button
             key={b.start}

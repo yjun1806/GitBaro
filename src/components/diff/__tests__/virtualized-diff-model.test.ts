@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DiffFile, DiffLineType } from "@git-diff-view/core";
-import { buildDiffLayout } from "../VirtualizedDiffView";
+import { buildDiffLayout, contentStyleFor } from "../VirtualizedDiffView";
 
 // VirtualizedDiffView가 의존하는 DiffFile의 행 모델 계약을 검증한다.
 // 렌더러는 0..unifiedLineLength(및 splitLineLength)를 인덱스로 순회하며
@@ -208,6 +208,27 @@ describe("buildDiffLayout", () => {
 
     const after = buildDiffLayout(file, true).rows.filter((r) => r.kind === "line");
     expect(after).toHaveLength(file.splitLineLength);
+  });
+});
+
+describe("본문 칸 스타일", () => {
+  // 이 조합 중 하나만 빠져도 긴 줄이 가로로 흘러 스크롤바가 조용히 되살아난다.
+  // jsdom에는 레이아웃이 없어 실제 접힘은 못 재므로, 최소한 규칙이 유지되는지는 못 박는다.
+  const style = contentStyleFor(19);
+
+  it("폭이 모자랄 때 접되 코드의 공백은 지킨다", () => {
+    expect(style.whiteSpace).toBe("pre-wrap");
+  });
+
+  it("공백 없는 긴 토큰도 칸 안에 가둔다", () => {
+    // URL·해시·미니파이 코드는 끊을 공백이 없어 `pre-wrap`만으로는 넘친다.
+    expect(style.overflowWrap).toBe("anywhere");
+  });
+
+  it("flex 자식이 내용 폭만큼 부풀지 않는다", () => {
+    // `minWidth: 0`이 없으면 flex 항목의 기본 최소 폭이 내용 폭이라 접히지 않는다.
+    expect(style.flex).toBe(1);
+    expect(style.minWidth).toBe(0);
   });
 });
 

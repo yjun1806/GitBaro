@@ -95,7 +95,7 @@ export interface DiffBlock {
   ins?: InsSpan[];
   del?: DelSpan[];
   /** 내부를 짚을 수 없어 "통째 변경" 배지로 물러선 경우(표 구조 변경 등). */
-  wholeCode?: boolean;
+  atomicChange?: boolean;
   /** 스팬이 어절이 아니라 **줄** 단위임(코드블록). */
   codeLines?: boolean;
   /** 표의 칸별 변경. */
