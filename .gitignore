@@ -28,7 +28,6 @@ src-tauri/target/
 
 # Auto Claude data directory
 .auto-claude/
-<<<<<<< Updated upstream
 
 # Auto Claude generated files
 .auto-claude-security.json
@@ -37,4 +36,6 @@ src-tauri/target/
 .worktrees/
 .security-key
 logs/security/
->>>>>>> Stashed changes
+
+# 커밋하지 않는 문서 — 리서치 노트·초안 등 저장소에 남길 필요 없는 것들
+docs/local/
