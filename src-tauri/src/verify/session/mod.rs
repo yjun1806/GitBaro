@@ -5,6 +5,7 @@
 //! built to two rules: stream, never load; and degrade to "no data" rather
 //! than error (spec §7-⑥, §7-⑦).
 
+pub mod attribution;
 pub mod bash;
 pub mod claude_code;
 pub mod codex;
@@ -89,8 +90,9 @@ pub fn discover_sessions(
     let mut found = Vec::new();
 
     if let Some(root) = &roots.claude_projects {
-        let dir = root.join(encode_project_dir(repo_path));
-        collect_jsonl(&dir, SessionSource::ClaudeCode, &mut found);
+        for dir in claude_project_dirs(root, repo_path) {
+            collect_jsonl(&dir, SessionSource::ClaudeCode, &mut found);
+        }
     }
     if let Some(root) = &roots.codex_sessions {
         // Codex partitions by YYYY/MM/DD and does not encode the cwd, so every
@@ -103,6 +105,83 @@ pub fn discover_sessions(
         found.truncate(limit);
     }
     found
+}
+
+/// Every checkout that shares `repo_path`'s object database: the path itself,
+/// this repository's working directory, the main working directory when
+/// `repo_path` is a linked worktree, and every linked worktree.
+///
+/// One piece of work spreads across all of them — an agent may run in a
+/// worktree while the commits land through the shared `.git`.
+fn related_checkouts(repo_path: &Path) -> Vec<PathBuf> {
+    let mut out = vec![repo_path.to_path_buf()];
+    let mut push = |path: &Path| {
+        let owned = path.to_path_buf();
+        if !out.contains(&owned) {
+            out.push(owned);
+        }
+    };
+
+    let Ok(repo) = git2::Repository::open(repo_path) else {
+        return out;
+    };
+    if let Some(workdir) = repo.workdir() {
+        push(workdir);
+    }
+    // `repo.path()` is `<main>/.git` for a normal checkout and
+    // `<main>/.git/worktrees/<name>` for a linked one; the main working
+    // directory is the parent of the `.git` component either way.
+    let git_dir_name = std::ffi::OsStr::new(".git");
+    let git_path = repo.path().to_path_buf();
+    if let Some(main) = git_path
+        .ancestors()
+        .find(|path| path.file_name() == Some(git_dir_name))
+        .and_then(Path::parent)
+    {
+        push(main);
+    }
+    if let Ok(names) = repo.worktrees() {
+        for name in names.iter().flatten() {
+            if let Ok(worktree) = repo.find_worktree(name) {
+                push(worktree.path());
+            }
+        }
+    }
+    out
+}
+
+/// Claude Code project directories that could hold sessions for `repo_path`.
+///
+/// The directory name encodes the agent's **cwd**, which is frequently not the
+/// repository root: an agent launched inside `src-tauri/` gets a directory of
+/// its own, and each linked worktree gets another. Looking only at the repo's
+/// own encoding silently drops those sessions — which is exactly what happened
+/// on this repository, where the work lived under three sibling directories.
+fn claude_project_dirs(root: &Path, repo_path: &Path) -> Vec<PathBuf> {
+    let prefixes: Vec<String> = related_checkouts(repo_path)
+        .iter()
+        .map(|path| encode_project_dir(path))
+        .collect();
+
+    let Ok(entries) = fs::read_dir(root) else {
+        return prefixes.iter().map(|p| root.join(p)).collect();
+    };
+
+    let mut dirs = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        // An exact match is the checkout itself; a `<prefix>-` match is a cwd
+        // below it. Requiring the separator keeps `-GitBaro` from swallowing
+        // `-GitBaroOther`.
+        let matches = prefixes
+            .iter()
+            .any(|prefix| name == prefix || name.starts_with(&format!("{prefix}-")));
+        if matches && entry.path().is_dir() {
+            dirs.push(entry.path());
+        }
+    }
+    dirs
 }
 
 fn collect_jsonl(dir: &Path, source: SessionSource, out: &mut Vec<SessionRef>) {
@@ -161,10 +240,18 @@ fn modified_millis(meta: &fs::Metadata) -> i64 {
 /// `Ok(None)` means "nothing recognisable in this file". Only being unable to
 /// open the file produces `Err`.
 pub fn summarize_session(path: &Path, source: SessionSource) -> Result<Option<SessionSummary>, AppError> {
-    match source {
-        SessionSource::ClaudeCode => summary::summarize_with(path, &ClaudeCodeAdapter),
-        SessionSource::Codex => summary::summarize_with(path, &CodexAdapter),
+    let mut summary = match source {
+        SessionSource::ClaudeCode => summary::summarize_with(path, &ClaudeCodeAdapter)?,
+        SessionSource::Codex => summary::summarize_with(path, &CodexAdapter)?,
+    };
+    // The fold never sees the file, so the mtime is stamped here — correlation
+    // treats it as a hard gate and must not receive a silent zero.
+    if let Some(summary) = summary.as_mut() {
+        summary.modified_at = fs::metadata(path)
+            .map(|meta| modified_millis(&meta))
+            .unwrap_or(0);
     }
+    Ok(summary)
 }
 
 /// Parse a session file whose origin is unknown, inferring it from the path.
@@ -236,8 +323,16 @@ fn path_matches(cwd: &str, repo: &str) -> bool {
 // because `verify::paths` needs a `git2::Repository` and this module must stay
 // usable without one.
 
+/// Bumped whenever [`SessionSummary`] gains a field the fold must populate.
+/// Without it the `#[serde(default)]` on those fields would quietly resurrect
+/// stale entries with empty prompts and a zero mtime — a report that is silently
+/// missing its first section is worse than a re-parse.
+const CACHE_VERSION: u32 = 2;
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct CacheEntry {
+    #[serde(default)]
+    version: u32,
     size: u64,
     mtime: i64,
     summary: SessionSummary,
@@ -248,7 +343,10 @@ fn cached_summary(session: &SessionRef, cache_dir: Option<&Path>) -> Option<Sess
 
     if let Some(path) = &cache_path {
         if let Some(entry) = read_cache(path) {
-            if entry.size == session.size && entry.mtime == session.modified_at {
+            if entry.version == CACHE_VERSION
+                && entry.size == session.size
+                && entry.mtime == session.modified_at
+            {
                 return Some(entry.summary);
             }
         }
@@ -264,6 +362,7 @@ fn cached_summary(session: &SessionRef, cache_dir: Option<&Path>) -> Option<Sess
 
 fn session_entry(session: &SessionRef, summary: &SessionSummary) -> CacheEntry {
     CacheEntry {
+        version: CACHE_VERSION,
         size: session.size,
         mtime: session.modified_at,
         summary: summary.clone(),
@@ -447,5 +546,63 @@ mod tests {
         assert!(path_matches("/repo/app/src", "/repo/app"));
         assert!(!path_matches("/repo/app-other", "/repo/app"));
         assert!(!path_matches("/repo", "/repo/app"));
+    }
+}
+
+#[cfg(test)]
+mod checkout_discovery_tests {
+    use super::*;
+
+    fn touch_jsonl(dir: &Path, name: &str) {
+        fs::create_dir_all(dir).unwrap();
+        fs::write(dir.join(format!("{name}.jsonl")), "{}\n").unwrap();
+    }
+
+    /// A session's log directory is keyed on the agent's cwd, which is often a
+    /// subdirectory of the repo rather than its root. Scanning only the repo's
+    /// own encoding loses those — the bug that made the feature find nothing on
+    /// a real repository.
+    #[test]
+    fn finds_sessions_logged_from_a_subdirectory_cwd() {
+        let base = std::env::temp_dir().join(format!("gitbaro-disc-{}", uuid::Uuid::new_v4()));
+        let repo = base.join("repo");
+        fs::create_dir_all(&repo).unwrap();
+        let root = base.join("projects");
+
+        let repo_dir = root.join(encode_project_dir(&repo));
+        let nested_dir = root.join(encode_project_dir(&repo.join("src-tauri")));
+        touch_jsonl(&repo_dir, "a");
+        touch_jsonl(&nested_dir, "b");
+
+        let dirs = claude_project_dirs(&root, &repo);
+        assert_eq!(dirs.len(), 2, "both the repo cwd and the nested cwd must match");
+
+        fs::remove_dir_all(&base).ok();
+    }
+
+    /// `-GitBaro` must not swallow `-GitBaroOther`: only an exact match or a
+    /// match followed by the separator counts.
+    #[test]
+    fn does_not_match_a_sibling_repository_with_a_longer_name() {
+        let base = std::env::temp_dir().join(format!("gitbaro-disc-{}", uuid::Uuid::new_v4()));
+        let repo = base.join("app");
+        fs::create_dir_all(&repo).unwrap();
+        let root = base.join("projects");
+
+        touch_jsonl(&root.join(encode_project_dir(&repo)), "a");
+        touch_jsonl(&root.join(format!("{}Other", encode_project_dir(&repo))), "b");
+
+        let dirs = claude_project_dirs(&root, &repo);
+        assert_eq!(dirs.len(), 1, "a longer sibling name is a different repository");
+
+        fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn a_plain_directory_is_its_own_only_checkout() {
+        let base = std::env::temp_dir().join(format!("gitbaro-disc-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&base).unwrap();
+        assert_eq!(related_checkouts(&base), vec![base.clone()]);
+        fs::remove_dir_all(&base).ok();
     }
 }
