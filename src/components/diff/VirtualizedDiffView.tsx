@@ -23,9 +23,8 @@ import {
 // 만들어 가상화한다.
 
 const MONO_FONT = "Menlo, Consolas, monospace";
-const CHAR_WIDTH_RATIO = 0.6; // Menlo 고정폭 글리프 advance ≈ 0.6em (가로 트랙 폭 추정용)
+const CHAR_WIDTH_RATIO = 0.6; // Menlo 고정폭 글리프 advance ≈ 0.6em (줄번호 칸 폭 추정용)
 const NUM_COL_PAD = 16;
-const CONTENT_PAD = 12;
 
 type Operator = "add" | "del" | undefined;
 type SyntaxLineT = SyntaxLine & { template?: string };
@@ -44,10 +43,8 @@ export interface ChangeBlock {
 export interface DiffLayout {
   rows: DiffRow[];
   changeBlocks: ChangeBlock[];
+  /** 줄번호 칸 폭을 정하는 데만 쓴다. 본문은 접혀서 가로 폭을 미리 잴 필요가 없다. */
   maxLineNo: number;
-  maxUnifiedChars: number;
-  maxOldChars: number;
-  maxNewChars: number;
 }
 
 function operatorOf(type: DiffLineType | undefined): Operator {
@@ -61,21 +58,13 @@ function hunkText(h: DiffHunkItem): string {
   return info?.plainText ?? "";
 }
 
-function lineChars(value: string | undefined): number {
-  // 표시 폭 추정 — 후행 개행은 폭에 무관하므로 제외.
-  return value ? value.replace(/\n$/, "").length : 0;
-}
-
-// 평탄한 행 배열(hunk 헤더 삽입) + 가로 트랙/줄번호 폭 추정치를 한 번의 순회로 계산한다.
+// 평탄한 행 배열(hunk 헤더 삽입) + 줄번호 칸 폭을 한 번의 순회로 계산한다.
 // 순수 함수 — 렌더 밖에서 테스트 가능.
 export function buildDiffLayout(diffFile: DiffFile, isSplit: boolean): DiffLayout {
   const rows: DiffRow[] = [];
   const changeBlocks: ChangeBlock[] = [];
   let block: ChangeBlock | null = null;
   let maxLineNo = 1;
-  let maxUnifiedChars = 0;
-  let maxOldChars = 0;
-  let maxNewChars = 0;
   const len = isSplit ? diffFile.splitLineLength : diffFile.unifiedLineLength;
 
   // Extend/close the current change block based on a line row's add/del state.
@@ -111,8 +100,6 @@ export function buildDiffLayout(diffFile: DiffFile, isSplit: boolean): DiffLayou
       );
       if (left.lineNumber) maxLineNo = Math.max(maxLineNo, left.lineNumber);
       if (right.lineNumber) maxLineNo = Math.max(maxLineNo, right.lineNumber);
-      maxOldChars = Math.max(maxOldChars, lineChars(left.value));
-      maxNewChars = Math.max(maxNewChars, lineChars(right.value));
     } else {
       const line = diffFile.getUnifiedLine(i);
       const prevHunk = line.diff?.prevHunkLine;
@@ -127,11 +114,10 @@ export function buildDiffLayout(diffFile: DiffFile, isSplit: boolean): DiffLayou
       );
       if (line.oldLineNumber) maxLineNo = Math.max(maxLineNo, line.oldLineNumber);
       if (line.newLineNumber) maxLineNo = Math.max(maxLineNo, line.newLineNumber);
-      maxUnifiedChars = Math.max(maxUnifiedChars, lineChars(line.value));
     }
   }
 
-  return { rows, changeBlocks, maxLineNo, maxUnifiedChars, maxOldChars, maxNewChars };
+  return { rows, changeBlocks, maxLineNo };
 }
 
 // 라인 배경색 — diff-theme.css의 CSS 변수를 재사용(테마 자동 대응).
@@ -241,18 +227,11 @@ export function VirtualizedDiffView({
 
   const layout = useMemo(() => buildDiffLayout(diffFile, isSplit), [diffFile, isSplit]);
 
-  const metrics = useMemo(() => {
-    const ch = fontSize * CHAR_WIDTH_RATIO;
+  // 긴 줄은 가로로 스크롤하지 않고 접는다. 그래서 재야 할 폭은 줄번호 칸 하나뿐이다.
+  const numColPx = useMemo(() => {
     const digits = String(layout.maxLineNo).length;
-    const numColPx = Math.max(2, digits) * ch + NUM_COL_PAD;
-    return {
-      numColPx,
-      unifiedInner: numColPx * 2 + layout.maxUnifiedChars * ch + CONTENT_PAD,
-      splitLeftContentPx: layout.maxOldChars * ch + CONTENT_PAD,
-      splitRightContentPx: layout.maxNewChars * ch + CONTENT_PAD,
-      splitInner: numColPx * 2 + (layout.maxOldChars + layout.maxNewChars) * ch + CONTENT_PAD * 2,
-    };
-  }, [layout, fontSize]);
+    return Math.max(2, digits) * (fontSize * CHAR_WIDTH_RATIO) + NUM_COL_PAD;
+  }, [layout.maxLineNo, fontSize]);
 
   const rows = layout.rows;
 
@@ -261,12 +240,31 @@ export function VirtualizedDiffView({
     parentRef.current?.scrollTo({ top: 0, left: 0 });
   }, [diffFile]);
 
+  // 줄이 접히면 행 높이가 제각각이 된다 — 추정치로 자리를 잡고 실제 높이는 재서 채운다.
+  // (`measureElement`가 `data-index`로 행을 식별하므로 각 행에 그 속성이 필요하다.)
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => rowHeight,
-    overscan: 24,
+    measureElement: (el) => el.getBoundingClientRect().height,
+    overscan: 12,
   });
+
+  // 창 너비가 바뀌면 접히는 지점이 달라져 모든 행 높이가 무효가 된다.
+  // **폭이 실제로 달라졌을 때만** 다시 잰다 — 높이 변화에도 반응하면 재측정이 스크롤바를
+  // 만들고 그게 다시 재측정을 부르는 진동에 빠질 수 있다.
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    let lastWidth = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === lastWidth) return;
+      lastWidth = el.clientWidth;
+      virtualizer.measure();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [virtualizer]);
 
   // Show the overview ruler only when the content actually overflows.
   useEffect(() => {
@@ -277,11 +275,12 @@ export function VirtualizedDiffView({
     const ro = new ResizeObserver(check);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [layout, rowHeight]);
+    // 행이 접히며 총 높이가 자라면 그때 넘치기 시작할 수 있다 — 총 높이도 신호로 본다.
+  }, [layout, rowHeight, virtualizer.getTotalSize()]);
 
   const numStyle: React.CSSProperties = {
-    width: metrics.numColPx,
-    minWidth: metrics.numColPx,
+    width: numColPx,
+    minWidth: numColPx,
     flexShrink: 0,
     textAlign: "right",
     padding: "0 6px",
@@ -289,34 +288,31 @@ export function VirtualizedDiffView({
     color: "var(--diff-plain-lineNumber-color--)",
     lineHeight: `${rowHeight}px`,
     whiteSpace: "pre",
+    // 접힌 행에서는 번호가 첫 줄에 붙어 있어야 어느 줄인지 읽힌다.
+    alignSelf: "stretch",
   };
 
-  // unified 줄번호는 가로 스크롤 시 고정(행이 transform이 아니라 top으로 배치돼 sticky가 동작).
-  const stickyNum = (left: number, bg: string): React.CSSProperties => ({
-    ...numStyle,
-    position: "sticky",
-    left,
-    zIndex: 1,
-    background: bg,
-  });
-
+  // `pre-wrap`은 코드의 들여쓰기·연속 공백을 지키면서 폭이 모자랄 때만 접는다.
+  // `anywhere`는 공백 없는 긴 토큰(URL·해시·미니파이 코드)도 칸 안에 가둔다.
   const contentStyle: React.CSSProperties = {
-    display: "inline-block",
+    flex: 1,
+    minWidth: 0,
     padding: "0 6px",
     lineHeight: `${rowHeight}px`,
-    whiteSpace: "pre",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
   };
 
   const renderHunkRow = (text: string) => (
     <div
       className="flex"
       style={{
-        height: rowHeight,
+        minHeight: rowHeight,
         background: contentBg(DiffLineType.Hunk),
         color: "var(--diff-hunk-content-color--)",
       }}
     >
-      <span style={{ ...contentStyle }}>{text}</span>
+      <span style={contentStyle}>{text}</span>
     </div>
   );
 
@@ -334,9 +330,9 @@ export function VirtualizedDiffView({
     const content = resolveContent(diffFile, diffLine, syntaxLine, raw, operatorOf(type), highlight);
 
     return (
-      <div className="flex" style={{ height: rowHeight, background: contentBg(type) }}>
-        <span style={stickyNum(0, numberBg(type))}>{line.oldLineNumber ?? ""}</span>
-        <span style={stickyNum(metrics.numColPx, numberBg(type))}>{line.newLineNumber ?? ""}</span>
+      <div className="flex" style={{ minHeight: rowHeight, background: contentBg(type) }}>
+        <span style={{ ...numStyle, background: numberBg(type) }}>{line.oldLineNumber ?? ""}</span>
+        <span style={{ ...numStyle, background: numberBg(type) }}>{line.newLineNumber ?? ""}</span>
         <ContentCell content={content} style={contentStyle} />
       </div>
     );
@@ -361,7 +357,7 @@ export function VirtualizedDiffView({
         <span style={{ ...numStyle, background: isEmpty ? "var(--diff-empty-content--)" : numberBg(type) }}>
           {line.lineNumber ?? ""}
         </span>
-        <span style={{ display: "inline-block", background: bg, flex: 1, minWidth: 0 }}>
+        <span style={{ display: "flex", background: bg, flex: 1, minWidth: 0 }}>
           {!isEmpty && <ContentCell content={content} style={contentStyle} />}
         </span>
       </>
@@ -372,21 +368,16 @@ export function VirtualizedDiffView({
     const left = diffFile.getSplitLeftLine(index);
     const right = diffFile.getSplitRightLine(index);
 
+    // 좌우를 정확히 반씩 나눈다. 가장 긴 줄에 맞춰 폭을 잡던 예전 방식은 한쪽에 긴 줄이
+    // 하나만 있어도 반대쪽이 짜부라졌고, 그 폭 때문에 가로 스크롤이 생겼다.
+    const half: React.CSSProperties = { display: "flex", width: "50%", minWidth: 0 };
+
     return (
-      <div className="flex" style={{ height: rowHeight }}>
-        <span
-          style={{
-            display: "flex",
-            width: metrics.numColPx + metrics.splitLeftContentPx,
-            flexShrink: 0,
-            borderRight: "1px solid var(--diff-border--)",
-          }}
-        >
+      <div className="flex" style={{ minHeight: rowHeight }}>
+        <span style={{ ...half, borderRight: "1px solid var(--diff-border--)" }}>
           {renderSplitSide(left, "old")}
         </span>
-        <span style={{ display: "flex", flex: 1, minWidth: 0 }}>
-          {renderSplitSide(right, "new")}
-        </span>
+        <span style={half}>{renderSplitSide(right, "new")}</span>
       </div>
     );
   };
@@ -400,7 +391,7 @@ export function VirtualizedDiffView({
     <div className="flex-1 min-h-0 relative">
       <div
         ref={parentRef}
-        className="absolute inset-0 overflow-auto diff-tailwindcss-wrapper"
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden diff-tailwindcss-wrapper"
         data-theme={isDark ? "dark" : "light"}
       >
         <div
@@ -408,9 +399,7 @@ export function VirtualizedDiffView({
           style={{
             position: "relative",
             height: virtualizer.getTotalSize(),
-            width: isSplit
-              ? `max(100%, ${Math.ceil(metrics.splitInner)}px)`
-              : `max(100%, ${Math.ceil(metrics.unifiedInner)}px)`,
+            width: "100%",
             fontFamily: MONO_FONT,
             fontSize,
             background: "var(--diff-plain-content--)",
@@ -419,6 +408,8 @@ export function VirtualizedDiffView({
           {virtualizer.getVirtualItems().map((v) => (
             <div
               key={v.key}
+              data-index={v.index}
+              ref={virtualizer.measureElement}
               style={{
                 position: "absolute",
                 top: v.start,

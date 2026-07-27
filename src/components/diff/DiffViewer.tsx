@@ -136,11 +136,14 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
     }
 
     const lang = getFileLang(diff.filePath);
+    // **원문 전체를 넘기지 않는다.** `DiffFile`은 원문이 있으면 hunk가 아니라 파일 전체를
+    // 렌더한다 — 60줄 파일에서 한 줄만 바뀌어도 61줄이 전부 나와, 정작 바뀐 줄을 찾기가
+    // 어려워진다. hunk만 주면 git이 잡은 변경 ±3줄만 보인다.
     const file = new DiffFile(
       diff.filePath,
-      diff.oldContent || "",
+      "",
       diff.filePath,
-      diff.newContent || "",
+      "",
       [hunksToUnifiedDiff(diff.filePath, diff.hunks)],
       lang,
       lang,

@@ -105,14 +105,14 @@ describe("buildDiffLayout", () => {
     expect(rows[0].kind === "hunk" && rows[0].text).toContain("@@");
   });
 
-  it("줄번호·문자폭 추정치를 라인 데이터에서 산출한다", () => {
+  it("줄번호 칸 폭의 근거가 되는 최대 줄번호를 산출한다", () => {
+    // 본문 폭은 재지 않는다 — 긴 줄은 가로로 흐르지 않고 접힌다.
     const file = new DiffFile("f", OLD2, "f", NEW2, [UNIFIED2], "text", "text");
     file.initRaw();
     file.buildUnifiedDiffLines();
 
     const layout = buildDiffLayout(file, false);
     expect(layout.maxLineNo).toBe(11); // 11줄 파일
-    expect(layout.maxUnifiedChars).toBeGreaterThan(0);
   });
 
   it("변경 블록: 연속 삭제+추가는 mix 한 블록, context로 끊긴 추가는 별도 add 블록", () => {
