@@ -15,6 +15,7 @@ const labels: PaintLabels = {
   moved: "위치 변경",
   tableStructureChanged: "표 구조 변경됨",
   codeChanged: "코드 변경됨",
+  htmlChanged: "HTML 블록 변경됨",
 };
 
 let host: HTMLElement;
@@ -166,18 +167,67 @@ describe("블록 렌더링", () => {
   });
 });
 
-describe("보안", () => {
-  it("생 HTML을 실행 가능한 마크업으로 들여보내지 않는다", () => {
-    // 임의 저장소를 여는 앱이다 — README 하나가 Tauri invoke를 잡으면 끝이다.
-    const el = render("문단.\n", '문단.\n\n<img src=x onerror="alert(1)">\n');
-    // 태그가 아니라 글자로 들어와야 한다 — 요소가 하나도 안 생겨야 안전하다.
-    expect(el.querySelector("img")).toBeNull();
-    expect(el.textContent).toContain('<img src=x onerror="alert(1)">');
+describe("보안 — 임의 저장소의 README를 앱 메인 컨텍스트에 들여보낸다", () => {
+  // 이 컨텍스트에는 Tauri `invoke()`가 노출돼 있다. README 하나가 그걸 잡으면 끝이다.
+  // 이스케이프가 아니라 살균으로 막으므로, 무엇이 남고 무엇이 사라지는지를 못 박는다.
+
+  it("이벤트 핸들러 속성을 걷어낸다", () => {
+    const el = render("문단.\n", '문단.\n\n<img src="x.png" onerror="alert(1)">\n');
+    expect(el.querySelector("img")).not.toBeNull(); // 이미지 자체는 살린다
+    expect(el.querySelector("img")?.hasAttribute("onerror")).toBe(false);
+    expect(el.innerHTML).not.toContain("onerror");
+  });
+
+  it("script 태그를 걷어낸다", () => {
+    const el = render("문단.\n", "문단.\n\n<script>alert(1)</script>\n");
+    expect(el.querySelector("script")).toBeNull();
+    expect(el.textContent).not.toContain("alert(1)");
+  });
+
+  it("iframe·object 같은 삽입 태그를 걷어낸다", () => {
+    const el = render("문단.\n", '문단.\n\n<iframe src="https://evil.test"></iframe>\n');
+    expect(el.querySelector("iframe")).toBeNull();
   });
 
   it("javascript: 링크를 살려두지 않는다", () => {
     const el = render("문단.\n", "문단.\n\n[클릭](javascript:alert(1))\n");
     const href = el.querySelector("a")?.getAttribute("href") ?? "";
     expect(href.startsWith("javascript:")).toBe(false);
+  });
+
+  it("생 HTML 속 javascript: 링크도 살려두지 않는다", () => {
+    const el = render("문단.\n", '문단.\n\n<a href="javascript:alert(1)">클릭</a>\n');
+    const href = el.querySelector("a")?.getAttribute("href") ?? "";
+    expect(href.startsWith("javascript:")).toBe(false);
+  });
+});
+
+describe("생 HTML 렌더 — README가 실제로 쓰는 것들", () => {
+  it("정렬 div와 줄바꿈을 태그로 살린다", () => {
+    // 이스케이프하면 `<div align="center">`가 글자로 쏟아진다(실제로 그런 화면이 나왔다).
+    const src = '<div align="center">\n\n# 제목\n\n<br />\n\n</div>\n';
+    const el = render(src, src);
+    expect(el.querySelector("div[align=center]")).not.toBeNull();
+    expect(el.querySelector("br")).not.toBeNull();
+    expect(el.textContent).not.toContain("<div");
+  });
+
+  it("인라인 HTML 태그가 텍스트 오프셋을 밀지 않는다", () => {
+    const el = render("<sub>앞 원본 뒤</sub>\n", "<sub>앞 수정본 뒤</sub>\n");
+    const painted = [...el.querySelectorAll(".d-mod-text")].map((n) => n.textContent).join("");
+    expect(painted).toBe("수정본");
+  });
+
+  it("HTML 블록이 바뀌면 내부를 짚지 않고 배지로 알린다", () => {
+    // 생 HTML 블록은 소스와 렌더된 텍스트가 달라 오프셋을 신뢰할 수 없다.
+    const el = render(
+      '<div class="a">내용입니다 여기</div>\n',
+      '<div class="a">내용이었습니다 여기</div>\n',
+    );
+    const badge = el.querySelector(".d-atombadge");
+    if (badge) {
+      expect(badge.textContent).toBe("HTML 블록 변경됨");
+      expect(el.querySelectorAll(".d-mod-text")).toHaveLength(0);
+    }
   });
 });

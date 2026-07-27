@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Loader2 } from "lucide-react";
 import { paint, type PaintLabels } from "@/lib/md-diff/paint";
 import { useDocDiff } from "@/lib/md-diff/use-doc-diff";
@@ -34,9 +35,23 @@ export function MarkdownDiffView({ oldContent, newContent, onError }: MarkdownDi
       moved: t("mdDiff.moved"),
       tableStructureChanged: t("mdDiff.tableStructureChanged"),
       codeChanged: t("mdDiff.codeChanged"),
+      htmlChanged: t("mdDiff.htmlChanged"),
     }),
     [t],
   );
+
+  /**
+   * 렌더된 문서의 링크는 **웹뷰가 직접 따라가게 두면 안 된다** — 앱 화면이 그 주소로
+   * 통째로 대체된다. http(s)만 바깥 브라우저로 넘기고, 저장소 상대 경로나 문서 내
+   * 앵커는 여기서 의미가 없으므로 아무 일도 하지 않는다.
+   */
+  const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const anchor = (e.target as HTMLElement).closest?.("a");
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    e.preventDefault();
+    const href = anchor.getAttribute("href") ?? "";
+    if (/^https?:\/\//i.test(href)) void openUrl(href);
+  }, []);
 
   useEffect(() => {
     if (state.status !== "ready" || !hostRef.current) return;
@@ -63,7 +78,8 @@ export function MarkdownDiffView({ oldContent, newContent, onError }: MarkdownDi
 
   return (
     <div className="flex-1 min-h-0 overflow-auto">
-      <div ref={hostRef} className="md-diff" />
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      <div ref={hostRef} className="md-diff" onClick={handleClick} />
     </div>
   );
 }

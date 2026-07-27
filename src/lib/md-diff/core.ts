@@ -73,7 +73,12 @@ export function computeDocDiff(
     let wholeCode = false;
     let cells = null as DiffBlock["cells"];
 
-    if (b.type === "code") {
+    if (b.type === "html") {
+      // 생 HTML 블록은 텍스트 프로젝션(= 소스)과 렌더된 `textContent`가 다르다.
+      // 그 좌표로 칠하면 엉뚱한 글자가 칠해지므로 내부를 짚지 않는다.
+      spans = { ins: [], del: [] };
+      wholeCode = true;
+    } else if (b.type === "code") {
       spans = codeLineSpans(old.text, b.text);
       codeLines = true;
     } else if (b.type === "table") {

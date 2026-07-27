@@ -1,3 +1,4 @@
+import DOMPurify from "dompurify";
 import type { CellSpans, DelSpan, DiffBlock, DocDiffModel, InsSpan } from "./types";
 
 /**
@@ -15,15 +16,23 @@ export interface PaintLabels {
   moved: string;
   tableStructureChanged: string;
   codeChanged: string;
+  htmlChanged: string;
 }
 
 /** 삭제 묶음을 접기 시작하는 개수. 이하는 그 자리에 펼쳐 둔다. */
 const INLINE_DELETE_LIMIT = 2;
 
-/** 모델이 준 블록 HTML을 요소로. 한 겹 벗겨 문단·헤딩이 바로 앉게 한다. */
+/**
+ * 모델이 준 블록 HTML을 요소로. 한 겹 벗겨 문단·헤딩이 바로 앉게 한다.
+ *
+ * **여기가 신뢰 경계다.** 임의 저장소의 README가 그대로 앱 메인 컨텍스트로 들어오는
+ * 유일한 통로이므로, `innerHTML`에 넣기 **전에** 살균한다. 넣고 나서 걷어내는 건 늦다 —
+ * `innerHTML`은 `<script>`를 실행하지 않지만 `<img onerror>`는 그 자리에서 발동한다.
+ * DOMPurify는 inert 문서에서 파싱하므로 살균 도중에도 아무것도 실행되지 않는다.
+ */
 function toElement(html: string): HTMLElement {
   const wrap = document.createElement("div");
-  wrap.innerHTML = html;
+  wrap.innerHTML = DOMPurify.sanitize(html);
   const only = wrap.children.length === 1 ? wrap.firstElementChild : null;
   if (only instanceof HTMLElement) return only;
   const frag = document.createElement("div");
@@ -261,7 +270,12 @@ function paintModified(placed: HTMLElement, b: DiffBlock, labels: PaintLabels): 
     // 내부를 짚을 수 없는 경우에만 — 표의 행·열 구조가 바뀌면 칸 좌표를 지어낼 수 없다.
     const badge = document.createElement("div");
     badge.className = "d-atombadge";
-    badge.textContent = b.type === "table" ? labels.tableStructureChanged : labels.codeChanged;
+    badge.textContent =
+      b.type === "table"
+        ? labels.tableStructureChanged
+        : b.type === "html"
+          ? labels.htmlChanged
+          : labels.codeChanged;
     placed.insertBefore(badge, placed.firstChild);
     return;
   }

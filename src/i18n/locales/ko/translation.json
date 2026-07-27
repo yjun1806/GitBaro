@@ -375,7 +375,8 @@
     "deletedBlocks": "삭제된 블록 {{blocks}}개 · {{chars}}자",
     "moved": "위치 변경",
     "tableStructureChanged": "표 구조 변경됨",
-    "codeChanged": "코드 변경됨"
+    "codeChanged": "코드 변경됨",
+    "htmlChanged": "HTML 블록 변경됨"
   },
   "sync": {
     "fetchOrigin": "Fetch origin",

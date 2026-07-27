@@ -375,7 +375,8 @@
     "deletedBlocks": "{{blocks}} deleted blocks · {{chars}} chars",
     "moved": "Moved",
     "tableStructureChanged": "Table structure changed",
-    "codeChanged": "Code changed"
+    "codeChanged": "Code changed",
+    "htmlChanged": "HTML block changed"
   },
   "sync": {
     "fetchOrigin": "Fetch origin",
