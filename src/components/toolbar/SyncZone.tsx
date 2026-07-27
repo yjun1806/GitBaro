@@ -50,11 +50,8 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const behind = headBranch?.aheadBehind?.behind ?? 0;
   const hasUpstream = headBranch?.upstream != null;
   const headBranchName = headBranch?.name ?? "";
-  // "origin/main" -> "origin". No upstream yet means the first push goes to origin.
-  const pushRemote = headBranch?.upstream?.split("/")[0] ?? "origin";
 
   const previewBranch = useUIStore((s) => s.previewBranch);
-  const setActiveTab = useUIStore((s) => s.setActiveTab);
   const canSync = tokenStatus?.valid === true && tokenStatus?.canPush === true;
   const syncDisabled = isSyncing || !activeAccountId || (!isValidating && !canSync) || !!previewBranch;
 
@@ -291,13 +288,9 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
           hasUpstream={hasUpstream}
           lastFetchedAt={lastFetchedAt}
           disabled={syncDisabled}
-          repoPath={activeRepoPath}
-          remote={pushRemote}
-          branch={headBranchName}
           onFetch={handleFetch}
           onPull={handlePull}
           onPush={handlePush}
-          onReviewFirst={() => setActiveTab("history")}
           onClose={onClose}
         />
       )}

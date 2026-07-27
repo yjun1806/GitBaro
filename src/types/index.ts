@@ -369,12 +369,15 @@ export interface BranchUpdate {
   newOid: string;
 }
 
-// ── Verification (verify subsystem) ─────────────────────────────────────────
+// ── Session report (verify subsystem) ───────────────────────────────────────
 //
-// Mirrors `src-tauri/src/verify/types.rs` and `verify/registry.rs`. Every Rust
-// struct there carries `#[serde(rename_all = "camelCase")]`, and every enum is
-// a plain camelCase string except `EvidenceFreshness`, which is internally
-// tagged on `type`.
+// Mirrors `src-tauri/src/verify/report/model.rs`. Every Rust struct there
+// carries `#[serde(rename_all = "camelCase")]`, and every enum is a plain
+// camelCase string except `CallerResolution`, which is tagged on `type`.
+//
+// The rule engine has no screens of its own. It feeds *this*: one page per
+// agent session, five sections, each answering a question the reader actually
+// asked. A line that would not change what they do next is not on the page.
 //
 // Time unit: every timestamp in this subsystem is epoch **milliseconds**
 // (`CommitInfo.timestamp` above is in seconds — do not mix them).
@@ -382,362 +385,385 @@ export interface BranchUpdate {
 /** Declared low → high. Sort ascending, display descending. */
 export type Severity = "info" | "warn" | "danger";
 
-/** One value per implemented rule. `Finding.ruleId` is the stable wire id. */
-export type FindingKind =
-  // V2: test disabling
-  | "testSkipAdded"
-  | "testFileDeleted"
-  | "assertionRemoved"
-  // V3: test quality anti-patterns
-  | "vacuousAssertion"
-  | "mockOnlyAssertion"
-  | "noAssertionTest"
-  | "broadExceptionAssertion"
-  | "assertionRoulette"
-  // V4: hallucinated dependencies
-  | "hallucinatedDependency"
-  | "suspiciousNewDependency"
-  // V5: verification bypass traces (static)
-  | "verificationBypassed"
-  | "typeEscapeHatchAdded"
-  | "emptyCatchAdded"
-  | "unsafeUnwrapAdded"
-  // V6: scope drift
-  | "scopeDrift"
-  // V10: deletion classification
-  | "publicExportDeleted"
-  | "errorHandlingDeleted"
-  | "validationDeleted"
-  // V11 / V12: execution evidence
-  | "testEvidenceMissing"
-  | "testEvidenceStale"
-  | "testEvidenceFailed"
-  | "uncoveredNewLines"
-  // V19~V27: session logs
-  | "readLessEdit"
-  | "testFailureThenTestEdited"
-  | "testsNeverRunInSession"
-  | "hookBypassCommand"
-  | "unrewindableChange"
-  | "subagentEdit"
-  | "postCompactionEdit"
-  | "repeatedEdit"
-  | "promptScopeDrift"
-  | "staleRulesInjected"
-  // V31 / V32 / V35: commit hygiene
-  | "tangledCommit"
-  | "revertUnsafe"
-  | "agentTrailerMismatch";
+export type SessionSource = "claudeCode" | "codex";
 
-export interface Finding {
-  kind: FindingKind;
-  severity: Severity;
-  /** Repository-relative path. Commit- and session-level findings carry `""`. */
-  file: string;
-  /** 1-based line in the new file, when one can be pinpointed. */
-  line: number | null;
+/**
+ * V30 — how strongly a commit is tied to a session. `high` may be stated as
+ * fact; `medium` must carry an estimate chip; `low` is dropped by the backend
+ * and never arrives here.
+ */
+export type LinkConfidence = "high" | "medium" | "low";
+
+/**
+ * Where one item came from. The UI calibrates how plainly it may speak: the
+ * session log is fact, a correlation is an estimate.
+ */
+export type Provenance = "sessionLog" | "git" | "symbolIndex" | "derived";
+
+/**
+ * Why a whole section cannot answer. A section with `unavailable` set arrives
+ * with its body fields empty — it is never half-filled.
+ */
+export interface Unavailable {
+  reason: UnavailableReason;
   /**
-   * **Not translated.** A factual evidence sentence from the backend, e.g.
-   * `"it.skip added"`. Render it verbatim; the title and description come from
-   * `t("verify.rule.<ruleId>.title" | ".description")`.
+   * **Not translated.** A factual sentence from the backend, e.g.
+   * `"symbol index is partial (412 of 5100 file(s) indexed)"`. The heading
+   * comes from `t("report.unavailable.<reason>")`.
    */
-  message: string;
-  /** Extra evidence (snippet, command). Backend truncates at 512 characters. */
   detail: string | null;
-  /** Stable wire id, e.g. `"v2.testSkipAdded"`. Doubles as the i18n key. */
-  ruleId: string;
+}
+
+export type UnavailableReason =
+  /** No user prompt in the session log at all. */
+  | "noPrompt"
+  /** No mention in the prompt resolved to anything in this repo (V26 G1). */
+  | "noResolvableAnchor"
+  /** No commit was attributable to this session with enough evidence. */
+  | "noCommitAttribution"
+  | "noSymbolIndex"
+  /** A partial index is treated exactly like no index. */
+  | "partialSymbolIndex"
+  /** This agent's log never carried the data (Codex: read/sidechain/compaction). */
+  | "unsupportedAgent"
+  /** The parse budget ran out before the tail of the log was read. */
+  | "parseBudget"
+  /** Not applicable — e.g. no signature changed at all. */
+  | "notApplicable";
+
+/** Where the session ran, relative to the worktree being looked at. */
+export type CwdRelation = "thisWorktree" | "siblingWorktree" | "unrelated";
+
+export interface ReportHeader {
+  sessionId: string;
+  sessionPath: string;
+  source: SessionSource;
+  startedAt: number;
+  endedAt: number;
+  durationMs: number;
+  cwd: string;
+  gitBranch: string | null;
+  /** One line, **composed by the backend**. The UI never assembles it. */
+  title: string;
+  cwdRelation: CwdRelation;
+  /** `truncated || skippedRecords > 0`. When true every count here is a floor. */
+  partial: boolean;
+  truncated: boolean;
+  skippedRecords: number;
+  compactionCount: number;
+}
+
+// § What was asked
+
+export interface AskedSection {
+  unavailable: Unavailable | null;
+  /** Oldest first. */
+  prompts: PromptRecord[];
+  /** Total before truncation, so the UI can say what it is not showing. */
+  totalPrompts: number;
+}
+
+export interface PromptRecord {
+  at: number;
+  /** Verbatim, cut at 2000 characters. Never translated, never summarised. */
+  text: string;
+  truncated: boolean;
+  /** 0-based. `0` is the specification anchor; the rest are corrections. */
+  ordinal: number;
+  /** A compaction followed this prompt — the instruction may have been dropped. */
+  compactedAway: boolean;
+  provenance: Provenance;
+}
+
+// § What was done
+
+export interface DidSection {
+  /**
+   * **Only the commit half can be unavailable.** File edits come from the
+   * session log, so `files` is never empty when the session edited anything.
+   */
+  unavailable: Unavailable | null;
+  /** Empty when attribution was refused. */
+  commits: ReportCommit[];
+  attribution: CommitAttribution | null;
+  /** Repository-relative. Churn descending, then path ascending. */
+  files: TouchedFile[];
+  filesEditedCount: number;
+  filesReadCount: number;
+  /** Edited but in none of the attributed commits. Empty when nothing is attributed. */
+  uncommittedPaths: string[];
+}
+
+export interface ReportCommit {
+  commitId: string;
+  summary: string;
+  authorName: string;
+  committedAt: number;
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+  /** In the commit but never edited by this session — the reason for `medium`. */
+  unattributedFiles: string[];
+  confidence: LinkConfidence;
+  provenance: Provenance;
+}
+
+export interface CommitAttribution {
+  /** The **best** grade among the attributed commits. */
+  confidence: LinkConfidence;
+  /**
+   * Evidence tokens: `"cwd"` | `"branch"` | `"timeWindow"` | `"fileOverlap"` |
+   * `"mtime"` | `"author"` | `"reflog"` | `"siblingWorktree"`. Render only
+   * tokens from this set — an unknown one means the backend moved on.
+   */
+  basis: string[];
+  /** Candidates that were dropped, and why. */
+  rejected: RejectedCommit[];
+  /** How many sessions claimed the same commit equally well. */
+  ambiguousWith: number;
+}
+
+export interface RejectedCommit {
+  commitId: string;
+  reason: RejectionReason;
+}
+
+export type RejectionReason =
+  | "mergeCommit"
+  | "branchMismatch"
+  | "noFileOverlap"
+  | "outsideSessionWindow"
+  | "differentWorktree"
+  | "differentAuthor"
+  | "ambiguousWithAnotherSession"
+  /** A partial log cannot support a partial-coverage claim. */
+  | "partialLogInsufficient";
+
+export interface TouchedFile {
+  /** **Repository-relative.** Absolute paths from the log are normalised here. */
+  path: string;
+  /** V25 churn — where the session floundered. The point of this section. */
+  editCount: number;
+  wasReadFirst: boolean;
+  bySubagent: boolean;
+  viaBash: boolean;
+  afterCompaction: boolean;
+  firstEditAt: number;
+  lastEditAt: number;
+  /** From the attributed commits. `null` when nothing is attributed. */
+  addedLines: number | null;
+  removedLines: number | null;
+  inCommit: boolean;
+  isTest: boolean;
+  provenance: Provenance;
+}
+
+// § What it went through
+
+export interface WentThroughSection {
+  unavailable: Unavailable | null;
+  bashTotal: number;
+  testRuns: number;
+  failedTestRuns: number;
+  /** Oldest first. Plain `other` bash never appears — 120 `ls` calls are not a story. */
+  events: OrdealEvent[];
+  /** Promoted out of the stream: the single most action-changing line here. */
+  testEditsAfterFailure: TestEditAfterFailure[];
+  /** Code changed and the tests were never run once (V20). */
+  neverRanTests: boolean;
+}
+
+export interface OrdealEvent {
+  at: number;
+  kind: OrdealKind;
+  /** Command text or path, cut at 512 characters. **Never translated.** */
+  evidence: string;
+  /** Extra evidence: the bypass token, the mutated path. */
+  detail: string | null;
+  severity: Severity;
+  provenance: Provenance;
+}
+
+export type OrdealKind =
+  | "testPassed"
+  | "testFailed"
+  /** `--no-verify`, `SKIP=`, `push -f`, `chmod` … */
+  | "hookBypass"
+  /** Shell redirect, `sed -i`, `rm` — outside checkpoint restore (V22). */
+  | "shellMutation"
+  | "compaction"
+  | "subagentEdit";
+
+export interface TestEditAfterFailure {
+  testPath: string;
+  /** Failures observed **before** this edit. Only ≥ 2 is reported. */
+  failuresBefore: number;
+  /** The failing commands, verbatim. At most 5. */
+  failingCommands: string[];
+  editedAt: number;
+}
+
+// § What is affected
+
+export interface ImpactSection {
+  unavailable: Unavailable | null;
+  /** Only entries with `untouchedCallerCount > 0` — the rest have nothing to say. */
+  entries: BlastRadiusEntry[];
+  totalUntouchedCallers: number;
+  indexState: IndexState;
+  basis: ImpactBasis;
+  provenance: Provenance;
+}
+
+/** Which baseline the blast radius was computed against. */
+export type ImpactBasis =
+  /** First parent of the oldest attributed commit → the newest. Most precise. */
+  | "attributedCommitRange"
+  /** HEAD ↔ worktree, narrowed to the session's paths. May include later edits. */
+  | "worktreeFallback";
+
+/** V9 — one signature change and everything that calls it. */
+export interface BlastRadiusEntry {
+  symbol: string;
+  file: string;
+  kind: SymbolKind;
+  signatureChanged: boolean;
+  /** Capped by the backend. */
+  callers: CallSite[];
+  callerCount: number;
+  /** Callers in files this change does not touch — the ones worth naming. */
+  untouchedCallerCount: number;
+  resolution: CallerResolution;
+}
+
+export interface CallSite {
+  file: string;
+  line: number;
+  /** The symbol containing the call; `null` for top-level code. */
+  symbol: string | null;
+  touchedInDiff: boolean;
 }
 
 /**
- * The honesty contract (spec §7-①): findings alone never mean "safe". Always
- * render `checked` / `unchecked` next to the findings — an empty `findings`
- * list means "nothing was flagged by the rules that ran", never "passed".
+ * Internally tagged on `type`. Ambiguity is stated, not hidden: misattribution
+ * is worse than no attribution.
  */
-export interface VerificationReport {
-  findings: Finding[];
-  /** Rule ids that actually ran against at least one target. */
-  checked: string[];
-  /** Rule ids with at least one target they could not look at. */
-  unchecked: string[];
-  /** Why each unchecked rule was skipped. */
-  limits: ScanLimit[];
+export type CallerResolution =
+  | { type: "nameUnique" }
+  | { type: "nameAmbiguous"; definitions: number };
+
+// § What differs from what was asked (V26)
+
+export interface DriftSection {
+  /** `noPrompt` or `noResolvableAnchor`. Zero anchors ends the section (G1). */
+  unavailable: Unavailable | null;
+  /** Every mention pulled out of the prompts — resolved and unresolved alike. */
+  mentions: PromptMention[];
+  inScopePaths: string[];
+  /** Churn descending, cut at 20; `driftedTotal` carries the real count. */
+  driftedPaths: DriftedPath[];
+  driftedTotal: number;
+  changedTotal: number;
+  verdict: DriftVerdict;
+  confidence: LinkConfidence;
+  basis: ImpactBasis;
+}
+
+export interface PromptMention {
+  /** The token as written in the prompt. Quoted verbatim. */
+  raw: string;
+  extractor: MentionExtractor;
+  /** `null` means unresolved — an unresolved mention never narrows scope (G4). */
+  resolved: ResolvedAnchor | null;
+  /** Which prompt it came from. */
+  promptOrdinal: number;
+}
+
+export type MentionExtractor =
+  /** Inside backticks. The strongest signal. */
+  | "backtick"
+  /** Carries a known file extension. */
+  | "extension"
+  /** Carries a slash (`src/verify`, `@/api/commands`). */
+  | "pathLike"
+  /** CamelCase / snake_case. Only active when a symbol index exists. */
+  | "identifier";
+
+export interface ResolvedAnchor {
+  /** Repository-relative. Directories end with `/`. */
+  path: string;
+  kind: AnchorKind;
+}
+
+export type AnchorKind = "file" | "directory" | "symbolDefinition";
+
+export interface DriftedPath {
+  path: string;
+  editCount: number;
+  addedLines: number | null;
+  removedLines: number | null;
+  isTest: boolean;
+}
+
+export type DriftVerdict =
+  /** Zero anchors — arrives with `unavailable` and renders nothing. */
+  | "noAnchor"
+  | "withinScope"
+  | "partialDrift"
+  /** Anchors resolved and **none** of them changed. The most valuable verdict. */
+  | "fullDrift";
+
+/** One session, one page. Everything it needs is in here — no second call. */
+export interface SessionReport {
+  header: ReportHeader;
+  asked: AskedSection;
+  did: DidSection;
+  wentThrough: WentThroughSection;
+  impact: ImpactSection;
+  drift: DriftSection;
   /** Epoch milliseconds. */
   generatedAt: number;
 }
 
-export interface ScanLimit {
-  ruleId: string;
-  reason: UncheckedReason;
-  /** Concrete, human-readable cause, e.g. `"lcov.info not found"`. */
-  detail: string | null;
-}
-
-/** i18n: `t("verify.unchecked.<reason>")`. */
-export type UncheckedReason =
-  | "disabled"
-  | "notApplicable"
-  | "unsupportedLanguage"
-  | "missingArtifact"
-  | "parseFailed"
-  | "budgetExceeded"
-  | "notImplemented";
-
-export type RuleStatus = "implemented" | "planned";
-
 /**
- * A registry row for the settings screen. `Planned` rules are included on
- * purpose so the UI can show what is *not* being checked.
+ * The list row. Also the **only** input to the DECISION A gate: an empty array
+ * means this repository shows no verification UI at all.
  */
-export interface RuleDescriptor {
-  ruleId: string;
-  /** `null` for planned rules, which have no `FindingKind` yet. */
-  kind: FindingKind | null;
-  vNumber: string;
-  /** Spec layer, 0–6. */
-  layer: number;
-  defaultSeverity: Severity;
-  status: RuleStatus;
-  enabled: boolean;
+export interface SessionDigest {
+  sessionId: string;
+  sessionPath: string;
+  source: SessionSource;
+  /** Same rule as `ReportHeader.title`. */
+  title: string;
+  startedAt: number;
+  endedAt: number;
+  durationMs: number;
+  gitBranch: string | null;
+  filesEditedCount: number;
+  /** Only `high`/`medium` attributions. Empty when attribution was refused. */
+  commitIds: string[];
+  attribution: LinkConfidence | null;
+  partial: boolean;
 }
 
-/** Lightweight per-commit badge summary for history lists. */
-export interface CommitVerificationSummary {
-  commitId: string;
-  /** `null` when there are no findings — which is not the same as safe. */
-  maxSeverity: Severity | null;
-  dangerCount: number;
-  warnCount: number;
-  infoCount: number;
-  /** Rules left unchecked for this commit. Show it on the badge. */
-  uncheckedCount: number;
-}
+// ── Session review mark ─────────────────────────────────────────────────────
+//
+// Mirrors `CommitReviewState` / `ReviewStatus` in `src-tauri/src/verify/types.rs`.
+// The per-file review UI is gone; what survives is the one control the report
+// page still needs — "이 세션 검토 완료". The mark is stored per commit because
+// a commit id is the only durable handle here, so a session's attributed
+// commits are marked together.
 
-// ── Review state (V13 · V29 · V34 · V33) ────────────────────────────────────
-
-/** `stale` means the content changed after review, so it went back to unreviewed. */
+/** Commits are immutable, so a commit is never `stale` — only files can be. */
 export type ReviewStatus = "unreviewed" | "reviewed" | "stale";
-
-/**
- * The on-disk review mark. Never crosses IPC and the frontend must never build
- * one — `markFileReviewed` sends a path and the backend derives the diff hash.
- */
-export interface FileReviewMark {
-  path: string;
-  reviewedDiffHash: string;
-  reviewedAt: number;
-  reviewer: string;
-}
-
-export interface FileReviewEntry {
-  path: string;
-  status: ReviewStatus;
-  reviewedAt: number | null;
-  reviewer: string | null;
-}
 
 export interface CommitReviewState {
   commitId: string;
-  /** Commits are immutable, so this is only `unreviewed` or `reviewed`. */
   status: ReviewStatus;
+  /** Epoch milliseconds. */
   reviewedAt: number | null;
+  /** git `user.name <user.email>` at the time of marking. */
   reviewer: string | null;
-}
-
-/** V29 — the unreviewed-commit queue. */
-export interface ReviewQueue {
-  /** Newest first. */
-  unreviewedCommitIds: string[];
-  totalUnreviewed: number;
-  /** Whether `unreviewedCommitIds` was cut off by the limit. */
-  truncated: boolean;
-  lastReviewedAt: number | null;
-}
-
-/** V34 — the pre-push gate. **Display only. It never blocks the push.** */
-export interface PushGateSummary {
-  commits: PushGateCommit[];
-  unreviewedCount: number;
-  dangerCount: number;
-  warnCount: number;
-  /** Commits touching enough files that a clean revert is unlikely (V31). */
-  tangledCount: number;
-}
-
-export interface PushGateCommit {
-  commitId: string;
-  summary: string;
-  reviewStatus: ReviewStatus;
-  filesChanged: number;
-  /** `null` when there are no findings — not a clean bill of health. */
-  maxSeverity: Severity | null;
-  findingCount: number;
-}
-
-/** V33 — the git-notes evidence ledger. Off by default, local only, never pushed. */
-export interface EvidenceLedgerEntry {
-  commitId: string;
-  recordedAt: number;
-  recordedBy: string;
-  checks: LedgerCheck[];
-  /** GitBaro version at record time — the format will evolve. */
-  toolVersion: string;
-}
-
-export interface LedgerCheck {
-  ruleId: string;
-  outcome: LedgerOutcome;
-  findingCount: number;
-}
-
-export type LedgerOutcome = "passed" | "flagged" | "skipped";
-
-// ── Execution evidence (V11 · V12) ──────────────────────────────────────────
-
-export interface TestEvidence {
-  /** Worktree hash the run is bound to (40 hex characters). */
-  worktreeHash: string;
-  /** Manifest used to diff the evidence against the tree. Empty above 5000 lines. */
-  manifest: string[];
-  command: string;
-  exitCode: number | null;
-  passed: boolean;
-  ranAt: number;
-  durationMs: number;
-  /** Last 8 KiB of stdout+stderr. May contain secrets — never log or upload it. */
-  outputTail: string;
-}
-
-/** Internally tagged on `type`. `changedFiles` is `null` when it is unknown. */
-export type EvidenceFreshness =
-  | { type: "fresh" }
-  | { type: "stale"; changedFiles: number | null }
-  | { type: "absent" };
-
-export interface TestEvidenceStatus {
-  evidence: TestEvidence | null;
-  freshness: EvidenceFreshness;
-  currentWorktreeHash: string;
-}
-
-export interface DiffCoverage {
-  path: string;
-  addedLines: number;
-  coveredAddedLines: number;
-  uncoveredAddedLines: number[];
-}
-
-export interface CoverageResult {
-  /** Repository-relative path of the parsed report. Empty when none was found. */
-  source: string;
-  parsedAt: number;
-  files: DiffCoverage[];
-  /** Changed files absent from the report — coverage is *undecidable* for these. */
-  unmappedFiles: string[];
-}
-
-// ── Session evidence (V19~V27 · V30) ────────────────────────────────────────
-
-export type SessionSource = "claudeCode" | "codex";
-
-export interface SessionSummary {
-  sessionId: string;
-  source: SessionSource;
-  /** Absolute path of the session JSONL — the re-lookup key for other commands. */
-  filePath: string;
-  cwd: string;
-  gitBranch: string | null;
-  startedAt: number;
-  endedAt: number;
-  /** V26 — the specification anchor. Truncated at 2000 chars. Stays local. */
-  firstUserPrompt: string | null;
-  filesRead: string[];
-  filesEdited: FileEditSummary[];
-  bashCommands: BashCommandRecord[];
-  /** V24 — compaction boundary timestamps. */
-  compactionBoundaries: number[];
-  /** V27 — digest of injected CLAUDE.md/AGENTS.md content (body not stored). */
-  injectedRulesDigest: string | null;
-  /** The tail could not be read within budget — every derived signal is partial. */
-  truncated: boolean;
-  /** Records skipped (over-long lines, parse failures). Non-zero ⇒ partial. */
-  skippedRecords: number;
-}
-
-export interface FileEditSummary {
-  path: string;
-  /** V25 — re-edit count (a floundering indicator). */
-  editCount: number;
-  firstEditAt: number;
-  lastEditAt: number;
-  /** V19 — was it Read/Grep'd in this session before the first edit? */
-  wasReadFirst: boolean;
-  /** V24 — edited after a compaction boundary? */
-  afterCompaction: boolean;
-  /** V23 — edited by a subagent? */
-  bySubagent: boolean;
-  /** V22 — changed through Bash, i.e. outside `/rewind`'s restore scope? */
-  viaBash: boolean;
-}
-
-export interface BashCommandRecord {
-  /** Truncated at 512 chars. */
-  command: string;
-  at: number;
-  isError: boolean;
-  kind: BashCommandKind;
-}
-
-export type BashCommandKind = "testRun" | "hookBypass" | "fileMutation" | "other";
-
-/**
- * V30 — session ↔ commit correlation. Heuristic by nature: a `low` confidence
- * link must be rendered as an estimate or not at all, never as settled fact.
- */
-export interface SessionCommitLink {
-  sessionId: string;
-  sessionPath: string;
-  /** Newest first. */
-  commitIds: string[];
-  confidence: LinkConfidence;
-  /** Evidence tokens: `"cwd"` | `"branch"` | `"timeWindow"` | `"fileOverlap"`. */
-  basis: string[];
-}
-
-export type LinkConfidence = "high" | "medium" | "low";
-
-// ── Multi-file diff (session cumulative diff) ───────────────────────────────
-//
-// `get_session_cumulative_diff` returns Rust `git::engine::DiffOutput`, which
-// is a *list* of file diffs. That is a different shape from the single-file
-// `DiffOutput` above (which the diff commands map into), so it gets its own
-// names rather than overloading them.
-
-export interface SessionDiff {
-  files: SessionDiffFile[];
-}
-
-export interface SessionDiffFile {
-  oldPath: string | null;
-  newPath: string | null;
-  isBinary: boolean;
-  hunks: SessionDiffHunk[];
-}
-
-export interface SessionDiffHunk {
-  header: string;
-  oldStart: number;
-  oldLines: number;
-  newStart: number;
-  newLines: number;
-  lines: SessionDiffLine[];
-}
-
-export interface SessionDiffLine {
-  /** git2 line origin — `"+"`, `"-"` or `" "` for the lines rendered in a hunk. */
-  origin: string;
-  content: string;
-  oldLineno: number | null;
-  newLineno: number | null;
 }
 
 // ── Structural diff (V1 · V17) ──────────────────────────────────────────────
@@ -891,62 +917,7 @@ export interface SymbolIndexStatus {
 
 export type IndexPhase = "enumerating" | "parsing" | "writing" | "done" | "cancelled";
 
-// ── Agent hooks (V28) ───────────────────────────────────────────────────────
-//
-// Mirrors `src-tauri/src/verify/hooks.rs`. These commands edit
-// `~/.claude/settings.json`, a file the user owns — install is a click behind an
-// explicit preview, never a side effect.
-
-/** `ok` is the only state install/uninstall accept. */
-export type SettingsState = "ok" | "missing" | "malformed";
-
-export interface HookStatus {
-  settingsPath: string;
-  settingsState: SettingsState;
-  installed: boolean;
-  /** Lowest version found among our entries — an older one means "upgrade". */
-  installedVersion: number | null;
-  currentVersion: number;
-  needsUpgrade: boolean;
-  installedEvents: string[];
-  scriptPath: string;
-  scriptPresent: boolean;
-  logDir: string;
-  logFiles: number;
-  logBytes: number;
-}
-
-/** Everything the consent dialog shows. Nothing here is written. */
-export interface HookPreview {
-  settingsPath: string;
-  settingsState: SettingsState;
-  /** The exact JSON merged under the top-level `hooks` key, pretty-printed. */
-  settingsFragment: string;
-  scriptPath: string;
-  /** The exact bytes written to `scriptPath`. */
-  scriptBody: string;
-  logDir: string;
-  /** Plain-language list of what the log will contain. */
-  recordedFields: string[];
-}
-
-export interface HookChange {
-  settingsPath: string;
-  /** `null` when nothing had to be written, so no backup was taken. */
-  backupPath: string | null;
-  changed: boolean;
-  events: string[];
-}
-
 // ── Events ──────────────────────────────────────────────────────────────────
-
-/** Payload of the `verify:test-progress` Tauri event emitted by `run_test_command`. */
-export interface VerifyTestProgressEvent {
-  repoPath: string;
-  /** Last output line, cut at 2048 characters. Empty on the final `running: false`. */
-  line: string;
-  running: boolean;
-}
 
 /** Payload of the `verify:index-progress` Tauri event emitted by `build_symbol_index`. */
 export interface VerifyIndexProgressEvent {

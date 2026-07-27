@@ -129,6 +129,8 @@ pub fn run() {
             commands::session::verify_session,
             commands::session::correlate_sessions_to_commits,
             commands::session::get_session_cumulative_diff,
+            commands::report::list_session_digests,
+            commands::report::get_session_report,
             commands::evidence::get_test_evidence,
             commands::evidence::run_test_command,
             commands::evidence::get_diff_coverage,

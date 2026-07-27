@@ -528,8 +528,19 @@ pub struct SessionSummary {
     pub git_branch: Option<String>,
     pub started_at: i64,
     pub ended_at: i64,
+    /// Session-file mtime in epoch milliseconds. A hard gate in correlation: a
+    /// log that stopped growing long before a commit cannot explain it.
+    /// `0` means "unknown" and is treated as neutral, never as evidence.
+    #[serde(default)]
+    pub modified_at: i64,
     /// V26 — the specification anchor. Truncated at 2000 chars. Stays local.
     pub first_user_prompt: Option<String>,
+    /// Every human prompt, in time order. `first_user_prompt` is equivalent to
+    /// `prompts.first()` and is kept for cache and caller compatibility.
+    /// Capped at [`MAX_SESSION_PROMPTS`]; a session with more instructions than
+    /// that is already beyond what any report can usefully quote.
+    #[serde(default)]
+    pub prompts: Vec<PromptRecord>,
     pub files_read: Vec<String>,
     pub files_edited: Vec<FileEditSummary>,
     pub bash_commands: Vec<BashCommandRecord>,
@@ -570,7 +581,30 @@ pub struct BashCommandRecord {
     pub at: i64,
     pub is_error: bool,
     pub kind: BashCommandKind,
+    /// Verbatim bypass tokens found in the command (`--no-verify`, `SKIP=` …).
+    /// The evidence a report quotes instead of paraphrasing.
+    #[serde(default)]
+    pub bypass_markers: Vec<String>,
 }
+
+/// One human instruction. Ordinal `0` is the specification anchor; the rest are
+/// corrections. The text is quoted verbatim — never translated or summarised.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptRecord {
+    pub at: i64,
+    /// Truncated at `session::jsonl::MAX_PROMPT_CHARS`.
+    pub text: String,
+    pub truncated: bool,
+    /// 0-based position among the session's human prompts.
+    pub ordinal: u32,
+    /// A compaction happened *after* this prompt, so the instruction may have
+    /// dropped out of the agent's context. The only judgement this type makes.
+    pub compacted_away: bool,
+}
+
+/// Upper bound on retained prompts per session.
+pub const MAX_SESSION_PROMPTS: usize = 200;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -590,18 +624,101 @@ pub enum BashCommandKind {
 pub struct SessionCommitLink {
     pub session_id: String,
     pub session_path: String,
+    /// Commits this session is credited with. Candidates graded `Low` are
+    /// **removed** here and explained in `rejected` — a bad candidate must not
+    /// drag the grade down while staying in the list.
     pub commit_ids: Vec<String>,
+    /// The **best** grade among `commits`, never the weakest.
     pub confidence: LinkConfidence,
-    /// Evidence tokens: `"cwd"` | `"branch"` | `"timeWindow"` | `"fileOverlap"`.
+    /// Evidence tokens, union over `commits`. See [`BASIS_TOKENS`].
     pub basis: Vec<String>,
+    /// Per-commit verdicts, same order as `commit_ids`.
+    pub commits: Vec<CommitLinkDetail>,
+    /// Candidates that were considered and dropped, with the reason.
+    pub rejected: Vec<RejectedCommit>,
+    /// How many sessions claimed the same commit equally strongly. `0` when
+    /// this link was uncontested.
+    pub ambiguous_with: usize,
 }
 
+/// The complete set of evidence tokens correlation may emit. The frontend
+/// renders nothing outside this list.
+pub const BASIS_TOKENS: &[&str] = &[
+    "cwd",
+    "branch",
+    "timeWindow",
+    "fileOverlap",
+    "mtime",
+    "author",
+    "reflog",
+    "siblingWorktree",
+];
+
+/// One (session, commit) verdict.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitLinkDetail {
+    pub commit_id: String,
+    pub confidence: LinkConfidence,
+    pub basis: Vec<String>,
+    /// `|session edits ∩ commit changes| / |commit changes|`.
+    pub commit_coverage: f32,
+    /// `|session edits ∩ commit changes| / |session edits|`.
+    pub session_coverage: f32,
+    /// Files in the commit the session never edited — the visible reason a
+    /// grade stopped at `Medium`. Capped at [`MAX_UNATTRIBUTED_FILES`].
+    pub unattributed_files: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RejectedCommit {
+    pub commit_id: String,
+    pub reason: RejectionReason,
+}
+
+/// Why a candidate commit was not attributed to a session.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub enum RejectionReason {
+    MergeCommit,
+    BranchMismatch,
+    NoFileOverlap,
+    OutsideSessionWindow,
+    DifferentWorktree,
+    DifferentAuthor,
+    /// Another session claimed it as strongly or more strongly.
+    AmbiguousWithAnotherSession,
+    /// A partially observed log cannot support a partial-coverage claim.
+    PartialLogInsufficient,
+}
+
+/// Where a session's working directory sits relative to the repository being
+/// viewed.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CwdRelation {
+    /// The session cwd is this worktree, or a directory inside it.
+    ThisWorktree,
+    /// A different worktree sharing this repository's object database.
+    /// Attribution caps at `Medium`.
+    SiblingWorktree,
+    /// Nothing to do with this repository.
+    Unrelated,
+}
+
+/// `unattributed_files` cap — enough to explain a Medium, not a file listing.
+pub const MAX_UNATTRIBUTED_FILES: usize = 20;
+
+/// `rejected` cap — the near-misses worth explaining, not the whole walk.
+pub const MAX_REJECTED_COMMITS: usize = 20;
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "camelCase")]
 pub enum LinkConfidence {
-    High,
-    Medium,
     Low,
+    Medium,
+    High,
 }
 
 /// Epoch milliseconds — the single time unit of this subsystem.

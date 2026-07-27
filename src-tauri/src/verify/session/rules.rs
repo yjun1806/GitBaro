@@ -42,13 +42,16 @@ const SESSION_KINDS: &[FindingKind] = &[
 /// `NotImplemented` rather than falling through to "not a session-log rule",
 /// which would be a lie about why they never ran.
 ///
-/// * V26 needs prompt→path extraction, and a weak version of it is a false
-///   positive generator; it is default-off and deferred deliberately.
 /// * V27 has no data source today: current Claude Code builds do not write the
 ///   injected CLAUDE.md into the session log at all (verified against live
 ///   logs — zero occurrences), so the digest is almost always `None`.
-const UNIMPLEMENTED_KINDS: &[FindingKind] =
-    &[FindingKind::PromptScopeDrift, FindingKind::StaleRulesInjected];
+const UNIMPLEMENTED_KINDS: &[FindingKind] = &[FindingKind::StaleRulesInjected];
+
+/// Session-log rules that also need the *repository* — a prompt mention only
+/// means something once it can be resolved against real paths. They are
+/// evaluated in `verify/report/`, which has a `git2::Repository` in hand, so
+/// this scan reports them as inapplicable *here* rather than unimplemented.
+const REPO_SCOPED_KINDS: &[FindingKind] = &[FindingKind::PromptScopeDrift];
 
 /// Rules that only Claude Code sessions carry the raw data for.
 const CLAUDE_ONLY_KINDS: &[FindingKind] = &[
@@ -102,6 +105,13 @@ pub fn run_session_rules(summary: &SessionSummary, config: &RuleConfig) -> Verif
 
     for kind in UNIMPLEMENTED_KINDS {
         limits.push(limit(kind.rule_id(), UncheckedReason::NotImplemented, None));
+    }
+    for kind in REPO_SCOPED_KINDS {
+        limits.push(limit(
+            kind.rule_id(),
+            UncheckedReason::NotApplicable,
+            Some("needs the repository to resolve prompt mentions; evaluated in the session report"),
+        ));
     }
 
     fill_registry_coverage(&checked, &mut limits);

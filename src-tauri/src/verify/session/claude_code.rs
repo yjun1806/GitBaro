@@ -9,8 +9,8 @@
 use serde_json::Value;
 
 use super::event::{
-    content_digest, looks_like_file_path, parse_timestamp, string_field, MetaEvent, SessionAdapter,
-    SessionEvent, ToolAction, ToolCallEvent,
+    content_digest, looks_like_file_path, parse_timestamp, sanitize_prompt, string_field, MetaEvent,
+    SessionAdapter, SessionEvent, ToolAction, ToolCallEvent,
 };
 use crate::verify::types::SessionSource;
 
@@ -104,14 +104,11 @@ fn translate_user(record: &Value, at: Option<i64>, out: &mut Vec<SessionEvent>) 
         return;
     };
 
-    // A plain string body is always a human prompt.
+    // A plain string body is a human prompt once the injected blocks are gone.
     if let Some(text) = content.as_str() {
-        if !is_meta && !text.is_empty() {
-            if let Some(at) = at {
-                out.push(SessionEvent::Prompt {
-                    at,
-                    text: text.to_string(),
-                });
+        if !is_meta {
+            if let (Some(at), Some(text)) = (at, sanitize_prompt(text)) {
+                out.push(SessionEvent::Prompt { at, text });
             }
         }
         return;
@@ -141,13 +138,12 @@ fn translate_user(record: &Value, at: Option<i64>, out: &mut Vec<SessionEvent>) 
                 if is_meta {
                     continue;
                 }
-                if let (Some(at), Some(text)) = (at, block.get("text").and_then(Value::as_str)) {
-                    if !text.is_empty() {
-                        out.push(SessionEvent::Prompt {
-                            at,
-                            text: text.to_string(),
-                        });
-                    }
+                let text = block
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .and_then(sanitize_prompt);
+                if let (Some(at), Some(text)) = (at, text) {
+                    out.push(SessionEvent::Prompt { at, text });
                 }
             }
             _ => {}

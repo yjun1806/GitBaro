@@ -42,11 +42,10 @@ export function useRepoWatcher(repoPath: string | null) {
       });
       // rail/목록의 dirty·ahead/behind 인디케이터도 함께 갱신 (오프라인 계산)
       queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
-      // V13은 "본 뒤에 바뀌면 자동으로 미검토로 되돌린다"가 핵심이므로 워킹트리
-      // 스캔·검토 상태·테스트 증거 신선도를 파일 변경과 함께 무효화한다.
-      queryClient.invalidateQueries({ queryKey: ["verifyWorkingTree"] });
-      queryClient.invalidateQueries({ queryKey: ["fileReviewStates"] });
-      queryClient.invalidateQueries({ queryKey: ["testEvidence"] });
+      // 에이전트가 작업 중이면 세션 로그도 함께 자라므로, 파일이 바뀌는 순간이
+      // 세션 목록·리포트를 다시 읽기에 가장 좋은 시점이다.
+      queryClient.invalidateQueries({ queryKey: ["sessionDigests"] });
+      queryClient.invalidateQueries({ queryKey: ["sessionReport"] });
     }).then((fn) => {
       if (mounted) {
         unlisten = fn;

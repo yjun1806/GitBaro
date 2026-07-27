@@ -1,274 +1,339 @@
 //! V30 — session ↔ commit correlation.
 //!
-//! This is a heuristic and it always will be: parallel sessions, worktrees and
-//! two agents editing the same file all produce ambiguity. Spec §7-⑧ is blunt
-//! about the consequence — **a wrong attribution is worse than none** — so the
-//! confidence grade is part of the answer, not an afterthought, and the grading
-//! rules are fixed by contract:
+//! This file does no grading of its own. It fans every (session, commit) pair
+//! out to [`attribution::grade_pair`], lets [`attribution::arbitrate`] settle
+//! commits two sessions both claim, and then folds the surviving verdicts into
+//! one [`SessionCommitLink`] per session.
 //!
-//! * `High` — cwd matches, branch matches, the commit falls inside the session
-//!   window, and the session edited every file the commit changed.
-//! * `Medium` — cwd matches, plus branch *or* time window, plus at least one
-//!   overlapping file.
-//! * `Low` — anything else. Callers must not render `Low` as established
-//!   provenance.
+//! Three properties the fold guarantees, because the previous implementation
+//! got each of them wrong (contract §5.1):
+//!
+//! * A candidate graded `Low` is **removed** from the link, not kept while
+//!   dragging the grade down. `confidence` is the **best** surviving commit.
+//! * A session with no surviving commit produces no link at all. "Unknown" is
+//!   the honest answer; a guess is not.
+//! * Every dropped candidate that was close enough to consider is listed in
+//!   `rejected` with its reason, so the UI can explain the absence.
 
-use std::collections::BTreeSet;
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet};
 
-use crate::verify::types::{LinkConfidence, SessionCommitLink, SessionSummary};
+use crate::verify::types::{
+    CommitLinkDetail, LinkConfidence, RejectedCommit, SessionCommitLink, SessionSummary,
+    MAX_REJECTED_COMMITS,
+};
 
-/// Commit facts needed for correlation. Built by the command layer from git2;
-/// kept as a plain struct so this logic is testable without a repository.
-#[derive(Clone, Debug)]
-pub struct CommitRef {
-    pub oid: String,
-    /// Epoch **milliseconds**. `CommitInfo::timestamp` is in seconds, so the
-    /// caller must multiply by 1000 (contract §2).
-    pub timestamp_ms: i64,
-    /// Repository-relative paths changed by the commit.
-    pub files: Vec<String>,
-}
+use super::attribution::{self, Claim, PairVerdict, SessionFacts};
 
-/// Commits are attributed to a session up to this long after it ended, to
-/// cover the common "agent finishes, human commits a moment later" case.
-const TAIL_GRACE_MILLIS: i64 = 10 * 60 * 1000;
+// Correlation inputs are declared in `attribution`, but callers reach for them
+// alongside `correlate` — re-exported so they need only one import.
+pub use super::attribution::{AttributionContext, CommitFacts};
 
 /// Correlate sessions to commits.
 ///
-/// Every session that matches at least one commit yields one link. Sessions
-/// with no plausible commit are omitted entirely — an empty link list is the
-/// honest answer when nothing lines up.
+/// Sessions with no plausible commit are omitted entirely — an empty link list
+/// is the correct answer when nothing lines up.
 pub fn correlate(
-    repo_path: &Path,
+    ctx: &AttributionContext,
     sessions: &[SessionSummary],
-    commits: &[CommitRef],
+    commits: &[CommitFacts],
 ) -> Vec<SessionCommitLink> {
-    let repo = repo_path.to_string_lossy().to_string();
-
-    sessions
+    let facts: Vec<SessionFacts<'_>> = sessions
         .iter()
-        .filter_map(|session| link_for(&repo, session, commits))
+        .map(|s| SessionFacts::new(ctx, s))
+        .collect();
+
+    // Grade every pair, then index the attributed ones by commit so parallel
+    // sessions can be arbitrated before anything is reported.
+    let mut verdicts: Vec<Vec<PairVerdict>> = Vec::with_capacity(facts.len());
+    for session in &facts {
+        verdicts.push(
+            commits
+                .iter()
+                .map(|commit| attribution::grade_pair(ctx, session, commit))
+                .collect(),
+        );
+    }
+
+    let mut by_commit: BTreeMap<String, Vec<Claim>> = BTreeMap::new();
+    for (index, session_verdicts) in verdicts.iter().enumerate() {
+        for verdict in session_verdicts {
+            if verdict.is_attributed() {
+                by_commit
+                    .entry(verdict.commit_id.clone())
+                    .or_default()
+                    .push(Claim {
+                        session: index,
+                        verdict: verdict.clone(),
+                    });
+            }
+        }
+    }
+
+    attribution::arbitrate(&facts, &mut by_commit);
+
+    // Fold the arbitration outcome back onto the per-session verdicts.
+    let settled: BTreeMap<(usize, String), PairVerdict> = by_commit
+        .into_values()
+        .flatten()
+        .map(|claim| ((claim.session, claim.verdict.commit_id.clone()), claim.verdict))
+        .collect();
+
+    facts
+        .iter()
+        .enumerate()
+        .filter_map(|(index, session)| {
+            let final_verdicts: Vec<PairVerdict> = verdicts[index]
+                .iter()
+                .map(|verdict| {
+                    settled
+                        .get(&(index, verdict.commit_id.clone()))
+                        .cloned()
+                        .unwrap_or_else(|| verdict.clone())
+                })
+                .collect();
+            link_for(session.summary, final_verdicts)
+        })
         .collect()
 }
 
-fn link_for(
-    repo: &str,
-    session: &SessionSummary,
-    commits: &[CommitRef],
-) -> Option<SessionCommitLink> {
-    let cwd_matches = path_matches(&session.cwd, repo);
-    let edited: BTreeSet<String> = session
-        .files_edited
-        .iter()
-        .map(|f| normalize(&f.path, repo))
-        .collect();
+fn link_for(session: &SessionSummary, verdicts: Vec<PairVerdict>) -> Option<SessionCommitLink> {
+    let (attributed, dropped): (Vec<PairVerdict>, Vec<PairVerdict>) =
+        verdicts.into_iter().partition(PairVerdict::is_attributed);
 
-    let mut commit_ids = Vec::new();
-    let mut basis: BTreeSet<&'static str> = BTreeSet::new();
-    let mut best = None::<LinkConfidence>;
-
-    for commit in commits {
-        let in_window = within_window(session, commit.timestamp_ms);
-        let changed: BTreeSet<String> = commit
-            .files
-            .iter()
-            .map(|f| normalize(f, repo))
-            .collect();
-        let overlap = changed.intersection(&edited).count();
-        // A branch is only evidence when both sides recorded one.
-        let branch_matches = session.git_branch.is_some();
-
-        let confidence = grade(cwd_matches, branch_matches, in_window, overlap, changed.len());
-
-        // Only claim a commit at all if something ties it to this session.
-        if !cwd_matches && overlap == 0 {
-            continue;
-        }
-        if !in_window && overlap == 0 {
-            continue;
-        }
-
-        commit_ids.push(commit.oid.clone());
-        if cwd_matches {
-            basis.insert("cwd");
-        }
-        if branch_matches {
-            basis.insert("branch");
-        }
-        if in_window {
-            basis.insert("timeWindow");
-        }
-        if overlap > 0 {
-            basis.insert("fileOverlap");
-        }
-        best = Some(match best {
-            Some(current) => weakest(current, confidence),
-            None => confidence,
-        });
-    }
-
-    if commit_ids.is_empty() {
+    if attributed.is_empty() {
         return None;
     }
+
+    let confidence = attributed
+        .iter()
+        .map(|v| v.confidence)
+        .max()
+        .unwrap_or(LinkConfidence::Low);
+    let basis: BTreeSet<&'static str> = attributed.iter().flat_map(|v| v.basis.clone()).collect();
+    let ambiguous_with = attributed
+        .iter()
+        .map(|v| v.ambiguous_with)
+        .max()
+        .unwrap_or(0);
 
     Some(SessionCommitLink {
         session_id: session.session_id.clone(),
         session_path: session.file_path.clone(),
-        commit_ids,
-        // The link is only as strong as its weakest attributed commit.
-        confidence: best.unwrap_or(LinkConfidence::Low),
+        commit_ids: attributed.iter().map(|v| v.commit_id.clone()).collect(),
+        confidence,
         basis: basis.into_iter().map(str::to_string).collect(),
+        commits: attributed.into_iter().map(detail).collect(),
+        // A commit the session never touched was never a candidate; listing it
+        // would bury the near-misses that actually explain the grade.
+        rejected: dropped
+            .into_iter()
+            .filter(|v| v.rejection.is_some() && v.commit_coverage > 0.0)
+            .take(MAX_REJECTED_COMMITS)
+            .map(|v| RejectedCommit {
+                commit_id: v.commit_id,
+                reason: v.rejection.expect("filtered above"),
+            })
+            .collect(),
+        ambiguous_with,
     })
 }
 
-fn grade(
-    cwd_matches: bool,
-    branch_matches: bool,
-    in_window: bool,
-    overlap: usize,
-    changed_count: usize,
-) -> LinkConfidence {
-    // High demands that the session account for the *whole* commit: every file
-    // the commit changed was edited in the session.
-    if cwd_matches && branch_matches && in_window && changed_count > 0 && overlap == changed_count {
-        return LinkConfidence::High;
+fn detail(verdict: PairVerdict) -> CommitLinkDetail {
+    CommitLinkDetail {
+        commit_id: verdict.commit_id,
+        confidence: verdict.confidence,
+        basis: verdict.basis.into_iter().map(str::to_string).collect(),
+        commit_coverage: verdict.commit_coverage,
+        session_coverage: verdict.session_coverage,
+        unattributed_files: verdict.unattributed_files,
     }
-    if cwd_matches && (branch_matches || in_window) && overlap >= 1 {
-        return LinkConfidence::Medium;
-    }
-    LinkConfidence::Low
-}
-
-fn weakest(a: LinkConfidence, b: LinkConfidence) -> LinkConfidence {
-    let rank = |c: LinkConfidence| match c {
-        LinkConfidence::Low => 0,
-        LinkConfidence::Medium => 1,
-        LinkConfidence::High => 2,
-    };
-    if rank(a) <= rank(b) {
-        a
-    } else {
-        b
-    }
-}
-
-fn within_window(session: &SessionSummary, at: i64) -> bool {
-    at >= session.started_at && at <= session.ended_at.saturating_add(TAIL_GRACE_MILLIS)
-}
-
-fn path_matches(cwd: &str, repo: &str) -> bool {
-    cwd == repo || cwd.starts_with(&format!("{}/", repo))
-}
-
-/// Session logs record absolute paths; commits record repository-relative
-/// ones. Compare on the relative form.
-fn normalize(path: &str, repo: &str) -> String {
-    path.strip_prefix(repo)
-        .map(|rest| rest.trim_start_matches('/').to_string())
-        .unwrap_or_else(|| path.to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::verify::types::{FileEditSummary, SessionSource};
+    use crate::verify::session::attribution::TAIL_GRACE_MILLIS;
+    use crate::verify::session::test_support::summary_fixture::{
+        commit, named_commit, named_session, session, REPO, T0,
+    };
+    use crate::verify::types::RejectionReason;
+    use std::path::PathBuf;
 
-    const REPO: &str = "/repo";
-    const T0: i64 = 1_772_000_000_000;
-
-    fn edit(path: &str) -> FileEditSummary {
-        FileEditSummary {
-            path: format!("{}/{}", REPO, path),
-            edit_count: 1,
-            first_edit_at: T0,
-            last_edit_at: T0 + 1000,
-            was_read_first: true,
-            after_compaction: false,
-            by_subagent: false,
-            via_bash: false,
-        }
-    }
-
-    fn session(branch: Option<&str>, cwd: &str, files: &[&str]) -> SessionSummary {
-        SessionSummary {
-            session_id: "sess-1".into(),
-            source: SessionSource::ClaudeCode,
-            file_path: "/logs/sess-1.jsonl".into(),
-            cwd: cwd.into(),
-            git_branch: branch.map(str::to_string),
-            started_at: T0,
-            ended_at: T0 + 60_000,
-            first_user_prompt: None,
-            files_read: Vec::new(),
-            files_edited: files.iter().map(|f| edit(f)).collect(),
-            bash_commands: Vec::new(),
-            compaction_boundaries: Vec::new(),
-            injected_rules_digest: None,
-            truncated: false,
-            skipped_records: 0,
-        }
-    }
-
-    fn commit(at: i64, files: &[&str]) -> CommitRef {
-        CommitRef {
-            oid: "abc123".into(),
-            timestamp_ms: at,
-            files: files.iter().map(|f| f.to_string()).collect(),
+    fn ctx() -> AttributionContext {
+        AttributionContext {
+            repo_path: PathBuf::from(REPO),
+            common_dir: None,
+            known_emails: ["dev@example.com".to_string()].into_iter().collect(),
         }
     }
 
     #[test]
-    fn high_requires_cwd_branch_window_and_full_file_coverage() {
+    fn a_clean_match_produces_one_high_link() {
         let links = correlate(
-            Path::new(REPO),
+            &ctx(),
             &[session(Some("main"), REPO, &["src/a.rs", "src/b.rs"])],
             &[commit(T0 + 30_000, &["src/a.rs", "src/b.rs"])],
         );
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].confidence, LinkConfidence::High);
+        assert_eq!(links[0].commit_ids, vec!["abc123".to_string()]);
+        assert_eq!(links[0].commits.len(), 1);
+        assert_eq!(links[0].commits[0].commit_coverage, 1.0);
+        assert!(links[0].basis.contains(&"branch".to_string()));
+    }
+
+    #[test]
+    fn a_bad_candidate_is_dropped_instead_of_dragging_the_grade_down() {
+        // Defect 8: `weakest()` downgraded the whole link while *keeping* the
+        // candidate that caused the downgrade.
+        let good = named_commit("good", T0 + 30_000, &["src/a.rs"]);
+        let mut stale = named_commit("stale", T0 + 3 * 60 * 60 * 1000, &["src/a.rs"]);
+        stale.branches.clear();
+        let mut s = session(Some("main"), REPO, &["src/a.rs"]);
+        s.git_branch = Some("main".into());
+
+        let links = correlate(&ctx(), &[s], &[good, stale]);
+        assert_eq!(links[0].commit_ids, vec!["good".to_string()]);
+        assert_eq!(links[0].confidence, LinkConfidence::High);
         assert_eq!(
-            links[0].basis,
-            vec!["branch", "cwd", "fileOverlap", "timeWindow"]
+            links[0].rejected,
+            vec![RejectedCommit {
+                commit_id: "stale".into(),
+                reason: RejectionReason::OutsideSessionWindow,
+            }]
         );
     }
 
     #[test]
-    fn partial_file_coverage_drops_to_medium() {
-        // The commit contains a file the session never touched, so the session
-        // cannot account for the whole commit.
+    fn a_hard_refusal_still_explains_itself() {
+        // A refusal that reports zero overlap would be indistinguishable from a
+        // commit that was never a candidate, and the UI could not explain the
+        // absence.
+        let good = named_commit("good", T0 + 30_000, &["src/a.rs"]);
+        let mut foreign = named_commit("foreign", T0 + 31_000, &["src/a.rs"]);
+        foreign.branches = ["release/1.0".to_string()].into_iter().collect();
+
         let links = correlate(
-            Path::new(REPO),
+            &ctx(),
             &[session(Some("main"), REPO, &["src/a.rs"])],
-            &[commit(T0 + 30_000, &["src/a.rs", "src/unrelated.rs"])],
+            &[good, foreign],
         );
-        assert_eq!(links[0].confidence, LinkConfidence::Medium);
+        assert_eq!(links[0].commit_ids, vec!["good".to_string()]);
+        assert_eq!(
+            links[0].rejected,
+            vec![RejectedCommit {
+                commit_id: "foreign".into(),
+                reason: RejectionReason::BranchMismatch,
+            }]
+        );
     }
 
     #[test]
-    fn no_branch_recorded_caps_at_medium() {
+    fn two_sessions_touching_disjoint_files_each_keep_their_own_commit() {
         let links = correlate(
-            Path::new(REPO),
-            &[session(None, REPO, &["src/a.rs"])],
+            &ctx(),
+            &[
+                named_session("a", Some("main"), REPO, &["src/a.rs"]),
+                named_session("b", Some("main"), REPO, &["src/b.rs"]),
+            ],
+            &[
+                named_commit("c-a", T0 + 10_000, &["src/a.rs"]),
+                named_commit("c-b", T0 + 20_000, &["src/b.rs"]),
+            ],
+        );
+        assert_eq!(links.len(), 2);
+        for link in &links {
+            assert_eq!(link.confidence, LinkConfidence::High);
+            assert_eq!(link.commit_ids.len(), 1);
+            assert_eq!(link.ambiguous_with, 0);
+        }
+    }
+
+    #[test]
+    fn two_sessions_on_the_same_files_both_lose_high() {
+        // Defect 7: both used to be graded High, producing two contradictory
+        // reports for one commit.
+        let links = correlate(
+            &ctx(),
+            &[
+                named_session("a", Some("main"), REPO, &["src/a.rs"]),
+                named_session("b", Some("main"), REPO, &["src/a.rs"]),
+            ],
             &[commit(T0 + 30_000, &["src/a.rs"])],
         );
-        assert_eq!(links[0].confidence, LinkConfidence::Medium);
+        assert_eq!(links.len(), 2);
+        for link in &links {
+            assert_eq!(link.confidence, LinkConfidence::Medium);
+            assert_eq!(link.ambiguous_with, 2);
+        }
     }
 
     #[test]
-    fn a_commit_outside_the_window_with_only_file_overlap_is_low() {
+    fn the_session_that_did_strictly_more_keeps_high() {
         let links = correlate(
-            Path::new(REPO),
-            &[session(Some("main"), "/other/repo", &["src/a.rs"])],
-            &[commit(T0 + 90 * 60 * 1000, &["src/a.rs"])],
+            &ctx(),
+            &[
+                named_session("narrow", Some("main"), REPO, &["src/a.rs"]),
+                named_session("wide", Some("main"), REPO, &["src/a.rs", "src/b.rs"]),
+            ],
+            &[commit(T0 + 30_000, &["src/a.rs", "src/b.rs"])],
         );
-        assert_eq!(links[0].confidence, LinkConfidence::Low);
+        // The narrow session never covered the whole commit, so it was Medium
+        // from the start; the wide one is uncontested at High.
+        let wide = links.iter().find(|l| l.session_id == "wide").expect("wide");
+        assert_eq!(wide.confidence, LinkConfidence::High);
+    }
+
+    #[test]
+    fn three_way_ambiguity_attributes_the_commit_to_nobody() {
+        let links = correlate(
+            &ctx(),
+            &[
+                named_session("a", Some("main"), REPO, &["src/a.rs"]),
+                named_session("b", Some("main"), REPO, &["src/a.rs"]),
+                named_session("c", Some("main"), REPO, &["src/a.rs"]),
+            ],
+            &[commit(T0 + 30_000, &["src/a.rs"])],
+        );
+        assert!(links.is_empty(), "three claimants is noise, not information");
+    }
+
+    #[test]
+    fn sessions_that_never_overlapped_are_not_parallel() {
+        let early = named_session("early", Some("main"), REPO, &["src/a.rs"]);
+        let mut late = named_session("late", Some("main"), REPO, &["src/a.rs"]);
+        late.started_at = T0 + 10 * 60 * 1000;
+        late.ended_at = T0 + 11 * 60 * 1000;
+        late.modified_at = late.ended_at;
+
+        // The commit lands inside `early`'s tail grace and inside `late`'s
+        // window, so both would claim it — but their windows do not overlap.
+        let links = correlate(&ctx(), &[early, late], &[commit(T0 + 10 * 60 * 1000 + 1, &["src/a.rs"])]);
+        let late_link = links.iter().find(|l| l.session_id == "late").expect("late");
+        assert_eq!(late_link.confidence, LinkConfidence::High);
+        assert_eq!(late_link.ambiguous_with, 0);
+    }
+
+    #[test]
+    fn a_session_with_no_commits_produces_no_link() {
+        let links = correlate(
+            &ctx(),
+            &[session(Some("main"), REPO, &["src/only-here.rs"])],
+            &[commit(T0 + 30_000, &["src/somewhere-else.rs"])],
+        );
+        assert!(links.is_empty());
+    }
+
+    #[test]
+    fn a_commit_with_no_session_produces_no_link() {
+        let links = correlate(&ctx(), &[], &[commit(T0 + 30_000, &["src/a.rs"])]);
+        assert!(links.is_empty());
     }
 
     #[test]
     fn commits_shortly_after_the_session_still_count() {
         let links = correlate(
-            Path::new(REPO),
+            &ctx(),
             &[session(Some("main"), REPO, &["src/a.rs"])],
             &[commit(T0 + 60_000 + TAIL_GRACE_MILLIS - 1, &["src/a.rs"])],
         );
@@ -276,47 +341,8 @@ mod tests {
     }
 
     #[test]
-    fn unrelated_sessions_produce_no_link_at_all() {
-        let links = correlate(
-            Path::new(REPO),
-            &[session(Some("main"), "/other/repo", &["src/x.rs"])],
-            &[commit(T0 + 90 * 60 * 1000, &["src/a.rs"])],
-        );
-        assert!(links.is_empty(), "no evidence must mean no attribution");
-    }
-
-    #[test]
-    fn a_link_is_only_as_strong_as_its_weakest_commit() {
-        let links = correlate(
-            Path::new(REPO),
-            &[session(Some("main"), REPO, &["src/a.rs"])],
-            &[
-                commit(T0 + 30_000, &["src/a.rs"]),
-                CommitRef {
-                    oid: "def456".into(),
-                    timestamp_ms: T0 + 40_000,
-                    files: vec!["src/a.rs".into(), "src/zz.rs".into()],
-                },
-            ],
-        );
-        assert_eq!(links[0].commit_ids.len(), 2);
-        assert_eq!(links[0].confidence, LinkConfidence::Medium);
-    }
-
-    #[test]
-    fn absolute_session_paths_match_relative_commit_paths() {
-        assert_eq!(normalize("/repo/src/a.rs", REPO), "src/a.rs");
-        assert_eq!(normalize("src/a.rs", REPO), "src/a.rs");
-    }
-
-    #[test]
     fn empty_inputs_are_safe() {
-        assert!(correlate(Path::new(REPO), &[], &[]).is_empty());
-        assert!(correlate(
-            Path::new(REPO),
-            &[session(Some("main"), REPO, &[])],
-            &[]
-        )
-        .is_empty());
+        assert!(correlate(&ctx(), &[], &[]).is_empty());
+        assert!(correlate(&ctx(), &[session(Some("main"), REPO, &[])], &[]).is_empty());
     }
 }

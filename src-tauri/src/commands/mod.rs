@@ -8,6 +8,7 @@ pub mod git;
 pub mod history;
 pub mod hooks;
 pub mod repo;
+pub mod report;
 pub mod review;
 pub mod session;
 pub mod settings;

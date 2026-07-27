@@ -112,6 +112,62 @@ pub fn looks_like_file_path(path: &str) -> bool {
     }
 }
 
+/// Wrapper blocks both CLIs splice into `user` records. They are machine text —
+/// hook output, slash-command plumbing, injected reminders — and a report that
+/// quotes them back as "what you asked for" is lying to the reader.
+const INJECTED_BLOCKS: &[&str] = &[
+    "system-reminder",
+    "command-name",
+    "command-message",
+    "command-args",
+    "local-command-stdout",
+    "local-command-stderr",
+    "user-prompt-submit-hook",
+];
+
+/// Strip injected blocks from a prompt body.
+///
+/// `None` means the record was entirely machine text and is not a human
+/// instruction at all.
+pub fn sanitize_prompt(text: &str) -> Option<String> {
+    let mut cleaned = text.to_string();
+    for tag in INJECTED_BLOCKS {
+        cleaned = strip_block(&cleaned, tag);
+    }
+    let cleaned = cleaned.trim();
+    (!cleaned.is_empty()).then(|| cleaned.to_string())
+}
+
+/// Remove every `<tag …> … </tag>` span. An unterminated opening tag swallows
+/// the remainder: a malformed injected block is still machine text, and keeping
+/// it would be the one failure mode that matters here.
+fn strip_block(text: &str, tag: &str) -> String {
+    let open = format!("<{}", tag);
+    let close = format!("</{}>", tag);
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+
+    loop {
+        let Some(start) = rest.find(&open) else {
+            out.push_str(rest);
+            return out;
+        };
+        // `<command-name>` must not match `<command-name-extra>`.
+        let after = rest[start + open.len()..].chars().next();
+        if !matches!(after, Some('>') | Some('/') | Some(' ') | Some('\t') | Some('\n')) {
+            let advance = start + open.len();
+            out.push_str(&rest[..advance]);
+            rest = &rest[advance..];
+            continue;
+        }
+        out.push_str(&rest[..start]);
+        rest = match rest[start..].find(&close) {
+            Some(end) => &rest[start + end + close.len()..],
+            None => return out,
+        };
+    }
+}
+
 /// SHA-1 content digest, matching the rest of the verify subsystem
 /// (contract §2.10 — git2 supplies this, so no hashing crate is needed).
 pub fn content_digest(bytes: &[u8]) -> Option<String> {
@@ -159,6 +215,46 @@ mod tests {
         // (.eslintrc.json) still reads as a file.
         assert!(!looks_like_file_path(".git"));
         assert!(looks_like_file_path(".eslintrc.json"));
+    }
+
+    #[test]
+    fn injected_blocks_are_stripped_from_prompts() {
+        assert_eq!(
+            sanitize_prompt("<system-reminder>noise</system-reminder>fix the parser"),
+            Some("fix the parser".to_string())
+        );
+        assert_eq!(
+            sanitize_prompt("<command-name>/review</command-name>\n<command-args>HEAD</command-args>"),
+            None,
+            "a slash-command record carries no human instruction"
+        );
+        // Multi-line reminders wrapped around real text.
+        assert_eq!(
+            sanitize_prompt("before\n<system-reminder>\na\nb\n</system-reminder>\nafter"),
+            Some("before\n\nafter".to_string())
+        );
+    }
+
+    #[test]
+    fn sanitizing_leaves_ordinary_prompts_untouched() {
+        assert_eq!(
+            sanitize_prompt("로그인 리팩터링 해줘"),
+            Some("로그인 리팩터링 해줘".to_string())
+        );
+        // A tag that merely starts the same is not an injected block.
+        assert_eq!(
+            sanitize_prompt("see <command-nameservice> docs"),
+            Some("see <command-nameservice> docs".to_string())
+        );
+        assert_eq!(sanitize_prompt("   "), None);
+    }
+
+    #[test]
+    fn an_unterminated_injected_block_never_leaks_machine_text() {
+        assert_eq!(
+            sanitize_prompt("real ask<system-reminder>truncated machine text"),
+            Some("real ask".to_string())
+        );
     }
 
     #[test]

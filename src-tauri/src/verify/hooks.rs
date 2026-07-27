@@ -726,6 +726,7 @@ impl Fold {
                 .map(|ok| !ok)
                 .unwrap_or(false),
             kind: classification.kind,
+            bypass_markers: classification.bypass_markers,
         });
     }
 
@@ -762,9 +763,13 @@ impl Fold {
             git_branch: None,
             started_at,
             ended_at: self.last_at.unwrap_or(started_at),
+            // Hook payloads are appended live, so the log file's mtime says
+            // nothing about when the session stopped. Left unknown.
+            modified_at: 0,
             // `UserPromptSubmit` is not one of the installed events, so the
             // prompt text is never recorded and V26 cannot run from hook data.
             first_user_prompt: None,
+            prompts: Vec::new(),
             files_read: self.files_read,
             files_edited,
             bash_commands: self.commands,

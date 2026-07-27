@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Users, Palette, Code, Check, Loader2, Terminal, Bot, ScanSearch } from "lucide-react";
+import { X, Users, Palette, Code, Check, Loader2, Terminal, Bot } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import type { AppSettings, GitHubAccount, EditorInfo, TerminalInfo, AiCliInfo } from "@/types";
@@ -7,8 +7,6 @@ import { Select } from "@/components/ui/Select";
 import { detectInstalledEditors, detectInstalledTerminals, detectInstalledAiClis } from "@/api/commands";
 import { ThemeSelector } from "./ThemeSelector";
 import { AccountSettings } from "./AccountSettings";
-import { RuleSettings } from "@/components/verify/RuleSettings";
-import { VerifyAdvancedSettings } from "./VerifyAdvancedSettings";
 
 const AI_CLI_ICONS: Record<string, { bg: string; svg: React.ReactNode }> = {
   claude: {
@@ -103,7 +101,7 @@ interface SettingsPanelProps {
   onClose: () => void;
 }
 
-type Section = "accounts" | "appearance" | "editor" | "terminal" | "ai" | "verification";
+type Section = "accounts" | "appearance" | "editor" | "terminal" | "ai";
 
 const sections: { id: Section; labelKey: string; icon: typeof Users }[] = [
   { id: "accounts", labelKey: "settings.accounts", icon: Users },
@@ -111,7 +109,6 @@ const sections: { id: Section; labelKey: string; icon: typeof Users }[] = [
   { id: "editor", labelKey: "settings.editor", icon: Code },
   { id: "terminal", labelKey: "settings.terminal", icon: Terminal },
   { id: "ai", labelKey: "settings.ai", icon: Bot },
-  { id: "verification", labelKey: "settings.verification", icon: ScanSearch },
 ];
 
 export function SettingsPanel({
@@ -378,13 +375,6 @@ export function SettingsPanel({
                       ))}
                   </div>
                 )}
-              </div>
-            )}
-
-            {activeSection === "verification" && (
-              <div className="flex flex-col gap-6">
-                <RuleSettings className="rounded-lg border border-border overflow-hidden" />
-                <VerifyAdvancedSettings />
               </div>
             )}
 

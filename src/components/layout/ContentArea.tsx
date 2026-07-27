@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { FileText, GitCommit, GitCompare, Archive, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useToastStore } from "@/stores/toast";
 import { useSelectionStore } from "@/stores/selection";
-import { useStatus, useFileDiff, useCommitDetail, useCommitFileDiff, useCommitAvatars, useFileReviewStates } from "@/api/queries";
-import { useFileVerification } from "@/hooks/useFileVerification";
+import { useStatus, useFileDiff, useCommitDetail, useCommitFileDiff, useCommitAvatars } from "@/api/queries";
+import { useSessionData } from "@/hooks/useSessionData";
 import { stopWorktreePreview } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "@/lib/utils";
@@ -16,9 +16,7 @@ import { StashDetailView } from "@/components/stash/StashDetailView";
 import { ActionsDetailView } from "@/components/actions/ActionsDetailView";
 import { ToolbarRoot } from "@/components/toolbar";
 import { PreviewBanner } from "@/components/worktree/PreviewBanner";
-import { FileReviewToggle } from "@/components/review";
-import { FindingBadge } from "@/components/verify/FindingBadge";
-import { SessionDetail } from "@/components/session/SessionDetail";
+import { SessionReportView } from "@/components/report";
 import type { FileStatus } from "@/types";
 import type { ActiveTab } from "@/stores/ui";
 
@@ -52,11 +50,6 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
   const { data: diff, isLoading, isError } = useFileDiff(activeRepoPath, filePath, staged);
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
 
-  // V13 review mark + this file's slice of the working-tree report (V2·V5·V6·V10).
-  const reviewPaths = useMemo(() => [filePath], [filePath]);
-  const { data: reviewEntries = [] } = useFileReviewStates(activeRepoPath, reviewPaths, staged);
-  const { counts, uncheckedCount } = useFileVerification(activeRepoPath, filePath, staged);
-
   const fileStatus: FileStatus =
     statusEntries.find((e) => e.path === filePath)?.status ?? "modified";
 
@@ -77,24 +70,11 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
   }
 
   return (
-    <>
-      {activeRepoPath && (
-        <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border bg-surface shrink-0">
-          <FileReviewToggle
-            repoPath={activeRepoPath}
-            path={filePath}
-            staged={staged}
-            entry={reviewEntries.find((e) => e.path === filePath)}
-          />
-          <FindingBadge counts={counts} uncheckedCount={uncheckedCount} />
-        </div>
-      )}
-      <DiffViewer
-        diff={diff ?? null}
-        status={fileStatus}
-        structural={activeRepoPath ? { repoPath: activeRepoPath, oid: null, staged } : null}
-      />
-    </>
+    <DiffViewer
+      diff={diff ?? null}
+      status={fileStatus}
+      structural={activeRepoPath ? { repoPath: activeRepoPath, oid: null, staged } : null}
+    />
   );
 }
 
@@ -138,7 +118,6 @@ interface ContentAreaProps {
 export function ContentArea({ activeTab }: ContentAreaProps) {
   const { t } = useTranslation();
   const compareBranch = useUIStore((s) => s.compareBranch);
-  const historyViewMode = useUIStore((s) => s.historyViewMode);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const setPreviewBranch = useUIStore((s) => s.setPreviewBranch);
   const addToast = useToastStore((s) => s.addToast);
@@ -151,9 +130,10 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
   const selectedRunId = useSelectionStore((s) => s.selectedRunId);
   const selectedSessionPath = useSelectionStore((s) => s.selectedSessionPath);
 
-  // A session detail only makes sense while History is grouped by session; a
-  // selection left over from another mode must not hijack the pane.
-  const isSessionMode = activeTab === "history" && historyViewMode === "sessions";
+  // DECISION A — the one gate. Without a readable agent session log this repo
+  // gets no verification UI at all, so a stale selection cannot open a report.
+  const { hasSessions } = useSessionData(activeRepoPath);
+  const canShowReport = activeTab === "history" && hasSessions;
 
   const handleStopPreview = async () => {
     if (!activeRepoPath) return;
@@ -219,10 +199,10 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
           )
         ) : selectedCommitId ? (
           <CommitDetailView key={selectedCommitId} commitId={selectedCommitId} />
-        ) : isSessionMode && selectedSessionPath && activeRepoPath ? (
-          /* V30 — a session opened from a History group header is reviewed as
-             one unit: its cumulative net diff, not commit by commit. */
-          <SessionDetail
+        ) : canShowReport && selectedSessionPath && activeRepoPath ? (
+          /* One session, one narrative: what was asked, what was done, what it
+             ran into, what it reaches, and where it drifted. */
+          <SessionReportView
             key={selectedSessionPath}
             repoPath={activeRepoPath}
             sessionPath={selectedSessionPath}

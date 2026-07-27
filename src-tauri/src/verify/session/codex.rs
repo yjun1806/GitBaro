@@ -12,7 +12,10 @@
 
 use serde_json::Value;
 
-use super::event::{parse_timestamp, string_field, MetaEvent, SessionAdapter, SessionEvent, ToolAction, ToolCallEvent};
+use super::event::{
+    parse_timestamp, sanitize_prompt, string_field, MetaEvent, SessionAdapter, SessionEvent,
+    ToolAction, ToolCallEvent,
+};
 use crate::verify::types::SessionSource;
 
 /// Function-call names that carry a shell command.
@@ -250,13 +253,12 @@ fn translate_event_msg(payload: &Value, at: Option<i64>, out: &mut Vec<SessionEv
     if payload.get("type").and_then(Value::as_str) != Some("user_message") {
         return;
     }
-    if let Some(text) = payload.get("message").and_then(Value::as_str) {
-        if !text.is_empty() {
-            out.push(SessionEvent::Prompt {
-                at,
-                text: text.to_string(),
-            });
-        }
+    let text = payload
+        .get("message")
+        .and_then(Value::as_str)
+        .and_then(sanitize_prompt);
+    if let Some(text) = text {
+        out.push(SessionEvent::Prompt { at, text });
     }
 }
 

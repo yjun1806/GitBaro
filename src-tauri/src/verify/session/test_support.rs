@@ -46,6 +46,79 @@ impl Drop for TempDir {
     }
 }
 
+/// Pre-built [`SessionSummary`] / [`CommitFacts`] values for the attribution
+/// and correlation tests, so both exercise identical baselines.
+pub mod summary_fixture {
+    use crate::verify::session::attribution::CommitFacts;
+    use crate::verify::types::{FileEditSummary, SessionSource, SessionSummary};
+
+    pub const REPO: &str = "/repo";
+    pub const T0: i64 = 1_772_000_000_000;
+
+    pub fn edit(path: &str) -> FileEditSummary {
+        FileEditSummary {
+            path: format!("{}/{}", REPO, path),
+            edit_count: 1,
+            first_edit_at: T0,
+            last_edit_at: T0 + 1000,
+            was_read_first: true,
+            after_compaction: false,
+            by_subagent: false,
+            via_bash: false,
+        }
+    }
+
+    /// A one-minute session on `branch`, rooted at `cwd`, editing `files`.
+    pub fn session(branch: Option<&str>, cwd: &str, files: &[&str]) -> SessionSummary {
+        named_session("sess-1", branch, cwd, files)
+    }
+
+    pub fn named_session(
+        id: &str,
+        branch: Option<&str>,
+        cwd: &str,
+        files: &[&str],
+    ) -> SessionSummary {
+        SessionSummary {
+            session_id: id.into(),
+            source: SessionSource::ClaudeCode,
+            file_path: format!("/logs/{}.jsonl", id),
+            cwd: cwd.into(),
+            git_branch: branch.map(str::to_string),
+            started_at: T0,
+            ended_at: T0 + 60_000,
+            modified_at: T0 + 60_000,
+            first_user_prompt: None,
+            prompts: Vec::new(),
+            files_read: Vec::new(),
+            files_edited: files.iter().map(|f| edit(f)).collect(),
+            bash_commands: Vec::new(),
+            compaction_boundaries: Vec::new(),
+            injected_rules_digest: None,
+            truncated: false,
+            skipped_records: 0,
+        }
+    }
+
+    /// A single-parent commit on `main`, authored by the configured user, with
+    /// no reflog evidence either way.
+    pub fn commit(at: i64, files: &[&str]) -> CommitFacts {
+        named_commit("abc123", at, files)
+    }
+
+    pub fn named_commit(oid: &str, at: i64, files: &[&str]) -> CommitFacts {
+        CommitFacts {
+            oid: oid.into(),
+            timestamp_ms: at,
+            files: files.iter().map(|f| f.to_string()).collect(),
+            parent_count: 1,
+            author_email: Some("dev@example.com".into()),
+            branches: ["main".to_string()].into_iter().collect(),
+            reflog_first_seen_at: None,
+        }
+    }
+}
+
 /// Synthetic session records matching the shapes observed in live logs.
 pub mod fixture {
     use serde_json::{json, Value};

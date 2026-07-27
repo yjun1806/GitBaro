@@ -2,21 +2,16 @@ import React from "react";
 import { RefreshCw, ArrowDown, ArrowUp, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import { PushGateBanner } from "@/components/review";
+
 interface SyncDropdownProps {
   ahead: number;
   behind: number;
   hasUpstream: boolean;
   lastFetchedAt: number | null;
   disabled: boolean;
-  repoPath: string | null;
-  remote: string;
-  branch: string;
   onFetch: () => void;
   onPull: (rebase?: boolean) => void;
   onPush: (force?: boolean) => void;
-  /** Navigational only — the gate never blocks a push (spec §V34). */
-  onReviewFirst: () => void;
   onClose: () => void;
 }
 
@@ -76,13 +71,9 @@ export function SyncDropdown({
   hasUpstream,
   lastFetchedAt,
   disabled,
-  repoPath,
-  remote,
-  branch,
   onFetch,
   onPull,
   onPush,
-  onReviewFirst,
   onClose,
 }: SyncDropdownProps) {
   const { t } = useTranslation();
@@ -91,25 +82,12 @@ export function SyncDropdown({
     onClose();
   };
 
-  // V34 — what is about to leave this machine. Display only: it renders no push
-  // control and disables nothing, because blocking teaches people to bypass.
-  const gate =
-    repoPath !== null && branch !== "" ? (
-      <PushGateBanner
-        repoPath={repoPath}
-        remote={remote}
-        branch={branch}
-        onReviewFirst={() => exec(onReviewFirst)}
-      />
-    ) : null;
-
   // upstream이 없으면 Publish Branch만 표시
   if (!hasUpstream) {
     return (
       <div
         className="absolute right-0 top-full mt-2 w-72 bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
       >
-        {gate}
         <div className="py-1">
           <MenuItem
             icon={<Upload className="w-4 h-4" />}
@@ -128,8 +106,6 @@ export function SyncDropdown({
     <div
       className="absolute right-0 top-full mt-2 w-72 bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
     >
-      {gate}
-
       {/* Fetch */}
       <div className="py-1">
         <MenuItem

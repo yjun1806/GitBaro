@@ -111,16 +111,6 @@
       "hardDesc": "HEAD를 이동하고 스테이징·워킹 트리 변경을 모두 삭제합니다.",
       "hardWarning": "Hard 리셋은 커밋되지 않은 변경을 영구히 삭제합니다.",
       "confirm": "리셋"
-    },
-    "viewMode": {
-      "commits": "커밋별",
-      "sessions": "세션별"
-    },
-    "session": {
-      "group": "세션 · \"{{prompt}}\"",
-      "stats": "{{commits}} 커밋 · {{files}} 파일 · {{duration}}",
-      "unlinked": "세션에 연결되지 않은 커밋",
-      "unlinkedCount": "커밋 {{count}}개"
     }
   },
   "branch": {
@@ -344,7 +334,6 @@
     "detectingTerminals": "설치된 터미널 감지 중",
     "noTerminals": "설치된 터미널을 찾을 수 없습니다",
     "ai": "AI 어시스턴트",
-    "verification": "검증",
     "aiDescription": "저장소에서 사용할 AI CLI를 선택하세요",
     "detectingAiClis": "설치된 AI CLI 감지 중",
     "noAiClis": "설치된 AI CLI를 찾을 수 없습니다"
@@ -676,683 +665,147 @@
     "progress": "{{percent}}%",
     "loadMore": "더 보기 ({{remaining}}개 남음)"
   },
-  "verify": {
-    "title": "검증",
-    "severity": {
-      "info": "참고",
-      "warn": "주의",
-      "danger": "위험"
+  "report": {
+    "loading": "세션 로그를 읽는 중…",
+    "section": {
+      "asked": "무엇을 시켰나",
+      "did": "무엇을 했나",
+      "wentThrough": "무엇을 겪었나",
+      "impact": "무엇이 영향받나",
+      "drift": "시킨 것과 다른 것"
     },
-    "status": {
-      "implemented": "구현됨",
-      "planned": "예정"
-    },
-    "unchecked": {
-      "disabled": "설정에서 꺼둠",
-      "notApplicable": "이 변경에 해당 대상이 없음",
-      "unsupportedLanguage": "지원하지 않는 언어",
-      "missingArtifact": "필요한 파일을 찾지 못함",
-      "parseFailed": "파싱하지 못함",
-      "budgetExceeded": "크기·시간 예산 초과",
-      "notImplemented": "아직 구현되지 않음"
-    },
-    "scope": {
-      "label": "검사 범위",
-      "summary": "검사한 룰 {{checked}}개 · 미검사 {{unchecked}}개",
-      "partialCount": "부분 검사: {{count}}개",
-      "noFindings": "실행된 룰에서 걸린 항목이 없다. 통과했다는 뜻은 아니다.",
-      "nothingRan": "이 변경에서 실행된 룰이 없다.",
-      "why": "검사하지 않은 이유"
-    },
-    "finding": {
-      "commitLevel": "커밋 단위",
-      "sessionLevel": "세션 단위",
-      "line": "{{line}}번째 줄",
-      "evidence": "근거",
-      "count": "발견 {{count}}건",
-      "jumpToFile": "diff에서 열기"
-    },
-    "badge": {
-      "label": "검증",
-      "danger": "위험 {{count}}",
-      "warn": "주의 {{count}}",
-      "info": "참고 {{count}}",
-      "unchecked": "미검사 {{count}}",
-      "noFindings": "걸린 항목 없음 · 미검사 룰 {{count}}개"
-    },
-    "report": {
-      "scanning": "검사 중…",
-      "generatedAt": "{{time}} 검사",
-      "rescan": "다시 검사",
-      "failed": "검증에 실패했다: {{error}}"
-    },
-    "settings": {
-      "title": "검증 룰",
-      "description": "룰은 하나씩 켜고 끌 수 있다. 끈 룰은 '통과'가 아니라 '미검사'로 표시된다.",
-      "activeCount": "켜짐 {{count}}개",
-      "disabledCount": "꺼짐 {{count}}개",
-      "plannedCount": "미구현 {{count}}개",
-      "defaultSeverity": "기본 심각도",
-      "on": "켜짐",
-      "off": "꺼짐",
-      "plannedNote": "아직 구현되지 않았다. 항상 미검사로 보고된다.",
-      "toggleFailed": "룰 설정을 바꾸지 못했다: {{error}}",
-      "loadFailed": "룰 목록을 불러오지 못했다: {{error}}",
-      "advanced": {
-        "title": "고급"
-      },
-      "symbolIndex": {
-        "title": "심볼 인덱스",
-        "note": "중복 코드·미사용 코드·영향 범위를 검사하려면 필요하다. 만들지 않으면 그 검사는 미검사로 남는다.",
-        "status": {
-          "idle": "없음",
-          "building": "빌드 중 {{count}} 파일",
-          "ready": "준비됨 · 심볼 {{count}}개",
-          "cancelled": "취소됨",
-          "failed": "빌드 실패"
-        },
-        "build": "인덱스 만들기",
-        "cancel": "취소",
-        "skipped": "인덱스가 읽지 못한 파일 {{count}}개 — 그 파일의 심볼은 검사에 쓰이지 않는다"
-      },
-      "hooks": {
-        "title": "에이전트 훅",
-        "note": "Claude Code가 무엇을 했는지 GitBaro가 직접 기록한다. 세션 로그 포맷 변경에 영향받지 않는 대신 ~/.claude/settings.json 을 수정한다.",
-        "status": {
-          "installed": "설치됨",
-          "absent": "설치되지 않음"
-        },
-        "preview": "설치 내용 미리보기",
-        "install": "설치",
-        "uninstall": "제거",
-        "dialog": {
-          "title": "설치될 내용",
-          "settingsFragment": "settings.json 에 추가되는 내용",
-          "script": "설치될 스크립트",
-          "fields": "기록되는 항목",
-          "backup": "{{path}} 을 고치기 전에 타임스탬프가 붙은 백업 사본을 먼저 만든다."
-        },
-        "installed": "훅을 설치했다",
-        "removed": "훅을 제거했다",
-        "failed": "훅 작업에 실패했다: {{error}}",
-        "needsUpgrade": "설치된 훅이 이 버전보다 오래됐다. 다시 설치해야 최신 항목이 기록된다.",
-        "settingsState": {
-          "missing": "{{path}} 이 아직 없다. 설치하면 새로 만든다.",
-          "malformed": "{{path}} 이 올바른 JSON이 아니다. 먼저 고쳐야 한다 — 지금 설치하면 덮어쓴다."
-        }
-      }
-    },
-    "review": {
-      "unreviewed": "미검토",
-      "reviewed": "검토함",
-      "stale": "검토 후 변경됨",
-      "needsRecheck": "재검토 필요",
-      "markReviewed": "검토함으로 표시",
-      "unmarkReviewed": "미검토로 되돌리기",
-      "reviewedBy": "{{reviewer}} 검토",
-      "reviewedAt": "{{time}} 검토",
-      "staleHint": "검토한 뒤 이 파일이 바뀌어 미검토 상태로 되돌아갔다.",
-      "progress": "{{total}}개 중 {{reviewed}}개 검토",
-      "progressStale": "검토 후 변경 {{stale}}개",
-      "markFailed": "검토 상태를 저장하지 못했다: {{error}}"
-    },
-    "queue": {
-      "unresolved": "이 화면에 로드되지 않은 커밋 {{count}}개"
-    },
-    "pushGate": {
-      "title": "push 하기 전에",
-      "commits": "push할 커밋 {{count}}개",
-      "unreviewed": "미검토 {{count}}개",
-      "danger": "위험 신호 {{count}}개",
-      "warn": "주의 신호 {{count}}개",
-      "tangled": "깨끗하게 revert하기 어려운 커밋 {{count}}개",
-      "displayOnly": "차단이 아니라 요약이다. push는 그대로 할 수 있다.",
-      "confirmDanger": "이 커밋들에 위험 수준 신호가 있다. 그래도 push할까?",
-      "confirmDangerAction": "그래도 push",
-      "reviewFirst": "먼저 검토하기",
-      "failed": "push 요약을 읽지 못했다: {{error}}"
-    },
-    "ledger": {
-      "title": "검증 원장",
-      "description": "커밋에 무엇을 확인했는지 로컬 git notes에 기록한다. 기본 꺼짐이며 절대 push하지 않는다.",
-      "enable": "검증 증거 기록",
-      "recordedAt": "{{time}} 기록",
-      "recordedBy": "{{recorder}} 기록",
-      "toolVersion": "GitBaro {{version}}",
-      "record": "지금 기록",
-      "empty": "이 커밋에 기록된 내용 없음",
-      "recordFailed": "원장을 기록하지 못했다: {{error}}",
-      "outcome": {
-        "passed": "걸린 항목 없음",
-        "flagged": "발견됨",
-        "skipped": "미검사"
-      }
-    },
-    "evidence": {
-      "title": "테스트 실행 증거",
-      "result": {
-        "passed": "테스트 통과",
-        "failed": "테스트 실패"
-      },
-      "freshness": {
-        "fresh": "현재 트리와 일치",
-        "stale": "이후 {{count}}개 파일 변경 — 증거 만료",
-        "staleUnknown": "이후 트리가 바뀜 — 증거 만료",
-        "absent": "이 워킹트리에서 테스트가 실행된 기록이 없다"
-      },
-      "command": "명령",
-      "duration": "{{seconds}}초",
-      "exitCode": "종료 코드 {{code}}",
-      "outputTail": "마지막 출력",
-      "details": "자세히",
-      "run": "테스트 실행",
-      "running": "실행 중…",
-      "runFailed": "테스트를 실행하지 못했다: {{error}}",
-      "noCommand": "이 저장소에 설정된 테스트 명령이 없다",
-      "claimNote": "실제로 실행된 것만 기록한다. 실행했다는 설명이 아니라.",
-      "autoDetect": "저장소에서 자동 탐지"
-    },
-    "coverage": {
-      "title": "추가 라인 커버리지",
-      "source": "{{path}} 기준",
-      "parsedAt": "{{time}} 파싱",
-      "covered": "추가한 {{added}}줄 중 {{covered}}줄이 실행됨",
-      "uncovered": "추가한 {{count}}줄이 한 번도 실행되지 않음",
-      "unmapped": "변경 파일 {{count}}개가 리포트에 없어 커버리지를 알 수 없다",
-      "fileUnmapped": "이 파일은 커버리지 리포트에 없어 커버리지를 알 수 없다",
-      "absent": "커버리지 리포트를 찾지 못해 커버리지를 알 수 없다",
-      "noAddedLines": "측정할 추가 라인이 없다",
-      "qualityNote": "커버리지는 라인이 실행됐다는 것만 증명한다. 그 테스트가 결함을 잡아낼지는 말해주지 않는다.",
-      "qualityFindings": "이 파일의 테스트 품질 발견 {{count}}건",
-      "qualityNotChecked": "이 커버리지는 코드가 실행됐다는 뜻이지 검증됐다는 뜻이 아닙니다. 테스트 품질은 별도로 검사되지 않았습니다.",
-      "legend": {
-        "covered": "실행됨",
-        "uncovered": "실행 안 됨",
-        "noData": "데이터 없음"
-      }
-    },
-    "session": {
-      "loading": "세션 로그를 읽는 중…",
-      "partial": "부분 관측",
-      "source": {
-        "claudeCode": "Claude Code",
-        "codex": "Codex"
-      },
-      "startedAt": "{{time}} 시작",
-      "firstPrompt": "첫 프롬프트",
-      "firstPromptNote": "에이전트가 고쳐 쓸 수 없는 원 지시다. 실제 변경과 대조해 보라.",
-      "noPrompt": "이 세션에는 기록된 프롬프트가 없다",
-      "filesRead": "읽은 파일 {{count}}개",
-      "filesEdited": "편집한 파일 {{count}}개",
-      "commands": "명령 {{count}}개",
-      "testRunTally": "테스트 실행 {{total}}회 · 실패 {{failed}}회",
-      "compactions": "컨텍스트 압축 {{count}}회",
-      "truncated": "로그가 너무 커서 전부 읽지 못했다. 이 수치는 일부만 본 결과다.",
-      "skippedRecords": "{{count}}개 레코드를 읽지 못했다. 이 수치는 일부만 본 결과다.",
-      "editCount": "{{count}}회 편집",
-      "notReadFirst": "읽지 않고 편집",
-      "viaBash": "셸 명령으로 변경",
-      "afterCompaction": "컨텍스트 압축 이후 변경",
-      "readLessNote": "에이전트가 이 세션에서 파일을 읽지 않고 수정했다. 먼저 직접 읽어보라.",
-      "viaBashNote": "셸 명령으로 변경돼 /rewind로 되돌릴 수 없다.",
-      "subagentNote": "서브에이전트가 수정했다. 메인 대화 기록에는 그 과정이 남아 있지 않다.",
-      "compactionNote": "컨텍스트가 압축된 뒤 수정됐다 — 에이전트에게 앞선 논의가 남아 있지 않았다.",
-      "churnNote": "에이전트가 같은 파일을 반복 수정했다 — 보통 확신이 없었다는 뜻이다. 한 번에 끝난 파일보다 먼저 읽어보라.",
-      "commandOutcomeNote": "종료 코드 0은 명령이 오류 없이 끝났다는 뜻일 뿐, 결과가 옳다는 뜻은 아니다.",
-      "commandKind": {
-        "testRun": "테스트 실행",
-        "hookBypass": "훅 우회",
-        "fileMutation": "파일 변경",
-        "other": "명령"
-      },
-      "cumulativeDiff": "이 세션이 바꾼 전체",
-      "cumulativeDiffEmpty": "이 세션을 커밋과 연결하지 못해 누적 변경을 알 수 없다",
-      "cumulativeDiffNote": "개별 수정이 아니라 세션 전체의 최종 변경이다.",
-      "cumulativeDiffLoading": "세션 diff를 만드는 중…",
-      "cumulativeDiffFiles": "파일 {{count}}개",
-      "showCumulativeDiff": "최종 변경 보기",
-      "binaryFile": "바이너리 파일",
-      "diffTruncated": "처음 {{count}}줄만 표시",
-      "link": {
-        "title": "연관 세션",
-        "estimateNote": "시각과 경로로 추정한 결과다. 기록이 아니라 추정으로 다뤄라.",
-        "basisLabel": "{{basis}} 기준으로 연결",
-        "confidence": {
-          "high": "일치",
-          "medium": "가능성 높음",
-          "low": "추정"
-        },
-        "basis": {
-          "cwd": "같은 디렉터리",
-          "branch": "같은 브랜치",
-          "timeWindow": "겹치는 시간대",
-          "fileOverlap": "같은 파일"
-        }
-      },
-      "headingFilesRead": "읽은 파일",
-      "headingFilesEdited": "수정한 파일",
-      "headingSubagentEdits": "서브에이전트 수정",
-      "headingCommands": "실행한 명령",
-      "headingSignals": "이 세션에서 나온 신호",
-      "noFilesRead": "읽은 파일이 없다",
-      "noFilesEdited": "수정한 파일이 없다",
-      "noCommands": "기록된 명령이 없다",
-      "partialSignalsNote": "로그를 일부만 읽어 이 신호들은 완전하지 않다.",
+    "header": {
       "duration": {
         "underMinute": "1분 미만",
         "minutes": "{{count}}분",
         "hours": "{{count}}시간"
+      },
+      "source": {
+        "claudeCode": "Claude Code",
+        "codex": "Codex"
+      },
+      "compactions": "압축 {{count}}회",
+      "compactionNote": "컨텍스트가 압축됐다. 압축 이전에 준 지시는 사라졌을 수 있다.",
+      "siblingWorktree": "이 저장소의 다른 워크트리에서 실행됐다: {{cwd}}",
+      "truncated": "로그 뒷부분을 읽지 못했다 — 아래 수치는 전부 하한이다.",
+      "skippedRecords": "레코드 {{count}}개를 읽지 못했다 — 아래 수치는 전부 하한이다."
+    },
+    "confidence": {
+      "estimate": "추정",
+      "mediumNote": "{{reasons}}(으)로 연결했다.",
+      "ambiguous": "같은 커밋을 세션 {{count}}개가 동등하게 주장한다."
+    },
+    "basis": {
+      "cwd": "같은 폴더",
+      "branch": "같은 브랜치",
+      "timeWindow": "같은 시간대",
+      "fileOverlap": "겹치는 파일",
+      "mtime": "세션 파일 수정 시각",
+      "author": "같은 작성자",
+      "reflog": "세션 중 HEAD에 처음 등장",
+      "siblingWorktree": "형제 워크트리"
+    },
+    "unavailable": {
+      "noPrompt": "이 세션에는 사용자 프롬프트가 없다.",
+      "noResolvableAnchor": "프롬프트가 이 저장소의 경로를 지목하지 않았다.",
+      "noCommitAttribution": "이 세션에 귀속할 만한 커밋이 없다.",
+      "noSymbolIndex": "이 저장소에 심볼 인덱스가 없다.",
+      "partialSymbolIndex": "심볼 인덱스가 일부만 만들어졌다.",
+      "unsupportedAgent": "이 에이전트의 로그에는 이 데이터가 없다.",
+      "parseBudget": "로그 뒷부분을 예산 안에 읽지 못했다.",
+      "notApplicable": "해당 없음."
+    },
+    "asked": {
+      "firstPrompt": "첫 지시",
+      "followUp": "{{ordinal}}번째 지시",
+      "morePrompts": "지시 {{count}}개는 표시하지 않았다.",
+      "compactedAway": "압축으로 사라짐",
+      "compactedAwayNote": "이 지시 뒤에 컨텍스트가 압축됐다. 에이전트가 이 지시를 더는 갖고 있지 않았을 수 있다.",
+      "truncated": "2000자에서 잘렸다."
+    },
+    "did": {
+      "counts": "편집 {{edited}}개 · 읽기 {{read}}개",
+      "estimateNote": "이 커밋들은 기록이 아니라 추정이다.",
+      "rejected": "후보 커밋 {{count}}개를 제외했다",
+      "rejection": {
+        "mergeCommit": "머지 커밋",
+        "branchMismatch": "다른 브랜치",
+        "noFileOverlap": "겹치는 파일 없음",
+        "outsideSessionWindow": "세션 시간대 밖",
+        "differentWorktree": "다른 워크트리",
+        "differentAuthor": "다른 작성자",
+        "ambiguousWithAnotherSession": "다른 세션이 동등하게 주장",
+        "partialLogInsufficient": "로그가 부분 관측"
+      },
+      "uncommitted": "편집한 파일 {{count}}개가 어떤 귀속 커밋에도 없다 — {{first}} 외.",
+      "filesChanged": "파일 {{count}}개",
+      "unattributedFiles": "이 세션이 편집한 적 없는 파일 {{count}}개",
+      "editCount": "{{count}}번 편집",
+      "churnNote": "이만큼 다시 고쳤다 — 세션이 헤맨 자리다.",
+      "notReadFirst": "안 읽고 고침",
+      "notReadFirstNote": "이 세션에서 읽거나 검색하지 않은 채 편집했다.",
+      "viaBash": "셸로 변경",
+      "viaBashNote": "셸 명령으로 바꿨다. 체크포인트 복원 범위 밖이다.",
+      "bySubagent": "서브에이전트",
+      "bySubagentNote": "메인 대화가 아니라 서브에이전트 사이드체인에서 편집했다.",
+      "afterCompaction": "압축 이후",
+      "afterCompactionNote": "컨텍스트 압축 이후에 편집했다.",
+      "testFile": "테스트",
+      "notInCommit": "미커밋"
+    },
+    "wentThrough": {
+      "counts": "명령 {{bash}}개 · 테스트 {{runs}}회 중 {{failed}}회 실패",
+      "neverRanTests": "코드를 고쳤지만 이 세션에서 테스트를 한 번도 돌리지 않았다.",
+      "testEditAfterFailure": "테스트가 {{count}}번 실패한 뒤 {{path}}을(를) 고쳤다.",
+      "kind": {
+        "testPassed": "테스트 통과",
+        "testFailed": "테스트 실패",
+        "hookBypass": "우회",
+        "shellMutation": "셸 변경",
+        "compaction": "컨텍스트 압축",
+        "subagentEdit": "서브에이전트 편집"
+      },
+      "repeats": "×{{count}}"
+    },
+    "impact": {
+      "counts": "이 세션이 건드리지 않은 호출부 {{count}}곳",
+      "worktreeFallback": "워킹트리를 기준으로 비교했다. 이 세션 이후의 변경이 섞였을 수 있다.",
+      "building": "인덱싱 {{done}} / {{total}}…",
+      "buildIndex": "심볼 인덱스 만들기",
+      "untouchedCallers": "미수정 {{count}}곳",
+      "nameAmbiguous": "같은 이름의 정의가 {{count}}개다. 무관한 호출부가 섞였을 수 있다.",
+      "moreCallers": "호출부 {{count}}곳은 표시하지 않았다."
+    },
+    "drift": {
+      "withinScope": "프롬프트가 지목한 {{anchors}}곳 안에서만 바뀌었다 — {{first}} 외.",
+      "partial": "{{total}}개 변경 중 {{drifted}}개가 프롬프트에 없던 곳이다 — {{first}} 외.",
+      "full": "프롬프트는 {{anchors}}곳({{anchorList}})을 지목했지만 그 경로는 하나도 바뀌지 않았다.",
+      "morePaths": "경로 {{count}}개는 표시하지 않았다.",
+      "unresolved": "언급 {{count}}개는 저장소에서 해석되지 않았다: {{mentions}}",
+      "mentionNote": "프롬프트의 \"{{raw}}\" → {{kind}}",
+      "anchorKind": {
+        "file": "파일",
+        "directory": "디렉터리",
+        "symbolDefinition": "이 심볼을 정의한 파일"
       }
     },
-    "dependencies": {
-      "title": "의존성 검사",
-      "run": "의존성 검사",
-      "offline": "매니페스트·락파일만 대조했다. 이 기기 밖으로 나간 정보는 없다.",
-      "allowRegistry": "패키지 레지스트리도 조회 (패키지 이름이 네트워크로 전송된다)",
-      "failed": "의존성을 검사하지 못했다: {{error}}"
+    "entry": {
+      "filesEdited": "파일 {{count}}개",
+      "commits": "커밋 {{count}}개",
+      "commitsEstimated": "커밋 약 {{count}}개",
+      "partial": "부분 로그"
     },
-    "error": {
-      "scanFailed": "검증에 실패했다: {{error}}",
-      "sessionUnreadable": "세션 로그를 읽지 못했다: {{error}}"
+    "review": {
+      "prompt": "이 세션을 다 읽었다면 표시해 두어라.",
+      "mark": "이 세션 검토 완료",
+      "partial": "커밋 {{total}}개 중 {{reviewed}}개만 검토됨",
+      "done": "커밋 {{count}}개를 검토 완료로 표시했다.",
+      "undo": "되돌리기"
     },
-    "rule": {
-      "v1": {
-        "structuralDiff": {
-          "title": "구조적(AST) diff",
-          "description": "구문 트리를 비교해 포맷·리네임·코드 이동을 걷어내고 실제 변경만 남긴다."
-        }
-      },
-      "v2": {
-        "testSkipAdded": {
-          "title": "테스트 skip 추가",
-          "description": "it.skip·xit·test.todo·#[ignore]·@pytest.mark.skip이 새로 추가됐다."
-        },
-        "testFileDeleted": {
-          "title": "테스트 파일 삭제",
-          "description": "이 변경에서 테스트 파일이 삭제됐다."
-        },
-        "assertionRemoved": {
-          "title": "단언 제거",
-          "description": "테스트 파일의 expect/assert 라인 수가 줄었다."
-        }
-      },
-      "v3": {
-        "vacuousAssertion": {
-          "title": "공허한 단언",
-          "description": "toBeDefined()·toBeTruthy()처럼 거의 모든 값에 통과하는 단언이다."
-        },
-        "mockOnlyAssertion": {
-          "title": "mock 자체 단언",
-          "description": "직접 만든 mock의 반환값을 단언해 프로덕션 코드가 실행되지 않는다."
-        },
-        "noAssertionTest": {
-          "title": "단언 없는 테스트",
-          "description": "코드를 실행하지만 아무것도 단언하지 않는 테스트 함수다."
-        },
-        "broadExceptionAssertion": {
-          "title": "광범위 예외 단언",
-          "description": "구체 타입·메시지 없이 최상위 Exception만 기대한다."
-        },
-        "assertionRoulette": {
-          "title": "단언 룰렛",
-          "description": "설명 없는 단언이 한 테스트에 몰려 있어 실패 원인을 짚기 어렵다."
-        }
-      },
-      "v4": {
-        "hallucinatedDependency": {
-          "title": "존재하지 않는 의존성",
-          "description": "추가된 패키지를 레지스트리·락파일에서 찾을 수 없다."
-        },
-        "suspiciousNewDependency": {
-          "title": "신생·저사용 의존성",
-          "description": "추가된 패키지가 배포된 지 얼마 되지 않았거나 다운로드 수가 매우 적다."
-        }
-      },
-      "v5": {
-        "verificationBypassed": {
-          "title": "검증 우회 추가",
-          "description": "--no-verify 플래그나 그에 준하는 lint·타입체크 무력화가 추가됐다."
-        },
-        "typeEscapeHatchAdded": {
-          "title": "타입 탈출구 추가",
-          "description": "as any·@ts-ignore·# type: ignore가 새로 추가됐다."
-        },
-        "emptyCatchAdded": {
-          "title": "빈 catch 추가",
-          "description": "에러를 처리하지 않고 삼키는 catch 블록이 추가됐다."
-        },
-        "unsafeUnwrapAdded": {
-          "title": "안전하지 않은 unwrap 추가",
-          "description": "새 unwrap()/expect()가 에러를 전파하지 않고 패닉한다."
-        }
-      },
-      "v6": {
-        "scopeDrift": {
-          "title": "스코프 이탈",
-          "description": "커밋 메시지가 선언한 스코프 밖의 파일이 변경됐다."
-        }
-      },
-      "v7": {
-        "reinventedFunction": {
-          "title": "재발명된 함수",
-          "description": "새로 추가된 함수가 저장소에 이미 있는 함수와 매우 비슷하다."
-        }
-      },
-      "v8": {
-        "orphanCode": {
-          "title": "고아 코드",
-          "description": "새로 추가된 export가 저장소 어디에서도 호출되지 않는다."
-        }
-      },
-      "v9": {
-        "blastRadius": {
-          "title": "영향 범위",
-          "description": "시그니처가 바뀐 함수의 호출부를 함께 보여준다."
-        }
-      },
-      "v10": {
-        "publicExportDeleted": {
-          "title": "public export 삭제",
-          "description": "export된 심볼이 제거됐다. 이 diff 밖의 호출부가 깨질 수 있다."
-        },
-        "errorHandlingDeleted": {
-          "title": "에러 처리 삭제",
-          "description": "try/catch·에러 분기·Result 처리가 제거됐다."
-        },
-        "validationDeleted": {
-          "title": "검증 로직 삭제",
-          "description": "입력 검사나 스키마 검증이 제거됐다."
-        }
-      },
-      "v11": {
-        "testEvidenceMissing": {
-          "title": "테스트 실행 기록 없음",
-          "description": "이 저장소에서 테스트가 실행된 기록이 없다."
-        },
-        "testEvidenceStale": {
-          "title": "테스트 증거 만료",
-          "description": "마지막 실행 기록 이후 트리가 바뀌어 그 결과가 지금 코드를 설명하지 못한다."
-        },
-        "testEvidenceFailed": {
-          "title": "테스트 실행 실패 기록",
-          "description": "이 트리에 대한 마지막 테스트 실행이 통과하지 못했다."
-        }
-      },
-      "v12": {
-        "uncoveredNewLines": {
-          "title": "실행되지 않은 추가 라인",
-          "description": "이 변경이 추가한 라인이 커버리지 리포트에서 한 번도 실행되지 않았다."
-        }
-      },
-      "v15": {
-        "mutationScore": {
-          "title": "뮤테이션 점수",
-          "description": "변경 파일의 뮤테이션 점수를 표시한다. 라인 커버리지보다 상위 신호다."
-        }
-      },
-      "v17": {
-        "invariantViolation": {
-          "title": "선언한 불변식 위반",
-          "description": "refactor:·perf:·docs: 커밋이 그 타입이 약속한 불변을 깼다."
-        }
-      },
-      "v16": {
-        "claimMismatch": {
-          "title": "주장과 diff 불일치",
-          "description": "커밋 메시지의 주장이 실제 diff에 나타나지 않는다."
-        }
-      },
-      "v18": {
-        "blindReviewMode": {
-          "title": "선판단 모드",
-          "description": "플래그·요약을 보기 전에 diff를 먼저 보게 한다."
-        }
-      },
-      "v19": {
-        "readLessEdit": {
-          "title": "읽지 않고 편집",
-          "description": "세션이 이 파일을 읽거나 검색하지 않고 수정했다. 경고가 아니라 리뷰 우선순위 신호다."
-        }
-      },
-      "v20": {
-        "testFailureThenTestEdited": {
-          "title": "실패 목격 후 테스트 수정",
-          "description": "세션이 테스트 실패를 목격한 뒤 코드가 아니라 테스트를 고쳤다."
-        },
-        "testsNeverRunInSession": {
-          "title": "세션에서 테스트 미실행",
-          "description": "이 세션의 명령 기록에 테스트 명령이 전혀 없다."
-        }
-      },
-      "v21": {
-        "hookBypassCommand": {
-          "title": "훅 우회 명령",
-          "description": "세션이 --no-verify·push -f처럼 훅을 건너뛰거나 강제 push하는 명령을 실행했다."
-        }
-      },
-      "v22": {
-        "unrewindableChange": {
-          "title": "/rewind로 되돌릴 수 없는 변경",
-          "description": "셸 명령으로 바뀐 파일이라 체크포인트 복원 범위 밖이다."
-        }
-      },
-      "v23": {
-        "subagentEdit": {
-          "title": "서브에이전트 편집",
-          "description": "서브에이전트가 이 파일을 바꿨고 메인 컨텍스트에는 요약만 올라왔다."
-        }
-      },
-      "v24": {
-        "postCompactionEdit": {
-          "title": "컨텍스트 압축 이후 편집",
-          "description": "세션이 컨텍스트를 압축한 뒤의 변경이라 앞선 지시가 빠졌을 수 있다."
-        }
-      },
-      "v25": {
-        "repeatedEdit": {
-          "title": "반복 재편집",
-          "description": "한 세션에서 같은 파일을 여러 번 고쳤다. 시행착오의 흔적이다."
-        }
-      },
-      "v26": {
-        "promptScopeDrift": {
-          "title": "원 프롬프트 범위 이탈",
-          "description": "첫 사용자 프롬프트가 언급하지 않은 경로가 변경됐다."
-        }
-      },
-      "v27": {
-        "staleRulesInjected": {
-          "title": "구버전 규칙 주입",
-          "description": "세션에 주입된 CLAUDE.md·AGENTS.md 내용이 디스크의 파일과 다르다."
-        }
-      },
-      "v28": {
-        "hookCollector": {
-          "title": "훅 기반 세션 기록",
-          "description": "세션 파일 파싱 대신 에이전트 CLI 훅으로 도구 이벤트를 수집한다."
-        }
-      },
-      "v31": {
-        "tangledCommit": {
-          "title": "엉킨 커밋",
-          "description": "한 커밋에 무관한 관심사가 섞여 깨끗하게 revert할 수 없다."
-        }
-      },
-      "v32": {
-        "revertUnsafe": {
-          "title": "revert 불안전",
-          "description": "이후 커밋이 이 커밋에 의존해 revert하면 충돌한다."
-        }
-      },
-      "v35": {
-        "agentTrailerMismatch": {
-          "title": "에이전트 트레일러 불일치",
-          "description": "커밋 트레일러와 세션 로그가 이 커밋의 편집 주체를 다르게 말한다."
-        }
-      },
-      "v36": {
-        "subCommitBisect": {
-          "title": "커밋 내부 이등분",
-          "description": "커밋 내부에서 파일 부분집합만 적용하며 이등분한다."
-        }
-      }
-    },
-    "summary": {
-      "noSignal": "신호 없음 · 룰 {{count}}개 미검사",
-      "more": "외 {{count}}건",
-      "loading": "확인 중…",
-      "clause": {
-        "v20": {
-          "testFailureThenTestEdited": "테스트 실패 후 테스트를 수정함",
-          "testsNeverRunInSession": "세션 중 테스트 미실행"
-        },
-        "v21": {
-          "hookBypassCommand": "검증 훅을 우회함"
-        },
-        "v11": {
-          "testEvidenceFailed": "마지막 테스트 실행 실패",
-          "testEvidenceStale": "테스트 증거 만료",
-          "testEvidenceMissing": "테스트 실행 기록 없음"
-        },
-        "v2": {
-          "testFileDeleted": "테스트 파일 {{count}}개 삭제",
-          "testSkipAdded": "테스트 {{count}}개 skip",
-          "assertionRemoved": "단언 {{count}}개 제거"
-        },
-        "v4": {
-          "hallucinatedDependency": "존재하지 않는 패키지 {{count}}개",
-          "suspiciousNewDependency": "의심스러운 새 의존성 {{count}}개"
-        },
-        "v5": {
-          "verificationBypassed": "`--no-verify` 로 커밋됨",
-          "emptyCatchAdded": "빈 catch {{count}}개",
-          "unsafeUnwrapAdded": "unwrap {{count}}개 추가",
-          "typeEscapeHatchAdded": "타입 우회 {{count}}개"
-        },
-        "v32": {
-          "revertUnsafe": "깨끗한 revert 불가"
-        },
-        "v31": {
-          "tangledCommit": "관련 없는 변경이 섞임"
-        },
-        "v6": {
-          "scopeDrift": "커밋 메시지 범위 밖 파일 {{count}}개"
-        },
-        "v17": {
-          "invariantViolation": "refactor 주장과 다른 동작 변경"
-        },
-        "v22": {
-          "unrewindableChange": "`/rewind` 로 못 되돌림 {{count}}파일"
-        },
-        "v12": {
-          "uncoveredNewLines": "실행 안 된 추가 라인 {{count}}줄"
-        },
-        "v7": {
-          "reinventedFunction": "기존 함수 재구현 {{count}}건"
-        },
-        "v3": {
-          "vacuousAssertion": "무의미한 단언 {{count}}개",
-          "mockOnlyAssertion": "mock만 검증하는 테스트 {{count}}개",
-          "noAssertionTest": "단언 없는 테스트 {{count}}개",
-          "broadExceptionAssertion": "광범위 예외 단언 {{count}}개",
-          "assertionRoulette": "이름 없는 단언 {{count}}개"
-        },
-        "v19": {
-          "readLessEdit": "읽지 않고 수정 {{count}}파일"
-        },
-        "v23": {
-          "subagentEdit": "서브에이전트가 수정 {{count}}파일"
-        },
-        "v24": {
-          "postCompactionEdit": "압축 이후 수정 {{count}}파일"
-        },
-        "v25": {
-          "repeatedEdit": "반복 수정 {{count}}파일"
-        },
-        "v10": {
-          "errorHandlingDeleted": "에러 처리 삭제 {{count}}건",
-          "validationDeleted": "검증 로직 삭제 {{count}}건",
-          "publicExportDeleted": "public export 삭제 {{count}}건"
-        },
-        "v9": {
-          "blastRadius": "시그니처 변경 미반영 호출부 {{count}}곳"
-        },
-        "v35": {
-          "agentTrailerMismatch": "에이전트 트레일러 불일치"
-        },
-        "v8": {
-          "orphanCode": "도달 불가 코드 {{count}}건"
-        },
-        "v1": {
-          "structuralDiff": "구조 변경 없음 (포맷만)"
-        }
-      }
-    },
-    "digest": {
-      "title": "검토 필요 {{count}}건",
-      "empty": "미검토 커밋 없음 · 룰 {{count}}개 미검사",
-      "scope": "검사 {{checked}} / 미검사 {{unchecked}}",
-      "scopeOpen": "범위 보기",
-      "truncated": "상위 {{count}}건만 표시",
-      "toggle": "접기·펼치기"
-    },
-    "syntax": {
-      "run": "심층 검사 실행",
-      "running": "심층 검사 중…",
-      "needsIndex": "중복 코드·미사용 코드·영향 범위는 아직 검사되지 않았습니다"
-    },
-    "category": {
-      "hookBypass": {
-        "title": "커밋 훅을 건너뛰고 커밋함",
-        "subtitle": "에이전트가 --no-verify 등으로 pre-commit 훅을 우회했다. 코드에는 흔적이 남지 않아 세션 기록으로만 확인된다."
-      },
-      "suppression": {
-        "title": "코드에 검사 억제를 심음",
-        "subtitle": "타입체커·린터가 잡아낼 문제를 고치는 대신 무시하도록 표시했다."
-      },
-      "testRemoval": {
-        "title": "테스트를 고치는 대신 치움",
-        "subtitle": "실패하는 테스트를 수정하지 않고 건너뛰거나 지웠다."
-      },
-      "testQuality": {
-        "title": "통과하지만 아무것도 증명하지 않는 테스트",
-        "subtitle": "실행은 되고 초록불이 뜨지만 결함을 잡아내지 못하는 테스트다."
-      },
-      "dependency": {
-        "title": "존재하지 않거나 수상한 패키지",
-        "subtitle": "AI가 지어낸 패키지명을 공격자가 미리 선점하는 실제 공격이 있다."
-      },
-      "scopeAndDeletion": {
-        "title": "말한 범위를 벗어난 변경과 삭제",
-        "subtitle": "커밋 메시지가 선언한 것과 실제로 바뀐 것이 다르다."
-      },
-      "codebaseContext": {
-        "title": "기존 코드와의 관계",
-        "subtitle": "새로 쓴 코드가 이미 있는 것과 겹치거나, 아무도 쓰지 않거나, 다른 곳을 깨뜨린다."
-      },
-      "agentSession": {
-        "title": "에이전트가 실제로 한 일",
-        "subtitle": "최종 diff에는 남지 않는 과정. 세션 기록이 있을 때만 검사된다."
-      },
-      "execution": {
-        "title": "정말 실행됐는지",
-        "subtitle": "테스트가 이 코드 상태에서 실제로 돌았는지, 바뀐 줄이 실행되긴 했는지."
-      },
-      "reviewTools": {
-        "title": "리뷰를 돕는 도구",
-        "subtitle": "무엇을 잡아내는 검사가 아니라, 리뷰하는 방식 자체를 바꾸는 기능이다."
-      },
-      "other": {
-        "title": "분류되지 않은 검사",
-        "subtitle": "아직 어느 묶음에도 속하지 않은 검사다."
-      }
-    },
-    "scanScope": {
-      "detail": {
-        "staticDiff": "기본 diff 검사에서는 다루지 않음",
-        "syntax": "구문 검사에서는 다루지 않음",
-        "session": "세션 기록으로 판단하는 검사가 아님"
-      }
+    "sessions": {
+      "heading": "에이전트 세션 {{count}}개",
+      "heading_one": "에이전트 세션 {{count}}개",
+      "heading_other": "에이전트 세션 {{count}}개"
     }
   }
 }

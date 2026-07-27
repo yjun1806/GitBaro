@@ -321,13 +321,23 @@ static RULES: &[RuleEntry] = &[
         false,
     ),
     implemented("v25.repeatedEdit", K::RepeatedEdit, "V25", 5, Info, false),
-    // V26/V27 are registered but NOT built. `session/rules.rs` lists both in
-    // `UNIMPLEMENTED_KINDS`, its `evaluate` has no arm for either, and nothing
-    // anywhere constructs their `FindingKind` — so an `Implemented` row here
-    // would promise the settings screen a rule that can never fire.
-    // V26 needs prompt→path extraction; V27 has no data source at all (current
-    // Claude Code builds never write the injected CLAUDE.md into the log).
-    planned("v26.promptScopeDrift", "V26", 5),
+    // V26 ships **on**: it is the fifth section of the session report, and a
+    // page that cannot say "the prompt named X and X never changed" answers
+    // only four of its five questions. It is structurally quiet — zero
+    // resolvable anchors means zero findings, never "everything drifted" — so
+    // default-on does not make it noisy. It is evaluated in
+    // `verify/report/drift.rs`, not in `session/rules.rs`, because it needs the
+    // repository to resolve a mention against.
+    implemented(
+        "v26.promptScopeDrift",
+        K::PromptScopeDrift,
+        "V26",
+        5,
+        Warn,
+        true,
+    ),
+    // V27 stays planned: it has no data source at all — current Claude Code
+    // builds never write the injected CLAUDE.md into the session log.
     planned("v27.staleRulesInjected", "V27", 5),
     planned("v28.hookCollector", "V28", 5),
     // ── Layer 6: post-commit ─────────────────────────────────────────────
@@ -405,10 +415,11 @@ mod tests {
         K::SubagentEdit,
         K::PostCompactionEdit,
         K::RepeatedEdit,
-        // K::PromptScopeDrift / K::StaleRulesInjected are deliberately absent:
-        // the enum variants exist so V26/V27 can name themselves in an
-        // `UNIMPLEMENTED_KINDS` limit, but no code constructs a `Finding` from
-        // them. They are `Planned` rows and must stay out of this list.
+        K::PromptScopeDrift,
+        // K::StaleRulesInjected is deliberately absent: the variant exists so
+        // V27 can name itself in an `UNIMPLEMENTED_KINDS` limit, but no code
+        // constructs a `Finding` from it. It is a `Planned` row and must stay
+        // out of this list.
         K::TangledCommit,
         K::RevertUnsafe,
         K::AgentTrailerMismatch,

@@ -8,7 +8,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use crate::error::AppError;
-use crate::verify::types::{BashCommandRecord, FileEditSummary, SessionSource, SessionSummary};
+use crate::verify::types::{
+    BashCommandRecord, FileEditSummary, PromptRecord, SessionSource, SessionSummary,
+    MAX_SESSION_PROMPTS,
+};
 
 use super::bash;
 use super::event::{SessionAdapter, SessionEvent, ToolAction};
@@ -23,7 +26,9 @@ struct Fold {
     git_branch: Option<String>,
     first_at: Option<i64>,
     last_at: Option<i64>,
-    first_prompt: Option<String>,
+    /// Every human instruction, in order. `compacted_away` is resolved in
+    /// `finish`, once all compaction boundaries are known.
+    prompts: Vec<PromptRecord>,
     injected_rules_digest: Option<String>,
 
     files_read: Vec<String>,
@@ -100,8 +105,15 @@ impl Fold {
             }
             SessionEvent::Prompt { at, text } => {
                 self.observe_time(at);
-                if self.first_prompt.is_none() {
-                    self.first_prompt = Some(jsonl::truncate_chars(&text, MAX_PROMPT_CHARS));
+                if self.prompts.len() < MAX_SESSION_PROMPTS {
+                    let ordinal = self.prompts.len() as u32;
+                    self.prompts.push(PromptRecord {
+                        at,
+                        truncated: text.chars().count() > MAX_PROMPT_CHARS,
+                        text: jsonl::truncate_chars(&text, MAX_PROMPT_CHARS),
+                        ordinal,
+                        compacted_away: false,
+                    });
                 }
             }
             SessionEvent::CompactBoundary { at } => {
@@ -166,6 +178,7 @@ impl Fold {
             at,
             is_error: false,
             kind: classification.kind,
+            bypass_markers: classification.bypass_markers,
         });
         if let Some(id) = tool_use_id {
             self.pending_commands.insert(id, self.commands.len() - 1);
@@ -182,6 +195,20 @@ impl Fold {
         let started_at = self.first_at.unwrap_or(0);
         let ended_at = self.last_at.unwrap_or(started_at);
         let first_boundary = self.compaction_boundaries.iter().min().copied();
+        let last_boundary = self.compaction_boundaries.iter().max().copied();
+
+        // "This instruction may have dropped out of the agent's context" is the
+        // one judgement the prompt list makes, and it needs every boundary — so
+        // it can only be decided here, not while folding.
+        let prompts: Vec<PromptRecord> = self
+            .prompts
+            .into_iter()
+            .map(|prompt| PromptRecord {
+                compacted_away: last_boundary.is_some_and(|b| b > prompt.at),
+                ..prompt
+            })
+            .collect();
+        let first_user_prompt = prompts.first().map(|p| p.text.clone());
 
         let files_edited = self
             .edits
@@ -219,7 +246,11 @@ impl Fold {
             git_branch: self.git_branch,
             started_at,
             ended_at,
-            first_user_prompt: self.first_prompt,
+            // Stamped by `session::summarize_session`, which is the only layer
+            // that has the file handle.
+            modified_at: 0,
+            first_user_prompt,
+            prompts,
             files_read: self.files_read,
             files_edited,
             bash_commands: self.commands,
@@ -276,7 +307,7 @@ pub fn summarize_with<A: SessionAdapter>(
     if summary.files_read.is_empty()
         && summary.files_edited.is_empty()
         && summary.bash_commands.is_empty()
-        && summary.first_user_prompt.is_none()
+        && summary.prompts.is_empty()
     {
         return Ok(None);
     }

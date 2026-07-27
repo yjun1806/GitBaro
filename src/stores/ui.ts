@@ -8,12 +8,8 @@ export type RailMode = "expanded" | "collapsed" | "hover";
 /** Sidebar tabs. A session is a way of *viewing* history, not a fifth place. */
 export type ActiveTab = "changes" | "history" | "stash" | "actions";
 
-/** How the History tab groups its commits. */
-export type HistoryViewMode = "commits" | "sessions";
-
 const RAIL_MODES: readonly RailMode[] = ["expanded", "collapsed", "hover"];
 const ACTIVE_TABS: readonly ActiveTab[] = ["changes", "history", "stash", "actions"];
-const HISTORY_VIEW_MODES: readonly HistoryViewMode[] = ["commits", "sessions"];
 
 function isRailMode(value: unknown): value is RailMode {
   return RAIL_MODES.includes(value as RailMode);
@@ -21,10 +17,6 @@ function isRailMode(value: unknown): value is RailMode {
 
 function isActiveTab(value: unknown): value is ActiveTab {
   return ACTIVE_TABS.includes(value as ActiveTab);
-}
-
-function isHistoryViewMode(value: unknown): value is HistoryViewMode {
-  return HISTORY_VIEW_MODES.includes(value as HistoryViewMode);
 }
 
 /**
@@ -41,7 +33,6 @@ function resolveActiveTab(value: unknown, fallback: ActiveTab): ActiveTab {
 interface UIState {
   theme: Theme;
   activeTab: ActiveTab;
-  historyViewMode: HistoryViewMode;
   sidebarWidth: number;
   isSidebarCollapsed: boolean;
   railMode: RailMode;
@@ -53,7 +44,6 @@ interface UIState {
   isSwitchingBranch: boolean;
   setTheme: (theme: Theme) => void;
   setActiveTab: (tab: ActiveTab) => void;
-  setHistoryViewMode: (mode: HistoryViewMode) => void;
   setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
   setRailMode: (mode: RailMode) => void;
@@ -69,7 +59,6 @@ export const useUIStore = create<UIState>()(
     (set) => ({
       theme: "system",
       activeTab: "changes",
-      historyViewMode: "commits",
       sidebarWidth: 500,
       isSidebarCollapsed: false,
       railMode: "hover",
@@ -82,8 +71,6 @@ export const useUIStore = create<UIState>()(
       setTheme: (theme) => set({ theme }),
 
       setActiveTab: (tab) => set({ activeTab: tab }),
-
-      setHistoryViewMode: (mode) => set({ historyViewMode: mode }),
 
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
 
@@ -101,11 +88,10 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "gitbaro-ui",
-      // Rail mode and the history grouping are the two choices worth keeping
-      // between launches; the rest of the UI state stays ephemeral.
+      // Rail mode is the one choice worth keeping between launches; the rest of
+      // the UI state stays ephemeral.
       partialize: (state) => ({
         railMode: state.railMode,
-        historyViewMode: state.historyViewMode,
       }),
       // Rehydration is not trusted: the stored blob may come from a build with
       // a different set of tabs, so every value is re-validated on the way in.
@@ -114,9 +100,6 @@ export const useUIStore = create<UIState>()(
         return {
           ...current,
           railMode: isRailMode(saved.railMode) ? saved.railMode : current.railMode,
-          historyViewMode: isHistoryViewMode(saved.historyViewMode)
-            ? saved.historyViewMode
-            : current.historyViewMode,
           activeTab: resolveActiveTab(saved.activeTab, current.activeTab),
         };
       },

@@ -26,6 +26,7 @@ pub mod deps;
 pub mod evidence;
 pub mod hooks;
 pub mod hygiene;
+pub mod report;
 pub mod review;
 pub mod rules;
 pub mod session;
