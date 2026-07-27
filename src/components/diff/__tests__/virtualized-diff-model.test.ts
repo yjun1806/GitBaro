@@ -99,10 +99,52 @@ describe("buildDiffLayout", () => {
     const lineRows = rows.filter((r) => r.kind === "line");
 
     expect(hunkRows).toHaveLength(2);
-    expect(lineRows).toHaveLength(file.unifiedLineLength);
+    // 접힌 라인은 행에서 빠진다 — 11줄 파일이지만 두 hunk가 덮는 8줄만 나온다.
+    expect(lineRows).toHaveLength(8);
+    expect(lineRows.length).toBeLessThan(file.unifiedLineLength);
     // 첫 행은 hunk 헤더, 그 텍스트는 @@ 를 포함한다.
     expect(rows[0].kind).toBe("hunk");
     expect(rows[0].kind === "hunk" && rows[0].text).toContain("@@");
+  });
+
+  it("접힌 줄 수를 hunk 행에 실어 펼치기 버튼의 근거를 준다", () => {
+    const file = new DiffFile("f", OLD2, "f", NEW2, [UNIFIED2], "text", "text");
+    file.initRaw();
+    file.buildUnifiedDiffLines();
+
+    const hunks = buildDiffLayout(file, false).rows.filter((r) => r.kind === "hunk");
+    // 두 hunk 사이(d~h 5줄)가 접혀 있다. 문서 시작·끝은 hunk가 덮으므로 접힘이 없다.
+    expect(hunks.map((h) => h.kind === "hunk" && h.hiddenCount)).toEqual([0, 5]);
+  });
+
+  it("펼치면 그만큼 행이 늘고 접힌 줄 수가 0이 된다", () => {
+    const file = new DiffFile("f", OLD2, "f", NEW2, [UNIFIED2], "text", "text");
+    file.initRaw();
+    file.buildUnifiedDiffLines();
+    expect(file.getExpandEnabled()).toBe(true);
+
+    const before = buildDiffLayout(file, false);
+    const target = before.rows.find((r) => r.kind === "hunk" && r.hiddenCount > 0);
+    expect(target?.kind === "hunk" && target.index).toBeGreaterThan(0);
+
+    if (target?.kind !== "hunk") throw new Error("접힌 hunk가 없다");
+    file.onUnifiedHunkExpand("all", target.index);
+
+    const after = buildDiffLayout(file, false);
+    const lines = after.rows.filter((r) => r.kind === "line");
+    // 접힌 게 없으면 라이브러리가 가진 행 전부가 나온다(unified는 삭제·추가가 따로 세어진다).
+    expect(lines).toHaveLength(file.unifiedLineLength);
+    expect(lines.length).toBeGreaterThan(before.rows.filter((r) => r.kind === "line").length);
+    expect(after.rows.filter((r) => r.kind === "hunk" && r.hiddenCount > 0)).toHaveLength(0);
+  });
+
+  it("원문이 없으면 펼칠 수 없다", () => {
+    // 접힘 자체는 원문이 있어야 성립한다 — 없으면 hunk가 곧 전부다.
+    const file = new DiffFile("f", "", "f", "", [UNIFIED2], "text", "text");
+    file.initRaw();
+    file.buildUnifiedDiffLines();
+    expect(file.getExpandEnabled()).toBe(false);
+    expect(buildDiffLayout(file, false).rows.filter((r) => r.kind === "line")).toHaveLength(8);
   });
 
   it("줄번호 칸 폭의 근거가 되는 최대 줄번호를 산출한다", () => {
@@ -141,14 +183,31 @@ describe("buildDiffLayout", () => {
     expect(changeBlocks[1].kind).toBe("mix");
   });
 
-  it("split 모드에서도 헤더 행을 삽입하고 라인 행 수가 splitLineLength와 같다", () => {
+  it("split 모드에서도 헤더 행을 삽입하고 접힌 줄은 뺀다", () => {
     const file = new DiffFile("f", OLD2, "f", NEW2, [UNIFIED2], "text", "text");
     file.initRaw();
     file.buildSplitDiffLines();
 
     const { rows } = buildDiffLayout(file, true);
     expect(rows.filter((r) => r.kind === "hunk")).toHaveLength(2);
-    expect(rows.filter((r) => r.kind === "line")).toHaveLength(file.splitLineLength);
+    const lines = rows.filter((r) => r.kind === "line");
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.length).toBeLessThan(file.splitLineLength);
+  });
+
+  it("split 모드에서도 펼치면 전체가 나온다", () => {
+    const file = new DiffFile("f", OLD2, "f", NEW2, [UNIFIED2], "text", "text");
+    file.initRaw();
+    file.buildSplitDiffLines();
+
+    const target = buildDiffLayout(file, true).rows.find(
+      (r) => r.kind === "hunk" && r.hiddenCount > 0,
+    );
+    if (target?.kind !== "hunk") throw new Error("접힌 hunk가 없다");
+    file.onSplitHunkExpand("all", target.index);
+
+    const after = buildDiffLayout(file, true).rows.filter((r) => r.kind === "line");
+    expect(after).toHaveLength(file.splitLineLength);
   });
 });
 

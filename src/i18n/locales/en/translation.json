@@ -366,7 +366,10 @@
     "dimensions": "{{width}} × {{height}}",
     "fileSize": "{{size}}",
     "highlightDisabled": "Syntax highlighting disabled for performance ({{lines}} lines).",
-    "enableHighlight": "Enable highlighting"
+    "enableHighlight": "Enable highlighting",
+    "expandUp": "Expand up",
+    "expandDown": "Expand down",
+    "expandAll": "Expand all {{lines}} hidden lines"
   },
   "mdDiff": {
     "rendering": "Computing document diff...",

@@ -1,5 +1,7 @@
-import { useMemo, useRef, useEffect, useState } from "react";
+import { useMemo, useRef, useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { ChevronUp, ChevronDown, UnfoldVertical } from "lucide-react";
 import { DiffOverviewRuler } from "./DiffOverviewRuler";
 import {
   DiffFile,
@@ -26,10 +28,17 @@ const MONO_FONT = "Menlo, Consolas, monospace";
 const CHAR_WIDTH_RATIO = 0.6; // Menlo 고정폭 글리프 advance ≈ 0.6em (줄번호 칸 폭 추정용)
 const NUM_COL_PAD = 16;
 
+// 라이브러리가 한 번에 펼치는 줄 수. 이보다 적게 접혀 있으면 방향 버튼은 의미가 없으므로
+// "모두 펼치기" 하나만 둔다. (라이브러리 상수라 바뀔 수 있지만, 틀려도 버튼 구성만 달라진다.)
+const EXPAND_STEP = 40;
+
 type Operator = "add" | "del" | undefined;
 type SyntaxLineT = SyntaxLine & { template?: string };
 type SplitLine = { lineNumber?: number; value?: string; diff?: DiffLine };
-export type DiffRow = { kind: "hunk"; text: string } | { kind: "line"; index: number };
+export type DiffRow =
+  /** 접힌 구간을 알리는 헤더 행. `index`는 이 hunk를 펼칠 때 라이브러리에 넘길 라인 인덱스다. */
+  | { kind: "hunk"; text: string; index: number; hiddenCount: number }
+  | { kind: "line"; index: number };
 
 // A contiguous run of changed rows, for the overview ruler. start/end are
 // inclusive indices into DiffLayout.rows.
@@ -53,9 +62,23 @@ function operatorOf(type: DiffLineType | undefined): Operator {
   return undefined;
 }
 
-function hunkText(h: DiffHunkItem): string {
-  const info = (h.unifiedInfo ?? h.splitInfo) as { plainText?: string } | undefined;
-  return info?.plainText ?? "";
+/** hunk 헤더가 담고 있는 것: 화면에 쓸 문구와, 그 앞에 몇 줄이 접혀 있는지. */
+interface HunkInfo {
+  plainText?: string;
+  startHiddenIndex?: number;
+  endHiddenIndex?: number;
+}
+
+function hunkRow(h: DiffHunkItem, isSplit: boolean, index: number): DiffRow {
+  const info = ((isSplit ? h.splitInfo : h.unifiedInfo) ?? {}) as HunkInfo;
+  const start = info.startHiddenIndex ?? 0;
+  const end = info.endHiddenIndex ?? 0;
+  return {
+    kind: "hunk",
+    text: info.plainText ?? "",
+    index,
+    hiddenCount: Math.max(0, end - start),
+  };
 }
 
 // 평탄한 행 배열(hunk 헤더 삽입) + 줄번호 칸 폭을 한 번의 순회로 계산한다.
@@ -84,13 +107,16 @@ export function buildDiffLayout(diffFile: DiffFile, isSplit: boolean): DiffLayou
     }
   };
 
+  // 라이브러리는 파일 전체를 들고 있고 접힘은 `isHidden`으로 표현한다. 그걸 무시하면
+  // 한 줄만 바뀐 파일도 전부 렌더된다 — 접힌 줄은 여기서 걸러낸다.
   for (let i = 0; i < len; i++) {
     if (isSplit) {
       const left = diffFile.getSplitLeftLine(i);
       const right = diffFile.getSplitRightLine(i);
-      const prevHunk = left.diff?.prevHunkLine ?? right.diff?.prevHunkLine;
-      if (prevHunk) {
-        rows.push({ kind: "hunk", text: hunkText(prevHunk) });
+      if (left.isHidden && right.isHidden) continue;
+      const hunk = diffFile.getSplitHunkLine(i);
+      if (hunk?.splitInfo) {
+        rows.push(hunkRow(hunk, true, i));
         block = null; // a hunk header separates change runs
       }
       rows.push({ kind: "line", index: i });
@@ -102,9 +128,10 @@ export function buildDiffLayout(diffFile: DiffFile, isSplit: boolean): DiffLayou
       if (right.lineNumber) maxLineNo = Math.max(maxLineNo, right.lineNumber);
     } else {
       const line = diffFile.getUnifiedLine(i);
-      const prevHunk = line.diff?.prevHunkLine;
-      if (prevHunk) {
-        rows.push({ kind: "hunk", text: hunkText(prevHunk) });
+      if (line.isHidden) continue;
+      const hunk = diffFile.getUnifiedHunkLine(i);
+      if (hunk?.unifiedInfo) {
+        rows.push(hunkRow(hunk, false, i));
         block = null;
       }
       rows.push({ kind: "line", index: i });
@@ -219,13 +246,37 @@ export function VirtualizedDiffView({
   highlight,
   fontSize,
 }: VirtualizedDiffViewProps) {
+  const { t } = useTranslation();
   const parentRef = useRef<HTMLDivElement>(null);
   const [scrollable, setScrollable] = useState(false);
 
   const rowHeight = Math.round(fontSize * 1.6);
   const isSplit = viewMode === "split";
 
-  const layout = useMemo(() => buildDiffLayout(diffFile, isSplit), [diffFile, isSplit]);
+  // 펼치기는 `diffFile` 내부 상태를 바꿀 뿐 새 객체를 만들지 않는다 — React가 알아채도록
+  // 직접 신호를 준다. 파일이 바뀌면 새 `diffFile`이 오므로 자연히 초기화된다.
+  const [expandTick, setExpandTick] = useState(0);
+  // 위로 펼치면 보던 내용이 그만큼 아래로 밀린다 — 펼치기 직전에 보던 라인을 기억해 두었다가
+  // 새 행 배열이 만들어진 뒤 그 자리로 되돌린다.
+  const [anchorLine, setAnchorLine] = useState<number | null>(null);
+
+  const canExpand = diffFile.getExpandEnabled();
+
+  const handleExpand = useCallback(
+    (dir: "up" | "down" | "all", index: number) => {
+      if (isSplit) diffFile.onSplitHunkExpand(dir, index);
+      else diffFile.onUnifiedHunkExpand(dir, index);
+      setAnchorLine(index);
+      setExpandTick((n) => n + 1);
+    },
+    [diffFile, isSplit],
+  );
+
+  const layout = useMemo(
+    () => buildDiffLayout(diffFile, isSplit),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- expandTick은 diffFile 내부 변경 신호
+    [diffFile, isSplit, expandTick],
+  );
 
   // 긴 줄은 가로로 스크롤하지 않고 접는다. 그래서 재야 할 폭은 줄번호 칸 하나뿐이다.
   const numColPx = useMemo(() => {
@@ -237,18 +288,42 @@ export function VirtualizedDiffView({
 
   // 파일이 바뀌면 이전 파일의 스크롤 오프셋이 남지 않도록 맨 위로 리셋.
   useEffect(() => {
-    parentRef.current?.scrollTo({ top: 0, left: 0 });
+    parentRef.current?.scrollTo({ top: 0 });
   }, [diffFile]);
 
   // 줄이 접히면 행 높이가 제각각이 된다 — 추정치로 자리를 잡고 실제 높이는 재서 채운다.
   // (`measureElement`가 `data-index`로 행을 식별하므로 각 행에 그 속성이 필요하다.)
+  // **행을 내용으로 식별한다.** 기본값인 배열 인덱스를 쓰면 펼치기로 행이 밀렸을 때 React가
+  // 같은 요소를 재사용하고, 요소 크기가 그대로면 ResizeObserver도 다시 보고하지 않아
+  // 짧은 줄의 높이가 긴 줄에 남는다(다음 행이 그 위를 덮어 그린다).
+  const getItemKey = useCallback(
+    (index: number) => {
+      const row = rows[index];
+      return row.kind === "hunk" ? `h${row.index}` : `l${row.index}`;
+    },
+    [rows],
+  );
+
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => rowHeight,
     measureElement: (el) => el.getBoundingClientRect().height,
+    getItemKey,
     overscan: 12,
   });
+
+  // 펼친 뒤 원래 보던 라인을 화면 상단으로 되돌린다. 라인 인덱스는 펼쳐도 그대로이므로
+  // (행 배열에서의 위치만 밀린다) 그걸 앵커로 삼는다.
+  useEffect(() => {
+    if (anchorLine === null) return;
+    // **먼저 측정을 버린다.** 높이 캐시는 행 인덱스 기준인데 펼치면 같은 인덱스에 다른 행이
+    // 온다. 그대로 두면 짧은 줄의 높이가 긴 줄에 적용돼 다음 행이 그 위를 덮어 그린다.
+    virtualizer.measure();
+    const at = rows.findIndex((r) => r.kind === "line" && r.index === anchorLine);
+    if (at >= 0) virtualizer.scrollToIndex(at, { align: "start" });
+    setAnchorLine(null);
+  }, [anchorLine, rows, virtualizer]);
 
   // 창 너비가 바뀌면 접히는 지점이 달라져 모든 행 높이가 무효가 된다.
   // **폭이 실제로 달라졌을 때만** 다시 잰다 — 높이 변화에도 반응하면 재측정이 스크롤바를
@@ -303,18 +378,71 @@ export function VirtualizedDiffView({
     overflowWrap: "anywhere",
   };
 
-  const renderHunkRow = (text: string) => (
-    <div
-      className="flex"
-      style={{
-        minHeight: rowHeight,
-        background: contentBg(DiffLineType.Hunk),
-        color: "var(--diff-hunk-content-color--)",
-      }}
-    >
-      <span style={contentStyle}>{text}</span>
-    </div>
-  );
+  const expandBtnStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: rowHeight,
+    height: rowHeight,
+    flexShrink: 0,
+    cursor: "pointer",
+    color: "var(--diff-hunk-content-color--)",
+  };
+
+  /**
+   * 접힌 구간의 헤더. 접힌 줄이 한 번에 펼칠 수 있는 양보다 많을 때만 방향 버튼을 낸다 —
+   * 40줄 이하인데 "위로/아래로"를 주면 둘 다 같은 결과라 고르는 의미가 없다.
+   */
+  const renderHunkRow = (row: Extract<DiffRow, { kind: "hunk" }>) => {
+    const stepwise = row.hiddenCount > EXPAND_STEP;
+    return (
+      <div
+        className="flex"
+        style={{
+          minHeight: rowHeight,
+          background: contentBg(DiffLineType.Hunk),
+          color: "var(--diff-hunk-content-color--)",
+        }}
+      >
+        {canExpand && row.hiddenCount > 0 && (
+          <span className="flex" style={{ flexShrink: 0 }}>
+            {stepwise && (
+              <>
+                <button
+                  type="button"
+                  style={expandBtnStyle}
+                  title={t("diff.expandUp")}
+                  aria-label={t("diff.expandUp")}
+                  onClick={() => handleExpand("up", row.index)}
+                >
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  style={expandBtnStyle}
+                  title={t("diff.expandDown")}
+                  aria-label={t("diff.expandDown")}
+                  onClick={() => handleExpand("down", row.index)}
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              style={expandBtnStyle}
+              title={t("diff.expandAll", { lines: row.hiddenCount })}
+              aria-label={t("diff.expandAll", { lines: row.hiddenCount })}
+              onClick={() => handleExpand("all", row.index)}
+            >
+              <UnfoldVertical className="w-3.5 h-3.5" />
+            </button>
+          </span>
+        )}
+        <span style={contentStyle}>{row.text}</span>
+      </div>
+    );
+  };
 
   const renderUnifiedRow = (index: number) => {
     const line = diffFile.getUnifiedLine(index);
@@ -383,7 +511,7 @@ export function VirtualizedDiffView({
   };
 
   const renderRow = (row: DiffRow) => {
-    if (row.kind === "hunk") return renderHunkRow(row.text);
+    if (row.kind === "hunk") return renderHunkRow(row);
     return isSplit ? renderSplitRow(row.index) : renderUnifiedRow(row.index);
   };
 

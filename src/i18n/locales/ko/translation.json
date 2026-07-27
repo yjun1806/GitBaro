@@ -366,7 +366,10 @@
     "dimensions": "{{width}} × {{height}}",
     "fileSize": "{{size}}",
     "highlightDisabled": "성능을 위해 구문 강조를 껐습니다 ({{lines}}줄).",
-    "enableHighlight": "구문 강조 켜기"
+    "enableHighlight": "구문 강조 켜기",
+    "expandUp": "위로 펼치기",
+    "expandDown": "아래로 펼치기",
+    "expandAll": "접힌 {{lines}}줄 모두 펼치기"
   },
   "mdDiff": {
     "rendering": "문서 diff 계산 중...",
