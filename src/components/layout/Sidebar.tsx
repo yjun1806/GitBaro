@@ -155,14 +155,14 @@ export function Sidebar() {
 
           {/* Tab content */}
           <div className="relative flex-1 overflow-hidden flex flex-col">
-            {activeTab === "changes" ? (
-              <ChangesView />
-            ) : activeTab === "history" ? (
+            {activeTab === "history" ? (
               <HistoryView />
             ) : activeTab === "stash" ? (
               <StashView />
-            ) : (
+            ) : activeTab === "actions" ? (
               <ActionsView />
+            ) : (
+              <ChangesView />
             )}
             <SwitchingOverlay />
           </div>

@@ -1,11 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { GitCommit, Clock, Copy, Check, ChevronDown } from "lucide-react";
-import { cn, formatDate } from "@/lib/utils";
+import { GitCommit, Clock, Copy, Check, ChevronDown, Undo2 } from "lucide-react";
+import { cn, formatDate, getErrorMessage } from "@/lib/utils";
 import { FileStatusBadge } from "@/lib/file-status";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
+import { useRepositoryStore } from "@/stores/repository";
+import { useToastStore } from "@/stores/toast";
+import { useCommitReviewMutations, useCommitReviewStates } from "@/api/queries";
 import type { CommitInfo, DiffOutput, FileStatus } from "@/types";
 import { DiffViewer } from "@/components/diff/DiffViewer";
+import { CommitVerification } from "@/components/verify/CommitVerification";
 
 function AuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
   const [imgError, setImgError] = useState(false);
@@ -49,6 +53,8 @@ export function CommitDetail({
   onSelectFile,
 }: CommitDetailProps) {
   const { t } = useTranslation();
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const addToast = useToastStore((s) => s.addToast);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [bodyExpanded, setBodyExpanded] = useState(false);
@@ -115,6 +121,23 @@ export function CommitDetail({
 
   const hasBody = commit.message !== commit.summary;
 
+  // V29 — marking "reviewed" lives here, next to the thing that was read,
+  // instead of in a list where it could be ticked without opening anything.
+  const reviewIds = useMemo(() => [commit.id], [commit.id]);
+  const { data: reviewStates = [] } = useCommitReviewStates(activeRepoPath, reviewIds);
+  const { mark, unmark } = useCommitReviewMutations(activeRepoPath);
+  const isReviewed = reviewStates[0]?.status === "reviewed";
+  const isReviewPending = mark.isPending || unmark.isPending;
+
+  const handleToggleReviewed = async () => {
+    try {
+      if (isReviewed) await unmark.mutateAsync(commit.id);
+      else await mark.mutateAsync(commit.id);
+    } catch (err) {
+      addToast(t("verify.review.markFailed", { error: getErrorMessage(err) }), "error");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Compact commit header */}
@@ -171,8 +194,33 @@ export function CommitDetail({
               </span>
             </>
           )}
+          <span className="flex-1" />
+          <button
+            type="button"
+            onClick={() => void handleToggleReviewed()}
+            disabled={isReviewPending || activeRepoPath === null}
+            title={isReviewed ? t("verify.review.unmarkReviewed") : t("verify.review.markReviewed")}
+            className={cn(
+              "shrink-0 flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs font-medium transition-colors disabled:opacity-40",
+              isReviewed
+                ? "border-border bg-muted text-muted-foreground hover:bg-accent"
+                : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20",
+            )}
+          >
+            {isReviewed && <Undo2 className="w-3 h-3 shrink-0" />}
+            {isReviewed ? t("verify.review.reviewed") : t("verify.review.markReviewed")}
+          </button>
         </div>
       </div>
+
+      {/* V31·V32·V35 plus the static diff rules — one line under the subject,
+          because "is this worth reading" is the question asked before the diff. */}
+      <CommitVerification
+        repoPath={activeRepoPath}
+        oid={commit.id}
+        onNavigate={handleFileClick}
+        className="shrink-0 border-b border-border"
+      />
 
       {/* File list + Diff viewer */}
       <div className="flex h-0 flex-1">
@@ -245,6 +293,11 @@ export function CommitDetail({
             diff={selectedFileDiff ?? null}
             status={
               changedFiles.find((f) => f.path === selectedPath)?.status ?? "modified"
+            }
+            structural={
+              activeRepoPath
+                ? { repoPath: activeRepoPath, oid: commit.id, staged: false }
+                : null
             }
           />
         </div>

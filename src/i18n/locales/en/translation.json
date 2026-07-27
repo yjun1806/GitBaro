@@ -111,6 +111,16 @@
       "hardDesc": "Move HEAD and discard all staged and working-tree changes.",
       "hardWarning": "A hard reset permanently discards uncommitted changes.",
       "confirm": "Reset"
+    },
+    "viewMode": {
+      "commits": "by commit",
+      "sessions": "by session"
+    },
+    "session": {
+      "group": "session · \"{{prompt}}\"",
+      "stats": "{{commits}} commits · {{files}} files · {{duration}}",
+      "unlinked": "commits with no linked session",
+      "unlinkedCount": "{{count}} commits"
     }
   },
   "branch": {
@@ -334,6 +344,7 @@
     "detectingTerminals": "Detecting installed terminals",
     "noTerminals": "No installed terminals found",
     "ai": "AI Assistant",
+    "verification": "Verification",
     "aiDescription": "Choose the AI CLI to use with repositories",
     "detectingAiClis": "Detecting installed AI CLIs",
     "noAiClis": "No installed AI CLIs found"
@@ -366,7 +377,16 @@
     "dimensions": "{{width}} × {{height}}",
     "fileSize": "{{size}}",
     "highlightDisabled": "Syntax highlighting disabled for performance ({{lines}} lines).",
-    "enableHighlight": "Enable highlighting"
+    "enableHighlight": "Enable highlighting",
+    "structural": {
+      "formattingOnly": "formatting only · {{count}} lines folded",
+      "expand": "expand",
+      "collapse": "collapse",
+      "identical": "identical · {{count}} lines folded",
+      "commentsOnly": "comments only · {{count}} lines folded",
+      "renameOnly": "renames only · {{count}} lines folded",
+      "moved": "code moved · {{count}} lines folded"
+    }
   },
   "mdDiff": {
     "rendering": "Computing document diff...",
@@ -655,5 +675,684 @@
     "noChanges": "Already up to date",
     "progress": "{{percent}}%",
     "loadMore": "Load more ({{remaining}} remaining)"
+  },
+  "verify": {
+    "title": "Verification",
+    "severity": {
+      "info": "Note",
+      "warn": "Warning",
+      "danger": "Danger"
+    },
+    "status": {
+      "implemented": "Implemented",
+      "planned": "Planned"
+    },
+    "unchecked": {
+      "disabled": "Turned off in settings",
+      "notApplicable": "Nothing of this kind in the change",
+      "unsupportedLanguage": "Language not supported",
+      "missingArtifact": "A required file was not found",
+      "parseFailed": "Could not be parsed",
+      "budgetExceeded": "Size or time budget exceeded",
+      "notImplemented": "Not implemented yet"
+    },
+    "scope": {
+      "label": "Scan scope",
+      "summary": "Checked {{checked}} rules · {{unchecked}} not checked",
+      "partialCount": "Partially checked: {{count}}",
+      "noFindings": "Nothing was flagged by the rules that ran. This is not a pass.",
+      "nothingRan": "No rule ran on this change.",
+      "why": "Why it was not checked"
+    },
+    "finding": {
+      "commitLevel": "Commit level",
+      "sessionLevel": "Session level",
+      "line": "Line {{line}}",
+      "evidence": "Evidence",
+      "count": "{{count}} findings",
+      "jumpToFile": "Open in the diff"
+    },
+    "badge": {
+      "label": "Verification",
+      "danger": "{{count}} danger",
+      "warn": "{{count}} warnings",
+      "info": "{{count}} notes",
+      "unchecked": "{{count}} not checked",
+      "noFindings": "Nothing flagged · {{count}} rules not checked"
+    },
+    "report": {
+      "scanning": "Scanning…",
+      "generatedAt": "Scanned {{time}}",
+      "rescan": "Scan again",
+      "failed": "Verification failed: {{error}}"
+    },
+    "settings": {
+      "title": "Verification rules",
+      "description": "Every rule can be turned on or off on its own. A rule you turn off is listed as not checked — never as passed.",
+      "activeCount": "On: {{count}}",
+      "disabledCount": "Off: {{count}}",
+      "plannedCount": "Not implemented: {{count}}",
+      "defaultSeverity": "Default severity",
+      "on": "On",
+      "off": "Off",
+      "plannedNote": "Not implemented yet — always reported as not checked.",
+      "toggleFailed": "Could not change the rule: {{error}}",
+      "loadFailed": "Could not load the rule list: {{error}}",
+      "advanced": {
+        "title": "Advanced"
+      },
+      "symbolIndex": {
+        "title": "Symbol index",
+        "note": "Needed to check duplicate code, unused code and blast radius. Without it those checks stay unchecked.",
+        "status": {
+          "idle": "none",
+          "building": "building · {{count}} files",
+          "ready": "ready · {{count}} symbols",
+          "cancelled": "cancelled",
+          "failed": "build failed"
+        },
+        "build": "build index",
+        "cancel": "cancel",
+        "skipped": "{{count}} files the index could not read — their symbols are not used by any check"
+      },
+      "hooks": {
+        "title": "Agent hooks",
+        "note": "GitBaro records what Claude Code did, directly. Immune to session-log format changes, but it modifies ~/.claude/settings.json.",
+        "status": {
+          "installed": "installed",
+          "absent": "not installed"
+        },
+        "preview": "preview what gets installed",
+        "install": "install",
+        "uninstall": "remove",
+        "dialog": {
+          "title": "What will be installed",
+          "settingsFragment": "added to settings.json",
+          "script": "script to be installed",
+          "fields": "fields recorded",
+          "backup": "{{path}} is copied to a timestamped backup before it is modified."
+        },
+        "installed": "hooks installed",
+        "removed": "hooks removed",
+        "failed": "hook operation failed: {{error}}",
+        "needsUpgrade": "The installed hooks are older than this build. Reinstall to record the current fields.",
+        "settingsState": {
+          "missing": "{{path}} does not exist yet — installing creates it.",
+          "malformed": "{{path}} is not valid JSON. Fix it first; installing would overwrite it."
+        }
+      }
+    },
+    "review": {
+      "unreviewed": "Not reviewed",
+      "reviewed": "Reviewed",
+      "stale": "Changed since review",
+      "needsRecheck": "needs another look",
+      "markReviewed": "Mark as reviewed",
+      "unmarkReviewed": "Mark as not reviewed",
+      "reviewedBy": "Reviewed by {{reviewer}}",
+      "reviewedAt": "Reviewed {{time}}",
+      "staleHint": "This file changed after you reviewed it, so it went back to not reviewed.",
+      "progress": "{{reviewed}} of {{total}} reviewed",
+      "progressStale": "{{stale}} changed since review",
+      "markFailed": "Could not save the review state: {{error}}"
+    },
+    "queue": {
+      "unresolved": "{{count}} more not loaded in this view"
+    },
+    "pushGate": {
+      "title": "Before you push",
+      "commits": "{{count}} commits to push",
+      "unreviewed": "{{count}} not reviewed",
+      "danger": "{{count}} with danger signals",
+      "warn": "{{count}} with warnings",
+      "tangled": "{{count}} touch enough files that a clean revert is unlikely",
+      "displayOnly": "This is a summary, not a gate. Pushing stays available.",
+      "confirmDanger": "A danger-level signal was found in these commits. Push anyway?",
+      "confirmDangerAction": "Push anyway",
+      "reviewFirst": "Review first",
+      "failed": "Could not read the push summary: {{error}}"
+    },
+    "ledger": {
+      "title": "Verification ledger",
+      "description": "Records what was checked on a commit in local git notes. Off by default and never pushed.",
+      "enable": "Record verification evidence",
+      "recordedAt": "Recorded {{time}}",
+      "recordedBy": "Recorded by {{recorder}}",
+      "toolVersion": "GitBaro {{version}}",
+      "record": "Record now",
+      "empty": "Nothing recorded for this commit",
+      "recordFailed": "Could not record the ledger: {{error}}",
+      "outcome": {
+        "passed": "Nothing flagged",
+        "flagged": "Flagged",
+        "skipped": "Not checked"
+      }
+    },
+    "evidence": {
+      "title": "Test run evidence",
+      "result": {
+        "passed": "Tests passed",
+        "failed": "Tests failed"
+      },
+      "freshness": {
+        "fresh": "matches the current tree",
+        "stale": "{{count}} files changed since — evidence expired",
+        "staleUnknown": "the tree changed since — evidence expired",
+        "absent": "No test run has been recorded for this working tree"
+      },
+      "command": "Command",
+      "duration": "{{seconds}}s",
+      "exitCode": "Exit code {{code}}",
+      "outputTail": "Last output",
+      "details": "Details",
+      "run": "Run tests",
+      "running": "Running…",
+      "runFailed": "Could not run the tests: {{error}}",
+      "noCommand": "No test command is configured for this repository",
+      "claimNote": "This records what actually ran, not what a summary said ran.",
+      "autoDetect": "Detect from this repository"
+    },
+    "coverage": {
+      "title": "Coverage of added lines",
+      "source": "From {{path}}",
+      "parsedAt": "Parsed {{time}}",
+      "covered": "{{covered}} of {{added}} added lines were executed",
+      "uncovered": "{{count}} added lines were never executed",
+      "unmapped": "{{count}} changed files are not in the report — their coverage is unknown",
+      "fileUnmapped": "This file is not in the coverage report, so its coverage is unknown",
+      "absent": "No coverage report was found, so coverage is unknown",
+      "noAddedLines": "No added lines to measure",
+      "qualityNote": "Coverage only proves a line ran. It says nothing about whether a test would catch a defect.",
+      "qualityFindings": "{{count}} test-quality findings on this file",
+      "qualityNotChecked": "This coverage means the code ran, not that it was verified. Test quality was not checked separately.",
+      "legend": {
+        "covered": "executed",
+        "uncovered": "never executed",
+        "noData": "no data"
+      }
+    },
+    "session": {
+      "loading": "Reading the session log…",
+      "partial": "Partial view",
+      "source": {
+        "claudeCode": "Claude Code",
+        "codex": "Codex"
+      },
+      "startedAt": "Started {{time}}",
+      "firstPrompt": "First prompt",
+      "firstPromptNote": "The prompt the agent could not rewrite. Compare it with what actually changed.",
+      "noPrompt": "No prompt was recorded for this session",
+      "filesRead": "{{count}} files read",
+      "filesEdited": "{{count}} files edited",
+      "commands": "{{count}} commands",
+      "testRunTally": "{{total}} test runs, {{failed}} failed",
+      "compactions": "{{count}} context compactions",
+      "truncated": "This log was too large to read in full, so these numbers are a partial view.",
+      "skippedRecords": "{{count}} records could not be read, so these numbers are a partial view.",
+      "editCount": "Edited {{count}} times",
+      "notReadFirst": "Not read before editing",
+      "viaBash": "Changed by a shell command",
+      "afterCompaction": "Changed after a context compaction",
+      "readLessNote": "The agent changed this file without reading it in this session. Read it yourself first.",
+      "viaBashNote": "Changed by a shell command, so /rewind cannot restore it.",
+      "subagentNote": "A subagent made these edits. The main transcript does not show how it got there.",
+      "compactionNote": "Edited after the context was compacted, so the agent no longer had the earlier discussion.",
+      "churnNote": "The agent edited this file repeatedly, which usually means it was unsure. Read it before the files it got right first time.",
+      "commandOutcomeNote": "A command that exited 0 ran without error. It does not mean the result was correct.",
+      "commandKind": {
+        "testRun": "Test run",
+        "hookBypass": "Hook bypass",
+        "fileMutation": "File change",
+        "other": "Command"
+      },
+      "cumulativeDiff": "Everything this session changed",
+      "cumulativeDiffEmpty": "This session could not be tied to a commit, so its cumulative change is unknown",
+      "cumulativeDiffNote": "The net change across the whole session, not the individual edits.",
+      "cumulativeDiffLoading": "Building the session diff…",
+      "cumulativeDiffFiles": "{{count}} files",
+      "showCumulativeDiff": "Show the net change",
+      "binaryFile": "Binary file",
+      "diffTruncated": "Showing the first {{count}} lines",
+      "link": {
+        "title": "Related session",
+        "estimateNote": "Estimated from timing and paths. Treat it as a guess, not a record.",
+        "basisLabel": "Matched on {{basis}}",
+        "confidence": {
+          "high": "Matched",
+          "medium": "Likely",
+          "low": "Estimate"
+        },
+        "basis": {
+          "cwd": "same directory",
+          "branch": "same branch",
+          "timeWindow": "overlapping time",
+          "fileOverlap": "same files"
+        }
+      },
+      "headingFilesRead": "Files read",
+      "headingFilesEdited": "Files edited",
+      "headingSubagentEdits": "Subagent edits",
+      "headingCommands": "Commands run",
+      "headingSignals": "Signals from this session",
+      "noFilesRead": "No file was read",
+      "noFilesEdited": "No file was edited",
+      "noCommands": "No command was recorded",
+      "partialSignalsNote": "The log was only read in part, so these signals are incomplete.",
+      "duration": {
+        "underMinute": "under a minute",
+        "minutes": "{{count}} min",
+        "hours": "{{count}} h"
+      }
+    },
+    "dependencies": {
+      "title": "Dependency check",
+      "run": "Check dependencies",
+      "offline": "Checked against the manifest and lockfile only. Nothing left this machine.",
+      "allowRegistry": "Also check the package registry (sends package names over the network)",
+      "failed": "Could not check the dependencies: {{error}}"
+    },
+    "error": {
+      "scanFailed": "Verification failed: {{error}}",
+      "sessionUnreadable": "That session log could not be read: {{error}}"
+    },
+    "rule": {
+      "v1": {
+        "structuralDiff": {
+          "title": "Structural (AST) diff",
+          "description": "Compares syntax trees so formatting, renames and moved code stop hiding the real change."
+        }
+      },
+      "v2": {
+        "testSkipAdded": {
+          "title": "Test skip added",
+          "description": "A new it.skip, xit, test.todo, #[ignore] or @pytest.mark.skip was introduced."
+        },
+        "testFileDeleted": {
+          "title": "Test file deleted",
+          "description": "A test file was removed in this change."
+        },
+        "assertionRemoved": {
+          "title": "Assertions removed",
+          "description": "The number of expect/assert lines in a test file went down."
+        }
+      },
+      "v3": {
+        "vacuousAssertion": {
+          "title": "Vacuous assertion",
+          "description": "An assertion that passes for almost any value, such as toBeDefined() or toBeTruthy()."
+        },
+        "mockOnlyAssertion": {
+          "title": "Mock-only assertion",
+          "description": "The test asserts on a value its own mock returned, so no production code runs."
+        },
+        "noAssertionTest": {
+          "title": "Test without assertions",
+          "description": "A test function that runs code but never asserts anything."
+        },
+        "broadExceptionAssertion": {
+          "title": "Broad exception assertion",
+          "description": "The test expects a base Exception with no concrete type or message."
+        },
+        "assertionRoulette": {
+          "title": "Assertion roulette",
+          "description": "Many unlabelled assertions in one test make a failure hard to pinpoint."
+        }
+      },
+      "v4": {
+        "hallucinatedDependency": {
+          "title": "Dependency not found",
+          "description": "An added package could not be found in the registry or in the lockfile."
+        },
+        "suspiciousNewDependency": {
+          "title": "Newly published or rarely used dependency",
+          "description": "An added package was published very recently or has very few downloads."
+        }
+      },
+      "v5": {
+        "verificationBypassed": {
+          "title": "Verification bypass added",
+          "description": "A --no-verify flag or an equivalent lint/type-check suppression was added."
+        },
+        "typeEscapeHatchAdded": {
+          "title": "Type escape hatch added",
+          "description": "A new as any, @ts-ignore or # type: ignore was introduced."
+        },
+        "emptyCatchAdded": {
+          "title": "Empty catch added",
+          "description": "A catch block was added that swallows the error without handling it."
+        },
+        "unsafeUnwrapAdded": {
+          "title": "Unchecked unwrap added",
+          "description": "A new unwrap()/expect() panics instead of propagating the error."
+        }
+      },
+      "v6": {
+        "scopeDrift": {
+          "title": "Scope drift",
+          "description": "Files changed outside the scope the commit message declares."
+        }
+      },
+      "v7": {
+        "reinventedFunction": {
+          "title": "Reinvented function",
+          "description": "A newly added function closely resembles one that already exists in the repository."
+        }
+      },
+      "v8": {
+        "orphanCode": {
+          "title": "Orphan code",
+          "description": "A newly added export is called from nowhere in the repository."
+        }
+      },
+      "v9": {
+        "blastRadius": {
+          "title": "Blast radius",
+          "description": "Lists the call sites affected by a changed signature."
+        }
+      },
+      "v10": {
+        "publicExportDeleted": {
+          "title": "Public export deleted",
+          "description": "An exported symbol was removed — call sites outside this diff may break."
+        },
+        "errorHandlingDeleted": {
+          "title": "Error handling deleted",
+          "description": "A try/catch, error branch or Result handling was removed."
+        },
+        "validationDeleted": {
+          "title": "Validation deleted",
+          "description": "An input check or schema validation was removed."
+        }
+      },
+      "v11": {
+        "testEvidenceMissing": {
+          "title": "No test run recorded",
+          "description": "No test run has ever been recorded for this repository."
+        },
+        "testEvidenceStale": {
+          "title": "Test evidence expired",
+          "description": "The tree changed after the last recorded run, so the result no longer describes this code."
+        },
+        "testEvidenceFailed": {
+          "title": "Recorded test run failed",
+          "description": "The last recorded test run for this tree did not pass."
+        }
+      },
+      "v12": {
+        "uncoveredNewLines": {
+          "title": "Added lines never executed",
+          "description": "Lines this change adds are not covered by the parsed coverage report."
+        }
+      },
+      "v15": {
+        "mutationScore": {
+          "title": "Mutation score",
+          "description": "Shows the mutation score of changed files — a stronger signal than line coverage."
+        }
+      },
+      "v17": {
+        "invariantViolation": {
+          "title": "Declared invariant violated",
+          "description": "A refactor:, perf: or docs: commit changed behaviour that its type promises to keep."
+        }
+      },
+      "v16": {
+        "claimMismatch": {
+          "title": "Claim does not match the diff",
+          "description": "The commit message claims something the diff does not show."
+        }
+      },
+      "v18": {
+        "blindReviewMode": {
+          "title": "Blind review mode",
+          "description": "Shows the diff before any flags or summaries, on purpose."
+        }
+      },
+      "v19": {
+        "readLessEdit": {
+          "title": "Edited without reading",
+          "description": "The session edited this file without reading or searching it first. Use it to prioritise review, not as a warning."
+        }
+      },
+      "v20": {
+        "testFailureThenTestEdited": {
+          "title": "Test edited after a failure",
+          "description": "The session saw a test fail and then changed the test rather than the code."
+        },
+        "testsNeverRunInSession": {
+          "title": "Tests never run in the session",
+          "description": "No test command appears anywhere in this session's command history."
+        }
+      },
+      "v21": {
+        "hookBypassCommand": {
+          "title": "Hook bypass command",
+          "description": "The session ran a command that skips hooks or force-pushes, such as --no-verify or push -f."
+        }
+      },
+      "v22": {
+        "unrewindableChange": {
+          "title": "Change outside /rewind's reach",
+          "description": "The file was changed through a shell command, which checkpoints do not restore."
+        }
+      },
+      "v23": {
+        "subagentEdit": {
+          "title": "Edited by a subagent",
+          "description": "A subagent changed this file; only its summary reached the main context."
+        }
+      },
+      "v24": {
+        "postCompactionEdit": {
+          "title": "Edited after context compaction",
+          "description": "The change came after the session compacted its context, so earlier instructions may have been dropped."
+        }
+      },
+      "v25": {
+        "repeatedEdit": {
+          "title": "Repeatedly re-edited",
+          "description": "The same file was edited many times in one session — a trial-and-error signal."
+        }
+      },
+      "v26": {
+        "promptScopeDrift": {
+          "title": "Outside the original prompt's scope",
+          "description": "Paths changed that the first user prompt never mentioned."
+        }
+      },
+      "v27": {
+        "staleRulesInjected": {
+          "title": "Session received outdated rules",
+          "description": "The CLAUDE.md/AGENTS.md content injected into the session differs from the file on disk."
+        }
+      },
+      "v28": {
+        "hookCollector": {
+          "title": "Hook-based session recording",
+          "description": "Collects tool events through agent CLI hooks instead of parsing session files."
+        }
+      },
+      "v31": {
+        "tangledCommit": {
+          "title": "Tangled commit",
+          "description": "One commit mixes unrelated concerns, so it cannot be reverted cleanly."
+        }
+      },
+      "v32": {
+        "revertUnsafe": {
+          "title": "Revert would not be clean",
+          "description": "Later commits depend on this one, so reverting it will conflict."
+        }
+      },
+      "v35": {
+        "agentTrailerMismatch": {
+          "title": "Agent trailer does not match the session",
+          "description": "The commit trailers and the session log disagree about who edited this commit."
+        }
+      },
+      "v36": {
+        "subCommitBisect": {
+          "title": "Sub-commit bisect",
+          "description": "Bisects inside a single commit by applying only a subset of its files."
+        }
+      }
+    },
+    "summary": {
+      "noSignal": "No signal · {{count}} rules not checked",
+      "more": "+{{count}} more",
+      "loading": "checking…",
+      "clause": {
+        "v20": {
+          "testFailureThenTestEdited": "test failed, then test edited",
+          "testsNeverRunInSession": "tests never run in session"
+        },
+        "v21": {
+          "hookBypassCommand": "verification hook bypassed"
+        },
+        "v11": {
+          "testEvidenceFailed": "last test run failed",
+          "testEvidenceStale": "test evidence stale",
+          "testEvidenceMissing": "no test run recorded"
+        },
+        "v2": {
+          "testFileDeleted": "{{count}} test files deleted",
+          "testSkipAdded": "{{count}} tests skipped",
+          "assertionRemoved": "{{count}} assertions removed"
+        },
+        "v4": {
+          "hallucinatedDependency": "{{count}} nonexistent packages",
+          "suspiciousNewDependency": "{{count}} suspicious dependencies"
+        },
+        "v5": {
+          "verificationBypassed": "committed with `--no-verify`",
+          "emptyCatchAdded": "{{count}} empty catch blocks",
+          "unsafeUnwrapAdded": "{{count}} unsafe unwraps added",
+          "typeEscapeHatchAdded": "{{count}} type escape hatches"
+        },
+        "v32": {
+          "revertUnsafe": "cannot revert cleanly"
+        },
+        "v31": {
+          "tangledCommit": "unrelated changes mixed in"
+        },
+        "v6": {
+          "scopeDrift": "{{count}} files outside stated scope"
+        },
+        "v17": {
+          "invariantViolation": "behaviour changed despite `refactor:`"
+        },
+        "v22": {
+          "unrewindableChange": "{{count}} files outside `/rewind`"
+        },
+        "v12": {
+          "uncoveredNewLines": "{{count}} new lines never executed"
+        },
+        "v7": {
+          "reinventedFunction": "{{count}} functions reinvented"
+        },
+        "v3": {
+          "vacuousAssertion": "{{count}} vacuous assertions",
+          "mockOnlyAssertion": "{{count}} mock-only tests",
+          "noAssertionTest": "{{count}} tests without assertions",
+          "broadExceptionAssertion": "{{count}} broad exception assertions",
+          "assertionRoulette": "{{count}} unlabelled assertions"
+        },
+        "v19": {
+          "readLessEdit": "{{count}} files edited unread"
+        },
+        "v23": {
+          "subagentEdit": "{{count}} files edited by subagent"
+        },
+        "v24": {
+          "postCompactionEdit": "{{count}} files edited after compaction"
+        },
+        "v25": {
+          "repeatedEdit": "{{count}} files repeatedly re-edited"
+        },
+        "v10": {
+          "errorHandlingDeleted": "{{count}} error handlers deleted",
+          "validationDeleted": "{{count}} validations deleted",
+          "publicExportDeleted": "{{count}} public exports deleted"
+        },
+        "v9": {
+          "blastRadius": "{{count}} callers not updated"
+        },
+        "v35": {
+          "agentTrailerMismatch": "agent trailer mismatch"
+        },
+        "v8": {
+          "orphanCode": "{{count}} unreachable definitions"
+        },
+        "v1": {
+          "structuralDiff": "formatting only, no structural change"
+        }
+      }
+    },
+    "digest": {
+      "title": "{{count}} need review",
+      "empty": "Nothing unreviewed · {{count}} rules not checked",
+      "scope": "checked {{checked}} / not checked {{unchecked}}",
+      "scopeOpen": "view scope",
+      "truncated": "showing top {{count}}",
+      "toggle": "collapse / expand"
+    },
+    "syntax": {
+      "run": "run deep scan",
+      "running": "deep scan running…",
+      "needsIndex": "Duplicate code, unused code and blast radius have not been checked yet"
+    },
+    "category": {
+      "hookBypass": {
+        "title": "Committed while skipping the hooks",
+        "subtitle": "The agent bypassed pre-commit hooks with --no-verify or similar. It leaves no trace in the code, so only the session log shows it."
+      },
+      "suppression": {
+        "title": "Silenced a check inside the code",
+        "subtitle": "Instead of fixing what the type checker or linter caught, the code was marked to ignore it."
+      },
+      "testRemoval": {
+        "title": "Removed a test instead of fixing it",
+        "subtitle": "A failing test was skipped or deleted rather than repaired."
+      },
+      "testQuality": {
+        "title": "Tests that pass without proving anything",
+        "subtitle": "They run and go green, but they cannot catch a defect."
+      },
+      "dependency": {
+        "title": "Packages that do not exist, or look wrong",
+        "subtitle": "Attackers pre-register package names that AI tends to invent — this attack is already happening."
+      },
+      "scopeAndDeletion": {
+        "title": "Changes and deletions outside what was claimed",
+        "subtitle": "What the commit message declared and what actually changed do not match."
+      },
+      "codebaseContext": {
+        "title": "Relationship to the existing code",
+        "subtitle": "New code that duplicates something already here, is never called, or breaks callers elsewhere."
+      },
+      "agentSession": {
+        "title": "What the agent actually did",
+        "subtitle": "The process behind the final diff. Only checked when a session log exists."
+      },
+      "execution": {
+        "title": "Whether it actually ran",
+        "subtitle": "Did the tests run against this exact state, and were the changed lines executed at all?"
+      },
+      "reviewTools": {
+        "title": "Tools that assist the review",
+        "subtitle": "Not detections — these change how you review rather than what gets flagged."
+      },
+      "other": {
+        "title": "Uncategorised checks",
+        "subtitle": "Checks that do not belong to any group yet."
+      }
+    },
+    "scanScope": {
+      "detail": {
+        "staticDiff": "Not covered by the diff scan",
+        "syntax": "Not covered by the syntax scan",
+        "session": "Not a session-log rule"
+      }
+    }
   }
 }

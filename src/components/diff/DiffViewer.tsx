@@ -11,6 +11,12 @@ import { BinaryDiffViewer } from "./BinaryDiffViewer";
 import { VirtualizedDiffView } from "./VirtualizedDiffView";
 import { MarkdownDiffView } from "./MarkdownDiffView";
 import { availableModes, defaultMode, type DiffViewMode } from "./view-mode";
+import {
+  noiseVerdict,
+  StructuralCollapseBar,
+  type StructuralTarget,
+} from "./StructuralCollapse";
+import { useStructuralDiff } from "@/api/queries";
 import { useUIStore } from "@/stores/ui";
 import { useToastStore } from "@/stores/toast";
 
@@ -50,9 +56,15 @@ function hunksToUnifiedDiff(filePath: string, hunks: DiffHunk[]): string {
 interface DiffViewerProps {
   diff: DiffOutput | null;
   status?: FileStatus;
+  /**
+   * Which revision this diff comes from, so V1 can compare the two versions of
+   * the file structurally. Omit it (stash, or any view with no git target) and
+   * no structural affordance is offered at all.
+   */
+  structural?: StructuralTarget | null;
 }
 
-export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
+export function DiffViewer({ diff, status = "modified", structural = null }: DiffViewerProps) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<DiffViewMode>(() =>
     defaultMode(diff?.filePath, diff?.binary ?? false),
@@ -105,6 +117,24 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
   // total = 실제 렌더되는 행 수(context 포함). 임계값은 이걸 기준으로 판정.
   const wantHighlight = stats.total <= HIGHLIGHT_LIMIT || forceHighlight;
 
+  // V1 — 이 파일 전체가 "읽을 필요 없는 변경"인지 묻는다. 답이 `null`이면(구조가
+  // 실제로 바뀌었거나, 파싱할 수 없는 파일이면) 아무것도 렌더하지 않는다.
+  // 분석하지 않은 파일에 대해 분석한 척하지 않는 것이 여기서 유일하게 중요하다.
+  const { data: structuralOutcome } = useStructuralDiff(
+    structural?.repoPath ?? null,
+    structural?.oid ?? null,
+    filePath ?? null,
+    structural?.staged ?? false,
+  );
+  const noise = noiseVerdict(structuralOutcome);
+
+  // 노이즈로 판정된 파일은 접힌 채로 시작한다 — 숨기는 게 아니라 미루는 것이라
+  // 토글은 항상 그 자리에 있다. 파일이 바뀌면 다시 접힌 상태로 돌아간다.
+  const [structuralExpanded, setStructuralExpanded] = useState(false);
+  useEffect(() => {
+    setStructuralExpanded(false);
+  }, [filePath]);
+
   // DiffFile 캐시 — 같은 diff 객체에 대해 initRaw/initSyntax를 반복하지 않음.
   // WeakMap이므로 diff 객체가 GC되면 캐시도 자동 정리.
   const cacheRef = useRef(new WeakMap<DiffOutput, DiffFile>());
@@ -114,7 +144,10 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
   // 문서 보기는 이 파이프라인을 전혀 쓰지 않는다. 그런데도 빌드하면 `initSyntax`가 파일
   // 전체를 메인 스레드에서 파싱해, 문서 diff를 Worker로 밀어낸 이유를 그대로 되돌린다.
   // (통합 ↔ 나란히 전환에는 재실행되지 않도록 boolean으로 좁혀 의존한다.)
-  const wantsLineDiff = viewMode !== "document";
+  // 접힌 노이즈 파일은 렌더도 파싱도 하지 않는다. 2,800줄 재포맷을 하이라이팅하는
+  // 비용을 치르지 않는 것이 V1을 접기로 구현한 이유의 절반이다.
+  const bodyFolded = noise !== null && !structuralExpanded && viewMode !== "document";
+  const wantsLineDiff = viewMode !== "document" && !bodyFolded;
 
   const diffFile = useMemo(() => {
     if (!diff || diff.binary || diff.hunks.length === 0) return null;
@@ -213,7 +246,16 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
         onSelectMode={setViewMode}
       />
 
-      {viewMode !== "document" && !wantHighlight && (
+      {noise !== null && viewMode !== "document" && (
+        <StructuralCollapseBar
+          verdict={noise}
+          lineCount={stats.total}
+          collapsed={!structuralExpanded}
+          onToggle={() => setStructuralExpanded((open) => !open)}
+        />
+      )}
+
+      {viewMode !== "document" && !bodyFolded && !wantHighlight && (
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs bg-surface border-b border-border text-muted-foreground">
           <span>{t("diff.highlightDisabled", { lines: stats.total })}</span>
           <button
@@ -226,7 +268,9 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
         </div>
       )}
 
-      {viewMode === "document" ? (
+      {bodyFolded ? (
+        <div className="flex-1 min-h-0" />
+      ) : viewMode === "document" ? (
         // 파일이 바뀌면 새로 마운트한다 — 안 그러면 새 원문으로 계산이 끝나기 전 한 프레임
         // 동안 이전 파일의 문서가 남는다.
         <MarkdownDiffView

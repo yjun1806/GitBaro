@@ -769,3 +769,10 @@ export async function startRepoWatch(repoPath: string): Promise<void> {
 export async function stopRepoWatch(): Promise<void> {
   return invoke("stop_repo_watch");
 }
+
+// ── Verification (verify subsystem) ─────────────────────────────────────────
+// The 26 verify wrappers live in ./verify (this file is already at its size
+// limit); they are re-exported here so `@/api/commands` stays the one import
+// path for Tauri command wrappers.
+
+export * from "./verify";

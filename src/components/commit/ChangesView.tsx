@@ -4,13 +4,17 @@ import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useSelectionStore } from "@/stores/selection";
-import { useStatus } from "@/api/queries";
+import { useCommitDraftStore } from "@/stores/commit-draft";
+import { useFileReviewStates, useStatus } from "@/api/queries";
 import { useCurrentBranch } from "@/hooks/useCurrentBranch";
 import { createCommit, stageFiles, unstageFiles, openInEditor, discardChanges, revealInFinder, addToGitignore } from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
 import { FileEntry } from "@/components/commit/FileEntry";
 import { FileContextMenu } from "@/components/commit/FileContextMenu";
 import { MergeConflictBanner } from "@/components/conflict/MergeConflictBanner";
+import { ReviewProgress } from "@/components/review";
+import { TestEvidenceBadge } from "@/components/evidence";
+import { WorkingTreeVerification } from "@/components/verify/WorkingTreeVerification";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { groupFilesByDirectory } from "@/lib/group-files";
@@ -43,8 +47,13 @@ export function ChangesView() {
     }
   }, [statusEntries, selectedFile, clearFileSelection]);
 
-  const [commitSummary, setCommitSummary] = useState("");
-  const [commitDescription, setCommitDescription] = useState("");
+  // Kept in a store so the verification panel in the content area can compare
+  // the message being typed against the changed paths (V6 scope drift).
+  const commitSummary = useCommitDraftStore((s) => s.summary);
+  const commitDescription = useCommitDraftStore((s) => s.description);
+  const setCommitSummary = useCommitDraftStore((s) => s.setSummary);
+  const setCommitDescription = useCommitDraftStore((s) => s.setDescription);
+  const resetCommitDraft = useCommitDraftStore((s) => s.reset);
   const [isCommitting, setIsCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [discardTarget, setDiscardTarget] = useState<string | null>(null);
@@ -144,6 +153,14 @@ export function ChangesView() {
   const stagedGroups = useMemo(() => groupFilesByDirectory(stagedFiles), [stagedFiles]);
   const unstagedGroups = useMemo(() => groupFilesByDirectory(unstagedFiles), [unstagedFiles]);
 
+  // V13 — how much of what is about to be committed has actually been read.
+  const stagedPaths = useMemo(() => stagedFiles.map((e) => e.path), [stagedFiles]);
+  const { data: stagedReviewStates = [] } = useFileReviewStates(
+    activeRepoPath,
+    stagedPaths,
+    true,
+  );
+
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set());
 
   const toggleDirCollapse = useCallback((key: string) => {
@@ -231,8 +248,7 @@ export function ChangesView() {
         ? `${commitSummary.trim()}\n\n${commitDescription.trim()}`
         : commitSummary.trim();
       await createCommit(activeRepoPath, message, false, activeAccountId);
-      setCommitSummary("");
-      setCommitDescription("");
+      resetCommitDraft();
       clearFileSelection();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["status"] }),
@@ -272,6 +288,7 @@ export function ChangesView() {
                 <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex-1">
                   {t("commit.stagedChanges")}
                 </span>
+                <ReviewProgress paths={stagedPaths} entries={stagedReviewStates} />
                 <span className="text-[10px] font-medium text-muted-foreground bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{stagedFiles.length}</span>
               </div>
             )}
@@ -395,6 +412,16 @@ export function ChangesView() {
 
       {/* Commit panel */}
       <div className="border-t border-border p-3 flex flex-col gap-2">
+        {/* Two lines of "what is known about this change" directly above the
+            commit button: what the rules found, then whether tests were run. */}
+        <WorkingTreeVerification
+          repoPath={activeRepoPath}
+          staged
+          draftMessage={commitSummary || null}
+          onNavigate={(file) => selectFile(file, true)}
+          className="overflow-hidden rounded-md border border-border bg-surface"
+        />
+        <TestEvidenceBadge repoPath={activeRepoPath} />
         <input
           type="text"
           placeholder={t("commit.summary")}

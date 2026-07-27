@@ -18,8 +18,13 @@ import { CommitItem } from "@/components/history/CommitItem";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
 import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
 import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
+import { RiskDigest } from "@/components/history/RiskDigest";
+import { HistoryViewModeToggle } from "@/components/history/HistoryViewModeToggle";
+import { SessionGroupList } from "@/components/history/SessionGroupList";
+import { SessionCommitBadge } from "@/components/session/SessionCommitBadge";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
+import { useSessionGroups } from "@/hooks/useSessionGroups";
 import type { CommitInfo } from "@/types";
 
 export function HistoryView() {
@@ -60,6 +65,27 @@ export function HistoryView() {
 
   const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
   const selectCommit = useSelectionStore((s) => s.selectCommit);
+  const selectSession = useSelectionStore((s) => s.selectSession);
+  const clearCommitSelection = useSelectionStore((s) => s.clearCommitSelection);
+  const historyViewMode = useUIStore((s) => s.historyViewMode);
+  const setHistoryViewMode = useUIStore((s) => s.setHistoryViewMode);
+
+  // V30 — provenance, shared by the flat timeline's badges and the grouped
+  // view. Only `high`/`medium` links survive; a guess is never shown as record.
+  const { groups, unlinked, sessionCount, linkByCommit } = useSessionGroups(
+    activeRepoPath,
+    commits,
+  );
+  // Session logs are an optional artifact of the machine, so a repo without
+  // them never sees the mode at all (spec §7-⑥).
+  const isSessionMode = historyViewMode === "sessions" && sessionCount > 0;
+
+  // Opening a session as one unit of review clears the commit selection, so the
+  // content area has exactly one thing to show.
+  const handleOpenSession = (sessionPath: string) => {
+    clearCommitSelection();
+    selectSession(sessionPath);
+  };
 
   const accountAvatarMap = useMemo(
     () => new Map(accounts.map((a) => [a.email.toLowerCase(), a.avatarUrl])),
@@ -139,6 +165,34 @@ export function HistoryView() {
     setResetTarget(null);
   };
 
+  // Avatar + trailing signals are resolved once and used by both view modes,
+  // so the same commit renders identically whichever way history is grouped.
+  const resolveCommitAvatar = (commit: CommitInfo) => {
+    const emailKey = commit.author.email?.toLowerCase() ?? "";
+    return accountAvatarMap.get(emailKey) || githubAvatarMap[emailKey] || undefined;
+  };
+
+  const renderCommitTrailing = (commit: CommitInfo) => {
+    const sessionLink = linkByCommit.get(commit.id);
+    const isUnpushed = commit.isUnpushed ?? false;
+    if (!sessionLink && !isUnpushed) return undefined;
+    return (
+      <span className="shrink-0 self-center flex items-center gap-1.5">
+        {sessionLink && <SessionCommitBadge link={sessionLink} />}
+        {isUnpushed && (
+          <span
+            className={cn(
+              "shrink-0 flex items-center justify-center w-5 h-5 rounded-full border border-primary/40",
+              selectedCommitId === commit.id ? "bg-primary/20" : "bg-primary/10",
+            )}
+          >
+            <ArrowUp strokeWidth={3} className="w-3 h-3 text-primary" />
+          </span>
+        )}
+      </span>
+    );
+  };
+
   // 하단 sentinel이 뷰포트(스크롤 컨테이너)에 들어오면 다음 페이지를 이어 로드
   useEffect(() => {
     const sentinel = loadMoreRef.current;
@@ -209,49 +263,63 @@ export function HistoryView() {
           />
         </>
       ) : (
-        <div ref={scrollRef} className="flex-1 overflow-y-auto" {...containerProps}>
-          {commits.map((commit: CommitInfo, index: number) => {
-            const isUnpushed = commit.isUnpushed ?? false;
-            const emailKey = commit.author.email?.toLowerCase() ?? "";
-            const avatarSrc =
-              accountAvatarMap.get(emailKey) ||
-              githubAvatarMap[emailKey] ||
-              undefined;
-            return (
-              <CommitItem
-                key={commit.id}
-                ref={itemRef(index)}
-                commit={commit}
-                remoteTags={remoteTags}
-                isSelected={selectedCommitId === commit.id}
-                isHighlighted={activeIndex === index}
-                avatarUrl={avatarSrc}
-                onClick={() => selectCommit(commit.id)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  selectCommit(commit.id);
-                  setMenu({ commit, x: e.clientX, y: e.clientY });
-                }}
-                trailing={
-                  isUnpushed ? (
-                    <div
-                      className={cn(
-                        "shrink-0 self-center flex items-center justify-center w-5 h-5 rounded-full border border-primary/40",
-                        selectedCommitId === commit.id
-                          ? "bg-primary/20"
-                          : "bg-primary/10",
-                      )}
-                    >
-                      <ArrowUp
-                        strokeWidth={3}
-                        className="w-3 h-3 text-primary"
-                      />
-                    </div>
-                  ) : undefined
-                }
-              />
-            );
-          })}
+        <>
+        {/* Risk first: what to look at, before how history is arranged. */}
+        {activeRepoPath && (
+          <RiskDigest
+            repoPath={activeRepoPath}
+            commits={commits}
+            selectedCommitId={selectedCommitId}
+            onSelectCommit={selectCommit}
+          />
+        )}
+        {sessionCount > 0 && (
+          <div className="flex items-center px-3 py-1 border-b border-border shrink-0">
+            <HistoryViewModeToggle
+              mode={isSessionMode ? "sessions" : "commits"}
+              onChange={setHistoryViewMode}
+            />
+          </div>
+        )}
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto"
+          {...(isSessionMode ? {} : containerProps)}
+        >
+          {isSessionMode && activeRepoPath ? (
+            <SessionGroupList
+              repoPath={activeRepoPath}
+              groups={groups}
+              unlinked={unlinked}
+              selectedCommitId={selectedCommitId}
+              onSelectCommit={selectCommit}
+              onOpenSession={handleOpenSession}
+              remoteTags={remoteTags}
+              resolveAvatarUrl={resolveCommitAvatar}
+              renderCommitTrailing={renderCommitTrailing}
+            />
+          ) : (
+            commits.map((commit: CommitInfo, index: number) => {
+              return (
+                <CommitItem
+                  key={commit.id}
+                  ref={itemRef(index)}
+                  commit={commit}
+                  remoteTags={remoteTags}
+                  isSelected={selectedCommitId === commit.id}
+                  isHighlighted={activeIndex === index}
+                  avatarUrl={resolveCommitAvatar(commit)}
+                  onClick={() => selectCommit(commit.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    selectCommit(commit.id);
+                    setMenu({ commit, x: e.clientX, y: e.clientY });
+                  }}
+                  trailing={renderCommitTrailing(commit)}
+                />
+              );
+            })
+          )}
           {/* 무한 스크롤 sentinel + 다음 페이지 로딩 표시 */}
           <div ref={loadMoreRef} />
           {isFetchingNextPage && (
@@ -260,6 +328,7 @@ export function HistoryView() {
             </div>
           )}
         </div>
+        </>
       )}
 
       {/* 커밋 우클릭 메뉴 */}
