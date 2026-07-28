@@ -23,7 +23,7 @@ use std::path::Path;
 
 use crate::verify::context::model::is_test_path;
 use crate::verify::context::RepoIndex;
-use crate::verify::types::{Finding, FindingKind, LinkConfidence};
+use crate::verify::types::LinkConfidence;
 
 use super::model::{
     AnchorKind, DriftSection, DriftVerdict, DriftedPath, ImpactBasis, MentionExtractor,
@@ -238,50 +238,6 @@ pub fn build(input: &DriftInput<'_>) -> DriftSection {
     }
 }
 
-/// The rule's finding form, so V26 is a real registry entry rather than a
-/// section the rule table knows nothing about.
-///
-/// The message states counts and paths. It carries **no judgement word** —
-/// whether drift is wrong depends on what the human meant, and this rule cannot
-/// know that.
-pub fn findings(section: &DriftSection) -> Vec<Finding> {
-    if section.unavailable.is_some() {
-        return Vec::new();
-    }
-    let sample: Vec<&str> = section
-        .drifted_paths
-        .iter()
-        .take(3)
-        .map(|p| p.path.as_str())
-        .collect();
-
-    match section.verdict {
-        DriftVerdict::PartialDrift => vec![Finding::new(
-            FindingKind::PromptScopeDrift,
-            "",
-            format!(
-                "{} of {} changed path(s) were not named in any prompt",
-                section.drifted_total, section.changed_total
-            ),
-        )
-        .with_detail(sample.join(", "))],
-        DriftVerdict::FullDrift => vec![Finding::new(
-            FindingKind::PromptScopeDrift,
-            "",
-            format!(
-                "the prompt named {} path(s); none of the {} changed path(s) is inside them",
-                section
-                    .mentions
-                    .iter()
-                    .filter(|m| m.resolved.is_some())
-                    .count(),
-                section.changed_total
-            ),
-        )
-        .with_detail(sample.join(", "))],
-        DriftVerdict::WithinScope | DriftVerdict::NoAnchor => Vec::new(),
-    }
-}
 
 // ── Stage A + B + C ──────────────────────────────────────────────────────────
 
@@ -1122,44 +1078,8 @@ mod tests {
 
     // ── Findings ──────────────────────────────────────────────────────────
 
-    #[test]
-    fn a_finding_carries_a_number_and_a_path_and_no_judgement() {
-        let section = run(
-            &[prompt(0, "refactor `src/auth/login.ts`")],
-            &changed(&["src/auth/login.ts", "src/billing/invoice.ts"]),
-        );
-        let findings = findings(&section);
-        assert_eq!(findings.len(), 1);
-        let finding = &findings[0];
-        assert_eq!(finding.rule_id, "v26.promptScopeDrift");
-        assert!(finding.message.contains('1') && finding.message.contains('2'));
-        assert_eq!(
-            finding.detail.as_deref(),
-            Some("src/billing/invoice.ts")
-        );
-        for word in ["wrong", "violation", "should", "잘못", "위반", "실패"] {
-            assert!(
-                !finding.message.contains(word),
-                "the rule states facts, it does not judge: {}",
-                finding.message
-            );
-        }
-    }
-
-    #[test]
-    fn no_anchor_and_within_scope_produce_no_finding() {
-        assert!(findings(&run(
-            &[prompt(0, "로그인 고쳐줘")],
-            &changed(&["src/auth/login.ts"])
-        ))
-        .is_empty());
-        assert!(findings(&run(
-            &[prompt(0, "fix `src/auth/login.ts`")],
-            &changed(&["src/auth/login.ts"])
-        ))
-        .is_empty());
-    }
-
+    
+    
     // ── Unit-level helpers ────────────────────────────────────────────────
 
     #[test]

@@ -328,14 +328,11 @@ static RULES: &[RuleEntry] = &[
     // default-on does not make it noisy. It is evaluated in
     // `verify/report/drift.rs`, not in `session/rules.rs`, because it needs the
     // repository to resolve a mention against.
-    implemented(
-        "v26.promptScopeDrift",
-        K::PromptScopeDrift,
-        "V26",
-        5,
-        Warn,
-        true,
-    ),
+    // V26 stays planned even though the drift analysis itself ships: the report
+    // renders it as a section, and the registry tracks the *finding* channel,
+    // which this rule does not use. Claiming otherwise would tell a reader a
+    // finding could appear when none ever can.
+    planned("v26.promptScopeDrift", "V26", 5),
     // V27 stays planned: it has no data source at all — current Claude Code
     // builds never write the injected CLAUDE.md into the session log.
     planned("v27.staleRulesInjected", "V27", 5),
@@ -415,7 +412,6 @@ mod tests {
         K::SubagentEdit,
         K::PostCompactionEdit,
         K::RepeatedEdit,
-        K::PromptScopeDrift,
         // K::StaleRulesInjected is deliberately absent: the variant exists so
         // V27 can name itself in an `UNIMPLEMENTED_KINDS` limit, but no code
         // constructs a `Finding` from it. It is a `Planned` row and must stay
@@ -461,6 +457,128 @@ mod tests {
             implemented, constructible,
             "an Implemented row whose kind no code constructs is an empty promise"
         );
+    }
+
+    /// `ALL_KINDS` above is hand-maintained, so it can claim a kind the code
+    /// never constructs — which is exactly how `v26.promptScopeDrift` shipped
+    /// as `Implemented` while its only producer was a function called from
+    /// tests. This derives the truth from the source instead: every implemented
+    /// kind must be named in production code somewhere outside the two files
+    /// that merely *declare* it.
+    #[test]
+    fn every_implemented_kind_is_named_in_production_code() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut production = String::new();
+        collect_production_source(&root, &mut production);
+        assert!(
+            production.len() > 10_000,
+            "source scan found almost nothing; the walk is broken"
+        );
+
+        let missing: Vec<&str> = ALL_KINDS
+            .iter()
+            .filter(|kind| {
+                let variant = format!("{kind:?}");
+                !production.contains(&format!("::{variant}"))
+            })
+            .map(|kind| kind.rule_id())
+            .collect();
+
+        assert!(
+            missing.is_empty(),
+            "these rules claim Implemented but no production code constructs them: {missing:?}"
+        );
+    }
+
+    /// Every `.rs` under `src/`, truncated at its first `#[cfg(test)]` so test
+    /// code cannot vouch for a rule. `registry.rs` and `types.rs` are skipped:
+    /// they only declare kinds and map them to ids, never produce findings.
+    fn collect_production_source(dir: &std::path::Path, out: &mut String) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_production_source(&path, out);
+                continue;
+            }
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            match path.file_name().and_then(|n| n.to_str()) {
+                Some("registry.rs") | Some("types.rs") => continue,
+                _ => {}
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            out.push_str(&strip_kind_lists(production_prefix(&text)));
+        }
+    }
+
+    /// Text before the first inline `#[cfg(test)] mod … { … }`.
+    ///
+    /// A one-line `#[cfg(test)] pub mod test_support;` is a declaration, not
+    /// test code, and cutting there would hide the whole file — which is how an
+    /// earlier version of this scan wrongly accused `evidence/mod.rs`. Only an
+    /// attribute followed by a brace before the next semicolon starts a test
+    /// module.
+    fn production_prefix(text: &str) -> &str {
+        let mut from = 0;
+        while let Some(offset) = text[from..].find("#[cfg(test)]") {
+            let at = from + offset;
+            let rest = &text[at + "#[cfg(test)]".len()..];
+            let brace = rest.find('{');
+            let semi = rest.find(';');
+            match (brace, semi) {
+                (Some(b), Some(sc)) if b < sc => return &text[..at],
+                (Some(_), None) => return &text[..at],
+                _ => from = at + "#[cfg(test)]".len(),
+            }
+        }
+        text
+    }
+
+    /// Production text with `const …_KINDS: &[FindingKind] = &[…];` tables
+    /// removed.
+    ///
+    /// Those tables *name* kinds without producing them — `REPO_SCOPED_KINDS`
+    /// exists precisely to say "not emitted here". Counting a mention inside
+    /// one as construction is what let the first version of this test pass
+    /// while the bug it was written for was reintroduced.
+    fn strip_kind_lists(text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut rest = text;
+        while let Some(start) = rest.find("&[FindingKind] = &[") {
+            let (before, tail) = rest.split_at(start);
+            out.push_str(before);
+            match tail.find("];") {
+                Some(end) => rest = &tail[end + 2..],
+                None => {
+                    rest = "";
+                    break;
+                }
+            }
+        }
+        out.push_str(rest);
+        out
+    }
+
+    #[test]
+    fn strip_kind_lists_drops_a_declaration_table_but_keeps_real_code() {
+        let text = "const REPO_SCOPED_KINDS: &[FindingKind] = &[FindingKind::PromptScopeDrift];\nlet f = Finding::new(FindingKind::ScopeDrift, \"a\", \"b\");";
+        let kept = strip_kind_lists(text);
+        assert!(!kept.contains("PromptScopeDrift"), "table mention must not count");
+        assert!(kept.contains("ScopeDrift"), "real construction must survive");
+    }
+
+    #[test]
+    fn production_prefix_keeps_code_after_a_test_only_module_declaration() {
+        let text = "#[cfg(test)]\npub mod test_support;\nfn real() {}\n#[cfg(test)]\nmod tests { fn t() {} }";
+        let kept = production_prefix(text);
+        assert!(kept.contains("fn real()"), "declaration must not end the scan");
+        assert!(!kept.contains("mod tests"), "the inline test module must be cut");
     }
 
     #[test]
