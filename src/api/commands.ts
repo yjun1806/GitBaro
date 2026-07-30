@@ -770,10 +770,10 @@ export async function getWorkflowRunJobs(
 
 // ── FS Watcher ──
 
-export async function startRepoWatch(repoPath: string): Promise<void> {
-  return invoke("start_repo_watch", { repoPath });
+export async function startRepoWatch(repoPath: string, token: number): Promise<void> {
+  return invoke("start_repo_watch", { repoPath, token });
 }
 
-export async function stopRepoWatch(repoPath: string): Promise<void> {
-  return invoke("stop_repo_watch", { repoPath });
+export async function stopRepoWatch(token: number): Promise<void> {
+  return invoke("stop_repo_watch", { token });
 }
