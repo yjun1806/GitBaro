@@ -12,7 +12,7 @@ import {
   Globe,
 } from "lucide-react";
 import { useUIStore, type RailMode } from "@/stores/ui";
-import { useRepositoryStore } from "@/stores/repository";
+import { useRepositoryStore, useRepoViewPath } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { useRepoSyncStatuses, useSettings } from "@/api/queries";
@@ -283,7 +283,11 @@ export function RepoRail() {
   const favoriteRepos = useRepositoryStore((s) => s.favoriteRepos);
   const ownerTypes = useRepositoryStore((s) => s.ownerTypes);
   const accounts = useAccountStore((s) => s.accounts);
-  const repoPaths = useMemo(() => repos.map((r) => r.path), [repos]);
+  const repoViewPath = useRepoViewPath();
+  const repoPaths = useMemo(
+    () => repos.map((r) => repoViewPath(r.path)),
+    [repos, repoViewPath],
+  );
   const { data: syncMap } = useRepoSyncStatuses(repoPaths);
   const { data: settingsData = null } = useSettings();
   const removeRepo = useRepositoryStore((s) => s.removeRepo);
@@ -370,7 +374,7 @@ export function RepoRail() {
                   isActive={repo.path === activeRepo?.path}
                   isFetching={fetchingPath === repo.path}
                   expanded={isExpanded}
-                  syncStatus={syncMap?.[repo.path]}
+                  syncStatus={syncMap?.[repoViewPath(repo.path)]}
                   onSelect={() => selectRepo(repo.path)}
                   onContextMenu={(e) => {
                     e.preventDefault();

@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createSafeStorage } from "@/lib/safe-storage";
@@ -72,6 +73,22 @@ interface RepositoryState {
  */
 export function useOwnerRepoPath(): string | null {
   return useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath);
+}
+
+/**
+ * 저장소 목록에 표시할 상태를 어느 경로에서 읽을지 정한다.
+ *
+ * 워크트리를 보던 저장소는 메인이 아니라 그 워크트리의 상태를 보여줘야 한다.
+ * 목록에서 클릭하면 그 워크트리로 들어가므로(activateRepo), 표시와 실제로 열리는
+ * 곳이 어긋나지 않는다. 워크트리에 변경·미푸시 커밋이 쌓여도 메인 작업 트리는
+ * 깨끗해서, 메인 경로로 계산하면 아무 표시도 나오지 않는다.
+ */
+export function useRepoViewPath(): (repoPath: string) => string {
+  const activeWorktrees = useRepositoryStore((s) => s.activeWorktrees);
+  return useCallback(
+    (repoPath: string) => activeWorktrees[repoPath] ?? repoPath,
+    [activeWorktrees],
+  );
 }
 
 export const useRepositoryStore = create<RepositoryState>()(

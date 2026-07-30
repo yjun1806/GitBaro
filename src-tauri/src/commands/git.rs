@@ -782,3 +782,59 @@ pub async fn add_to_gitignore(repo_path: String, pattern: String) -> Result<(), 
     tracing::info!("Added to .gitignore: {}", log_pattern);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .output()
+            .expect("git 실행 실패");
+        assert!(out.status.success(), "git {:?}: {}", args, String::from_utf8_lossy(&out.stderr));
+    }
+
+    /// 링크된 워크트리에서도 작업 트리 변경이 보고되어야 한다.
+    /// 워크트리의 `.git` 은 디렉토리가 아니라 파일이라, 저장소를 여는 쪽이
+    /// 이를 따라가지 못하면 변경이 하나도 안 잡힌다.
+    #[tokio::test]
+    async fn reports_changes_made_inside_a_linked_worktree() {
+        let tmp = std::env::temp_dir().join(format!("gitbaro-wt-status-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+
+        git(&main, &["init", "-q", "-b", "main"]);
+        git(&main, &["config", "user.email", "t@t"]);
+        git(&main, &["config", "user.name", "t"]);
+        std::fs::write(main.join("README.md"), "hello\n").unwrap();
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+
+        let wt = tmp.join("feature");
+        git(&main, &["worktree", "add", "-q", "-b", "feature", wt.to_str().unwrap()]);
+
+        // 워크트리 안에서 추적 파일 수정 + 새 파일 추가
+        std::fs::write(wt.join("README.md"), "hello\nchanged in worktree\n").unwrap();
+        std::fs::write(wt.join("new-file.txt"), "brand new\n").unwrap();
+
+        let entries = get_status(wt.to_string_lossy().to_string())
+            .await
+            .expect("워크트리 status 조회 실패");
+
+        let paths: Vec<String> = entries
+            .iter()
+            .filter_map(|e| e.get("path").and_then(|p| p.as_str()).map(String::from))
+            .collect();
+
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        assert!(paths.contains(&"README.md".to_string()), "수정 파일 누락: {:?}", paths);
+        assert!(paths.contains(&"new-file.txt".to_string()), "새 파일 누락: {:?}", paths);
+    }
+}

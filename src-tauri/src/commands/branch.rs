@@ -766,3 +766,96 @@ pub async fn rename_branch(
     tracing::info!("Renamed branch: {} -> {}", old_name, new_name);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+    use std::process::Command;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .output()
+            .expect("git 실행 실패");
+        assert!(
+            out.status.success(),
+            "git {:?}: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    fn field<'a>(v: &'a Value, key: &str) -> &'a Value {
+        v.get(key).unwrap_or_else(|| panic!("{key} 없음: {v}"))
+    }
+
+    /// 저장소 목록의 dirty·ahead 인디케이터는 이 커맨드가 계산한다.
+    /// 워크트리 경로로 물으면 워크트리 상태가, 메인 경로로 물으면 메인 상태가 나와야 한다.
+    /// 둘을 구분하지 못하면 워크트리에 쌓인 작업이 목록에서 통째로 사라진다.
+    #[tokio::test]
+    async fn reports_worktree_state_separately_from_the_main_worktree() {
+        let tmp = std::env::temp_dir().join(format!("gitbaro-sync-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        // 로컬 bare 원격 + clone (네트워크 불필요)
+        let origin = tmp.join("origin.git");
+        git(&tmp, &["init", "-q", "--bare", "-b", "main", origin.to_str().unwrap()]);
+        let main = tmp.join("main");
+        git(&tmp, &["clone", "-q", origin.to_str().unwrap(), main.to_str().unwrap()]);
+
+        std::fs::write(main.join("README.md"), "hello\n").unwrap();
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        git(&main, &["push", "-q", "-u", "origin", "main"]);
+
+        // 워크트리를 만들고 upstream 을 붙인 뒤, 미푸시 커밋 2건을 쌓는다
+        let wt = tmp.join("feature-wt");
+        git(&main, &["worktree", "add", "-q", "-b", "feature", wt.to_str().unwrap()]);
+        git(&wt, &["push", "-q", "-u", "origin", "feature"]);
+        for i in 0..2 {
+            std::fs::write(wt.join(format!("f{i}.txt")), "x\n").unwrap();
+            git(&wt, &["add", "-A"]);
+            git(&wt, &["commit", "-qm", &format!("wt commit {i}")]);
+        }
+        // 추적 파일을 수정해 dirty 로 만든다 (untracked 는 isDirty 에 포함되지 않는다)
+        std::fs::write(wt.join("README.md"), "hello\nchanged\n").unwrap();
+
+        let statuses = repo_sync_status(vec![
+            wt.to_string_lossy().to_string(),
+            main.to_string_lossy().to_string(),
+        ])
+        .await
+        .expect("repo_sync_status 실패");
+
+        let by_path = |p: &Path| {
+            statuses
+                .iter()
+                .find(|s| field(s, "path").as_str() == Some(&p.to_string_lossy()))
+                .unwrap_or_else(|| panic!("{} 결과 없음", p.display()))
+                .clone()
+        };
+
+        let wt_status = by_path(&wt);
+        let main_status = by_path(&main);
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        // 워크트리: 미푸시 2건 + 변경 있음
+        assert_eq!(field(&wt_status, "branch").as_str(), Some("feature"));
+        assert_eq!(field(&wt_status, "ahead").as_u64(), Some(2));
+        assert_eq!(field(&wt_status, "isDirty").as_bool(), Some(true));
+
+        // 메인: 깨끗함 — 목록이 메인 경로로 계산하면 위 상태가 전부 사라진다
+        assert_eq!(field(&main_status, "branch").as_str(), Some("main"));
+        assert_eq!(field(&main_status, "ahead").as_u64(), Some(0));
+        assert_eq!(field(&main_status, "isDirty").as_bool(), Some(false));
+    }
+}

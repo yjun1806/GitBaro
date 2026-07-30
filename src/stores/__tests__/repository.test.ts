@@ -105,6 +105,34 @@ describe("useRepositoryStore", () => {
   });
 });
 
+// 저장소 목록의 dirty·ahead 표시는 "클릭하면 열리는 경로" 기준이어야 한다.
+// 메인 경로로 계산하면 워크트리에 쌓인 변경·미푸시 커밋이 목록에 전혀 안 나타난다.
+describe("목록에 표시할 상태를 읽을 경로", () => {
+  function viewPath(activeWorktrees: Record<string, string>, repoPath: string) {
+    return activeWorktrees[repoPath] ?? repoPath;
+  }
+
+  it("워크트리를 보던 저장소는 그 워크트리 경로를 쓴다", () => {
+    expect(viewPath({ [MAIN_A]: WT_A }, MAIN_A)).toBe(WT_A);
+  });
+
+  it("메인에 있는 저장소는 저장소 경로를 그대로 쓴다", () => {
+    expect(viewPath({ [MAIN_A]: WT_A }, MAIN_B)).toBe(MAIN_B);
+  });
+
+  it("activateRepo 가 여는 경로와 항상 일치한다", () => {
+    useRepositoryStore.setState({
+      repos: [makeRepo(MAIN_A)],
+      activeWorktrees: { [MAIN_A]: WT_A },
+    });
+    state().activateRepo(MAIN_A);
+
+    expect(state().activeRepoPath).toBe(
+      viewPath(state().activeWorktrees, MAIN_A),
+    );
+  });
+});
+
 describe("findOwnerRepo", () => {
   const repos = [makeRepo(MAIN_A), makeRepo(MAIN_B)];
 

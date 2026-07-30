@@ -24,7 +24,7 @@ import {
   ShieldX,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useRepositoryStore } from "@/stores/repository";
+import { useRepositoryStore, useRepoViewPath } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { addLocalRepository, cloneRepository, getRepoVisibility, getOwnerType, validateToken } from "@/api/commands";
 import { CloneDialog } from "@/components/repository/CloneDialog";
@@ -150,7 +150,11 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
   const addRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const repos = useRepositoryStore((s) => s.repos);
-  const repoPaths = useMemo(() => repos.map((r) => r.path), [repos]);
+  const repoViewPath = useRepoViewPath();
+  const repoPaths = useMemo(
+    () => repos.map((r) => repoViewPath(r.path)),
+    [repos, repoViewPath],
+  );
   const { data: syncMap } = useRepoSyncStatuses(repoPaths);
   const addRepo = useRepositoryStore((s) => s.addRepo);
   const removeRepo = useRepositoryStore((s) => s.removeRepo);
@@ -402,7 +406,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                     const isPickerOpen = accountPickerRepo === repo.path;
                     const hasRemote = repo.remotes.length > 0;
                     // 신선한 dirty 값(전체 레포 배치 조회) 우선, 없으면 스토어 값
-                    const isDirty = syncMap?.[repo.path]?.isDirty ?? repo.isDirty;
+                    const isDirty = syncMap?.[repoViewPath(repo.path)]?.isDirty ?? repo.isDirty;
                     const visibility = repoVisibility[repo.path];
                     const permission = repoPermissions[repo.path];
                     const isValidating = validatingRepo === repo.path;
@@ -505,7 +509,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                           </div>
                           {/* State indicators + actions */}
                           <div className="flex items-center gap-1 shrink-0">
-                            <RepoSyncIndicator status={syncMap?.[repo.path]} variant="badge" />
+                            <RepoSyncIndicator status={syncMap?.[repoViewPath(repo.path)]} variant="badge" />
                             {isDirty && (
                               <Circle
                                 className={cn(
