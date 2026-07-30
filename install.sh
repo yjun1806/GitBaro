@@ -18,7 +18,9 @@ INSTALL_DIR="/Applications"
 # 이름은 앱 캐시와 겹치지 않게 둔다. macOS 파일시스템은 기본이 대소문자 구분 없음이라
 # `GitBaro/` 는 앱이 쓰는 `gitbaro/`(WKWebView 캐시)와 같은 디렉토리가 되어,
 # 앱 캐시를 비우면 빌드 캐시까지 사라진다.
-BUILD_DIR="$HOME/Library/Caches/gitbaro-build"
+# $HOME 유효성은 아래 "환경 확인" 에서 검사한다. set -u 때문에 여기서 곧바로
+# 죽으면 원인을 알 수 없는 unbound variable 메시지만 남는다.
+BUILD_DIR="${HOME:-}/Library/Caches/gitbaro-build"
 # 로그는 한 번 보고 버리는 것이라 tmp 로 충분하다.
 LOG_FILE="${TMPDIR:-/tmp}/gitbaro-install.log"
 TOTAL_STEPS=4
@@ -84,11 +86,25 @@ installed_version() {
     "$INSTALL_DIR/$APP_NAME/Contents/Info.plist" 2>/dev/null || true
 }
 
+# $BUILD_DIR 자체가 저장소 루트인지 확인한다.
+#
+# `[ -d "$BUILD_DIR/.git" ]` 로는 부족하다 — 캐시가 반쯤 지워져 .git/HEAD 만 사라진
+# 껍데기가 남으면 검사는 통과하고 git 이 실패한다.
+# 반대로 `git rev-parse --git-dir` 만으로도 안 된다 — 상위 디렉토리까지 거슬러 올라가서
+# 찾기 때문에, 홈을 git 으로 관리하는 사용자에게는 그 저장소를 잡아 아래 fetch 와
+# reset --hard 가 홈 작업 트리를 날려버린다.
+# 그래서 "저장소 루트가 정확히 여기인지" 를 본다. 애매하면 재clone 쪽이 안전하다.
+is_build_repo() {
+  [ "$(git -C "$BUILD_DIR" rev-parse --absolute-git-dir 2>/dev/null)" \
+    = "$(cd "$BUILD_DIR" 2>/dev/null && pwd -P)/.git" ]
+}
+
 banner
 
 # ── 1. 환경 확인 ─────────────────────────────────────────
 step "환경 확인"
 [ "$(uname)" = "Darwin" ] || fail "GitBaro 는 macOS 전용입니다."
+[ -n "${HOME:-}" ] || fail "\$HOME 이 비어 있어 빌드 캐시 위치를 정할 수 없습니다."
 
 PREV_VERSION="$(installed_version)"
 
@@ -131,16 +147,11 @@ ok "git · cargo · pnpm · gh 확인 완료"
 
 # ── 2. 저장소 준비 ───────────────────────────────────────
 step "저장소 준비"
-# `.git` 디렉토리 존재만으로 판단하면 안 된다. macOS 는 $TMPDIR 안에서 오래 접근되지
-# 않은 파일을 주기적으로 지우는데(110.clean-tmps), 디렉토리 골격은 남긴다. 그래서
-# .git/HEAD 만 사라진 껍데기가 남고 git 은 "not a git repository" 로 실패한다.
-# 실제로 열리는 저장소인지 확인해, 망가졌으면 새로 clone 한다.
-if git -C "$BUILD_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+if is_build_repo; then
   run "기존 소스 갱신" bash -c \
     "git -C '$BUILD_DIR' fetch --depth 1 origin main && git -C '$BUILD_DIR' reset --hard origin/main"
 else
-  rm -rf "$BUILD_DIR"
-  mkdir -p "$(dirname "$BUILD_DIR")"
+  rm -rf "${BUILD_DIR:?}"
   run "저장소 clone" git clone --depth 1 "$REPO_URL" "$BUILD_DIR"
 fi
 cd "$BUILD_DIR"
@@ -167,6 +178,11 @@ fi
 rm -rf "${INSTALL_DIR:?}/$APP_NAME"
 ditto "$BUNDLED" "$INSTALL_DIR/$APP_NAME"
 ok "$INSTALL_DIR/$APP_NAME"
+
+# 빌드 캐시는 일부러 남긴다. 지우면 다음 업데이트가 전체 재컴파일(수 분)이 된다.
+# 대신 어디에 얼마나 쌓였는지는 알려준다 — 말없이 GB 단위를 남기지 않는다.
+info "빌드 캐시 $(du -sh "$BUILD_DIR" 2>/dev/null | cut -f1) — 다음 업데이트를 빠르게 합니다"
+info "지우려면: ${C_BLD}rm -rf $BUILD_DIR${C_RST}"
 
 done_label="설치 완료!"
 [ -n "$PREV_VERSION" ] && done_label="업데이트 완료!"

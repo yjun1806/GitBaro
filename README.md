@@ -75,6 +75,13 @@ curl -fsSL https://raw.githubusercontent.com/yjun1806/GitBaro/main/install.sh | 
 > 사전 빌드 바이너리가 아니라 **소스에서 직접 빌드**하므로 아래 사전 요구 사항(Rust · pnpm · gh)이 필요합니다.
 > Rust 첫 컴파일은 수 분 걸릴 수 있습니다. 완료 후 `open -a GitBaro` 로 실행하세요.
 
+빌드 캐시는 `~/Library/Caches/gitbaro-build` 에 남습니다(1GB 이상). 다음 업데이트를 수 분에서
+수십 초로 줄여 주므로 그대로 두길 권하지만, 공간이 필요하면 지워도 됩니다.
+
+```bash
+rm -rf ~/Library/Caches/gitbaro-build
+```
+
 ### 사전 요구 사항
 
 | 도구 | 버전 |
