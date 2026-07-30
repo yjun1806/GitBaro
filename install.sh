@@ -12,7 +12,11 @@ set -euo pipefail
 REPO_URL="https://github.com/yjun1806/GitBaro.git"
 APP_NAME="GitBaro.app"
 INSTALL_DIR="/Applications"
-BUILD_DIR="${TMPDIR:-/tmp}/gitbaro-build"
+# 빌드 캐시는 $TMPDIR 에 두지 않는다. macOS 는 $TMPDIR 안에서 오래 접근되지 않은
+# 파일을 주기적으로 지우는데(110.clean-tmps), 며칠 만에 업데이트하면 clone 과
+# Rust target 캐시가 반쯤 지워진 상태로 남아 빌드가 깨진다.
+BUILD_DIR="$HOME/Library/Caches/GitBaro/build"
+# 로그는 한 번 보고 버리는 것이라 tmp 로 충분하다.
 LOG_FILE="${TMPDIR:-/tmp}/gitbaro-install.log"
 TOTAL_STEPS=4
 
@@ -124,11 +128,16 @@ ok "git · cargo · pnpm · gh 확인 완료"
 
 # ── 2. 저장소 준비 ───────────────────────────────────────
 step "저장소 준비"
-if [ -d "$BUILD_DIR/.git" ]; then
+# `.git` 디렉토리 존재만으로 판단하면 안 된다. macOS 는 $TMPDIR 안에서 오래 접근되지
+# 않은 파일을 주기적으로 지우는데(110.clean-tmps), 디렉토리 골격은 남긴다. 그래서
+# .git/HEAD 만 사라진 껍데기가 남고 git 은 "not a git repository" 로 실패한다.
+# 실제로 열리는 저장소인지 확인해, 망가졌으면 새로 clone 한다.
+if git -C "$BUILD_DIR" rev-parse --git-dir >/dev/null 2>&1; then
   run "기존 소스 갱신" bash -c \
     "git -C '$BUILD_DIR' fetch --depth 1 origin main && git -C '$BUILD_DIR' reset --hard origin/main"
 else
   rm -rf "$BUILD_DIR"
+  mkdir -p "$(dirname "$BUILD_DIR")"
   run "저장소 clone" git clone --depth 1 "$REPO_URL" "$BUILD_DIR"
 fi
 cd "$BUILD_DIR"
