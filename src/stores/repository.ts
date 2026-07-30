@@ -83,10 +83,18 @@ export function useOwnerRepoPath(): string | null {
  * 곳이 어긋나지 않는다. 워크트리에 변경·미푸시 커밋이 쌓여도 메인 작업 트리는
  * 깨끗해서, 메인 경로로 계산하면 아무 표시도 나오지 않는다.
  */
+export function repoViewPath(
+  activeWorktrees: Record<string, string>,
+  repoPath: string,
+): string {
+  return activeWorktrees[repoPath] ?? repoPath;
+}
+
+/** {@link repoViewPath} 를 현재 스토어 상태에 묶어 돌려준다. */
 export function useRepoViewPath(): (repoPath: string) => string {
   const activeWorktrees = useRepositoryStore((s) => s.activeWorktrees);
   return useCallback(
-    (repoPath: string) => activeWorktrees[repoPath] ?? repoPath,
+    (path: string) => repoViewPath(activeWorktrees, path),
     [activeWorktrees],
   );
 }
