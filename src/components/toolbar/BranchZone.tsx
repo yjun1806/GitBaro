@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { GitBranch, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useRepositoryStore } from "@/stores/repository";
+import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useBranches, useRecentBranches, useStatus, useWorktrees } from "@/api/queries";
 import { switchBranch, createBranch, deleteBranch, renameBranch, stashPush, stashPop } from "@/api/commands";
@@ -29,10 +29,11 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   useClickOutside(zoneRef, onClose, isOpen);
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const ownerRepoPath = useOwnerRepoPath();
   const { data: branches = [] } = useBranches(activeRepoPath);
   const { data: recentBranchNames = [] } = useRecentBranches(activeRepoPath);
   const { data: statusFiles = [] } = useStatus(activeRepoPath);
-  const { data: worktrees = [] } = useWorktrees(activeRepoPath);
+  const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);

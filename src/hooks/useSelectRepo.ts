@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useUIStore } from "@/stores/ui";
+import { useVerifyWorktree } from "@/hooks/useVerifyWorktree";
 import { gitFetch } from "@/api/commands";
 
 /* ─── Module-level fetch tracker (resets on app restart) ─── */
@@ -12,17 +13,24 @@ const fetchedRepos = new Set<string>();
  * 저장소 선택 로직을 공유하는 훅.
  * 저장소를 활성화하고, 연결된 계정을 활성화하며, 최초 1회 백그라운드 fetch를
  * 수행한다. 사이드바 저장소 목록과 퀵 전환 레일에서 동일하게 사용한다.
+ *
+ * 마지막에 워크트리를 보고 있었다면 그 워크트리로 복원한다(activateRepo).
  */
 export function useSelectRepo() {
-  const setActiveRepo = useRepositoryStore((s) => s.setActiveRepo);
+  const activateRepo = useRepositoryStore((s) => s.activateRepo);
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
   const setRepoListOpen = useUIStore((s) => s.setRepoListOpen);
+  const verifyWorktree = useVerifyWorktree();
   const queryClient = useQueryClient();
   const [fetchingPath, setFetchingPath] = useState<string | null>(null);
 
   const selectRepo = useCallback(
     (path: string) => {
-      setActiveRepo(path);
+      const restoredWorktree = useRepositoryStore.getState().activeWorktrees[path];
+      activateRepo(path);
+      if (restoredWorktree) {
+        verifyWorktree(path, restoredWorktree);
+      }
       const latestRepos = useRepositoryStore.getState().repos;
       const repo = latestRepos.find((r) => r.path === path);
       if (repo?.accountId) {
@@ -49,7 +57,7 @@ export function useSelectRepo() {
           });
       }
     },
-    [setActiveRepo, setActiveAccount, setRepoListOpen, queryClient],
+    [activateRepo, verifyWorktree, setActiveAccount, setRepoListOpen, queryClient],
   );
 
   return { selectRepo, fetchingPath };

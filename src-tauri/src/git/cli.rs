@@ -29,6 +29,9 @@ pub struct WorktreeEntry {
     pub is_locked: bool,
     pub lock_reason: Option<String>,
     pub is_dirty: bool,
+    /// 작업 디렉토리가 사라진 워크트리. git은 `git worktree prune` 전까지
+    /// 관리 파일을 남겨두므로 목록에는 계속 나타난다. 실제로는 쓸 수 없다.
+    pub is_prunable: bool,
 }
 
 pub struct GitCliEngine {
@@ -629,6 +632,7 @@ impl GitCliEngine {
 ///   branch refs/heads/<name>  (or `detached`)
 ///   bare  (optional)
 ///   locked [<reason>]  (optional)
+///   prunable [<reason>]  (optional — 작업 디렉토리가 사라진 경우)
 fn parse_worktree_porcelain(output: &str) -> Vec<WorktreeEntry> {
     let mut entries = Vec::new();
     let mut is_first = true;
@@ -645,6 +649,7 @@ fn parse_worktree_porcelain(output: &str) -> Vec<WorktreeEntry> {
         let mut is_bare = false;
         let mut is_locked = false;
         let mut lock_reason: Option<String> = None;
+        let mut is_prunable = false;
 
         for line in block.lines() {
             let line = line.trim();
@@ -662,6 +667,8 @@ fn parse_worktree_porcelain(output: &str) -> Vec<WorktreeEntry> {
             } else if let Some(reason) = line.strip_prefix("locked ") {
                 is_locked = true;
                 lock_reason = Some(reason.to_string());
+            } else if line == "prunable" || line.starts_with("prunable ") {
+                is_prunable = true;
             }
             // `detached` line → branch stays None
         }
@@ -677,6 +684,7 @@ fn parse_worktree_porcelain(output: &str) -> Vec<WorktreeEntry> {
                 is_locked,
                 lock_reason,
                 is_dirty: false,
+                is_prunable,
             });
             is_first = false;
         }
@@ -1233,4 +1241,73 @@ pub(crate) fn parse_git_error(stderr: &str) -> String {
         }
     }
     stderr.trim().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 실제 `git worktree list --porcelain` 출력. 작업 디렉토리를 지운 워크트리는
+    /// 목록에서 사라지지 않고 `prunable` 라인이 붙어서 그대로 남는다.
+    const PRUNABLE_OUTPUT: &str = "\
+worktree /repos/alpha
+HEAD 5f9d7f256d0204210a1f16bd3c43b7e907342968
+branch refs/heads/main
+
+worktree /repos/alpha-worktrees/feat
+HEAD 5f9d7f256d0204210a1f16bd3c43b7e907342968
+branch refs/heads/feat
+prunable gitdir file points to non-existent location
+";
+
+    #[test]
+    fn marks_worktree_with_missing_directory_as_prunable() {
+        let entries = parse_worktree_porcelain(PRUNABLE_OUTPUT);
+
+        assert_eq!(entries.len(), 2);
+        assert!(!entries[0].is_prunable);
+        assert!(entries[1].is_prunable);
+        assert_eq!(entries[1].path, "/repos/alpha-worktrees/feat");
+    }
+
+    #[test]
+    fn keeps_healthy_worktrees_unmarked() {
+        let output = "\
+worktree /repos/alpha
+HEAD abc123
+branch refs/heads/main
+
+worktree /repos/alpha-worktrees/feat
+HEAD def456
+branch refs/heads/feat
+";
+        let entries = parse_worktree_porcelain(output);
+
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().all(|e| !e.is_prunable));
+        assert!(entries[0].is_main);
+        assert!(!entries[1].is_main);
+    }
+
+    /// 이유 없는 `prunable` 단독 라인도 git이 쓸 수 있다.
+    #[test]
+    fn accepts_bare_prunable_line() {
+        let output = "worktree /repos/alpha-worktrees/feat\nHEAD abc123\ndetached\nprunable\n";
+        let entries = parse_worktree_porcelain(output);
+
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].is_prunable);
+        assert_eq!(entries[0].branch, None);
+    }
+
+    /// `locked`와 `prunable`은 서로 다른 상태다. 접두사가 겹치지 않는지 확인한다.
+    #[test]
+    fn distinguishes_locked_from_prunable() {
+        let output = "worktree /repos/alpha-worktrees/feat\nHEAD abc123\nbranch refs/heads/feat\nlocked in use elsewhere\n";
+        let entries = parse_worktree_porcelain(output);
+
+        assert!(entries[0].is_locked);
+        assert!(!entries[0].is_prunable);
+        assert_eq!(entries[0].lock_reason.as_deref(), Some("in use elsewhere"));
+    }
 }

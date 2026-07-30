@@ -277,7 +277,9 @@ export function RepoRail() {
   const railMode = useUIStore((s) => s.railMode);
   const setRepoListOpen = useUIStore((s) => s.setRepoListOpen);
   const repos = useRepositoryStore((s) => s.repos);
-  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  // activeRepoPath는 워크트리를 보는 중이면 워크트리 경로라 저장소와 매칭되지 않는다.
+  // 소유 저장소를 담고 있는 activeRepo로 비교해야 워크트리에서도 선택 표시가 유지된다.
+  const activeRepo = useRepositoryStore((s) => s.activeRepo);
   const favoriteRepos = useRepositoryStore((s) => s.favoriteRepos);
   const ownerTypes = useRepositoryStore((s) => s.ownerTypes);
   const accounts = useAccountStore((s) => s.accounts);
@@ -365,7 +367,7 @@ export function RepoRail() {
                 <RailItem
                   key={repo.path}
                   repo={repo}
-                  isActive={repo.path === activeRepoPath}
+                  isActive={repo.path === activeRepo?.path}
                   isFetching={fetchingPath === repo.path}
                   expanded={isExpanded}
                   syncStatus={syncMap?.[repo.path]}

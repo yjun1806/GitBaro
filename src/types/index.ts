@@ -252,6 +252,11 @@ export interface WorktreeInfo {
   isLocked: boolean;
   lockReason: string | null;
   isDirty: boolean;
+  /**
+   * 작업 디렉토리가 사라진 워크트리. git은 `git worktree prune` 전까지 관리 파일을
+   * 남겨두므로 목록에는 계속 나타나지만 실제로는 열 수 없다.
+   */
+  isPrunable: boolean;
 }
 
 // ── Stash ────────────────────────────────────────────────────────────────────

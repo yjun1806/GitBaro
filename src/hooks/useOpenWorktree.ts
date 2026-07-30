@@ -14,6 +14,10 @@ import type { WorktreeInfo } from "@/types";
  *
  * 전환 후 새 경로의 브랜치·상태가 준비될 때까지 브랜치 전환과 동일한 로딩
  * 피드백(isSwitchingBranch)을 유지해, 큰 저장소에서 "멈춤"으로 보이지 않게 한다.
+ *
+ * 실제로 열리는 데 성공한 워크트리만 기억한다(rememberWorktree). 열지 못한 경로를
+ * 기억하면 다음에 이 저장소를 고를 때 다시 그 경로로 복원되고, 저장까지 되어
+ * 앱을 재시작해도 따라온다.
  */
 export function useOpenWorktree(
   activeRepoPath: string | null,
@@ -25,9 +29,11 @@ export function useOpenWorktree(
   return useCallback(
     async (path: string) => {
       const parentPath = mainWorktree?.path ?? activeRepoPath ?? path;
+      const { setActiveRepo, rememberWorktree } = useRepositoryStore.getState();
       const { setSwitchingBranch } = useUIStore.getState();
       setSwitchingBranch(true);
-      useRepositoryStore.getState().setActiveRepo(path, parentPath);
+      setActiveRepo(path, parentPath);
+      rememberWorktree(parentPath, null);
       try {
         await Promise.all([
           queryClient.fetchQuery({
@@ -39,6 +45,9 @@ export function useOpenWorktree(
             queryFn: () => getStatus(path),
           }),
         ]);
+        if (path !== parentPath) {
+          rememberWorktree(parentPath, path);
+        }
       } finally {
         setSwitchingBranch(false);
       }

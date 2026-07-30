@@ -21,6 +21,7 @@ import { ErrorToast } from "@/components/error/ErrorToast";
 import { useToastStore } from "@/stores/toast";
 import { useGitEvents } from "@/hooks/useGitEvents";
 import { useRepoWatcher } from "@/hooks/useRepoWatcher";
+import { useVerifyWorktree } from "@/hooks/useVerifyWorktree";
 
 function AppContent() {
   const { t } = useTranslation();
@@ -112,6 +113,15 @@ function AppContent() {
           .catch(() => { /* repo may have been removed from disk */ })
       ),
     );
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 워크트리를 보던 채로 앱을 종료한 뒤 그 워크트리를 지웠다면, 활성 경로가 없는
+  // 폴더를 가리킨 채로 시작해 모든 git 조회가 실패한다. 시작할 때 한 번 확인한다.
+  const verifyWorktree = useVerifyWorktree();
+  useEffect(() => {
+    const { activeRepoPath, activeRepo } = useRepositoryStore.getState();
+    if (!activeRepo || !activeRepoPath || activeRepoPath === activeRepo.path) return;
+    verifyWorktree(activeRepo.path, activeRepoPath);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // DEV: Cmd+Shift+W to preview welcome screen for testing (data preserved)
