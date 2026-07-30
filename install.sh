@@ -15,7 +15,10 @@ INSTALL_DIR="/Applications"
 # 빌드 캐시는 $TMPDIR 에 두지 않는다. macOS 는 $TMPDIR 안에서 오래 접근되지 않은
 # 파일을 주기적으로 지우는데(110.clean-tmps), 며칠 만에 업데이트하면 clone 과
 # Rust target 캐시가 반쯤 지워진 상태로 남아 빌드가 깨진다.
-BUILD_DIR="$HOME/Library/Caches/GitBaro/build"
+# 이름은 앱 캐시와 겹치지 않게 둔다. macOS 파일시스템은 기본이 대소문자 구분 없음이라
+# `GitBaro/` 는 앱이 쓰는 `gitbaro/`(WKWebView 캐시)와 같은 디렉토리가 되어,
+# 앱 캐시를 비우면 빌드 캐시까지 사라진다.
+BUILD_DIR="$HOME/Library/Caches/gitbaro-build"
 # 로그는 한 번 보고 버리는 것이라 tmp 로 충분하다.
 LOG_FILE="${TMPDIR:-/tmp}/gitbaro-install.log"
 TOTAL_STEPS=4
