@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.6](https://github.com/yjun1806/GitBaro/compare/v0.1.5...v0.1.6) (2026-07-30)
+
+
+### Bug Fixes
+
+* **worktree:** keep the selected worktree when switching repositories ([4f1732f](https://github.com/yjun1806/GitBaro/commit/4f1732f9ec5e4ff9ad313d1a788cfe5e97b62376))
+
 ## [0.1.5](https://github.com/yjun1806/GitBaro/compare/v0.1.4...v0.1.5) (2026-07-27)
 
 
