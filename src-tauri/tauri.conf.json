@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/refs/heads/main/nicegui/static/tauri.conf.schema.json",
   "productName": "GitBaro",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "identifier": "com.gitbaro.app",
   "build": {
     "beforeDevCommand": "pnpm dev",

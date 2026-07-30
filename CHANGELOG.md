@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.7](https://github.com/yjun1806/GitBaro/compare/v0.1.6...v0.1.7) (2026-07-30)
+
+
+### Bug Fixes
+
+* **install:** keep the build cache out of the app's own cache directory ([5873997](https://github.com/yjun1806/GitBaro/commit/587399782e88c421be10496c817c193d52c3e945))
+* **install:** stop the repo guard from matching a parent repository ([e32ce50](https://github.com/yjun1806/GitBaro/commit/e32ce50046d6a022c16d50c159dd83b599083116))
+* **install:** survive macOS purging the build cache in $TMPDIR ([6a4ea27](https://github.com/yjun1806/GitBaro/commit/6a4ea2756c4036b009054bbd023a0c4e17800a3a))
+* **repo:** count untracked files when marking a repository dirty ([a5ceff4](https://github.com/yjun1806/GitBaro/commit/a5ceff46386a3f714847fa641e6e308eda9a530e))
+* **watch:** identify watchers by generation instead of path ([999b474](https://github.com/yjun1806/GitBaro/commit/999b474746b647ddb63b280fc47a1c92f3a753bf))
+* **watch:** stop only the watcher for the path being torn down ([5dbf40b](https://github.com/yjun1806/GitBaro/commit/5dbf40bcfd47494dd93da2dd827d85d26188b7ed))
+* **worktree:** show worktree state in the repository list ([ac17e43](https://github.com/yjun1806/GitBaro/commit/ac17e43db60ea8cd9e4649b3910fccadd665b39f))
+
 ## [0.1.6](https://github.com/yjun1806/GitBaro/compare/v0.1.5...v0.1.6) (2026-07-30)
 
 
