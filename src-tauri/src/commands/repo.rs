@@ -2,6 +2,7 @@ use crate::commands::auth::resolve_token;
 use crate::error::AppError;
 use crate::git::cli::GitCliEngine;
 use crate::git::engine::GitRemoteEngine;
+use crate::git::libgit::is_working_tree_dirty;
 use crate::state::TokenStore;
 use serde_json::{json, Value};
 
@@ -19,13 +20,7 @@ fn repo_info_from_path(repo_path: &str) -> Result<Value, AppError> {
         .ok()
         .and_then(|h| h.shorthand().map(|s| s.to_string()));
 
-    let is_dirty = {
-        let mut opts = git2::StatusOptions::new();
-        opts.include_untracked(false).exclude_submodules(true);
-        repo.statuses(Some(&mut opts))
-            .map(|s| !s.is_empty())
-            .unwrap_or(false)
-    };
+    let is_dirty = is_working_tree_dirty(&repo);
 
     let remote_names: Vec<String> = repo
         .remotes()

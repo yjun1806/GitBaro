@@ -616,3 +616,19 @@ impl LibGitEngine {
         Ok(StashShowResult { entry, files })
     }
 }
+
+/// 작업 트리에 커밋되지 않은 변경이 있는지.
+///
+/// untracked 파일도 변경으로 센다. Changes 탭(`get_status`)이 그렇게 세기 때문에,
+/// 여기서 빼면 새 파일만 만든 저장소가 목록에서는 깨끗해 보이는 불일치가 생긴다.
+///
+/// 디렉토리 재귀는 하지 않는다(`recurse_untracked_dirs` 기본값). 있는지 없는지만
+/// 알면 되므로 untracked 디렉토리는 항목 하나로 접힌 채여도 충분하고, 여러 저장소를
+/// 주기적으로 훑는 호출부(repo_sync_status)의 비용을 낮춘다.
+pub fn is_working_tree_dirty(repo: &Repository) -> bool {
+    let mut opts = git2::StatusOptions::new();
+    opts.include_untracked(true).exclude_submodules(true);
+    repo.statuses(Some(&mut opts))
+        .map(|s| !s.is_empty())
+        .unwrap_or(false)
+}

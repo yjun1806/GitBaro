@@ -3,6 +3,7 @@ use crate::git::branch::validate_branch_name;
 use crate::git::cli::GitCliEngine;
 use crate::git::commit::commit_to_info;
 use crate::git::engine::{BranchCompareResult, MergePreCheckResult, MergeStrategy};
+use crate::git::libgit::is_working_tree_dirty;
 use serde_json::{json, Value};
 
 fn is_fully_merged(repo: &git2::Repository, branch_oid: git2::Oid, default_oid: git2::Oid) -> bool {
@@ -228,14 +229,8 @@ pub async fn repo_sync_status(repo_paths: Vec<String>) -> Result<Vec<Value>, App
 fn head_sync_status(path: &str) -> Option<Value> {
     let repo = git2::Repository::open(path).ok()?;
 
-    // working-tree 변경 여부 — RepoInfo.isDirty와 동일한 옵션으로 계산
-    let is_dirty = {
-        let mut opts = git2::StatusOptions::new();
-        opts.include_untracked(false).exclude_submodules(true);
-        repo.statuses(Some(&mut opts))
-            .map(|s| !s.is_empty())
-            .unwrap_or(false)
-    };
+    // working-tree 변경 여부 — RepoInfo.isDirty와 같은 함수를 쓴다
+    let is_dirty = is_working_tree_dirty(&repo);
 
     // 현재 브랜치 기준 ahead/behind (detached HEAD·upstream 없으면 0/0)
     let head_branch = repo
@@ -857,5 +852,36 @@ mod tests {
         assert_eq!(field(&main_status, "branch").as_str(), Some("main"));
         assert_eq!(field(&main_status, "ahead").as_u64(), Some(0));
         assert_eq!(field(&main_status, "isDirty").as_bool(), Some(false));
+    }
+
+    /// 새 파일만 추가해도 dirty 다. Changes 탭은 untracked 를 세는데 목록이 세지
+    /// 않으면, 파일을 하나 만들었을 때 탭에는 "1" 이 뜨고 목록에는 아무 표시도
+    /// 없는 어긋남이 생긴다.
+    #[tokio::test]
+    async fn counts_untracked_files_as_dirty() {
+        let tmp = std::env::temp_dir().join(format!("gitbaro-untracked-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        git(&tmp, &["init", "-q", "-b", "main"]);
+        std::fs::write(tmp.join("README.md"), "hello\n").unwrap();
+        git(&tmp, &["add", "-A"]);
+        git(&tmp, &["commit", "-qm", "init"]);
+
+        let clean = repo_sync_status(vec![tmp.to_string_lossy().to_string()])
+            .await
+            .unwrap();
+        assert_eq!(field(&clean[0], "isDirty").as_bool(), Some(false));
+
+        // 추적되지 않는 새 파일 하나만 추가한다
+        std::fs::write(tmp.join("brand-new.txt"), "x\n").unwrap();
+
+        let dirty = repo_sync_status(vec![tmp.to_string_lossy().to_string()])
+            .await
+            .unwrap();
+        let is_dirty = field(&dirty[0], "isDirty").as_bool();
+
+        let _ = std::fs::remove_dir_all(&tmp);
+        assert_eq!(is_dirty, Some(true));
     }
 }
