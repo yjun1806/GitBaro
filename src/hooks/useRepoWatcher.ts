@@ -24,7 +24,10 @@ export function useRepoWatcher(repoPath: string | null) {
     startRepoWatch(repoPath).catch(() => {});
 
     return () => {
-      stopRepoWatch().catch(() => {
+      // 멈출 경로를 명시한다. 저장소를 전환하면 이 정리와 새 경로의 start 가
+      // await 없이 함께 나가는데, 도착 순서가 보장되지 않아 경로 없이 멈추면
+      // 방금 시작한 감시자를 죽일 수 있다.
+      stopRepoWatch(repoPath).catch(() => {
         /* best-effort teardown */
       });
     };

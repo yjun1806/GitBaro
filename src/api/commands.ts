@@ -774,6 +774,6 @@ export async function startRepoWatch(repoPath: string): Promise<void> {
   return invoke("start_repo_watch", { repoPath });
 }
 
-export async function stopRepoWatch(): Promise<void> {
-  return invoke("stop_repo_watch");
+export async function stopRepoWatch(repoPath: string): Promise<void> {
+  return invoke("stop_repo_watch", { repoPath });
 }
