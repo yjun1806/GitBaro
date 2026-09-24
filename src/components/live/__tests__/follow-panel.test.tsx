@@ -110,11 +110,12 @@ const { FollowPanel, FollowRepoFooter, OVERFLOW_POLL_MS } = await import("../Fol
 
 function renderFollow(path = WT) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const utils = render(
     <QueryClientProvider client={client}>
       <FollowPanel path={path} variant="inline" />
     </QueryClientProvider>,
   );
+  return { ...utils, client };
 }
 
 const emit = (path: string) =>
@@ -431,27 +432,39 @@ describe("FollowPanel — same file in another worktree (D5)", () => {
     expect(mark.getAttribute("title")).toBe("Also being edited in another worktree: main");
   });
 
-  it("warns above the diff and fills in the changed lines once both diffs are loaded", async () => {
+  it("warns above the diff with both worktrees' changed sections, and opens them side by side", async () => {
     renderFollow();
     const banner = await screen.findByTestId("overlap-banner");
     expect(banner.textContent).toContain("Same file");
     expect(banner.textContent).toContain("main");
-    // The other worktree's diff has not been read yet: no line numbers, and no request for it.
-    expect(banner.textContent).toContain("Open them side by side to compare the changed lines.");
-    expect(getFileDiff.mock.calls.some(([repo]) => repo === REPO)).toBe(false);
+    // Only the file on screen is read from the other worktree, and the ranges show right away.
+    await waitFor(() =>
+      expect(screen.getByTestId("overlap-banner").textContent).toContain("Different lines for now (lines 2 / 20)."),
+    );
+    expect(getFileDiff.mock.calls.filter(([repo]) => repo === REPO).map(([, file]) => file)).toEqual(["src/b.ts"]);
 
     fireEvent.click(screen.getByRole("button", { name: "View both worktrees side by side" }));
     const dialog = await screen.findByRole("dialog");
     expect(dialog.textContent).toContain("src/b.ts");
     await waitFor(() => expect(screen.getAllByTestId("diff-viewer")).toHaveLength(3));
-    await waitFor(() =>
-      expect(screen.getByTestId("overlap-banner").textContent).toContain("Different lines for now (lines 2 / 20)."),
-    );
     // Opening the comparison is the user taking over: following pauses so the file stays put.
     expect(useFollowStore.getState().mode).toBe("paused");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("re-reads the other worktree's diff instead of keeping an old all-clear", async () => {
+    const { client } = renderFollow();
+    await waitFor(() =>
+      expect(screen.getByTestId("overlap-banner").textContent).toContain("Different lines for now (lines 2 / 20)."),
+    );
+    // The main worktree now edits line 2 too. Any refresh of its diff must reach the banner.
+    backend.hunks = { ...backend.hunks, [`${REPO}\u0000src/b.ts`]: addHunk(2) };
+    await act(() => client.invalidateQueries({ queryKey: ["fileDiff", REPO] }));
+    await waitFor(() =>
+      expect(screen.getByTestId("overlap-banner").textContent).toContain("Both change lines 2 (lines 2 / 2)."),
+    );
   });
 
   it("shows no warning for a file only this worktree changes", async () => {

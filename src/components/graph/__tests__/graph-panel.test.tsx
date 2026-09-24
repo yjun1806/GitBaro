@@ -10,6 +10,7 @@ import { useReviewSeenStore } from "@/stores/review-seen";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useFollowStore } from "@/stores/follow";
 import { syncStatusPaths } from "@/components/sidebar/tree-model";
+import { worktreeColor } from "../worktree-history";
 import type {
   CommitInfo,
   NewCommitIds,
@@ -391,6 +392,45 @@ describe("GraphPanel worktree chips (D5)", () => {
     fireEvent.click(feat);
     expect(rowLabels()).toContain("f1");
     expect(rowLabels()).toContain("Uncommitted changes in feat/x (4)");
+  });
+
+  it("draws each worktree's WIP row in its own lane down to its commits, in the chip's color", async () => {
+    renderPanel();
+    await screen.findByRole("separator");
+    const featColor = worktreeColor(FEAT);
+    const chips = screen.getByRole("group", { name: "Worktrees shown in the graph" });
+    const chipIcon = within(chips).getByRole("button", { name: /feat\/x/ }).querySelector("svg") as SVGElement;
+    // jsdom writes inline colors as rgb(); convert the same way before comparing.
+    const probe = document.createElement("span");
+    probe.style.color = featColor;
+    expect((chipIcon as unknown as HTMLElement).style.color).toBe(probe.style.color);
+    const wip = screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" });
+    expect(wip.querySelector("circle")?.getAttribute("stroke")).toBe(featColor);
+    // The line leaving the WIP row reaches f1, which is drawn in the same color.
+    const f1 = document.querySelector('[data-commit-id="f1"]') as HTMLElement;
+    expect(f1.querySelector("circle")?.getAttribute("fill")).toBe(featColor);
+    expect([...f1.querySelectorAll("path")].some((p) => p.getAttribute("stroke") === featColor)).toBe(true);
+  });
+
+  it("does not offer reset or revert on another worktree's commit", async () => {
+    renderPanel();
+    await screen.findByRole("separator");
+    const disabledOf = (id: string) => {
+      fireEvent.contextMenu(document.querySelector(`[data-commit-id="${id}"]`) as HTMLElement);
+      const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
+      const out = items.filter((m) => (m as HTMLButtonElement).disabled).map((m) => m.textContent);
+      fireEvent.keyDown(document, { key: "Escape" });
+      return out;
+    };
+    expect(disabledOf("f1")).toEqual([i18n.t("history.contextMenu.reset"), i18n.t("history.contextMenu.revert")]);
+    expect(disabledOf("c1")).toEqual([]);
+  });
+
+  it("hides the chips while the graph shows a branch comparison", () => {
+    useUIStore.setState({ compareBranch: "feat/x" });
+    renderPanel();
+    expect(screen.getByText("compare-view")).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "Worktrees shown in the graph" })).toBeNull();
   });
 
   it("keeps the open worktree on: its chip cannot be turned off", () => {

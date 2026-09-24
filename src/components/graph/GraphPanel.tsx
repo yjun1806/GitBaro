@@ -8,7 +8,9 @@ import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useStashList, useWorkflowRuns, useWorktrees } from "@/api/queries";
 import { CommitGraph, type WorktreeHead } from "./CommitGraph";
 import { useGraphReview } from "./useGraphReview";
-import { laneColor, normalizePath, type GraphWip } from "./graph-model";
+import { normalizePath, type GraphWip } from "./graph-model";
+import { worktreeColor } from "./worktree-history";
+import { activeRange, useBranchRangeStore } from "@/components/branch/branch-range";
 import { WorktreeChips, type WorktreeChip } from "@/components/worktree/WorktreeChips";
 import type { WorktreeInfo } from "@/types";
 import { StashView } from "@/components/stash/StashView";
@@ -59,6 +61,10 @@ export function GraphPanel() {
 
   const tab = graphPanelTabOf(activeTab);
   const worktreeFilter = useWorktreeFilter(review.wips);
+  // 범위·비교 화면은 지금 연 워크트리의 커밋만 그린다 — 칩으로 고를 것이 없으니 칩 줄을 감춘다.
+  const compareBranch = useUIStore((s) => s.compareBranch);
+  const branchRange = useBranchRangeStore((s) => s.range);
+  const graphListShown = !compareBranch && activeRange(branchRange, activeRepoPath) === null;
 
   // 커밋을 새로 고를 때만 아래 칸을 커밋 상세로 바꾼다. 패널이 다시 마운트될 때
   // (저장소 목록을 열었다 닫을 때 등) 남아 있던 선택으로 스태시·Actions 탭에서
@@ -124,7 +130,7 @@ export function GraphPanel() {
         )}
       </div>
 
-      {tab === "graph" && worktreeFilter.chips.length > 1 && (
+      {tab === "graph" && graphListShown && worktreeFilter.chips.length > 1 && (
         <WorktreeChips
           chips={worktreeFilter.chips}
           visible={worktreeFilter.visible}
@@ -178,7 +184,6 @@ function useWorktreeFilter(allWips: GraphWip[]) {
     return map;
   }, [worktreeList]);
 
-  const colorSeed = ownerPath ?? "";
   const chips = useMemo<WorktreeChip[]>(
     () =>
       [...allWips].sort(chipOrder).map((w) => {
@@ -190,10 +195,10 @@ function useWorktreeFilter(allWips: GraphWip[]) {
           isCurrent: w.isCurrent,
           base: info?.base ?? null,
           dirtyCount: w.count,
-          color: w.isCurrent ? laneColor(colorSeed, 0) : laneColor(w.path, 0),
+          color: worktreeColor(w.path),
         };
       }),
-    [allWips, infoByPath, colorSeed],
+    [allWips, infoByPath],
   );
 
   const visible = useMemo(

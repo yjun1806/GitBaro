@@ -13,8 +13,9 @@ const ctx = (o: number, n: number): DiffLine => ({ content: "", lineType: "conte
 const add = (n: number): DiffLine => ({ content: "", lineType: "add", oldLineNo: null, newLineNo: n });
 const del = (o: number): DiffLine => ({ content: "", lineType: "delete", oldLineNo: o, newLineNo: null });
 
-function hunk(newStart: number, lines: DiffLine[]): DiffHunk {
-  return { oldStart: newStart, oldLines: 0, newStart, newLines: 0, header: "", lines };
+/** hunk 머리(`@@ -oldStart,oldLines +newStart,newLines @@`)와 줄. */
+function hunk(newStart: number, newLines: number, lines: DiffLine[] = []): DiffHunk {
+  return { oldStart: newStart, oldLines: newLines, newStart, newLines, header: "", lines };
 }
 
 function diff(...hunks: DiffHunk[]) {
@@ -52,31 +53,29 @@ describe("findSameFileWorktrees", () => {
 });
 
 describe("changedLineRanges", () => {
-  it("groups added lines into ranges on the new side", () => {
+  it("uses each hunk's new-side range, like the mockup's 61–69", () => {
+    // gen_d2.py lines5: `@@ -61,9 +61,15 @@` with a delete at 63, adds at 63 and 65.
     const d = diff(
-      hunk(61, [ctx(61, 61), add(62), add(63), ctx(62, 64), add(65)]),
-      hunk(112, [add(112), add(113), ctx(110, 114)]),
+      hunk(61, 15, [ctx(61, 61), ctx(62, 62), del(63), add(63), ctx(64, 64), add(65), ctx(65, 66)]),
+      hunk(112, 19, [add(112), ctx(110, 113)]),
     );
-    // 62–63 and 65 are one line apart, so they stay separate; 65 touches nothing.
     expect(changedLineRanges(d)).toEqual([
-      { start: 62, end: 63 },
-      { start: 65, end: 65 },
-      { start: 112, end: 113 },
+      { start: 61, end: 75 },
+      { start: 112, end: 130 },
     ]);
   });
 
-  it("counts a deletion-only spot as the new-side line right after it", () => {
-    const d = diff(hunk(10, [ctx(10, 10), del(11), del(12), ctx(13, 11)]));
-    expect(changedLineRanges(d)).toEqual([{ start: 11, end: 11 }]);
+  it("counts a hunk with no new-side lines as the one line where it sits", () => {
+    expect(changedLineRanges(diff(hunk(10, 0, [del(11), del(12)])))).toEqual([{ start: 10, end: 10 }]);
+    expect(changedLineRanges(diff(hunk(0, 0, [del(1)])))).toEqual([{ start: 1, end: 1 }]);
   });
 
-  it("merges a replacement (deleted then added) into one range", () => {
-    const d = diff(hunk(5, [ctx(5, 5), del(6), add(6), add(7), ctx(7, 8)]));
-    expect(changedLineRanges(d)).toEqual([{ start: 6, end: 7 }]);
+  it("merges hunks that touch", () => {
+    expect(changedLineRanges(diff(hunk(5, 3), hunk(8, 2)))).toEqual([{ start: 5, end: 9 }]);
   });
 
   it("ignores binary diffs", () => {
-    expect(changedLineRanges({ hunks: [hunk(1, [add(1)])], binary: true })).toEqual([]);
+    expect(changedLineRanges({ hunks: [hunk(1, 1, [add(1)])], binary: true })).toEqual([]);
   });
 });
 
@@ -126,19 +125,20 @@ describe("range helpers", () => {
 });
 
 describe("compareLineRanges", () => {
-  const mine = diff(hunk(61, [add(61), add(62), add(69)]));
+  const mine = diff(hunk(61, 9));
 
   it("says the two worktrees change different lines", () => {
-    const theirs = diff(hunk(112, [add(112), add(130)]));
+    const theirs = diff(hunk(112, 19));
     const result = compareLineRanges(mine, theirs);
     expect(result?.shared).toEqual([]);
-    expect(formatRanges(result!.mine)).toBe("61–62, 69");
-    expect(formatRanges(result!.theirs)).toBe("112, 130");
+    expect(formatRanges(result!.mine)).toBe("61–69");
+    expect(formatRanges(result!.theirs)).toBe("112–130");
   });
 
-  it("finds the lines both worktrees change", () => {
-    const theirs = diff(hunk(60, [ctx(60, 60), add(61), add(62)]));
-    expect(compareLineRanges(mine, theirs)?.shared).toEqual([{ start: 61, end: 62 }]);
+  it("calls overlapping hunks shared even when the edited lines themselves differ", () => {
+    // Mine edits line 62 inside 61–69, theirs edits line 68 inside 65–71: the hunks overlap.
+    const theirs = diff(hunk(65, 7, [ctx(65, 65), add(68)]));
+    expect(compareLineRanges(mine, theirs)?.shared).toEqual([{ start: 65, end: 69 }]);
   });
 
   it("gives no answer until both diffs are loaded, or for binary files", () => {

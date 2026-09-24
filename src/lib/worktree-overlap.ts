@@ -63,27 +63,18 @@ export function mergeRanges(ranges: readonly LineRange[]): LineRange[] {
 }
 
 /**
- * diff에서 바뀐 줄의 범위(새 쪽 줄 번호). 추가된 줄은 그 줄 번호를, 지우기만 한 자리는
- * 지운 줄 바로 다음에 오는 새 쪽 줄 하나를 범위로 친다. 바이너리 diff는 빈 목록.
+ * diff의 변경 구간(새 쪽 줄 번호). hunk 머리(`@@ -61,9 +61,15 @@`)의 새 쪽 범위를 그대로
+ * 한 구간으로 친다(시안 D5의 「61–69행」이 hunk 머리에서 온다). 새 쪽 줄이 없는 hunk(지우기만
+ * 한 자리)는 그 자리 한 줄로 친다. 바이너리 diff는 빈 목록.
  */
 export function changedLineRanges(diff: Pick<DiffOutput, "hunks" | "binary">): LineRange[] {
   if (diff.binary) return [];
-  const ranges: LineRange[] = [];
-  for (const hunk of diff.hunks) {
-    // 지우기만 한 자리의 새 쪽 위치: 앞 줄의 새 쪽 번호 + 1(hunk 첫 줄이면 hunk 시작).
-    let nextNew = Math.max(1, hunk.newStart);
-    for (const line of hunk.lines) {
-      if (line.lineType === "add" && line.newLineNo !== null) {
-        ranges.push({ start: line.newLineNo, end: line.newLineNo });
-        nextNew = line.newLineNo + 1;
-      } else if (line.lineType === "delete") {
-        ranges.push({ start: nextNew, end: nextNew });
-      } else if (line.newLineNo !== null) {
-        nextNew = line.newLineNo + 1;
-      }
-    }
-  }
-  return mergeRanges(ranges);
+  return mergeRanges(
+    diff.hunks.map((hunk) => {
+      const start = Math.max(1, hunk.newStart);
+      return { start, end: start + Math.max(0, hunk.newLines - 1) };
+    }),
+  );
 }
 
 /** 두 범위 목록이 함께 덮는 줄(합친 범위). 없으면 빈 목록. */

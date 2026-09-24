@@ -119,7 +119,7 @@ vi.mock("@/api/queries", () => ({
   // W6-T2 워크트리 칩·겹침 경고
   useWorktreeHeadHistories: () => [],
   useWipFilesMany: () => [],
-  useCachedFileDiff: () => ({ data: undefined }),
+  useSiblingFileDiffs: (sides: unknown[]) => sides.map(() => ({ data: undefined })),
 }));
 
 vi.mock("@/components/history/CommitDetail", () => ({

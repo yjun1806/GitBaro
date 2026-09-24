@@ -32,7 +32,7 @@ function DiffColumn({ side, filePath, label }: { side: SideBySideSide; filePath:
       className="flex flex-col flex-1 min-w-0 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
     >
       <div className="flex items-center gap-2 h-9 px-3 shrink-0 border-b border-(--line)">
-        <WorktreeTag name={overlapWorktreeName(side)} />
+        <WorktreeTag name={overlapWorktreeName(side)} path={side.path} />
         <span className="truncate text-[11px] text-(--faint)" title={side.path}>
           {side.path}
         </span>

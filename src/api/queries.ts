@@ -823,14 +823,22 @@ export function useWipFilesMany(paths: readonly string[]) {
 }
 
 /**
- * 이미 불러온 diff만 돌려준다(`useFileDiff`와 같은 캐시 항목). 새로 읽지 않는다 —
- * 겹침 경고의 줄 범위는 이미 불러온 diff로만 계산한다.
+ * 같은 파일을 고치는 다른 워크트리들의 그 파일 diff(`useFileDiff`와 같은 캐시 항목). 결과는 `sides` 순서다.
+ * 겹침 경고가 보고 있는 파일 하나에만 쓴다. 따라가지 않는 워크트리는 감시 이벤트로 갱신되지
+ * 않으므로 파일 목록과 같은 주기로 다시 읽는다.
  */
-export function useCachedFileDiff(repoPath: string | null, filePath: string | null, staged: boolean) {
-  return useQuery({
-    queryKey: ["fileDiff", repoPath, filePath, staged],
-    queryFn: () => getFileDiff(repoPath!, filePath!, staged),
-    enabled: false,
+export function useSiblingFileDiffs(
+  sides: readonly { path: string; staged: boolean }[],
+  filePath: string | null,
+) {
+  return useQueries({
+    queries: sides.map(({ path, staged }) => ({
+      queryKey: ["fileDiff", path, filePath, staged],
+      queryFn: () => getFileDiff(path, filePath!, staged),
+      enabled: filePath !== null,
+      refetchInterval: SIBLING_WIP_POLL_MS,
+      refetchIntervalInBackground: false,
+    })),
   });
 }
 

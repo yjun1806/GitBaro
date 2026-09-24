@@ -2,12 +2,14 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderGit2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
-import { useCachedFileDiff, useReviewStatusQuery, useWipFilesMany } from "@/api/queries";
+import { useReviewStatusQuery, useSiblingFileDiffs, useWipFilesMany } from "@/api/queries";
 import { normalizePath } from "@/components/graph/graph-model";
+import { worktreeColor } from "@/components/graph/worktree-history";
 import {
   compareLineRanges,
   findSameFileWorktrees,
   formatRanges,
+  type LineOverlap,
   type OverlapWorktree,
   type SiblingWorktreeFiles,
 } from "@/lib/worktree-overlap";
@@ -100,11 +102,18 @@ export function OverlapMark({ siblings }: { siblings: readonly OverlapSibling[] 
   );
 }
 
-/** 워크트리 이름표(시안 D5의 워크트리 라벨). */
-export function WorktreeTag({ name }: { name: string }) {
+/**
+ * 워크트리 이름표(시안 D5의 워크트리 라벨). 테두리와 아이콘은 그 워크트리의 색이라
+ * 그래프의 칩·WIP 행과 짝지어 볼 수 있다.
+ */
+export function WorktreeTag({ name, path }: { name: string; path: string }) {
+  const color = worktreeColor(path);
   return (
-    <span className="inline-flex items-center gap-1 shrink-0 max-w-[220px] px-[7px] py-px rounded-[6px] border border-(--line2) bg-card text-[10.5px] font-bold text-(--fg2)">
-      <FolderGit2 className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+    <span
+      className="inline-flex items-center gap-1 shrink-0 max-w-[220px] px-[7px] py-px rounded-[6px] border bg-card text-[10.5px] font-bold text-(--fg2)"
+      style={{ borderColor: color }}
+    >
+      <FolderGit2 className="w-2.5 h-2.5 shrink-0" style={{ color }} aria-hidden="true" />
       <span className="truncate font-mono">{name}</span>
     </span>
   );
@@ -119,15 +128,20 @@ export interface OverlapBannerProps {
 }
 
 /**
- * diff 위의 ⧉ 「같은 파일」 경고(시안 D5). 줄 범위는 이미 불러온 두 diff로만 계산한다 —
- * 그쪽 diff를 아직 읽지 않았으면 범위 없이 경고만 띄우고, 나란히 보기를 열면 채워진다.
+ * diff 위의 ⧉ 「같은 파일」 경고(시안 D5). 1차 판정(경로)으로 걸린 파일을 볼 때만 그 파일 하나의
+ * 다른 워크트리 diff를 읽어 변경 구간을 견준다. 함께 고치는 줄이 있는 워크트리를 먼저 보여 준다.
  */
 export function OverlapBanner({ filePath, mine, siblings, onSideBySide }: OverlapBannerProps) {
   const { t } = useTranslation();
-  const first = siblings[0];
-  const { data: theirs } = useCachedFileDiff(first?.path ?? null, first ? filePath : null, first?.staged ?? false);
-  if (!first) return null;
-  const lines = compareLineRanges(mine, theirs?.filePath === filePath ? theirs : null);
+  const results = useSiblingFileDiffs(siblings, filePath);
+  const compared = siblings.map((s, i) => {
+    const theirs = results[i]?.data;
+    return { sibling: s, lines: compareLineRanges(mine, theirs?.filePath === filePath ? theirs : null) };
+  });
+  const pick = compared.find((c) => (c.lines?.shared.length ?? 0) > 0) ?? compared[0];
+  if (!pick) return null;
+  const first = pick.sibling;
+  const lines: LineOverlap | null = pick.lines;
   const more = siblings.length - 1;
 
   let detail: string;
@@ -154,7 +168,7 @@ export function OverlapBanner({ filePath, mine, siblings, onSideBySide }: Overla
     >
       <strong className="shrink-0">⧉ {t("overlap.sameFile")}</strong>
       <span className="flex flex-wrap items-center gap-1.5 min-w-0">
-        <WorktreeTag name={overlapWorktreeName(first)} />
+        <WorktreeTag name={overlapWorktreeName(first)} path={first.path} />
         {more > 0 && <span>{t("overlap.andMore", { count: more })}</span>}
         <span>{t("overlap.bannerAlsoEditing", { count: siblings.length })}</span>
         <span>{detail}</span>
