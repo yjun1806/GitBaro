@@ -179,7 +179,12 @@ export function ToolbarRoot() {
       <div className="flex items-center h-[52px] border-b border-border bg-surface select-none">
         {scope?.kind === "workspace" ? (
           <>
-            <div className="flex-1 min-w-[40px] h-full" data-tauri-drag-region />
+            {/* 워크스페이스 리뷰 화면(W4-T3)이 제목을 이 자리에 portal로 그린다. */}
+            <div
+              className="flex items-center flex-1 min-w-[40px] h-full pl-4"
+              data-tauri-drag-region
+              data-toolbar-title-slot
+            />
             <WorkspaceDisabledActions />
           </>
         ) : (

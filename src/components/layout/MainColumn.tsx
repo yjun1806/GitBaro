@@ -1,18 +1,18 @@
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { Folder, FolderGit2, X } from "lucide-react";
+import { FolderGit2, X } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useToastStore } from "@/stores/toast";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { useActiveScope } from "@/hooks/useActiveScope";
-import { useWorkspaceStore } from "@/stores/workspace";
 import { stopWorktreePreview } from "@/api/commands";
 import { getErrorMessage } from "@/lib/utils";
 import { ToolbarRoot } from "@/components/toolbar";
 import { PreviewBanner } from "@/components/worktree/PreviewBanner";
 import { RepoListView } from "@/components/repository/RepoListView";
 import { GraphPanel } from "@/components/graph/GraphPanel";
+import { WorkspaceReview } from "@/components/review/WorkspaceReview";
 import { Card, ContentArea, EmptyState } from "./ContentArea";
 
 /** "All repositories" list, opened from the sidebar. Takes over the main column. */
@@ -37,24 +37,6 @@ function RepoListCard() {
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <RepoListView onSelectRepo={selectRepo} />
       </div>
-    </Card>
-  );
-}
-
-/**
- * 워크스페이스를 고른 상태의 메인 칸. 여러 저장소 리뷰 화면(W4-T3 `WorkspaceReview`)이
- * 이 자리를 채운다. 그 전까지는 워크스페이스 이름과 저장소 수만 보여 준다.
- */
-function WorkspaceScopeCard({ id, repoCount }: { id: string; repoCount: number }) {
-  const { t } = useTranslation();
-  const name = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === id)?.name ?? "");
-  return (
-    <Card className="flex-1">
-      <EmptyState
-        icon={Folder}
-        title={name}
-        description={t("activeScope.workspaceDescription", { count: repoCount })}
-      />
     </Card>
   );
 }
@@ -107,7 +89,7 @@ export function MainColumn() {
             <ContentArea activeTab={activeTab} />
           </>
         ) : scope?.kind === "workspace" ? (
-          <WorkspaceScopeCard id={scope.id} repoCount={scope.paths.length} />
+          <WorkspaceReview key={scope.id} workspaceId={scope.id} paths={scope.paths} />
         ) : (
           <Card className="flex-1">
             <EmptyState

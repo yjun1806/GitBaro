@@ -572,3 +572,144 @@ export function useCachedWorkflowRunsState(
     client.getQueryState<WorkflowRun[]>(["workflowRuns", repoPath, accountId]),
   );
 }
+
+// W4-T3 — 워크스페이스 리뷰 화면
+
+import { hashKey, useQueries } from "@tanstack/react-query";
+import { getWorkspaceHistory } from "./commands";
+import type { NewCommitIds, StatusEntry, WorkspaceRepoHistory } from "@/types";
+
+/** 워크스페이스 타임라인에서 저장소마다 불러올 커밋 수. */
+export const WORKSPACE_HISTORY_LIMIT = 100;
+
+/**
+ * 조건에 맞는 캐시 중 가장 최근에 받은 데이터. `useQueries`에서는 키가 바뀌면 관찰자가 새로
+ * 만들어져 `keepPreviousData`가 넘겨줄 이전 값이 없다. 그래서 키 앞부분이 같은 캐시에서
+ * 직접 찾아 자리 표시 데이터로 쓴다(HEAD가 바뀔 때 레인이 잠깐 사라지지 않게).
+ */
+export function latestCachedData<T>(
+  client: QueryClient,
+  matches: (queryKey: readonly unknown[]) => boolean,
+): T | undefined {
+  let best: { at: number; data: T } | undefined;
+  for (const q of client.getQueryCache().findAll({ predicate: (query) => matches(query.queryKey) })) {
+    const data = q.state.data as T | undefined;
+    if (data !== undefined && (!best || q.state.dataUpdatedAt > best.at)) {
+      best = { at: q.state.dataUpdatedAt, data };
+    }
+  }
+  return best?.data;
+}
+
+/**
+ * 저장소마다 따로 부르는 워크스페이스 타임라인. 키 앞부분이 `["workspaceHistory", repoPath]`라
+ * 저장소 하나만 무효화할 수 있다. `headOid`(리뷰 스캔의 HEAD)가 키에 들어 있어 커밋이 생기면
+ * 20초 스캔 뒤 바로 다시 읽는다(`.git/` 안쪽 변경은 활동 이벤트가 오지 않는다). 다시 읽는
+ * 동안에는 같은 저장소의 마지막 결과를 그대로 보여 준다.
+ * 결과는 `repos` 순서와 같고, 한 번도 못 읽은 저장소는 undefined다.
+ */
+export function useWorkspaceHistories(
+  repos: readonly { path: string; headOid: string | null }[],
+): (WorkspaceRepoHistory | undefined)[] {
+  const client = useQueryClient();
+  return useQueries({
+    queries: repos.map(({ path, headOid }) => ({
+      queryKey: ["workspaceHistory", path, headOid, WORKSPACE_HISTORY_LIMIT],
+      queryFn: async () => (await getWorkspaceHistory([path], WORKSPACE_HISTORY_LIMIT))[0],
+      placeholderData: (previous: WorkspaceRepoHistory | undefined) =>
+        previous ??
+        latestCachedData<WorkspaceRepoHistory>(
+          client,
+          (key) => key[0] === "workspaceHistory" && key[1] === path,
+        ),
+    })),
+    combine: (results) => results.map((r) => r.data),
+  });
+}
+
+/**
+ * 저장소 HEAD부터의 최근 커밋(`get_commit_history`). 새 커밋 중 타임라인(main과 갈라진 뒤의
+ * 커밋)에 없는 커밋을 그리려고 부른다. main에 있는 저장소에서 pull로 받았거나 원격이 없는
+ * main에 바로 쌓인 커밋이 그렇다. 결과는 경로 → 커밋 목록(최신 순)이다.
+ */
+export function useWorkspaceRecentCommits(
+  repos: readonly { path: string; headOid: string }[],
+): Record<string, CommitInfo[]> {
+  const client = useQueryClient();
+  return useQueries({
+    queries: repos.map(({ path, headOid }) => ({
+      queryKey: ["workspaceRecentCommits", path, headOid, WORKSPACE_HISTORY_LIMIT],
+      queryFn: () => getCommitHistory(path, WORKSPACE_HISTORY_LIMIT, 0),
+      placeholderData: (previous: CommitInfo[] | undefined) =>
+        previous ??
+        latestCachedData<CommitInfo[]>(
+          client,
+          (key) => key[0] === "workspaceRecentCommits" && key[1] === path,
+        ),
+    })),
+    combine: (results) => {
+      const out: Record<string, CommitInfo[]> = {};
+      results.forEach((r, i) => {
+        if (r.data) out[repos[i].path] = r.data;
+      });
+      return out;
+    },
+  });
+}
+
+/**
+ * 여러 워크트리의 커밋하지 않은 변경. 키가 `useStatus`와 같아(`["status", path]`) 캐시를 같이 쓴다.
+ * 결과는 경로 → 목록이고, 아직 못 읽은 경로는 빠진다.
+ */
+export function useStatusMany(paths: readonly string[]): Record<string, StatusEntry[]> {
+  return useQueries({
+    queries: paths.map((path) => ({
+      queryKey: ["status", path],
+      queryFn: () => getStatus(path),
+      staleTime: 0,
+      refetchInterval: 30_000,
+      refetchIntervalInBackground: false,
+    })),
+    combine: (results) => {
+      const out: Record<string, StatusEntry[]> = {};
+      results.forEach((r, i) => {
+        if (r.data) out[paths[i]] = r.data;
+      });
+      return out;
+    },
+  });
+}
+
+/**
+ * 여러 워크트리의 새 커밋. 키가 `useNewCommitIdsQuery`와 같아 단일 저장소 그래프와 캐시를 같이 쓴다.
+ * HEAD가 바뀌어 다시 세는 동안에는 같은 기준선으로 센 마지막 결과를 보여 준다(기준선이 바뀌면,
+ * 곧 「확인함」을 누른 뒤에는 옛 수를 다시 보이지 않는다).
+ * 결과는 경로 → 응답이고, 아직 못 센 경로는 빠진다.
+ */
+export function useNewCommitIdsMany(
+  entries: readonly { entry: SeenRecordInput; headOid: string | null }[],
+): Record<string, NewCommitIds> {
+  const client = useQueryClient();
+  return useQueries({
+    queries: entries.map(({ entry, headOid }) => {
+      const entryHash = hashKey([entry]);
+      return {
+        queryKey: ["newCommitIds", entry, headOid],
+        queryFn: () => listNewCommitIds(entry),
+        refetchInterval: REVIEW_POLL_MS,
+        refetchIntervalInBackground: false,
+        placeholderData: (previous: NewCommitIds | undefined) =>
+          previous ??
+          latestCachedData<NewCommitIds>(
+            client,
+            (key) => key[0] === "newCommitIds" && hashKey([key[1]]) === entryHash,
+          ),
+      };
+    }),
+    combine: (results) => {
+      const out: Record<string, NewCommitIds> = {};
+      for (const r of results) if (r.data) out[r.data.path] = r.data;
+      return out;
+    },
+  });
+}
