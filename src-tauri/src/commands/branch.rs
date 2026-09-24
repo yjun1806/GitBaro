@@ -943,7 +943,7 @@ mod tests {
     /// untracked 폴더 안 파일 3개 → 4. 깨끗한 저장소는 0과 null이다.
     #[tokio::test]
     async fn reports_dirty_count_and_latest_mtime() {
-        let tmp = std::env::temp_dir().join(format!("gitbaro-dirty-count-{}", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("gitbaro-branch-dirty-count-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
         git(&tmp, &["init", "-q", "-b", "main"]);

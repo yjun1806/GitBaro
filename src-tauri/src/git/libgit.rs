@@ -680,7 +680,7 @@ mod dirty_summary_tests {
 
     fn temp_repo(tag: &str) -> (std::path::PathBuf, Repository) {
         let dir = std::env::temp_dir()
-            .join(format!("gitbaro-dirty-{tag}-{}", std::process::id()));
+            .join(format!("gitbaro-libgit-dirty-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let repo = Repository::init(&dir).unwrap();

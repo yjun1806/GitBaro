@@ -140,8 +140,9 @@ export interface CommitInfo {
   /** `Co-Authored-By:` 트레일러의 공동 작성자. 모든 커밋 응답(히스토리·상세·브랜치 비교)이 채운다. */
   coAuthors: CoAuthor[];
   /**
-   * 작성자나 공동 작성자 이름이 코딩 에이전트(Claude, Codex 등 — Rust `AGENT_NAMES`)와
-   * 맞는지. 확정이 아닌 추정이므로 화면에서는 흐리게 표시한다.
+   * `Co-Authored-By` 트레일러에 코딩 에이전트(Claude, Codex 등)가 있는지. 커밋 작성자는
+   * 보지 않는다. 판별 규칙은 Rust `git::commit::is_agent_co_author` 한 곳에 있다.
+   * 확정이 아닌 추정이므로 화면에서는 흐리게 표시한다.
    */
   isAgentAuthored: boolean;
 }

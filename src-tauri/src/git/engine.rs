@@ -97,8 +97,8 @@ pub struct CommitInfo {
     /// People listed in `Co-Authored-By:` trailers, in message order, deduplicated.
     /// Filled by `commit_to_info` (see `git::commit::parse_co_authors`).
     pub co_authors: Vec<CoAuthor>,
-    /// Best guess that a coding agent wrote this commit: the author or a
-    /// co-author matches `git::commit::AGENT_NAMES`. An estimate, not a fact —
+    /// Best guess that a coding agent wrote this commit: a `Co-Authored-By`
+    /// trailer names an agent (`git::commit::is_agent_co_author`). An estimate, not a fact —
     /// the UI shows it dimmed.
     pub is_agent_authored: bool,
 }

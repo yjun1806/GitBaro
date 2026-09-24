@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -6,6 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCommitDetail, getCommitHistory, getRepoSyncStatus } from "@/api/commands";
+import type { RepoSyncStatus } from "@/types";
 
 const invokeMock = vi.mocked(invoke);
 
@@ -100,39 +101,39 @@ describe("getCommitDetail mapping", () => {
   });
 });
 
-describe("getRepoSyncStatus mapping", () => {
-  it("returns dirtyCount and dirtyLatestMtime next to isDirty", async () => {
-    const statuses = [
-      {
-        path: "/repo/a",
-        branch: "main",
-        ahead: 1,
-        behind: 0,
-        hasUpstream: true,
-        isDirty: true,
-        dirtyCount: 4,
-        dirtyLatestMtime: 1_700_000_005_250,
-      },
-      {
-        path: "/repo/b",
-        branch: "main",
-        ahead: 0,
-        behind: 0,
-        hasUpstream: false,
-        isDirty: false,
-        dirtyCount: 0,
-        dirtyLatestMtime: null,
-      },
-    ];
-    invokeMock.mockResolvedValueOnce(statuses);
+// getRepoSyncStatus passes the backend response through unchanged, so there is
+// no runtime mapping to check. What can break is the call itself and the
+// declared type. The field names on the wire are checked by the Rust test
+// `reports_dirty_count_and_latest_mtime` (commands/branch.rs); this file is
+// type-checked by `pnpm typecheck`, so the `satisfies` and `expectTypeOf`
+// lines below fail the build if the type loses or retypes a field.
+describe("getRepoSyncStatus contract", () => {
+  it("calls repo_sync_status with the repo paths", async () => {
+    invokeMock.mockResolvedValueOnce([]);
 
-    const result = await getRepoSyncStatus(["/repo/a", "/repo/b"]);
+    await getRepoSyncStatus(["/repo/a", "/repo/b"]);
 
     expect(invokeMock).toHaveBeenCalledWith("repo_sync_status", {
       repoPaths: ["/repo/a", "/repo/b"],
     });
-    expect(result).toEqual(statuses);
-    expect(result[0].dirtyCount).toBe(4);
-    expect(result[1].dirtyLatestMtime).toBeNull();
+  });
+
+  it("declares dirtyCount and dirtyLatestMtime next to isDirty", () => {
+    const dirty = {
+      path: "/repo/a",
+      branch: "main",
+      ahead: 1,
+      behind: 0,
+      hasUpstream: true,
+      isDirty: true,
+      dirtyCount: 4,
+      dirtyLatestMtime: 1_700_000_005_250,
+    } satisfies RepoSyncStatus;
+    const clean = { ...dirty, isDirty: false, dirtyCount: 0, dirtyLatestMtime: null } satisfies RepoSyncStatus;
+
+    expectTypeOf<RepoSyncStatus["dirtyCount"]>().toEqualTypeOf<number>();
+    expectTypeOf<RepoSyncStatus["dirtyLatestMtime"]>().toEqualTypeOf<number | null>();
+    expectTypeOf<RepoSyncStatus["isDirty"]>().toEqualTypeOf<boolean>();
+    expect([dirty.dirtyCount, clean.dirtyLatestMtime]).toEqual([4, null]);
   });
 });

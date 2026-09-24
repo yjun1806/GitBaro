@@ -59,26 +59,31 @@ pub fn signature_to_author(sig: &git2::Signature<'_>) -> AuthorInfo {
 /// Names of coding agents whose commits we mark as agent-authored. The single
 /// source for this list — every commit response (`commit_to_info`,
 /// `get_commit_history`, `get_commit_detail`) goes through `agent_attribution`.
-/// Matched case-insensitively against whole words of a name, so
-/// "Claude Opus 4.5" and "github-copilot[bot]" both match.
+/// Matched case-insensitively against whole words of a co-author name, so
+/// "Claude Opus 4.5" and "gemini-code-assist[bot]" both match. A name match
+/// alone is not enough: see `is_agent_co_author`.
 pub const AGENT_NAMES: &[&str] = &["Claude", "Codex", "Copilot", "Cursor", "Gemini", "Devin", "Aider"];
+
+/// Email domains that only coding agents commit from. A co-author with one of
+/// these is an agent whatever the name says.
+pub const AGENT_EMAIL_DOMAINS: &[&str] = &["anthropic.com", "openai.com", "cursor.com", "aider.chat"];
 
 /// Parse `Co-Authored-By: Name <email>` trailers from a commit message.
 ///
-/// The key is matched case-insensitively (`Co-authored-by`, `CO-AUTHORED-BY`).
-/// Every line is scanned rather than only the last paragraph, because agents
-/// often put other trailers or notes after a blank line. Duplicates (same
-/// email, or same name when there is no email) are dropped, keeping the first.
+/// Only the trailer block is read, as git does: the paragraphs at the end of
+/// the message whose every line is `Key: value` with no leading space. Several
+/// such paragraphs in a row all count, because agents often put another
+/// trailer (e.g. `Claude-Session:`) after a blank line. The subject paragraph
+/// never counts, and neither does indented or quoted text in the body. The key
+/// is matched case-insensitively. Duplicates (same email, or same name when
+/// there is no email) are dropped, keeping the first.
 pub fn parse_co_authors(message: &str) -> Vec<CoAuthor> {
     let mut result: Vec<CoAuthor> = Vec::new();
-    for line in message.lines() {
-        let Some((key, value)) = line.trim().split_once(':') else {
-            continue;
-        };
-        if !key.trim().eq_ignore_ascii_case("co-authored-by") {
+    for (key, value) in trailer_lines(message) {
+        if !key.eq_ignore_ascii_case("co-authored-by") {
             continue;
         }
-        let Some(co_author) = co_author_from_value(value.trim()) else {
+        let Some(co_author) = co_author_from_value(value) else {
             continue;
         };
         let is_duplicate = result.iter().any(|c| {
@@ -93,6 +98,40 @@ pub fn parse_co_authors(message: &str) -> Vec<CoAuthor> {
         }
     }
     result
+}
+
+/// `(key, value)` pairs of the trailer block at the end of `message`, in order.
+fn trailer_lines(message: &str) -> Vec<(&str, &str)> {
+    // Paragraphs are runs of non-blank lines; whitespace-only lines separate them.
+    let paragraphs: Vec<Vec<&str>> = message
+        .lines()
+        .collect::<Vec<_>>()
+        .split(|l| l.trim().is_empty())
+        .filter(|lines| !lines.is_empty())
+        .map(<[&str]>::to_vec)
+        .collect();
+    // The first paragraph is the subject (plus any body glued to it).
+    let body = paragraphs.get(1..).unwrap_or(&[]);
+    let block_start = body
+        .iter()
+        .rposition(|lines| !lines.iter().all(|l| as_trailer(l).is_some()))
+        .map_or(0, |i| i + 1);
+    body[block_start..]
+        .iter()
+        .flatten()
+        .filter_map(|l| as_trailer(l))
+        .collect()
+}
+
+/// Split a trailer line `Key: value`. `None` for indented lines and for keys
+/// that are not a single token of letters, digits and dashes.
+fn as_trailer(line: &str) -> Option<(&str, &str)> {
+    if line.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let (key, value) = line.split_once(':')?;
+    let is_token = !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+    is_token.then(|| (key, value.trim()))
 }
 
 /// Split a trailer value `Name <email>` (email optional) into a `CoAuthor`.
@@ -110,18 +149,39 @@ fn co_author_from_value(value: &str) -> Option<CoAuthor> {
 }
 
 /// True when any whole word of `name` equals one of `AGENT_NAMES` (ignoring case).
-pub fn is_agent_name(name: &str) -> bool {
+fn has_agent_name(name: &str) -> bool {
     name.split(|c: char| !c.is_alphanumeric())
         .filter(|word| !word.is_empty())
         .any(|word| AGENT_NAMES.iter().any(|agent| agent.eq_ignore_ascii_case(word)))
 }
 
-/// Co-authors and the agent-authored guess for one commit. Shared by every
-/// commit response so the history list, commit detail and branch compare agree.
-pub fn agent_attribution(message: &str, author_name: &str) -> (Vec<CoAuthor>, bool) {
+/// True when a co-author looks like a coding agent rather than a person.
+///
+/// "Claude" and "Devin" are also human first names, so the name only counts
+/// together with an address no person commits from: none at all, a `noreply`
+/// address (GitHub bot accounts use `…@users.noreply.github.com`), or an
+/// agent vendor's domain (`AGENT_EMAIL_DOMAINS`, enough on its own).
+/// `Devin Kim <devin@corp.com>` is therefore a person.
+pub fn is_agent_co_author(co_author: &CoAuthor) -> bool {
+    let email = co_author.email.to_ascii_lowercase();
+    let domain = email.rsplit_once('@').map_or("", |(_, d)| d);
+    if AGENT_EMAIL_DOMAINS
+        .iter()
+        .any(|d| domain == *d || domain.ends_with(&format!(".{d}")))
+    {
+        return true;
+    }
+    let is_non_personal_email = email.is_empty() || email.contains("noreply");
+    is_non_personal_email && has_agent_name(&co_author.name)
+}
+
+/// Co-authors and the agent-authored guess for one commit, from its
+/// `Co-Authored-By` trailers only (the commit author is not considered — a
+/// person may well be called Claude). Shared by every commit response so the
+/// history list, commit detail and branch compare agree.
+pub fn agent_attribution(message: &str) -> (Vec<CoAuthor>, bool) {
     let co_authors = parse_co_authors(message);
-    let is_agent_authored =
-        is_agent_name(author_name) || co_authors.iter().any(|c| is_agent_name(&c.name));
+    let is_agent_authored = co_authors.iter().any(is_agent_co_author);
     (co_authors, is_agent_authored)
 }
 
@@ -140,7 +200,7 @@ pub fn commit_to_info(commit: &git2::Commit<'_>) -> CommitInfo {
     let committer = signature_to_author(&commit.committer());
     let timestamp = commit.time().seconds();
     let parent_ids = parent_ids(commit);
-    let (co_authors, is_agent_authored) = agent_attribution(&message, &author.name);
+    let (co_authors, is_agent_authored) = agent_attribution(&message);
 
     CommitInfo {
         id,
@@ -291,17 +351,54 @@ mod tests {
     }
 
     #[test]
-    fn agent_attribution_matches_whole_words_ignoring_case() {
+    fn agent_attribution_matches_agent_trailers_by_whole_word() {
         let (co_authors, is_agent) =
-            agent_attribution("x\n\nCo-Authored-By: claude <noreply@anthropic.com>", "Dev");
+            agent_attribution("x\n\nCo-Authored-By: claude <noreply@anthropic.com>");
         assert_eq!(co_authors.len(), 1);
         assert!(is_agent);
 
-        // The author alone can mark the commit (e.g. a bot account).
-        assert!(agent_attribution("x", "github-copilot[bot]").1);
+        // GitHub bot accounts: agent name + noreply address.
+        assert!(agent_attribution(
+            "x\n\nCo-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>"
+        )
+        .1);
+        // A name-only trailer has no personal address to contradict it.
+        assert!(agent_attribution("x\n\nCo-Authored-By: Codex").1);
+        // An agent vendor domain is enough on its own.
+        assert!(agent_attribution("x\n\nCo-Authored-By: Assistant <bot@openai.com>").1);
         // "Claudette" is not "Claude": only whole words count.
-        assert!(!agent_attribution("x\n\nCo-Authored-By: Claudette <c@x.io>", "Dev").1);
-        assert!(!agent_attribution("x", "Dev").1);
+        assert!(!agent_attribution("x\n\nCo-Authored-By: Claudette <noreply@x.io>").1);
+        assert!(!agent_attribution("x").1);
+    }
+
+    /// "Claude" and "Devin" are also human first names. A person's own address
+    /// keeps them unmarked, and the commit author is never looked at.
+    #[test]
+    fn human_named_like_an_agent_is_not_marked() {
+        let (co_authors, is_agent) =
+            agent_attribution("feat: x\n\nCo-authored-by: Devin Kim <devin@corp.com>");
+        assert_eq!(co_authors, vec![co("Devin Kim", "devin@corp.com")]);
+        assert!(!is_agent);
+        assert!(!agent_attribution("x\n\nCo-Authored-By: Claude Martin <claude@martin.fr>").1);
+    }
+
+    #[test]
+    fn reads_only_the_trailer_block_at_the_end() {
+        // A trailer quoted (indented) in the body, followed by more prose.
+        let quoted = "chore: stop adding agent trailer\n\n\
+            Old messages ended with:\n    \
+            Co-Authored-By: Claude <noreply@anthropic.com>\n\n\
+            This removes it.";
+        assert_eq!(agent_attribution(quoted), (vec![], false));
+
+        // The subject line is never a trailer.
+        assert!(parse_co_authors("co-authored-by: fix typo").is_empty());
+        assert!(parse_co_authors("co-authored-by: fix typo\n\nbody").is_empty());
+
+        // A trailer-shaped line inside a prose paragraph is not a trailer.
+        assert!(parse_co_authors("x\n\nSee co-authored-by: Bob <b@x.io> above\nfor details").is_empty());
+        // A trailer paragraph followed by prose is not the trailer block.
+        assert!(parse_co_authors("x\n\nCo-Authored-By: Bob <b@x.io>\n\nMore text.").is_empty());
     }
 
     #[test]

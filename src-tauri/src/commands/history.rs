@@ -104,7 +104,7 @@ pub async fn get_commit_history(
                     Some(set) => set.contains(&oid),
                 };
                 let message = commit.message().unwrap_or("");
-                let (co_authors, is_agent_authored) = agent_attribution(message, &author_name);
+                let (co_authors, is_agent_authored) = agent_attribution(message);
                 Some(json!({
                     "oid": oid.to_string(),
                     "message": message.trim().to_string(),
@@ -193,8 +193,7 @@ pub async fn get_commit_detail(repo_path: String, oid: String) -> Result<Value, 
         )?;
 
         let parents = parent_ids(&commit);
-        let (co_authors, is_agent_authored) =
-            agent_attribution(commit.message().unwrap_or(""), author.name().unwrap_or(""));
+        let (co_authors, is_agent_authored) = agent_attribution(commit.message().unwrap_or(""));
 
         Ok::<_, AppError>(json!({
             "oid": commit.id().to_string(),
