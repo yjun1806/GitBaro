@@ -769,5 +769,38 @@
     "resizeSidebar": "Resize sidebar",
     "panelTabs": "Main panel",
     "selectCommitOrChanges": "Select a commit or the uncommitted changes row above."
+  },
+  "sidebarTree": {
+    "search": "Find repository or branch",
+    "collapseAll": "Collapse all",
+    "expandAll": "Expand all",
+    "tree": "Repositories",
+    "addRepo": "Add repository",
+    "noMatch": "No repository matches \"{{query}}\"",
+    "empty": "No repositories yet",
+    "workspaceSubtitle_one": "Workspace · {{count}} repository",
+    "workspaceSubtitle_other": "Workspace · {{count}} repositories",
+    "quietRepos_one": "{{count}} quiet repository ({{names}})",
+    "quietRepos_other": "{{count}} quiet repositories ({{names}})",
+    "worktree": "Worktree",
+    "favorite": "Favorite",
+    "badge": {
+      "uncommitted_one": "{{count}} uncommitted file",
+      "uncommitted_other": "{{count}} uncommitted files",
+      "newCommits_one": "{{count}} new commit",
+      "newCommits_other": "{{count}} new commits",
+      "ahead_one": "{{count}} commit to push",
+      "ahead_other": "{{count}} commits to push",
+      "behind_one": "{{count}} commit to pull",
+      "behind_other": "{{count}} commits to pull",
+      "live": "Files changed in the last 10 minutes",
+      "liveNotWatched": "Files changed recently (not watched live right now, so later changes may show up late or not at all)"
+    },
+    "live": {
+      "title": "Files changing now",
+      "empty": "No files changed in the last 10 minutes",
+      "seconds": "{{count}}s",
+      "minutes": "{{count}}m"
+    }
   }
 }
