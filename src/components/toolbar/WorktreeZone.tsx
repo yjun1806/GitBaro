@@ -13,6 +13,7 @@ import { cn, getErrorMessage } from "@/lib/utils";
 import { useClickOutside } from "./useToolbarDropdown";
 import { WorktreeDropdown } from "./WorktreeDropdown";
 import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog";
+import { WorktreeBaseLabel } from "@/components/worktree/WorktreeBaseLabel";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { railFlowWidth } from "@/components/layout/RepoRail";
@@ -70,6 +71,9 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
     ? (currentWorktree.path.split("/").pop() ?? currentWorktree.path)
     : t("worktree.main");
 
+  // 링크된 워크트리 안에 있으면 그 브랜치가 어디서 갈라졌는지 값 옆에 붙인다.
+  const currentBase = isInWorktree ? currentWorktree?.base ?? null : null;
+
   const handleRemoveWorktree = async (path: string) => {
     if (!activeRepoPath) return;
     try {
@@ -94,7 +98,13 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
         <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground leading-tight">{t("worktree.title")}</p>
           <div className="flex items-center gap-1.5">
-            <p className={cn("text-sm font-semibold truncate max-w-[160px]", isInWorktree && "text-info")}>{currentLabel}</p>
+            <p className={cn("text-sm font-semibold truncate min-w-0", isInWorktree && "text-info")}>{currentLabel}</p>
+            {currentBase && (
+              <>
+                <span className="text-xs text-muted-foreground/50 shrink-0">{"·"}</span>
+                <WorktreeBaseLabel base={currentBase} variant="compact" />
+              </>
+            )}
             {linkedCount > 0 && (
               <span className="text-[10px] font-semibold text-info bg-info/10 px-1.5 py-0.5 rounded-full shrink-0 tabular-nums">
                 {linkedCount}

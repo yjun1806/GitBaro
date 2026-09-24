@@ -4,6 +4,7 @@ import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { WorktreeContextMenu } from "@/components/worktree/WorktreeContextMenu";
+import { WorktreeBaseLabel } from "@/components/worktree/WorktreeBaseLabel";
 import type { WorktreeInfo } from "@/types";
 
 interface WorktreeListProps {
@@ -109,11 +110,17 @@ export function WorktreeList({
                   )}
                 </div>
 
-                <div className="flex items-center gap-1 mt-0.5">
+                <div className="flex items-center gap-1 mt-0.5 min-w-0">
                   <GitBranch className="w-3 h-3 text-muted-foreground shrink-0" />
                   <span className="text-xs text-muted-foreground truncate">
                     {wt.branch ?? t("worktree.detachedHead")}
                   </span>
+                  {wt.base && (
+                    <>
+                      <span className="text-xs text-muted-foreground/50 shrink-0">{"·"}</span>
+                      <WorktreeBaseLabel base={wt.base} className="shrink" />
+                    </>
+                  )}
                 </div>
 
                 <p

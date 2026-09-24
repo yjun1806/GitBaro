@@ -226,7 +226,14 @@
     "missingFallback": "Worktree {{path}} is gone — returning to the main worktree",
     "openFailed": "Could not open worktree {{path}}: {{error}}",
     "missing": "Missing",
-    "missingHint": "The folder is gone. Remove it to clean up."
+    "missingHint": "The folder is gone. Remove it to clean up.",
+    "base": {
+      "from": "from {{base}}",
+      "basedOn": "based on {{base}}",
+      "inferred": "estimated",
+      "inferredHint": "No creation record, so this is the branch with the nearest fork point",
+      "counts": "{{ahead}} commits ahead of and {{behind}} behind {{base}}"
+    }
   },
   "clone": {
     "account": "Account",

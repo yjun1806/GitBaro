@@ -122,9 +122,14 @@ export function BranchRow({
 
       {worktree && (
         <Tooltip
-          label={t("branch.inWorktree", {
-            name: worktree.path.split("/").pop() ?? worktree.path,
-          })}
+          label={[
+            t("branch.inWorktree", {
+              name: worktree.path.split("/").pop() ?? worktree.path,
+            }),
+            worktree.base && t("worktree.base.from", { base: worktree.base.name }),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         >
           <WorktreeIcon className="w-3.5 h-3.5 text-info" />
         </Tooltip>

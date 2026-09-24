@@ -253,6 +253,21 @@ export interface MergePreCheckResult {
   conflictFiles: string[];
 }
 
+/**
+ * 워크트리 브랜치가 갈라져 나온 브랜치.
+ * - `recorded`: GitBaro가 워크트리를 만들 때 기록한 값
+ * - `reflog`: git이 브랜치를 만들 때 남긴 기록(`branch: Created from X`)
+ * - `inferred`: 기록이 없어 분기점이 가장 가까운 브랜치로 추정한 값
+ */
+export type WorktreeBaseSource = "recorded" | "reflog" | "inferred";
+
+export interface WorktreeBase {
+  name: string;
+  source: WorktreeBaseSource;
+  aheadOfBase: number;
+  behindBase: number;
+}
+
 export interface WorktreeInfo {
   path: string;
   head: string;
@@ -267,6 +282,8 @@ export interface WorktreeInfo {
    * 남겨두므로 목록에는 계속 나타나지만 실제로는 열 수 없다.
    */
   isPrunable: boolean;
+  /** 메인·detached 워크트리는 null. */
+  base: WorktreeBase | null;
 }
 
 // ── Stash ────────────────────────────────────────────────────────────────────
