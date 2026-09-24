@@ -79,7 +79,8 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const hasUpstream = headBranch?.upstream != null;
 
   const previewBranch = useUIStore((s) => s.previewBranch);
-  const canSync = tokenStatus?.valid === true && tokenStatus?.canPush === true;
+  // canPush is null for non-GitHub remotes: push access is unknown, so let git decide.
+  const canSync = tokenStatus?.valid === true && tokenStatus?.canPush !== false;
   const syncDisabled = isSyncing || !accountId || (!isValidating && !canSync) || !!previewBranch;
 
   // Find this repo's active remote operation progress
@@ -99,7 +100,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
       if (tokenStatus?.reason === "network_error") return { title: t("sync.networkError"), description: t("sync.networkErrorDesc") };
       return { title: t("sync.sessionExpired"), description: t("sync.sessionExpiredDesc") };
     }
-    if (!tokenStatus?.canPush) {
+    if (tokenStatus?.canPush === false) {
       if (tokenStatus?.reason === "repo_not_found") return { title: t("sync.repoNotFound"), description: t("sync.repoNotFoundDesc") };
       return { title: t("sync.readOnly"), description: t("sync.readOnlyDesc") };
     }

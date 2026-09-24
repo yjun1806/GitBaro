@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Loader2, CheckCircle, XCircle, Copy, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { startGhLogin } from "@/api/commands";
+import { cancelGhLogin, startGhLogin } from "@/api/commands";
 import { Dialog } from "@/components/ui/Dialog";
 
 type FlowState = "idle" | "code" | "waiting" | "success" | "error";
@@ -20,6 +20,8 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
   const [copied, setCopied] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successUsername, setSuccessUsername] = useState("");
+  // Id of the running `gh auth login`, so closing the dialog can stop it.
+  const loginIdRef = useRef<number | null>(null);
 
   const startLogin = useCallback(async () => {
     setFlowState("idle");
@@ -27,7 +29,7 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
     setCopied(false);
 
     try {
-      await startGhLogin();
+      loginIdRef.current = await startGhLogin();
       // Command returned — background task is running.
       // We wait for Tauri events to update the UI.
     } catch (err) {
@@ -83,6 +85,11 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
     return () => {
       mounted = false;
       cleanups.forEach((fn) => fn());
+      // Closing the dialog (Cancel, Escape, or after success) stops a login that
+      // is still waiting; the backend ignores ids that already finished.
+      if (loginIdRef.current !== null) {
+        void cancelGhLogin(loginIdRef.current).catch(() => {});
+      }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

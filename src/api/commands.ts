@@ -585,8 +585,14 @@ export async function checkGhStatus(): Promise<GhStatus> {
   return invoke("check_gh_status");
 }
 
-export async function startGhLogin(): Promise<void> {
+/** Starts `gh auth login` in the background. Resolves to the login id for `cancelGhLogin`. */
+export async function startGhLogin(): Promise<number> {
   return invoke("start_gh_login");
+}
+
+/** Kills the `gh auth login` process started with `loginId`, if it is still running. */
+export async function cancelGhLogin(loginId: number): Promise<void> {
+  return invoke("cancel_gh_login", { loginId });
 }
 
 interface RawAccount {
@@ -637,7 +643,8 @@ export async function getRepoAccount(
 
 export interface TokenValidation {
   valid: boolean;
-  canPush: boolean;
+  /** null when push access cannot be checked (the remote is not on github.com). */
+  canPush: boolean | null;
   reason?: string;
 }
 

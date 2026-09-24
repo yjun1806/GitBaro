@@ -40,12 +40,19 @@ export function truncateHash(hash: string, length = 7): string {
   return hash.slice(0, length);
 }
 
+// Repo names may contain dots (vercel/next.js, user.github.io); only a trailing
+// ".git" is stripped. SSH host aliases cannot be resolved here (no ssh config).
+const GITHUB_REMOTE_PATTERNS = [
+  // https://github.com/o/r, http://, https://user@github.com/o/r, ssh://git@github.com[:22]/o/r
+  /^(?:https?|ssh|git|git\+ssh):\/\/(?:[^@/]+@)?github\.com(?::\d+)?\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i,
+  // git@github.com:o/r
+  /^(?:[^@/]+@)?github\.com:\/?([^/]+)\/([^/]+?)(?:\.git)?\/?$/i,
+];
+
 export function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
-  const patterns = [
-    /github\.com[/:]([^/]+)\/([^/.]+?)(?:\.git)?$/,
-  ];
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
+  const trimmed = url.trim();
+  for (const pattern of GITHUB_REMOTE_PATTERNS) {
+    const match = trimmed.match(pattern);
     if (match) {
       return { owner: match[1], repo: match[2] };
     }

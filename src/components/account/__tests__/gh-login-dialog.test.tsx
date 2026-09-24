@@ -13,14 +13,17 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 vi.mock("@/api/commands", () => ({
-  startGhLogin: vi.fn(async () => {}),
+  startGhLogin: vi.fn(async () => 7),
+  cancelGhLogin: vi.fn(async () => {}),
 }));
 
+import { cancelGhLogin, startGhLogin } from "@/api/commands";
 import { GhLoginDialog } from "@/components/account/GhLoginDialog";
 
 afterEach(() => {
   cleanup();
   handlers.clear();
+  vi.mocked(cancelGhLogin).mockClear();
 });
 
 describe("GhLoginDialog", () => {
@@ -52,5 +55,15 @@ describe("GhLoginDialog", () => {
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(onSuccess).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels the running gh login when the dialog closes", async () => {
+    const { unmount } = render(<GhLoginDialog onClose={vi.fn()} />);
+
+    await vi.waitFor(() => expect(startGhLogin).toHaveBeenCalled());
+    await act(async () => {});
+    unmount();
+
+    expect(cancelGhLogin).toHaveBeenCalledWith(7);
   });
 });

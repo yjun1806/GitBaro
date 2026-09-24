@@ -204,8 +204,8 @@ pub(crate) async fn resolve_commit_identity(account_id: Option<&str>) -> Option<
         .unwrap_or_default();
     let account = cache.iter().find(|a| a["id"].as_str() == Some(id))?;
     let name = account["username"].as_str().unwrap_or("Unknown").to_string();
-    let email = account["email"].as_str().unwrap_or("").to_string();
-    (!email.is_empty()).then_some((name, email))
+    let email = crate::commands::auth::cached_commit_email(Some(account), &name);
+    Some((name, email))
 }
 
 #[tauri::command]
