@@ -13,7 +13,7 @@ import {
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { cn } from "@/lib/utils";
 import type { BranchInfo, RemoteOp } from "@/types";
-import { CommitNowButton } from "@/components/commit/CommitNowButton";
+import { WorkingChangesButton } from "@/components/commit/WorkingChangesButton";
 import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { useHistoryView, useSetHistoryView } from "@/components/graph/useHistoryView";
 import { MultiRepoRemoteDialog } from "./MultiRepoRemoteDialog";
@@ -53,7 +53,7 @@ function Dot() {
 
 export interface GitStatusLineViewProps {
   model: GitStatusLineModel;
-  /** 커밋 안 한 파일 수(「커밋하기」 버튼 숫자). */
+  /** 커밋 안 한 파일 수(「작업 중인 변경 N」 버튼 숫자). */
   uncommittedCount: number;
   /** 보는 중일 때 체크아웃할 브랜치. 모든 브랜치를 보면 null. */
   checkoutName: string | null;
@@ -150,7 +150,7 @@ export function GitStatusLineView({
         )}
       </span>
       <span className="flex-1" />
-      {model.canCommit && <CommitNowButton count={uncommittedCount} variant="header" />}
+      {model.canCommit && <WorkingChangesButton count={uncommittedCount} variant="header" />}
     </div>
   );
 }

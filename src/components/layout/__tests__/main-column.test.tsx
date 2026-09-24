@@ -193,7 +193,7 @@ describe("MainColumn (two-column shell)", () => {
     // The D4 footer: stage all / commit… / stash. "Commit…" ends following and shows the staging list.
     expect(screen.getByRole("button", { name: "Stage all" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Stash" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Commit…" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open staging" }));
     expect(useFollowStore.getState().target).toBeNull();
     expect(screen.getByText("changes-view")).toBeTruthy();
   });

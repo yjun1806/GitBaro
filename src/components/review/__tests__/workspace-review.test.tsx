@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -128,8 +129,11 @@ vi.mock("@/api/queries", () => ({
 }));
 
 vi.mock("@/components/history/CommitDetail", () => ({
-  CommitDetail: ({ commit: c, repoPath }: { commit: CommitInfo; repoPath: string }) => (
-    <div>{`commit-detail ${repoPath} ${c.id}`}</div>
+  CommitDetail: ({ commit: c, repoPath, switcher }: { commit: CommitInfo; repoPath: string; switcher?: ReactNode }) => (
+    <div>
+      {switcher}
+      <div>{`commit-detail ${repoPath} ${c.id}`}</div>
+    </div>
   ),
 }));
 vi.mock("@/components/diff/DiffViewer", () => ({ DiffViewer: () => <div>diff-viewer</div> }));
@@ -273,6 +277,25 @@ describe("WorkspaceReview", () => {
     expect(screen.getByText("diff-viewer")).toBeTruthy();
     // 「따라가는 중」은 고른 WIP 행과 파일 목록 머리에 붙는다.
     expect(screen.getAllByTestId("follow-badge").map((b) => b.textContent)).toEqual(["Following", "Following"]);
+  });
+
+  it("switches between a repository's working changes and its picked commit, keeping the mode visible", () => {
+    const { container } = renderReview();
+    fireEvent.click(container.querySelector('[data-commit-id="api1"]') as HTMLElement);
+    const switcher = screen.getByTestId("work-switcher");
+    expect(switcher.dataset.mode).toBe("commit");
+    const commitSegment = within(switcher).getByRole("button", { name: /^Commit api1/ });
+    expect(commitSegment.getAttribute("aria-pressed")).toBe("true");
+
+    // 첫 칸: 그 저장소의 WIP 행(여기서는 워크트리 하나)으로 간다.
+    fireEvent.click(within(switcher).getByRole("button", { name: "Working changes 1" }));
+    expect(useFollowStore.getState().target).toBe(API_WT);
+    expect(screen.getByTestId("work-switcher").dataset.mode).toBe("working");
+    expect(screen.queryByText(`commit-detail ${API} api1`)).toBeNull();
+
+    // 둘째 칸: 그 저장소에서 마지막으로 고른 커밋으로 돌아온다.
+    fireEvent.click(within(screen.getByTestId("work-switcher")).getByRole("button", { name: /^Commit api1/ }));
+    expect(screen.getByText(`commit-detail ${API} api1`)).toBeTruthy();
   });
 
   it("invalidates only the changed worktree's queries on repo:activity", async () => {

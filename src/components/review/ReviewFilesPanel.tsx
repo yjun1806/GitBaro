@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderGit2, GitCommit, GitPullRequestDraft } from "lucide-react";
 import { useCommitDetail, useCommitFileDiff } from "@/api/queries";
@@ -19,6 +19,8 @@ export type ReviewSelection =
 export interface ReviewFilesPanelProps {
   selection: ReviewSelection;
   repoLabel: (repoPath: string) => string;
+  /** 목록 맨 위의 [작업 중인 변경 | 커밋] 전환(고른 저장소·워크트리 기준). */
+  switcher?: ReactNode;
 }
 
 /**
@@ -26,7 +28,7 @@ export interface ReviewFilesPanelProps {
  * 커밋이면 기존 커밋 상세(`CommitDetail`)를 그 저장소 경로로 부른다. WIP 행이면 그
  * 워크트리를 따라가며(D4) 커밋하지 않은 파일과 diff를 읽기 전용으로 보여 주고, 커밋하려면 저장소 화면으로 연다.
  */
-export function ReviewFilesPanel({ selection, repoLabel }: ReviewFilesPanelProps) {
+export function ReviewFilesPanel({ selection, repoLabel, switcher }: ReviewFilesPanelProps) {
   const { t } = useTranslation();
   if (selection === null) {
     return (
@@ -34,7 +36,9 @@ export function ReviewFilesPanel({ selection, repoLabel }: ReviewFilesPanelProps
     );
   }
   if (selection.kind === "commit") {
-    return <ReviewCommitFiles key={selection.key} repoPath={selection.repoPath} oid={selection.oid} />;
+    return (
+      <ReviewCommitFiles key={selection.key} repoPath={selection.repoPath} oid={selection.oid} switcher={switcher} />
+    );
   }
   return (
     <ReviewWipFiles
@@ -44,11 +48,12 @@ export function ReviewFilesPanel({ selection, repoLabel }: ReviewFilesPanelProps
       branch={selection.branch}
       isMain={selection.isMain}
       label={repoLabel(selection.repoPath)}
+      switcher={switcher}
     />
   );
 }
 
-function ReviewCommitFiles({ repoPath, oid }: { repoPath: string; oid: string }) {
+function ReviewCommitFiles({ repoPath, oid, switcher }: { repoPath: string; oid: string; switcher?: ReactNode }) {
   const { t } = useTranslation();
   const { data, isLoading, isError } = useCommitDetail(repoPath, oid);
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -74,6 +79,7 @@ function ReviewCommitFiles({ repoPath, oid }: { repoPath: string; oid: string })
       changedFiles={data.changedFiles.map((f) => ({ path: f.path, status: f.status }))}
       selectedFileDiff={fileDiff ?? null}
       onSelectFile={setFilePath}
+      switcher={switcher ?? null}
     />
   );
 }
@@ -84,13 +90,14 @@ interface ReviewWipFilesProps {
   branch: string | null;
   isMain: boolean;
   label: string;
+  switcher?: ReactNode;
 }
 
 /**
  * WIP 행: 그 워크트리를 따라간다(D4, `FollowPanel`). 읽기 전용이고, 스테이징·커밋은
  * 저장소 화면에서 한다.
  */
-function ReviewWipFiles({ repoPath, path, branch, isMain, label }: ReviewWipFilesProps) {
+function ReviewWipFiles({ repoPath, path, branch, isMain, label, switcher }: ReviewWipFilesProps) {
   const { t } = useTranslation();
   const { selectRepo } = useSelectRepo();
 
@@ -122,5 +129,5 @@ function ReviewWipFiles({ repoPath, path, branch, isMain, label }: ReviewWipFile
     </div>
   );
 
-  return <FollowPanel path={path} variant="inline" header={header} />;
+  return <FollowPanel path={path} variant="inline" header={header} switcher={switcher} />;
 }

@@ -15,6 +15,10 @@ import { repoLaneColor } from "@/components/graph/repo-lanes";
 import type { WorkspaceRepoHistory } from "@/types";
 import { WorkspaceTitle } from "./WorkspaceTitle";
 import { ReviewFilesPanel, type ReviewSelection } from "./ReviewFilesPanel";
+import { WorkSwitcher } from "@/components/commit/WorkSwitcher";
+import type { RepoLaneGraph } from "@/components/graph/repo-lanes";
+
+type CommitSelection = Extract<ReviewSelection, { kind: "commit" }>;
 import { useWorkspaceReview, type ReviewRepo } from "./useWorkspaceReview";
 import { useReviewActivityRefresh } from "./useReviewActivityRefresh";
 import { FilesByRepo } from "./FilesByRepo";
@@ -44,6 +48,8 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const accounts = useAccountStore((s) => s.accounts);
   const [showAll, setShowAll] = useState(false);
   const [selection, setSelection] = useState<ReviewSelection>(null);
+  // 저장소마다 마지막으로 고른 커밋. 「작업 중인 변경」으로 갔다가 「커밋」 칸으로 돌아올 때 쓴다.
+  const [lastCommitByRepo, setLastCommitByRepo] = useState<Readonly<Record<string, CommitSelection>>>({});
   const [tab, setTab] = useState<"graph" | "files">("graph");
   const groupBy = useFilesViewStore((s) => s.groupBy);
   const setGroupBy = useFilesViewStore((s) => s.setGroupBy);
@@ -172,9 +178,11 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                 baseBranchLabel={data.baseBranchLabel}
                 isLoading={data.isLoading}
                 emptyMessage={emptyMessage}
-                onSelectCommit={(repoPath, commit, key) =>
-                  setSelection({ kind: "commit", key, repoPath, oid: commit.id })
-                }
+                onSelectCommit={(repoPath, commit, key) => {
+                  const picked: CommitSelection = { kind: "commit", key, repoPath, oid: commit.id };
+                  setSelection(picked);
+                  setLastCommitByRepo((prev) => ({ ...prev, [repoPath]: picked }));
+                }}
                 onSelectWip={(wip, key) =>
                   setSelection({
                     kind: "wip",
@@ -192,7 +200,18 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
           bottom={
             tab === "graph" ? (
               <Card className="flex-1">
-                <ReviewFilesPanel selection={selection} repoLabel={repoLabel} />
+                <ReviewFilesPanel
+                  selection={selection}
+                  repoLabel={repoLabel}
+                  switcher={
+                    <WorkspaceWorkSwitcher
+                      selection={selection}
+                      graph={data.graph}
+                      lastCommit={selection ? (lastCommitByRepo[selection.repoPath] ?? null) : null}
+                      onSelect={setSelection}
+                    />
+                  }
+                />
               </Card>
             ) : (
               <FilesByRepo repos={filesRepos} groupBy={groupBy} />
@@ -268,4 +287,53 @@ function useToolbarTitleSlot(): HTMLElement | null {
     setSlot(document.querySelector<HTMLElement>("[data-toolbar-title-slot]"));
   }, []);
   return slot;
+}
+
+/**
+ * 워크스페이스 아래 칸의 [작업 중인 변경 N | 커밋 <sha>] 전환. 고른 저장소 기준이다: 커밋을 골랐으면
+ * 첫 칸은 그 저장소(메인 작업 트리 먼저)의 WIP 행으로, WIP를 골랐으면 둘째 칸은 그 저장소에서 마지막으로
+ * 고른 커밋으로 간다. 커밋 안 한 변경이 없거나 고른 커밋이 없으면 그 칸을 끈다.
+ */
+function WorkspaceWorkSwitcher({
+  selection,
+  graph,
+  lastCommit,
+  onSelect,
+}: {
+  selection: ReviewSelection;
+  graph: RepoLaneGraph;
+  lastCommit: CommitSelection | null;
+  onSelect: (selection: ReviewSelection) => void;
+}) {
+  const { t } = useTranslation();
+  if (selection === null) return null;
+  const wipRows = graph.rows.flatMap((r) => (r.kind === "wip" && r.repoPath === selection.repoPath ? [r] : []));
+  const wipRow =
+    selection.kind === "wip"
+      ? (wipRows.find((r) => r.wip.path === selection.path) ?? null)
+      : (wipRows.find((r) => r.wip.isMain) ?? wipRows[0] ?? null);
+  const commit = selection.kind === "commit" ? selection : lastCommit;
+  return (
+    <WorkSwitcher
+      mode={selection.kind === "commit" ? "commit" : "working"}
+      workingCount={wipRow?.wip.count ?? 0}
+      workingDisabledReason={wipRow || selection.kind === "wip" ? null : t("workSwitcher.noWorkingHint")}
+      workingDisabledLabel={t("workSwitcher.working", { count: 0 })}
+      commitShortId={commit ? commit.oid.slice(0, 7) : null}
+      onWorking={() => {
+        if (!wipRow) return;
+        onSelect({
+          kind: "wip",
+          key: wipRow.key,
+          repoPath: wipRow.repoPath,
+          path: wipRow.wip.path,
+          branch: wipRow.wip.branch,
+          isMain: wipRow.wip.isMain,
+        });
+      }}
+      onCommit={() => {
+        if (commit) onSelect(commit);
+      }}
+    />
+  );
 }

@@ -223,7 +223,7 @@ interface GraphWipRowProps {
   leading?: ReactNode;
   /** 파일 수 뒤에 둘 것(따라가기의 「따라가는 중」 알약, 시안 D4). */
   trailing?: ReactNode;
-  /** 행 오른쪽 끝의 버튼(「커밋하기 (N)」). 행 버튼 밖에 둔다(버튼 안에 버튼을 넣지 않는다). */
+  /** 행 오른쪽 끝의 버튼(「작업 중인 변경 N」). 행 버튼 밖에 둔다(버튼 안에 버튼을 넣지 않는다). */
   action?: ReactNode;
   onSelect: () => void;
 }

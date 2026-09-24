@@ -186,7 +186,7 @@ export function GraphPanel() {
         </TabGroup>
         {tab === "graph" && <ViewBranchPicker />}
         {tab === "graph" && <CompareChip />}
-        {/* 「커밋하기」는 위 git 상태 줄에 있다. */}
+        {/* 「작업 중인 변경 N」은 위 git 상태 줄에 있다. */}
         {tab === "graph" && newCommits !== null && newCommits.newCount > 0 && (
           <button
             type="button"

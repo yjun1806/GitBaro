@@ -37,7 +37,8 @@ import {
 } from "@/lib/file-selection";
 import type { StatusEntry } from "@/types";
 import { isComposerCollapsed } from "./composer-state";
-import { isFreshCommitFocus } from "./useStartCommit";
+import { isFreshWorkingFocus } from "./useOpenWorkingChanges";
+import { RepoWorkSwitcher } from "./WorkSwitcher";
 import { useCommitTarget } from "./useCommitTarget";
 import { useUIStore } from "@/stores/ui";
 
@@ -70,7 +71,9 @@ function ViewingComposerNote() {
   const { t } = useTranslation();
   const setView = useSetHistoryView();
   return (
-    <div className="flex flex-col items-center justify-center gap-3 h-full px-6 text-center">
+    <div className="flex flex-col h-full">
+      <RepoWorkSwitcher mode="working" />
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
       <p className="text-[12.5px] leading-[19px] text-muted-foreground">{t("historyView.composerHidden")}</p>
       <button
         type="button"
@@ -79,6 +82,7 @@ function ViewingComposerNote() {
       >
         {t("historyView.backToCurrent")}
       </button>
+      </div>
     </div>
   );
 }
@@ -97,9 +101,8 @@ function ChangesViewBody() {
   const statusEntries = useMemo(() => statusData ?? [], [statusData]);
   const { data: mergeState } = useMergeState(activeRepoPath);
   const target = useCommitTarget();
-  const summaryRef = useRef<HTMLInputElement | null>(null);
-  const commitFocusAt = useUIStore((s) => s.commitFocusAt);
-  const setCommitFocusAt = useUIStore((s) => s.setCommitFocusAt);
+  const workingFocusAt = useUIStore((s) => s.workingFocusAt);
+  const setWorkingFocusAt = useUIStore((s) => s.setWorkingFocusAt);
   const collapsed = isComposerCollapsed(
     statusData ? statusData.length : null,
     mergeState !== undefined && mergeState !== null,
@@ -375,15 +378,18 @@ function ChangesViewBody() {
     }
   };
 
-  // 「커밋하기」를 누르고 왔으면 요약 칸으로 포커스를 옮긴다(입력이 보일 때만).
+  // 「작업 중인 변경」으로 왔으면 파일 목록으로 포커스를 옮긴다(목록이 보일 때만). 요약 칸이 아니다 —
+  // 이동한 것뿐이고, 무엇을 커밋할지는 목록을 보고 고른다.
+  const listRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (collapsed || !isFreshCommitFocus(commitFocusAt, Date.now())) return;
-    summaryRef.current?.focus();
-    setCommitFocusAt(null);
-  }, [commitFocusAt, collapsed, setCommitFocusAt]);
+    if (collapsed || !isFreshWorkingFocus(workingFocusAt, Date.now())) return;
+    listRef.current?.focus();
+    setWorkingFocusAt(null);
+  }, [workingFocusAt, collapsed, setWorkingFocusAt]);
 
   return (
     <div className="flex flex-col h-full">
+      <RepoWorkSwitcher mode="working" />
       {/* Merge/rebase recovery banner (abort / continue) */}
       <MergeConflictBanner repoPath={activeRepoPath} conflictCount={conflictCount} />
       {collapsed ? (
@@ -399,7 +405,7 @@ function ChangesViewBody() {
       ) : (
       <>
       {/* File list */}
-      <div className="flex-1 overflow-y-auto" {...containerProps}>
+      <div ref={listRef} data-testid="changes-file-list" className="flex-1 overflow-y-auto" {...containerProps}>
         {statusEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
             <p className="text-sm">{t("changes.noChanges")}</p>
@@ -556,7 +562,6 @@ function ChangesViewBody() {
           </span>
         </p>
         <input
-          ref={summaryRef}
           type="text"
           placeholder={t("commit.summary")}
           value={commitSummary}

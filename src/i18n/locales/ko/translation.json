@@ -70,7 +70,7 @@
   "commit": {
     "summary": "요약 (필수)",
     "description": "설명",
-    "submit": "{{branch}}에 Commit",
+    "submit": "{{branch}}에 커밋",
     "amend": "이전 Commit 수정",
     "noStagedFiles": "Commit할 Stage된 파일 없음",
     "stagedChanges": "Staged Changes",
@@ -87,7 +87,7 @@
     "close": "닫기",
     "stageFailed": "Stage 실패: {{error}}",
     "unstageFailed": "Unstage 실패: {{error}}",
-    "commitNow": "커밋하기 ({{count}})",
+    "workingChanges": "작업 중인 변경 {{count}}",
     "target": "{{branch}}에 커밋 · {{worktree}}"
   },
   "history": {
@@ -961,7 +961,7 @@
     "emptyHint": "사이드바에서 저장소를 워크스페이스로 끌어다 놓으세요.",
     "selectTitle": "커밋이나 커밋 안 한 변경을 고르세요",
     "selectHint": "고른 것의 파일과 diff가 여기에 나와요.",
-    "openToCommit": "열어서 커밋하기",
+    "openToCommit": "이 작업 트리 열기",
     "noChanges": "커밋 안 한 변경이 없어요",
     "staged": "스테이징됨",
     "allQuiet_one": "조용한 저장소 {{count}}개를 숨겼어요. 기본 브랜치에 있고 새 커밋도, 커밋 안 한 변경도 없어요. 「모두 보기」로 펼칠 수 있어요.",
@@ -1112,7 +1112,7 @@
     "modifiedAt": "{{when}} 수정",
     "pickedGone": "{{file}}에 더 이상 커밋 안 한 변경이 없어요.",
     "stageAll": "모두 스테이지",
-    "commit": "커밋…",
+    "commit": "스테이징 열기",
     "stash": "Stash"
   },
   "overlap": {
@@ -1214,5 +1214,14 @@
       "revert": "revert",
       "squash": "squash"
     }
+  },
+  "workSwitcher": {
+    "label": "아래 칸에 보일 것",
+    "working": "작업 중인 변경 {{count}}",
+    "workingDisabled": "작업 중인 변경 · 체크아웃한 브랜치에서만",
+    "workingDisabledHint": "다른 브랜치를 보는 중이에요. 작업 중인 변경은 체크아웃한 브랜치에서만 볼 수 있어요.",
+    "commit": "커밋",
+    "noCommit": "커밋 선택 안 됨",
+    "noWorkingHint": "이 저장소에는 커밋 안 한 변경이 없어요."
   }
 }

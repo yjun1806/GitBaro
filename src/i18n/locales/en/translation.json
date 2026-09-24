@@ -87,7 +87,7 @@
     "close": "Close",
     "stageFailed": "Stage failed: {{error}}",
     "unstageFailed": "Unstage failed: {{error}}",
-    "commitNow": "Commit ({{count}})",
+    "workingChanges": "Working changes {{count}}",
     "target": "Commit to {{branch}} · {{worktree}}"
   },
   "history": {
@@ -963,7 +963,7 @@
     "emptyHint": "Drag repositories onto the workspace in the sidebar.",
     "selectTitle": "Pick a commit or uncommitted changes",
     "selectHint": "Its files and diff show here.",
-    "openToCommit": "Open to commit",
+    "openToCommit": "Open this working tree",
     "noChanges": "No uncommitted changes",
     "staged": "staged",
     "allQuiet_one": "{{count}} quiet repository is hidden: it is on its default branch with no new commits and no uncommitted changes. Use Show all to see it.",
@@ -1126,7 +1126,7 @@
     "modifiedAt": "Modified {{when}}",
     "pickedGone": "{{file}} has no uncommitted changes any more.",
     "stageAll": "Stage all",
-    "commit": "Commit…",
+    "commit": "Open staging",
     "stash": "Stash"
   },
   "overlap": {
@@ -1234,5 +1234,14 @@
       "revert": "Revert",
       "squash": "Squash"
     }
+  },
+  "workSwitcher": {
+    "label": "What the lower area shows",
+    "working": "Working changes {{count}}",
+    "workingDisabled": "Working changes · checked-out branch only",
+    "workingDisabledHint": "You're viewing another branch. Working changes belong to the checked-out branch.",
+    "commit": "Commit",
+    "noCommit": "No commit selected",
+    "noWorkingHint": "This repository has no uncommitted changes."
   }
 }

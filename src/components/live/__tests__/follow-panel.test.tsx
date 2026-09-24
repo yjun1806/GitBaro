@@ -383,7 +383,7 @@ describe("FollowRepoFooter", () => {
     await waitFor(() => expect(stageFiles).toHaveBeenCalledTimes(1));
     expect(stageFiles).toHaveBeenCalledWith(REPO, ["src/b.ts", "src/new.ts", "src/old.ts"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Commit…" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open staging" }));
     expect(useFollowStore.getState().target).toBeNull();
     expect(screen.getByRole("button", { name: "Stash" })).toBeTruthy();
   });

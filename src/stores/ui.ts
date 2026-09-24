@@ -36,10 +36,10 @@ interface UIState {
   /** diff를 메인 칸 전체로 키웠는가. 저장하지 않는다. */
   isDiffMaximized: boolean;
   /**
-   * 「커밋하기」를 누른 시각(epoch ms). 커밋 입력(`ChangesView`)이 마운트되거나 이 값이 바뀌면
-   * 요약 칸에 포커스를 옮기고 지운다. 저장하지 않는다.
+   * 「작업 중인 변경」을 연 시각(epoch ms). 스테이징 목록(`ChangesView`)이 마운트되거나 이 값이 바뀌면
+   * 파일 목록에 포커스를 옮기고 지운다. 저장하지 않는다.
    */
-  commitFocusAt: number | null;
+  workingFocusAt: number | null;
   setTheme: (theme: Theme) => void;
   setActiveTab: (tab: "changes" | "history" | "stash" | "actions") => void;
   setSidebarWidth: (width: number) => void;
@@ -54,7 +54,7 @@ interface UIState {
   setGraphPanelRatio: (ratio: number) => void;
   setFileListWidth: (width: number) => void;
   setDiffMaximized: (maximized: boolean) => void;
-  setCommitFocusAt: (at: number | null) => void;
+  setWorkingFocusAt: (at: number | null) => void;
 }
 
 /** Sidebar width in the two-column shell's design (`gen_d.py` sidebar, 276px). */
@@ -138,7 +138,7 @@ export const useUIStore = create<UIState>()(
       graphPanelRatio: DEFAULT_GRAPH_RATIO,
       fileListWidth: DEFAULT_FILE_LIST_WIDTH,
       isDiffMaximized: false,
-      commitFocusAt: null,
+      workingFocusAt: null,
 
       setTheme: (theme) => set({ theme }),
 
@@ -161,7 +161,7 @@ export const useUIStore = create<UIState>()(
       setGraphPanelRatio: (ratio) => set({ graphPanelRatio: clampGraphRatio(ratio) }),
       setFileListWidth: (width) => set({ fileListWidth: clampFileListWidth(width) }),
       setDiffMaximized: (maximized) => set({ isDiffMaximized: maximized }),
-      setCommitFocusAt: (at) => set({ commitFocusAt: at }),
+      setWorkingFocusAt: (at) => set({ workingFocusAt: at }),
     }),
     {
       name: "gitbaro-ui",

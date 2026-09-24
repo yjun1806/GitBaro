@@ -37,7 +37,7 @@ export interface GitStatusLineModel {
   upstream: { text: string; ahead: number; behind: number; hasUpstream: boolean } | null;
   /** 커밋 안 한 변경 칸. 변경이 없으면 「커밋 안 한 변경 없음」. */
   uncommitted: string;
-  /** 「커밋하기」를 보일지. 보는 중이거나 변경이 없으면 숨긴다. */
+  /** 「작업 중인 변경 N」 버튼을 보일지. 보는 중이거나 변경이 없으면 숨긴다. */
   canCommit: boolean;
 }
 

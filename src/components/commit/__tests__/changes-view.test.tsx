@@ -45,7 +45,7 @@ beforeEach(async () => {
   state.merge = null;
   state.branches = [{ name: "feat/x", isHead: true, isRemote: false }];
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
-  useUIStore.setState({ commitFocusAt: null });
+  useUIStore.setState({ workingFocusAt: null });
   useHistoryViewStore.getState().reset();
 });
 
@@ -123,18 +123,17 @@ describe("ChangesView composer", () => {
     expect(screen.getByTestId("commit-target").textContent).toBe("Commit to … · main working tree");
   });
 
-  it("moves focus to the summary after 'Commit (N)'", () => {
+  it("moves focus to the file list, not the summary, after 'Working changes N'", () => {
     state.status = [{ path: "a.ts", status: "modified", staged: false }];
     renderView();
-    act(() => useUIStore.getState().setCommitFocusAt(Date.now()));
-    const summary = screen.getByTestId("commit-target").nextElementSibling;
-    expect(document.activeElement).toBe(summary);
-    expect(useUIStore.getState().commitFocusAt).toBeNull();
+    act(() => useUIStore.getState().setWorkingFocusAt(Date.now()));
+    expect(document.activeElement).toBe(screen.getByTestId("changes-file-list"));
+    expect(useUIStore.getState().workingFocusAt).toBeNull();
   });
 
   it("ignores a stale focus request", () => {
     state.status = [{ path: "a.ts", status: "modified", staged: false }];
-    useUIStore.setState({ commitFocusAt: Date.now() - 60_000 });
+    useUIStore.setState({ workingFocusAt: Date.now() - 60_000 });
     renderView();
     expect(document.activeElement).toBe(document.body);
   });

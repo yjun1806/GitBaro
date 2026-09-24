@@ -10,7 +10,7 @@ import { useSelectionStore } from "@/stores/selection";
 import { useToastStore } from "@/stores/toast";
 import { useFollowStore, type FollowMode } from "@/stores/follow";
 import { FollowBadge } from "@/components/live/FollowPanel";
-import { CommitNowButton } from "@/components/commit/CommitNowButton";
+import { WorkingChangesButton } from "@/components/commit/WorkingChangesButton";
 import {
   useBranches,
   useCommitAvatars,
@@ -207,7 +207,7 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
             layout={lanes?.get(wipLaneOid(wip.path))}
             colorOf={lanes ? colorOf : undefined}
             // 지금 연 워크트리는 여기서 바로 커밋한다. 다른 워크트리는 행을 눌러 따라간 뒤 그 워크트리를 연다.
-            action={wip.isCurrent && (wip.count ?? 0) > 0 ? <CommitNowButton count={wip.count ?? 0} /> : undefined}
+            action={wip.isCurrent && (wip.count ?? 0) > 0 ? <WorkingChangesButton count={wip.count ?? 0} /> : undefined}
             onSelect={() => selection.selectWip(wip)}
           />
         );

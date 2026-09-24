@@ -50,11 +50,11 @@ describe("git status line", () => {
     const line = renderLine(input());
     expect(line.dataset.tone).toBe("normal");
     expect(line.textContent).toBe(
-      "메인 작업 트리·체크아웃 ⎇ main·origin/main보다 ↑2 ↓1·커밋 안 한 변경 3개 (스테이징 1)커밋하기 (3)",
+      "메인 작업 트리·체크아웃 ⎇ main·origin/main보다 ↑2 ↓1·커밋 안 한 변경 3개 (스테이징 1)작업 중인 변경 3",
     );
     fireEvent.click(screen.getByRole("button", { name: "origin/main보다 ↑2 ↓1" }));
     expect(handlers.onRemote).toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "커밋하기 (3)" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "작업 중인 변경 3" })).toBeTruthy();
   });
 
   it("normal in a linked worktree without an upstream and without changes", () => {
@@ -67,7 +67,7 @@ describe("git status line", () => {
       }),
     );
     expect(line.textContent).toBe("작업 트리 app-feat·체크아웃 ⎇ feat/x·원격 브랜치 없음·커밋 안 한 변경 없음");
-    expect(screen.queryByRole("button", { name: /커밋하기/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^작업 중인 변경/ })).toBeNull();
   });
 
   it("detached HEAD: warns and names the commit instead of a branch", () => {
@@ -103,9 +103,9 @@ describe("git status line", () => {
     expect(line.textContent).toContain("feat/x 보는 중 · 체크아웃 안 함");
     // 무엇이 실제로 체크아웃돼 있는지는 그대로 보인다.
     expect(line.textContent).toContain("체크아웃 ⎇ main");
-    // 커밋 안 한 변경·커밋하기·upstream은 보는 중에는 없다.
+    // 커밋 안 한 변경·작업 중인 변경 버튼·upstream은 보는 중에는 없다.
     expect(line.textContent).not.toContain("커밋 안 한 변경");
-    expect(screen.queryByRole("button", { name: /커밋하기/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^작업 중인 변경/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "이 브랜치로 체크아웃" }));
     expect(handlers.onCheckout).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "현재 브랜치로 돌아가기" }));

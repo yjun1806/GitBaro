@@ -187,7 +187,7 @@ function renderPanel() {
 /** 스크롤 영역 안의 행(버튼·구분선)을 화면 순서대로. */
 function rowLabels(): string[] {
   const rows = document.querySelectorAll(
-    "[role=tabpanel] button:not([data-commit-now]), [role=tabpanel] [role=separator]",
+    "[role=tabpanel] button:not([data-working-changes]), [role=tabpanel] [role=separator]",
   );
   return [...rows].map((el) =>
     el.getAttribute("role") === "separator"
@@ -527,7 +527,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     for (const key of Object.keys(changesVsDefaultByPath)) delete changesVsDefaultByPath[key];
     branchList.splice(0, branchList.length);
     statusEntries.splice(0, statusEntries.length, { path: "a.ts", status: "modified", staged: false } as StatusEntry);
-    useUIStore.setState({ commitFocusAt: null, isDiffMaximized: false });
+    useUIStore.setState({ workingFocusAt: null, isDiffMaximized: false });
   });
 
   it("puts counts on the tabs: new commits and files changed since main", async () => {
@@ -582,7 +582,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     expect(screen.queryByRole("button", { name: /· main working tree ·/ })).toBeNull();
     // 다른 워크트리(파일 4개)의 행은 남는다.
     expect(screen.getByRole("button", { name: /feat\/x branch · app-feat · 4 files/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /^Commit \(/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Working changes/ })).toBeNull();
 
     statusEntries.push({ path: "b.ts", status: "added", staged: false } as StatusEntry);
     rerender(
@@ -602,21 +602,24 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     expect(rows[1]).toContain("main working tree");
   });
 
-  it("offers Commit (N) on the open worktree's row and in the header, which open the composer", () => {
+  it("offers Working changes N on the open worktree's row and in the status line, which open the staging list", () => {
     useUIStore.setState({ activeTab: "history" });
+    useSelectionStore.getState().selectCommit("c2");
     renderPanel();
-    const buttons = screen.getAllByRole("button", { name: "Commit (1)" });
-    // 행에 하나, 패널 머리에 하나.
+    const buttons = screen.getAllByRole("button", { name: "Working changes 1" });
+    // 행에 하나, 상태 줄에 하나. 커밋하는 버튼처럼 보이는 이름은 없다.
     expect(buttons).toHaveLength(2);
-    // 다른 워크트리 행에는 없다(그 워크트리를 열어야 커밋할 수 있다).
+    expect(screen.queryByRole("button", { name: /^Commit/ })).toBeNull();
+    // 다른 워크트리 행에는 없다(그 워크트리를 열어야 스테이징할 수 있다).
     const featRow = screen.getAllByTestId("wip-row")[0];
-    expect(within(featRow).queryByRole("button", { name: /^Commit \(/ })).toBeNull();
+    expect(within(featRow).queryByRole("button", { name: /^Working changes/ })).toBeNull();
 
     useFollowStore.getState().start(FEAT);
     fireEvent.click(buttons[0]);
     expect(useUIStore.getState().activeTab).toBe("changes");
     expect(useFollowStore.getState().target).toBeNull();
-    expect(useUIStore.getState().commitFocusAt).not.toBeNull();
+    expect(useSelectionStore.getState().selectedCommitId).toBeNull();
+    expect(useUIStore.getState().workingFocusAt).not.toBeNull();
   });
 
   it("shows the active comparison as a chip that ends it", () => {
@@ -645,13 +648,13 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     act(() => useHistoryViewStore.getState().view(REPO, { kind: "ref", name: "feat/x", isRemote: false }));
     // 커밋 목록은 그 브랜치에서 읽는다.
     expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "ref", name: "feat/x" });
-    // 체크아웃한 작업 트리의 것(WIP 행, 새 커밋 점·확인함 선·버튼, 커밋하기)은 감추고 안내를 둔다.
+    // 체크아웃한 작업 트리의 것(WIP 행, 새 커밋 점·확인함 선·버튼, 작업 중인 변경 버튼)은 감추고 안내를 둔다.
     expect(screen.queryAllByTestId("wip-row")).toHaveLength(0);
     expect(screen.getByText(i18n.t("historyView.wipHidden"))).toBeTruthy();
     expect(screen.queryByRole("separator")).toBeNull();
     expect(screen.queryAllByTitle("New commit")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /new commits? as seen/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Commit \(/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Working changes/ })).toBeNull();
     // 커밋 행은 그대로 눌러 상세를 연다.
     fireEvent.click(document.querySelector<HTMLElement>('[data-commit-id="c2"]')!);
     expect(useSelectionStore.getState().selectedCommitId).toBe("c2");
