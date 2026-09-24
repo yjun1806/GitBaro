@@ -1,0 +1,170 @@
+import { useCallback, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import { ArrowLeftRight, GitCompare, Loader2, X } from "lucide-react";
+import { useBranchComparison, useBranches, useStatus } from "@/api/queries";
+import { useRepositoryStore } from "@/stores/repository";
+import { useSelectionStore } from "@/stores/selection";
+import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
+import { computeGraphLanes } from "@/lib/graph-lanes";
+import { getErrorMessage } from "@/lib/utils";
+import { GRAPH_COLUMNS, GraphRow } from "@/components/graph/GraphRow";
+import { graphColumnWidth, laneColor } from "@/components/graph/graph-model";
+import { BranchMergeDialog } from "./BranchMergeDialog";
+import { rangeLabel, rangeLaneInput, useBranchRangeStore, type BranchRange } from "./branch-range";
+
+interface BranchRangeGraphProps {
+  range: BranchRange;
+  /** 지금 브랜치. `base`가 지금 브랜치일 때만 머리글에 Merge 버튼을 둔다. */
+  currentBranch: string | null;
+  /** 목록 맨 위에 둘 행(WIP 행). */
+  top?: ReactNode;
+  onSelectCommit: (id: string) => void;
+}
+
+/**
+ * 커밋 그래프의 범위 모드. `base..target`(target에만 있는 커밋)만 레인 그래프로 그린다.
+ * 머리글에서 방향을 바꾸거나(target..base), 지금 브랜치로 가져오거나(Merge…), 범위 보기를 끝낸다.
+ */
+export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: BranchRangeGraphProps) {
+  const { t } = useTranslation();
+  const swap = useBranchRangeStore((s) => s.swap);
+  const clear = useBranchRangeStore((s) => s.clear);
+  const colorSeed = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? "");
+  const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
+  const { data: statusFiles = [] } = useStatus(range.repoPath);
+  const { data, isLoading, error } = useBranchComparison(range.repoPath, range.base, range.target);
+  const { data: branches = [] } = useBranches(range.repoPath);
+  const [showMerge, setShowMerge] = useState(false);
+  // 비교 기준은 로컬 브랜치여야 한다(`compare_branches`). 원격 브랜치와는 방향을 바꿀 수 없다.
+  const canSwap = branches.some((b) => !b.isRemote && b.name === range.target);
+
+  // compare_branches의 behindCommits = target에만 있는 커밋 = base..target.
+  const { commits, layouts, graphWidth } = useMemo(() => {
+    const inRange = data?.behindCommits ?? [];
+    const result = computeGraphLanes(rangeLaneInput(inRange));
+    const byOid = new Map(result.rows.map((r) => [r.oid, r]));
+    const maxLanes = result.rows.reduce((m, r) => Math.max(m, r.width), 1);
+    return {
+      commits: inRange.filter((c) => byOid.has(c.id)),
+      layouts: byOid,
+      graphWidth: graphColumnWidth(maxLanes),
+    };
+  }, [data]);
+  const colorOf = useCallback((chain: number) => laneColor(colorSeed, chain), [colorSeed]);
+
+  const selectedIdx = commits.findIndex((c) => c.id === selectedCommitId);
+  const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
+    items: commits,
+    onSelect: (c) => onSelectCommit(c.id),
+    selectedIndex: selectedIdx,
+  });
+
+  const canMerge = currentBranch !== null && range.base === currentBranch && range.target !== currentBranch;
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden" data-testid="branch-range-graph">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-(--line) shrink-0 text-[12px]">
+        <GitCompare className="w-3.5 h-3.5 text-(--muted) shrink-0" aria-hidden="true" />
+        <span className="font-semibold text-(--fg2) shrink-0">{t("branchPanel.rangeTitle")}</span>
+        <code className="font-mono text-[11.5px] px-1.5 py-px rounded-(--radius-chip) bg-(--chip) text-(--fg) truncate min-w-0">
+          {rangeLabel(range)}
+        </code>
+        {data && (
+          <span className="text-(--faint) shrink-0">
+            {t("branchPanel.rangeCount", { count: data.behindCount })}
+          </span>
+        )}
+        <span className="flex-1" />
+        {canSwap && (
+          <button
+            type="button"
+            onClick={swap}
+            title={t("branchPanel.rangeSwap")}
+            aria-label={t("branchPanel.rangeSwap")}
+            className="w-6 h-6 flex items-center justify-center rounded-(--radius-chip) text-(--muted) hover:bg-accent transition-colors shrink-0"
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {canMerge && (
+          <button
+            type="button"
+            onClick={() => setShowMerge(true)}
+            className="h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors shrink-0"
+          >
+            {t("branchPanel.merge")}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={clear}
+          title={t("branchPanel.rangeClose")}
+          aria-label={t("branchPanel.rangeClose")}
+          className="w-6 h-6 flex items-center justify-center rounded-(--radius-chip) text-(--muted) hover:bg-accent transition-colors shrink-0"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div
+        className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11px] font-semibold text-(--faint)"}
+        style={{ paddingLeft: graphWidth + 8 }}
+        aria-hidden="true"
+      >
+        <span className="pl-3.5">{t("graph.colDescription")}</span>
+        <span>{t("graph.colAuthor")}</span>
+        <span>{t("graph.colTime")}</span>
+        <span>{t("graph.colCommit")}</span>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
+        {top}
+        {isLoading ? (
+          <p className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            {t("compare.loading")}
+          </p>
+        ) : error ? (
+          <p className="py-6 px-4 text-center text-sm text-danger">{getErrorMessage(error)}</p>
+        ) : commits.length === 0 ? (
+          <p className="py-6 px-4 text-center text-sm text-muted-foreground">
+            {t("branchPanel.rangeEmpty", { base: range.base, target: range.target })}
+          </p>
+        ) : (
+          commits.map((commit, index) => {
+            const layout = layouts.get(commit.id);
+            if (!layout) return null;
+            return (
+              <GraphRow
+                key={commit.id}
+                ref={itemRef(index)}
+                commit={commit}
+                layout={layout}
+                graphWidth={graphWidth}
+                colorOf={colorOf}
+                remoteTags={null}
+                isSelected={selectedCommitId === commit.id}
+                isHighlighted={activeIndex === index}
+                isNew={false}
+                isSeen={false}
+                wipAbove={false}
+                onClick={() => onSelectCommit(commit.id)}
+              />
+            );
+          })
+        )}
+      </div>
+
+      {showMerge && currentBranch && (
+        <BranchMergeDialog
+          repoPath={range.repoPath}
+          currentBranch={currentBranch}
+          source={range.target}
+          isDirty={statusFiles.length > 0}
+          onClose={() => setShowMerge(false)}
+        />
+      )}
+    </div>
+  );
+}

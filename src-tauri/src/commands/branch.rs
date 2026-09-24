@@ -4,7 +4,9 @@ use crate::git::cli::{GitCliEngine, GitOperation};
 use crate::git::commit::commit_to_info;
 use crate::git::engine::{BranchCompareResult, MergePreCheckResult, MergeStrategy};
 use crate::git::libgit::working_tree_dirty_summary;
-use crate::git::worktree_base::default_branch_name;
+use crate::git::worktree_base::{
+    default_branch_name, default_branch_with_fallback, resolve_worktree_base_cached, WorktreeBase,
+};
 use serde_json::{json, Value};
 
 fn is_fully_merged(repo: &git2::Repository, branch_oid: git2::Oid, default_oid: git2::Oid) -> bool {
@@ -794,6 +796,87 @@ pub async fn rename_branch(
     Ok(())
 }
 
+// W5-T3
+/// 한 번에 기반 브랜치를 계산할 브랜치 수의 상한. 브랜치 패널은 화면에 보이는 행만 묻는다.
+const MAX_BRANCH_BASES: usize = 60;
+
+/// 브랜치 패널 한 행의 기반 브랜치. 기록·reflog가 없으면 가장 가까운 분기점으로 추정한 값이다.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchBaseInfo {
+    pub name: String,
+    /// 원격 브랜치, 기본 브랜치, 없는 브랜치, 기반을 찾지 못한 브랜치는 null.
+    pub base: Option<WorktreeBase>,
+    /// 이 브랜치의 커밋이 merge로 기반 브랜치에 들어갔다(지워도 잃는 커밋이 없다).
+    /// 커밋 없이 기반보다 뒤처지기만 한 브랜치는 false다.
+    pub merged_into_base: bool,
+}
+
+/// 로컬 브랜치마다 어느 브랜치에서 갈라졌는지(기반 브랜치)와 기반보다 앞선·뒤처진 커밋 수.
+/// 워크트리 기반 판별(`resolve_worktree_base_cached`)을 그대로 쓴다. 기본 브랜치와
+/// 원격 브랜치는 계산하지 않는다. 비용 때문에 호출자는 화면에 보이는 행만 넘긴다.
+#[tauri::command]
+pub async fn branch_bases(
+    repo_path: String,
+    names: Vec<String>,
+) -> Result<Vec<BranchBaseInfo>, AppError> {
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&repo_path)?;
+        Ok(branch_bases_in(&repo, &names))
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
+}
+
+fn branch_bases_in(repo: &git2::Repository, names: &[String]) -> Vec<BranchBaseInfo> {
+    let default = default_branch_with_fallback(repo);
+    names
+        .iter()
+        .take(MAX_BRANCH_BASES)
+        .map(|name| {
+            let is_local = repo.find_branch(name, git2::BranchType::Local).is_ok();
+            let base = if is_local && default.as_deref() != Some(name.as_str()) {
+                resolve_worktree_base_cached(repo, name)
+            } else {
+                None
+            };
+            let merged_into_base = base.as_ref().is_some_and(|b| is_merged_into_base(repo, name, b));
+            BranchBaseInfo { name: name.clone(), base, merged_into_base }
+        })
+        .collect()
+}
+
+/// 앞선 커밋이 없고 뒤처진 브랜치 가운데, 끝 커밋이 기반 브랜치의 첫째 부모 줄에 없는 것.
+/// 첫째 부모 줄에 있으면 기반 브랜치가 원래 지나온 커밋이다. 즉 커밋 없이 만든 뒤 기반만
+/// 앞으로 간 브랜치다. 줄 밖(merge 커밋의 둘째 부모 쪽)이면 그 브랜치의 커밋이 merge로 들어갔다.
+/// fast-forward로 들어간 브랜치는 구별할 수 없어 false로 둔다.
+fn is_merged_into_base(repo: &git2::Repository, branch: &str, base: &WorktreeBase) -> bool {
+    if base.ahead_of_base != 0 || base.behind_base == 0 {
+        return false;
+    }
+    let tip = match repo.find_branch(branch, git2::BranchType::Local).ok().and_then(|b| b.get().target()) {
+        Some(oid) => oid,
+        None => return false,
+    };
+    let base_tip = repo
+        .find_branch(&base.name, git2::BranchType::Local)
+        .or_else(|_| repo.find_branch(&base.name, git2::BranchType::Remote))
+        .ok()
+        .and_then(|b| b.get().target());
+    let Some(mut oid) = base_tip else { return false };
+    // 첫째 부모 줄에서 tip까지의 거리는 behind_base를 넘지 않는다.
+    for _ in 0..=base.behind_base {
+        if oid == tip {
+            return false;
+        }
+        match repo.find_commit(oid).ok().and_then(|c| c.parent_id(0).ok()) {
+            Some(parent) => oid = parent,
+            None => break,
+        }
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1010,5 +1093,59 @@ mod tests {
         eprintln!("[W1-T2] repo_sync_status x40 repos took {elapsed:?}");
         assert_eq!(statuses.len(), 40);
         assert!(statuses.iter().all(|s| field(s, "dirtyCount").as_u64() == Some(6)));
+    }
+
+    /// 브랜치 패널의 기반 브랜치: reflog에 적힌 브랜치, 기본 브랜치·없는 브랜치는 null,
+    /// 기반에 다 들어간 브랜치는 앞선 커밋 0개로 온다.
+    #[tokio::test]
+    async fn reports_the_base_branch_of_each_local_branch() {
+        let dir = std::env::temp_dir().join(format!("gitbaro-branch-bases-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        git(&dir, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        git(&dir, &["branch", "dev"]);
+        git(&dir, &["checkout", "-q", "dev"]);
+        git(&dir, &["commit", "-q", "--allow-empty", "-m", "dev 1"]);
+        git(&dir, &["branch", "feat/x", "dev"]);
+        git(&dir, &["checkout", "-q", "feat/x"]);
+        git(&dir, &["commit", "-q", "--allow-empty", "-m", "feat 1"]);
+        git(&dir, &["commit", "-q", "--allow-empty", "-m", "feat 2"]);
+        git(&dir, &["checkout", "-q", "main"]);
+        // done 은 main 에서 만들어 커밋 하나를 올린 뒤 main 에 병합됐다.
+        git(&dir, &["branch", "done", "main"]);
+        git(&dir, &["checkout", "-q", "done"]);
+        git(&dir, &["commit", "-q", "--allow-empty", "-m", "done 1"]);
+        git(&dir, &["checkout", "-q", "main"]);
+        git(&dir, &["merge", "-q", "--no-ff", "-m", "merge done", "done"]);
+        // idle 은 main 에서 커밋 없이 만들었고, 그 뒤 main 만 앞으로 갔다.
+        git(&dir, &["branch", "idle", "main~1"]);
+        git(&dir, &["config", "branch.idle.gitbaroBase", "main"]);
+
+        let names = ["feat/x", "main", "done", "idle", "origin/nope", "missing"].map(String::from).to_vec();
+        let bases = branch_bases(dir.to_string_lossy().to_string(), names)
+            .await
+            .expect("branch_bases 실패");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let by_name = |n: &str| bases.iter().find(|b| b.name == n).unwrap().base.clone();
+        let merged = |n: &str| bases.iter().find(|b| b.name == n).unwrap().merged_into_base;
+        assert_eq!(bases.len(), 6);
+        let feat = by_name("feat/x").expect("feat/x 기반 있음");
+        assert_eq!(feat.name, "dev");
+        assert_eq!((feat.ahead_of_base, feat.behind_base), (2, 0));
+        assert_eq!(by_name("main"), None, "기본 브랜치는 계산하지 않음");
+        let done = by_name("done").expect("done 기반 있음");
+        assert_eq!(done.name, "main");
+        assert_eq!(done.ahead_of_base, 0, "병합된 브랜치는 앞선 커밋이 없음");
+        assert!(done.behind_base > 0);
+        assert!(merged("done"), "merge 로 들어간 브랜치");
+        let idle = by_name("idle").expect("idle 기반 있음");
+        assert_eq!((idle.name.as_str(), idle.ahead_of_base), ("main", 0));
+        assert!(idle.behind_base > 0);
+        assert!(!merged("idle"), "커밋 없이 뒤처지기만 한 브랜치는 merge 된 게 아님");
+        assert!(!merged("feat/x"));
+        assert_eq!(by_name("origin/nope"), None);
+        assert_eq!(by_name("missing"), None);
     }
 }

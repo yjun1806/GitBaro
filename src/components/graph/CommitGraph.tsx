@@ -40,6 +40,8 @@ import {
   type GraphWip,
 } from "./graph-model";
 import { repoLaneColor, type LaneWip, type RepoLaneGraph } from "./repo-lanes";
+import { BranchRangeGraph } from "@/components/branch/BranchRangeGraph";
+import { activeRange, isStaleRange, useBranchRangeStore } from "@/components/branch/branch-range";
 
 export interface CommitGraphProps {
   /** 맨 위 WIP 행(`useGraphReview`가 순서까지 정한 목록). */
@@ -58,6 +60,18 @@ export interface CommitGraphProps {
 export function CommitGraph(props: CommitGraphProps) {
   const compareBranch = useUIStore((s) => s.compareBranch);
   const selection = useGraphSelection();
+  const range = useActiveBranchRange();
+  // 범위 모드(브랜치 패널의 「비교」): `base..target` 커밋만 그린다. WIP 행은 남긴다.
+  if (range) {
+    return (
+      <BranchRangeGraph
+        range={range.range}
+        currentBranch={range.currentBranch}
+        top={<WipRows wips={props.wips} selection={selection} graphWidth={graphColumnWidth(1)} headChain={null} />}
+        onSelectCommit={selection.selectCommit}
+      />
+    );
+  }
   // 비교 화면(선택기의 비교 해제 버튼, merge 패널 포함)은 기존 화면을 그대로 쓴다.
   // WIP 행은 남겨 비교 중에도 스테이징 목록으로 갈 수 있게 한다.
   if (compareBranch) {
@@ -72,6 +86,25 @@ export function CommitGraph(props: CommitGraphProps) {
 }
 
 type GraphSelection = ReturnType<typeof useGraphSelection>;
+
+/**
+ * 지금 연 저장소의 범위 모드. 다른 저장소로 옮기거나, base·target 브랜치가 없어지거나,
+ * 워크트리가 다른 브랜치로 바뀌면 범위를 지운다(`isStaleRange`).
+ */
+function useActiveBranchRange() {
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const stored = useBranchRangeStore((s) => s.range);
+  const clearRange = useBranchRangeStore((s) => s.clear);
+  const { data: branches } = useBranches(stored ? activeRepoPath : null);
+  const range = activeRange(stored, activeRepoPath);
+  const stale = range !== null && isStaleRange(range, branches);
+  useEffect(() => {
+    if (stored && (stored.repoPath !== activeRepoPath || stale)) clearRange();
+  }, [stored, activeRepoPath, stale, clearRange]);
+  if (!range || stale) return null;
+  const currentBranch = branches?.find((b) => b.isHead && !b.isRemote)?.name ?? null;
+  return { range, currentBranch };
+}
 
 /**
  * 그래프에서 고른 것(WIP 행 또는 커밋)을 아래 칸에 연다. 다른 워크트리의 WIP 행은 그

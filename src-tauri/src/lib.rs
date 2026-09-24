@@ -130,6 +130,8 @@ pub fn run() {
             commands::branch_changes::get_file_diff_vs_default,
             // W5-T2
             commands::remote_plan::plan_remote_op,
+            // W5-T3
+            commands::branch::branch_bases,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");
