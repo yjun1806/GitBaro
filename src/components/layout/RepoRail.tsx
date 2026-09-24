@@ -15,6 +15,7 @@ import {
   useSidebarWatchPaths,
 } from "@/components/sidebar/useSidebarTreeData";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
+import { HEADER_HEIGHT_CLASS, TRAFFIC_LIGHT_INSET_PX } from "@/lib/layout-tokens";
 import { cn } from "@/lib/utils";
 import type { RepoInfo, RepoSyncStatus } from "@/types";
 
@@ -273,24 +274,33 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
           isOverlay && "shadow-xl",
         )}
       >
-        {/* 모든 저장소 목록 열기/닫기 */}
-        <button
-          onClick={() => setRepoListOpen(!repoListOpen)}
-          title={t("rail.allRepos")}
-          aria-pressed={repoListOpen}
-          className={cn(
-            "flex items-center gap-2.5 h-11 shrink-0 border-b border-border hover:bg-accent transition-colors",
-            isExpanded ? "px-4" : "justify-center",
-            repoListOpen ? "text-foreground" : "text-muted-foreground",
-          )}
-        >
-          <ListTree className="w-4 h-4 shrink-0" />
+        {/* 사이드바 머리글 줄 — 툴바(ToolbarRoot)와 같은 높이(HEADER_HEIGHT_CLASS)라
+            아래 테두리가 창 위쪽에서 하나로 이어져 보인다. macOS 트래픽 라이트는 창의
+            맨 왼쪽 위, 즉 이 줄 안에 있으므로 그 자리(TRAFFIC_LIGHT_INSET_PX)는 여기서
+            예약한다(Overlay 타이틀바). 접힌 사이드바는 그 폭(56px)이 트래픽 라이트보다
+            좁아 예약할 자리가 없어 이 예약은 펼침(hover 포함) 상태에서만 둔다. */}
+        <div className={cn("flex items-center shrink-0 border-b border-border", HEADER_HEIGHT_CLASS)}>
           {isExpanded && (
-            <span className="text-xs font-semibold uppercase tracking-wider truncate">
-              {t("rail.allRepos")}
-            </span>
+            <div className="h-full shrink-0" style={{ width: TRAFFIC_LIGHT_INSET_PX }} data-tauri-drag-region />
           )}
-        </button>
+          <button
+            onClick={() => setRepoListOpen(!repoListOpen)}
+            title={t("rail.allRepos")}
+            aria-pressed={repoListOpen}
+            className={cn(
+              "flex items-center gap-2.5 flex-1 min-w-0 h-full hover:bg-accent transition-colors",
+              isExpanded ? "pr-4" : "justify-center",
+              repoListOpen ? "text-foreground" : "text-muted-foreground",
+            )}
+          >
+            <ListTree className="w-4 h-4 shrink-0" />
+            {isExpanded && (
+              <span className="text-xs font-semibold uppercase tracking-wider truncate">
+                {t("rail.allRepos")}
+              </span>
+            )}
+          </button>
+        </div>
 
         {isExpanded ? (
           <div className="flex-1 min-h-0 px-[var(--g)] pt-2.5 pb-1">

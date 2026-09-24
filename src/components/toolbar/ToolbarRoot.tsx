@@ -11,9 +11,10 @@ import {
 } from "@/api/commands";
 import { useUIStore } from "@/stores/ui";
 import { useToastStore } from "@/stores/toast";
-import { getErrorMessage } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { GhLoginDialog } from "@/components/account/GhLoginDialog";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
+import { HEADER_HEIGHT_CLASS } from "@/lib/layout-tokens";
 import { ToolbarDropdownContext, useToolbarDropdown } from "./useToolbarDropdown";
 import { BranchZone } from "./BranchZone";
 import { WorktreeZone } from "./WorktreeZone";
@@ -114,10 +115,9 @@ export function ToolbarRoot() {
   return (
     <ToolbarDropdownContext.Provider value={dropdown}>
       {/* @container: 툴바 폭에 따라 git 작업 버튼 이름을 숨긴다(ActionButton의 TOOLBAR_LABEL_CLASS). */}
-      <div className="@container flex items-center h-[52px] border-b border-border bg-surface select-none">
-        {/* macOS 트래픽 라이트 자리(Overlay 타이틀바). 버튼 위가 아니라 여백이라 드래그 영역이다. */}
-        <div className="w-[78px] h-full shrink-0" data-tauri-drag-region />
-
+      <div className={cn("@container flex items-center border-b border-border bg-surface select-none", HEADER_HEIGHT_CLASS)}>
+        {/* macOS 트래픽 라이트는 사이드바 쪽(맨 왼쪽 위 모서리)에 있다 — 그 자리 예약은
+            RepoRail의 머리글이 진다(TRAFFIC_LIGHT_INSET_PX, layout-tokens.ts). */}
         {scope?.kind === "workspace" ? (
           <>
             {/* 워크스페이스 리뷰 화면(W4-T3)이 제목을 이 자리에 portal로 그린다. */}
@@ -172,7 +172,7 @@ export function ToolbarRoot() {
         {/* Zone D: Settings */}
         <button
           onClick={handleOpenSettings}
-          className="flex items-center justify-center w-[42px] h-[52px] hover:bg-accent transition-colors text-muted-foreground hover:text-foreground shrink-0"
+          className={cn("flex items-center justify-center w-[42px] hover:bg-accent transition-colors text-muted-foreground hover:text-foreground shrink-0", HEADER_HEIGHT_CLASS)}
           title={t("common.settings")}
         >
           <Settings className="w-4 h-4" />
