@@ -438,3 +438,37 @@ export function useStashMutations(repoPath: string | null) {
     pushPartial: pushPartialMutation,
   };
 }
+
+// W1-T4 — 새 커밋 기준선
+
+import { keepPreviousData } from "@tanstack/react-query";
+import { reviewStatus, countNewCommits } from "./commands";
+import type { SeenRecordInput } from "@/types";
+
+/** 사이드바 펼침 여부와 상관없이 20초마다 워크트리 목록과 HEAD를 다시 읽는다. */
+export const REVIEW_POLL_MS = 20_000;
+
+export function useReviewStatusQuery(repoPaths: string[]) {
+  return useQuery({
+    queryKey: ["reviewStatus", repoPaths],
+    queryFn: () => reviewStatus(repoPaths),
+    enabled: repoPaths.length > 0,
+    refetchInterval: REVIEW_POLL_MS,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/**
+ * `inputs`가 null이면 멈춘다(첫 기준선을 잡기 전). 기준선이나 `headsKey`(워크트리 HEAD 목록)가
+ * 바뀌면 키가 바뀌어 바로 다시 세고, 그 밖에는 20초마다 센다(기반 브랜치가 움직인 경우).
+ */
+export function useNewCommitCountsQuery(inputs: SeenRecordInput[] | null, headsKey: string) {
+  return useQuery({
+    queryKey: ["newCommitCounts", inputs, headsKey],
+    queryFn: () => countNewCommits(inputs ?? []),
+    enabled: inputs !== null && inputs.length > 0,
+    refetchInterval: REVIEW_POLL_MS,
+    refetchIntervalInBackground: false,
+    placeholderData: keepPreviousData,
+  });
+}

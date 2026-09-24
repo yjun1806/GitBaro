@@ -473,3 +473,52 @@ export interface ActivityEvent {
   /** Epoch ms of the emission. */
   at: number;
 }
+
+// W1-T4 — 새 커밋 기준선 (Rust: src-tauri/src/git/new_commits.rs)
+
+/** `review_status`가 돌려주는 워크트리 하나. `path`는 기준선 스토어의 키다. */
+export interface ReviewWorktree {
+  /**
+   * 작업 트리 경로(끝의 `/` 없음). 메인 작업 트리는 요청한 저장소 경로를 그대로 쓴다
+   * (심볼릭 링크를 풀지 않아 저장소 목록의 경로와 같다).
+   */
+  path: string;
+  /** 체크아웃한 로컬 브랜치. detached HEAD면 null. */
+  branch: string | null;
+  /** HEAD 커밋. 커밋이 하나도 없는 저장소면 null. */
+  headOid: string | null;
+  isMain: boolean;
+}
+
+/** 저장소 하나의 워크트리 목록(메인 작업 트리가 맨 앞). 열 수 없는 저장소는 응답에서 빠진다. */
+export interface RepoReviewStatus {
+  /** 요청에 넘긴 저장소 경로 그대로. */
+  repoPath: string;
+  worktrees: ReviewWorktree[];
+}
+
+/** `count_new_commits`의 입력. 기준선이 없으면 `oid`를 비운다. */
+export interface SeenRecordInput {
+  path: string;
+  oid?: string | null;
+  /** 확인한 시각(epoch ms). */
+  seenAt?: number | null;
+  branch?: string | null;
+}
+
+/**
+ * 새 커밋을 센 방법.
+ * - `oid`: 기준 커밋..HEAD. 기반 브랜치를 병합해 들어온 커밋은 뺀다(기본 브랜치 제외)
+ * - `authorTime`: rebase·amend로 기준 커밋이 사라져, 기반 브랜치에 없는 커밋 중 author 시각이
+ *   확인 시각과 같은 초이거나 더 늦은 커밋
+ * - `mergeBase`: 기준선이 없거나 브랜치가 바뀌어, 기반 브랜치에서 갈라진 지점..HEAD
+ */
+export type NewCommitBasis = "oid" | "authorTime" | "mergeBase";
+
+/** 워크트리 하나의 새 커밋 수. HEAD가 없거나 열 수 없는 워크트리는 응답에서 빠진다. */
+export interface NewCommitCount {
+  path: string;
+  headOid: string;
+  newCount: number;
+  basis: NewCommitBasis;
+}
