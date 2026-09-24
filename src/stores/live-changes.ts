@@ -1,7 +1,13 @@
 import { create } from "zustand";
+import { useRepositoryStore } from "@/stores/repository";
 
 /** 이 시간이 지난 변경은 "지금 바뀌는 곳" 같은 화면에서 뺀다. */
 export const LIVE_CHANGE_STALE_MS = 10 * 60 * 1000;
+
+/** `path`가 `repoPath` 자신이거나(저장소 자체) 그 아래(워크트리)인지. */
+function belongsToRepo(path: string, repoPath: string): boolean {
+  return path === repoPath || path.startsWith(`${repoPath}/`);
+}
 
 /**
  * 여러 저장소·워크트리의 최근 변경 시각을 모은다. `useLiveChanges` 훅이
@@ -30,6 +36,12 @@ interface LiveChangesState {
    * 경로)는 `true`로 본다(낙관적 기본값 — 실시간 도는 중이라 가정).
    */
   isWatched: (path: string) => boolean;
+  /**
+   * 저장소가 목록에서 빠지면 그 경로와 워크트리들의 최근 변경 기록을 지운다.
+   * 지우지 않으면 제거된 저장소가 최대 10분 동안 "지금 바뀌는 곳"에 계속
+   * 남는다.
+   */
+  forgetPaths: (repoPaths: string[]) => void;
 }
 
 export const useLiveChangesStore = create<LiveChangesState>((set, get) => ({
@@ -55,4 +67,29 @@ export const useLiveChangesStore = create<LiveChangesState>((set, get) => ({
   },
 
   isWatched: (path) => !get().overflow.includes(path),
+
+  forgetPaths: (repoPaths) =>
+    set((state) => {
+      if (repoPaths.length === 0) return state;
+      const lastChangedAt = Object.fromEntries(
+        Object.entries(state.lastChangedAt).filter(
+          ([path]) => !repoPaths.some((repoPath) => belongsToRepo(path, repoPath)),
+        ),
+      );
+      return { lastChangedAt };
+    }),
 }));
+
+/**
+ * 저장소를 목록에서 지우면 최근 변경 기록도 지운다(`workspace.ts`·
+ * `review-seen.ts`의 같은 구독과 같은 이유). 이 스토어는 저장하지 않으므로
+ * 복원 순서를 기다릴 필요는 없다 — 저장소 스토어가 복원된 뒤의 실제 제거만
+ * 걸러내면 된다.
+ */
+useRepositoryStore.subscribe((next, prev) => {
+  if (next.repos === prev.repos) return;
+  if (!useRepositoryStore.persist.hasHydrated()) return;
+  const nextPaths = new Set(next.repos.map((r) => r.path));
+  const removed = prev.repos.map((r) => r.path).filter((p) => !nextPaths.has(p));
+  if (removed.length > 0) useLiveChangesStore.getState().forgetPaths(removed);
+});

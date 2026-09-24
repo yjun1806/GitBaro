@@ -84,7 +84,7 @@ export function useLiveChanges(): void {
   }, [recordChange]);
 
   // 상한을 넘겨 빠진 경로: 기존 20초 폴링의 dirtyLatestMtime 으로 대신 채운다
-  // (W1-T2가 repo_sync_status 에 그 필드를 추가한다. 아직 없으면 조용히 건너뛴다).
+  // (W1-T2가 repo_sync_status 에 그 필드를 추가했다 — RepoSyncStatus의 필수 필드).
   //
   // `RepoRail`도 `useRepoSyncStatuses`를 20초 폴링으로 부르므로, overflow가
   // 그 전체 목록의 부분집합이면 같은 queryKey로 걸어 계산을 한 번만 하게
@@ -98,10 +98,7 @@ export function useLiveChanges(): void {
   useEffect(() => {
     if (!syncStatusByPath) return;
     for (const path of overflow) {
-      const status = syncStatusByPath[path] as
-        | { dirtyLatestMtime?: number | null }
-        | undefined;
-      const mtime = status?.dirtyLatestMtime;
+      const mtime = syncStatusByPath[path]?.dirtyLatestMtime;
       if (typeof mtime === "number") {
         recordChange(path, mtime);
       }

@@ -1,9 +1,13 @@
-import { beforeEach, describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_CHANGE_STALE_MS, useLiveChangesStore } from "../live-changes";
+import { useRepositoryStore } from "@/stores/repository";
+import { makeRepo } from "@/lib/__tests__/repo-tree-fixtures";
 
 describe("useLiveChangesStore", () => {
   beforeEach(() => {
     useLiveChangesStore.setState({ lastChangedAt: {}, watched: [], overflow: [] });
+    useRepositoryStore.setState({ repos: [] });
   });
 
   it("records a change and reports it as recent", () => {
@@ -81,5 +85,43 @@ describe("useLiveChangesStore", () => {
 
   it("isWatched: true (optimistic) for a path with no watch state yet", () => {
     expect(useLiveChangesStore.getState().isWatched("/repo/unknown")).toBe(true);
+  });
+
+  describe("지운 저장소 정리", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("forgetPaths는 그 저장소와 그 아래 워크트리의 최근 변경 기록을 지운다", () => {
+      const { recordChange, forgetPaths } = useLiveChangesStore.getState();
+      recordChange("/repo/a", 1_000);
+      recordChange("/repo/a/.worktrees/x", 2_000);
+      recordChange("/repo/b", 3_000);
+
+      forgetPaths(["/repo/a"]);
+
+      expect(useLiveChangesStore.getState().lastChangedAt).toEqual({ "/repo/b": 3_000 });
+    });
+
+    it("저장소를 지우면 최근 변경 기록도 함께 지워진다", () => {
+      const alpha = makeRepo("alpha", null);
+      useRepositoryStore.setState({ repos: [alpha] });
+      useLiveChangesStore.getState().recordChange(alpha.path, 1_000);
+
+      useRepositoryStore.getState().removeRepo(alpha.path);
+
+      expect(useLiveChangesStore.getState().lastChangedAt[alpha.path]).toBeUndefined();
+    });
+
+    it("저장소 스토어가 복원되기 전의 빈 repos로는 정리하지 않는다", () => {
+      const alpha = makeRepo("alpha", null);
+      useRepositoryStore.setState({ repos: [alpha] });
+      useLiveChangesStore.getState().recordChange(alpha.path, 1_000);
+      vi.spyOn(useRepositoryStore.persist, "hasHydrated").mockReturnValue(false);
+
+      useRepositoryStore.setState({ repos: [] });
+
+      expect(useLiveChangesStore.getState().lastChangedAt[alpha.path]).toBe(1_000);
+    });
   });
 });

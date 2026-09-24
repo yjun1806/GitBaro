@@ -16,7 +16,12 @@ pub enum ChangeKind {
 
 /// Directories inside the working tree whose changes never show up in
 /// `git status` (dependency/build output) and only produce noise.
-const IGNORED_DIRS: [&str; 6] = [".git", "node_modules", "target", "dist", ".next", "build"];
+///
+/// Shared with `watcher::activity::classify_activity` so a build (`cargo
+/// build`, `pnpm install`, `vite build`) does not count as "repo activity"
+/// there either — the two watchers must agree on what counts as a real
+/// working-tree change.
+pub(crate) const IGNORED_DIRS: [&str; 6] = [".git", "node_modules", "target", "dist", ".next", "build"];
 
 /// Top-level entries of a git dir whose changes matter to the UI. Everything
 /// else (objects/, logs/, hooks/, config, FETCH_HEAD, ...) is ignored, except

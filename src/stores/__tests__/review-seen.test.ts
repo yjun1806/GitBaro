@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   REVIEW_SEEN_STORAGE_KEY,
   REVIEW_SEEN_VERSION,
@@ -8,7 +8,9 @@ import {
   migrateReviewSeen,
   useReviewSeenStore,
 } from "@/stores/review-seen";
+import { useRepositoryStore } from "@/stores/repository";
 import { mergeReviewStatus } from "@/hooks/useReviewStatus";
+import { makeRepo } from "@/lib/__tests__/repo-tree-fixtures";
 import type { RepoReviewStatus, ReviewWorktree } from "@/types";
 
 const ALPHA = "/repos/alpha";
@@ -214,6 +216,68 @@ describe("buildCountInputs", () => {
   it("아직 스캔 기록이 없는 저장소는 기준선을 잡기 전이라 세지 않는다", () => {
     const repos = [repo(ALPHA, [wt(ALPHA, true, "a1")]), repo(BETA, [wt(BETA, true, "b1")])];
     expect(buildCountInputs(repos, {}, [ALPHA])).toEqual([{ path: ALPHA }]);
+  });
+});
+
+describe("지운 저장소 정리", () => {
+  const alphaRepo = makeRepo("alpha", null);
+  const betaRepo = makeRepo("beta", null);
+
+  beforeEach(() => {
+    useRepositoryStore.setState({ repos: [alphaRepo, betaRepo] });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useRepositoryStore.setState({ repos: [] });
+  });
+
+  it("forgetRepos는 그 저장소의 기준선과 링크된 워크트리 기준선, scannedRepos 기록을 지운다", () => {
+    state().applyScan(
+      [
+        repo(ALPHA, [wt(ALPHA, true, "a1"), wt(ALPHA_WT, false, "f1", "feature")]),
+        repo(BETA, [wt(BETA, true, "b1")]),
+      ],
+      1000,
+    );
+
+    state().forgetRepos([ALPHA]);
+
+    expect(state().entries).toEqual({ [BETA]: { branch: "main", oid: "b1", seenAt: 1000 } });
+    expect(state().scannedRepos).toEqual([BETA]);
+  });
+
+  it("저장소를 지우면 기준선도 함께 지워져, 다시 추가했을 때 첫 실행으로 다시 잡힌다", () => {
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1")])], 1000);
+    expect(state().entries[ALPHA]).toEqual({ branch: "main", oid: "a1", seenAt: 1000 });
+
+    useRepositoryStore.getState().removeRepo(ALPHA);
+    expect(state().entries[ALPHA]).toBeUndefined();
+    expect(state().scannedRepos).toEqual([]);
+
+    useRepositoryStore.getState().addRepo(alphaRepo);
+    // 재추가 뒤 200개 커밋이 쌓인 상태를 다시 스캔해도, 첫 실행으로 잡혀 기준선이
+    // 새 HEAD가 된다 — 옛 기준선이 남아 200개가 새 커밋으로 보이는 사고를 막는다.
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a201")])], 2000);
+    expect(state().entries[ALPHA]).toEqual({ branch: "main", oid: "a201", seenAt: 2000 });
+  });
+
+  it("저장소 스토어가 복원되기 전의 빈 repos로는 정리하지 않는다", () => {
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1")])], 1000);
+    vi.spyOn(useRepositoryStore.persist, "hasHydrated").mockReturnValue(false);
+
+    useRepositoryStore.setState({ repos: [] });
+
+    expect(state().entries[ALPHA]).toEqual({ branch: "main", oid: "a1", seenAt: 1000 });
+  });
+
+  it("이 스토어가 복원되기 전에도 정리하지 않는다", () => {
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1")])], 1000);
+    vi.spyOn(useReviewSeenStore.persist, "hasHydrated").mockReturnValue(false);
+
+    useRepositoryStore.setState({ repos: [betaRepo] });
+
+    expect(state().entries[ALPHA]).toEqual({ branch: "main", oid: "a1", seenAt: 1000 });
   });
 });
 

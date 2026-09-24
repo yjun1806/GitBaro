@@ -10,7 +10,7 @@
 
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -92,19 +92,30 @@ pub fn diff_targets(old: &[PathBuf], new: &[PathBuf]) -> TargetDiff {
 ///
 /// - `.git/` internals never count (staging, status refresh, and GitBaro's own
 ///   other watcher already cover that; this one is about working-tree edits).
+/// - Build output and dependency installs inside the root (`super::fs_events::
+///   IGNORED_DIRS` — `node_modules`, `target`, `dist`, `.next`, `build`) never
+///   count either, matching the existing single-repo watcher: otherwise
+///   `cargo build` or `pnpm install` inside a watched repo would mark it as
+///   "just changed" even though no tracked or untracked source file moved.
 /// - When a watched root sits inside another watched root (a worktree folder
 ///   under its parent repository, `.gitignore:23`/`:39` — `.claude/worktrees/x`,
 ///   `.worktrees/x`), the change is attributed to the deepest (most specific)
 ///   containing root only, so it is never double-counted.
 pub fn classify_activity(path: &Path, watched: &[PathBuf]) -> Option<PathBuf> {
-    if path.components().any(|c| c.as_os_str() == ".git") {
-        return None;
-    }
-    watched
+    let root = watched
         .iter()
         .filter(|root| path.starts_with(root.as_path()))
-        .max_by_key(|root| root.as_os_str().len())
-        .cloned()
+        .max_by_key(|root| root.as_os_str().len())?;
+
+    let rel = path.strip_prefix(root).unwrap_or(path);
+    let ignored = rel
+        .components()
+        .any(|c| matches!(c, Component::Normal(name) if super::fs_events::IGNORED_DIRS.contains(&name.to_string_lossy().as_ref())));
+    if ignored {
+        return None;
+    }
+
+    Some(root.clone())
 }
 
 /// Coalesces repeated activity on the same root into one emission per
@@ -366,6 +377,29 @@ mod tests {
             classify_activity(Path::new("/repo/.worktrees/feature/src/lib.rs"), &watched),
             Some(p("/repo/.worktrees/feature"))
         );
+        assert_eq!(
+            classify_activity(Path::new("/repo/src/main.rs"), &watched),
+            Some(p("/repo"))
+        );
+    }
+
+    #[test]
+    fn classify_ignores_build_and_dependency_output() {
+        // Matches `watcher::fs_events::IGNORED_DIRS` so the same repo gets the
+        // same answer whether it is watched here or polled via
+        // `dirtyLatestMtime` — a `cargo build`/`pnpm install`/`vite build`
+        // must not count as "지금 바뀌는 곳" activity.
+        let watched = vec![p("/repo")];
+        for path in [
+            "/repo/target/debug/foo",
+            "/repo/node_modules/pkg/index.js",
+            "/repo/dist/bundle.js",
+            "/repo/.next/cache/x",
+            "/repo/build/out.bin",
+        ] {
+            assert_eq!(classify_activity(Path::new(path), &watched), None, "{path}");
+        }
+        // A source file still counts.
         assert_eq!(
             classify_activity(Path::new("/repo/src/main.rs"), &watched),
             Some(p("/repo"))

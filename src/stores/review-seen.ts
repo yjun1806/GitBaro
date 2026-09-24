@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createSafeStorage } from "@/lib/safe-storage";
+import { useRepositoryStore } from "@/stores/repository";
 import type { RepoReviewStatus, SeenRecordInput } from "@/types";
 
 /**
@@ -46,6 +47,17 @@ interface ReviewSeenState extends PersistedReviewSeen {
   applyScan: (repos: RepoReviewStatus[], now?: number) => void;
   /** 「새 커밋 N개 확인함으로 표시」. 기준선을 지금 HEAD로 옮긴다. */
   markSeen: (path: string, headOid: string, branch: string | null) => void;
+  /**
+   * 저장소가 목록에서 빠지면 그 `scannedRepos` 기록과 워크트리 기준선을 지운다.
+   * 지우지 않으면 같은 저장소를 다시 추가했을 때 「첫 실행」으로 다시 잡히지 않고
+   * 옛 기준선 그대로 남아, 그 사이 쌓인 커밋이 전부 새 커밋으로 보인다.
+   */
+  forgetRepos: (repoPaths: string[]) => void;
+}
+
+/** `path`가 `repoPath` 자신이거나(메인 작업 트리) 그 아래(링크된 워크트리)인지. */
+function belongsToRepo(path: string, repoPath: string): boolean {
+  return path === repoPath || path.startsWith(`${repoPath}/`);
 }
 
 /**
@@ -164,6 +176,21 @@ export const useReviewSeenStore = create<ReviewSeenState>()(
         set((state) => ({
           entries: { ...state.entries, [path]: { branch, oid: headOid, seenAt: Date.now() } },
         })),
+
+      forgetRepos: (repoPaths) =>
+        set((state) => {
+          if (repoPaths.length === 0) return state;
+          const gone = new Set(repoPaths);
+          const entries = Object.fromEntries(
+            Object.entries(state.entries).filter(
+              ([path]) => ![...gone].some((repoPath) => belongsToRepo(path, repoPath)),
+            ),
+          );
+          return {
+            entries,
+            scannedRepos: state.scannedRepos.filter((p) => !gone.has(p)),
+          };
+        }),
     }),
     {
       name: REVIEW_SEEN_STORAGE_KEY,
@@ -179,3 +206,18 @@ export const useReviewSeenStore = create<ReviewSeenState>()(
     },
   ),
 );
+
+/**
+ * 저장소를 목록에서 지우면 기준선 기록도 지운다(`workspace.ts`의 같은 구독과
+ * 같은 이유). 두 스토어가 모두 복원된 뒤에만 돈다 — 복원 전의 빈 `repos`를
+ * 「모두 지워짐」으로 읽으면 기준선이 전부 지워지는 사고가 난다.
+ */
+useRepositoryStore.subscribe((next, prev) => {
+  if (next.repos === prev.repos) return;
+  if (!useRepositoryStore.persist.hasHydrated() || !useReviewSeenStore.persist.hasHydrated()) {
+    return;
+  }
+  const nextPaths = new Set(next.repos.map((r) => r.path));
+  const removed = prev.repos.map((r) => r.path).filter((p) => !nextPaths.has(p));
+  if (removed.length > 0) useReviewSeenStore.getState().forgetRepos(removed);
+});
