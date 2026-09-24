@@ -184,19 +184,19 @@ pub async fn get_repo_visibility(
 ) -> Result<Value, AppError> {
     // 1. Get remote origin URL
     let rp = repo_path.clone();
-    let origin_url = tokio::task::spawn_blocking(move || {
+    let (owner, repo_name) = tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&rp)?;
         let remote = repo.find_remote("origin").map_err(|e| {
             AppError::RepoNotFound(format!("No origin remote: {}", e))
         })?;
-        Ok::<String, AppError>(remote.url().unwrap_or("").to_string())
+        let url = remote.url().unwrap_or("").to_string();
+        // 2. Parse owner/repo. This may run `ssh -G` for a host alias, so it
+        // stays inside spawn_blocking.
+        crate::git::remote::parse_github_url(&url)
+            .ok_or_else(|| AppError::RepoNotFound("Not a GitHub repository URL".to_string()))
     })
     .await
     .map_err(|e| AppError::Channel(e.to_string()))??;
-
-    // 2. Parse owner/repo from URL
-    let (owner, repo_name) = crate::git::remote::parse_github_url(&origin_url)
-        .ok_or_else(|| AppError::RepoNotFound("Not a GitHub repository URL".to_string()))?;
 
     // 3. Call GitHub API with the linked account's token
     let client = crate::github::client::GitHubClient::new();

@@ -402,18 +402,19 @@ pub async fn resolve_commit_avatars(
     repo_path: String,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<HashMap<String, String>, AppError> {
-    // 1. Open repo and get origin remote URL
-    let remote_url = tokio::task::spawn_blocking(move || {
+    // 1-2. Read the origin URL and parse GitHub owner/repo. Parsing may run
+    // `ssh -G` for a host alias, so it stays inside spawn_blocking too.
+    let parsed = tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
         let remote = repo.find_remote("origin")?;
         let url = remote.url().unwrap_or("").to_string();
-        Ok::<_, AppError>(url)
+        Ok::<_, AppError>(parse_github_url(&url))
     })
     .await
     .map_err(|e| AppError::Channel(e.to_string()))??;
 
-    // 2. Parse GitHub owner/repo — not a GitHub repo → return empty
-    let (owner, repo_name) = match parse_github_url(&remote_url) {
+    // Not a GitHub repo → return empty
+    let (owner, repo_name) = match parsed {
         Some(pair) => pair,
         None => return Ok(HashMap::new()),
     };
