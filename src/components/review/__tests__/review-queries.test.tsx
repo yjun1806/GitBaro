@@ -67,6 +67,30 @@ describe("useWorkspaceHistories", () => {
     resolveLatest("history:/a", [history("/a", "h2")]);
     await waitFor(() => expect(result.current[0]?.headOid).toBe("h2"));
   });
+
+  it("refetches on a poll even while HEAD stays the same, to pick up moved refs", async () => {
+    // origin/<branch>나 origin/main처럼 이 저장소의 HEAD와 무관한 참조가 외부에서
+    // 옮겨가면 headOid는 그대로다. 폴링이 없으면 창 포커스가 돌아오거나 이 저장소에서
+    // 커밋할 때까지 참조 라벨과 갈라진 지점이 옛 값으로 남는다.
+    vi.useFakeTimers();
+    try {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const { result } = renderHook(
+        () => useWorkspaceHistories([{ path: "/a", headOid: "h1" }]),
+        { wrapper: wrapperFor(client) },
+      );
+      resolveLatest("history:/a", [history("/a", "h1")]);
+      await vi.waitFor(() => expect(result.current[0]?.headOid).toBe("h1"));
+
+      await vi.advanceTimersByTimeAsync(20_000);
+      // 폴링이 키를 바꾸지 않고 다시 불렀으므로, 두 번째 응답이 대기 중이어야 한다.
+      expect(pending.some((p) => p.key === "history:/a")).toBe(true);
+      resolveLatest("history:/a", [{ ...history("/a", "h1"), branch: "feat/moved" }]);
+      await vi.waitFor(() => expect(result.current[0]?.branch).toBe("feat/moved"));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("useNewCommitIdsMany", () => {

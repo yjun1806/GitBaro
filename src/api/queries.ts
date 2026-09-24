@@ -604,8 +604,10 @@ export function latestCachedData<T>(
 /**
  * 저장소마다 따로 부르는 워크스페이스 타임라인. 키 앞부분이 `["workspaceHistory", repoPath]`라
  * 저장소 하나만 무효화할 수 있다. `headOid`(리뷰 스캔의 HEAD)가 키에 들어 있어 커밋이 생기면
- * 20초 스캔 뒤 바로 다시 읽는다(`.git/` 안쪽 변경은 활동 이벤트가 오지 않는다). 다시 읽는
- * 동안에는 같은 저장소의 마지막 결과를 그대로 보여 준다.
+ * 바로 다시 읽는다. `.git/` 안쪽 변경(외부 push로 원격 추적 브랜치가 옮겨가거나, fetch로
+ * origin/main이 옮겨가는 경우 등)은 활동 이벤트가 오지 않아 HEAD만으로는 못 잡으므로,
+ * `REVIEW_POLL_MS`마다 폴링해 참조 라벨과 갈라진 지점을 최신으로 유지한다(리뷰 화면의 다른
+ * 쿼리와 같은 주기). 다시 읽는 동안에는 같은 저장소의 마지막 결과를 그대로 보여 준다.
  * 결과는 `repos` 순서와 같고, 한 번도 못 읽은 저장소는 undefined다.
  */
 export function useWorkspaceHistories(
@@ -616,6 +618,8 @@ export function useWorkspaceHistories(
     queries: repos.map(({ path, headOid }) => ({
       queryKey: ["workspaceHistory", path, headOid, WORKSPACE_HISTORY_LIMIT],
       queryFn: async () => (await getWorkspaceHistory([path], WORKSPACE_HISTORY_LIMIT))[0],
+      refetchInterval: REVIEW_POLL_MS,
+      refetchIntervalInBackground: false,
       placeholderData: (previous: WorkspaceRepoHistory | undefined) =>
         previous ??
         latestCachedData<WorkspaceRepoHistory>(
