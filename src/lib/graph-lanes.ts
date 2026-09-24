@@ -11,6 +11,17 @@
  *   이미 돌려준 행과 넘겨받은 상태는 절대 바꾸지 않으므로 앞 페이지의 레인은 그대로다.
  * - `laneKey`(저장소·워크트리 경로 등)를 주면 그 키의 커밋이 새 줄기를 시작할 때
  *   항상 같은 레인을 쓴다. 여러 저장소를 한 그래프에 섞을 때 저장소별 레인을 고정한다.
+ *
+ * 입력이 어긋날 때의 처리:
+ * - 이미 그린 커밋이 다시 오면(오프셋 페이징 중 새 커밋이 생겨 페이지가 밀린 경우 등)
+ *   행을 만들지 않고 `duplicateOids`로 알려 준다.
+ * - 부모가 자식보다 먼저 와 이미 그려졌다면(커밋 시각이 뒤틀린 시간순 정렬 등)
+ *   그 부모로 가는 선은 그리지 않는다. 기다릴 대상이 없는 레인이 영원히 열려 있지 않게 하려는 것이다.
+ * - 빠진 커밋(페이지가 밀려 건너뛴 커밋)은 이 함수가 알아챌 수 없다. 그 커밋을 기다리는 레인은
+ *   계속 지나가는 선으로 남으므로, 호출자는 커서(마지막 oid) 기준으로 페이징하거나 이력이 바뀌면
+ *   처음부터 다시 계산해야 한다.
+ * - 목록에 끝내 나오지 않을 부모(병합 기준점 아래에서 이력을 끊은 경우 등)도 레인을 연 채로 남긴다.
+ *   이력을 중간에서 끊는 호출자는 그 부모들을 `parentIds`에서 빼고 넘긴다.
  */
 
 export interface GraphCommitInput {
@@ -47,6 +58,7 @@ export interface GraphRowLayout {
   readonly width: number;
 }
 
+
 interface LaneSlot {
   /** 이 레인이 다음에 만나기를 기다리는 커밋 */
   readonly oid: string;
@@ -56,14 +68,22 @@ interface LaneSlot {
 /** 페이지 사이에 이어받는 계산 상태. 불변으로 다룬다. */
 export interface GraphLaneState {
   readonly lanes: readonly (LaneSlot | null)[];
-  /** laneKey → 고정 레인 */
-  readonly pinned: Readonly<Record<string, number>>;
+  /** laneKey → 고정 레인. 키가 어떤 문자열이든 안전하도록 Map을 쓴다. */
+  readonly pinned: ReadonlyMap<string, number>;
+  /** 이미 행을 만든 커밋. 중복 커밋과 순서가 뒤집힌 부모를 걸러 낸다. */
+  readonly seen: ReadonlySet<string>;
   readonly nextChain: number;
 }
 
 export interface GraphLaneResult {
+  /** 새로 그린 커밋마다 한 행. 이미 그린 커밋은 빠진다. */
   readonly rows: readonly GraphRowLayout[];
   readonly state: GraphLaneState;
+  /**
+   * 이미 그린 커밋이라 행을 만들지 않은 oid. 비어 있지 않으면 페이지가 밀렸다는 신호이니,
+   * 호출자는 목록에서도 같은 커밋을 빼거나 처음부터 다시 계산한다.
+   */
+  readonly duplicateOids: readonly string[];
 }
 
 export interface CreateLaneStateOptions {
@@ -72,12 +92,11 @@ export interface CreateLaneStateOptions {
 }
 
 export function createGraphLaneState(options: CreateLaneStateOptions = {}): GraphLaneState {
-  const pinned: Record<string, number> = {};
-  let next = 0;
+  const pinned = new Map<string, number>();
   for (const key of options.pinnedKeys ?? []) {
-    if (!(key in pinned)) pinned[key] = next++;
+    if (!pinned.has(key)) pinned.set(key, pinned.size);
   }
-  return { lanes: [], pinned, nextChain: 0 };
+  return { lanes: [], pinned, seen: new Set(), nextChain: 0 };
 }
 
 /**
@@ -90,45 +109,55 @@ export function computeGraphLanes(
 ): GraphLaneResult {
   // 성능을 위해 이 호출 안에서만 쓰는 복사본을 고친다. `prev`는 건드리지 않는다.
   const lanes: (LaneSlot | null)[] = [...prev.lanes];
-  const pinned: Record<string, number> = { ...prev.pinned };
-  const reserved = new Set<number>(Object.values(pinned));
-  // oid → 그 커밋을 기다리는 레인들. 레인 배열을 매번 훑지 않으려는 색인이다.
-  const waiting = new Map<string, number[]>();
+  const pinned = new Map(prev.pinned);
+  const seen = new Set(prev.seen);
+  // 고정 레인 → 그 레인의 주인 키
+  const owners = new Map<number, string>();
+  pinned.forEach((lane, key) => owners.set(lane, key));
+  // oid → 그 커밋을 기다리는 레인. 부모를 이미 기다리는 레인이 있으면 새 레인을 열지 않고
+  // 그 레인으로 합류하므로, 한 커밋을 기다리는 레인은 언제나 하나뿐이다.
+  const waiting = new Map<string, number>();
   lanes.forEach((slot, index) => {
-    if (slot) addWaiting(waiting, slot.oid, index);
+    if (slot) waiting.set(slot.oid, index);
   });
   let nextChain = prev.nextChain;
 
   const freeLane = (): number => {
     for (let i = 0; i < lanes.length; i++) {
-      if (lanes[i] === null && !reserved.has(i)) return i;
+      if (lanes[i] === null && !owners.has(i)) return i;
     }
     let i = lanes.length;
-    while (reserved.has(i)) i++;
+    while (owners.has(i)) i++;
     return i;
   };
 
   const setLane = (index: number, slot: LaneSlot | null) => {
     while (lanes.length <= index) lanes.push(null);
     const old = lanes[index];
-    if (old) removeWaiting(waiting, old.oid, index);
+    if (old) waiting.delete(old.oid);
     lanes[index] = slot;
-    if (slot) addWaiting(waiting, slot.oid, index);
+    if (slot) waiting.set(slot.oid, index);
   };
 
   const rows: GraphRowLayout[] = [];
+  const duplicateOids: string[] = [];
 
   for (const commit of commits) {
+    if (seen.has(commit.oid)) {
+      duplicateOids.push(commit.oid);
+      continue;
+    }
+    seen.add(commit.oid);
+
     const topLanes = lanes.slice();
-    const expecting = [...(waiting.get(commit.oid) ?? [])].sort((a, b) => a - b);
+    const expected = waiting.get(commit.oid);
     const key = commit.laneKey;
-    const pinnedLane = key !== undefined ? pinned[key] : undefined;
+    const pinnedLane = key !== undefined ? pinned.get(key) : undefined;
 
     let lane: number;
     let chain: number;
-    if (expecting.length > 0) {
-      lane =
-        pinnedLane !== undefined && expecting.includes(pinnedLane) ? pinnedLane : expecting[0];
+    if (expected !== undefined) {
+      lane = expected;
       chain = (topLanes[lane] as LaneSlot).chain;
     } else {
       if (pinnedLane !== undefined && !lanes[pinnedLane]) {
@@ -136,39 +165,38 @@ export function computeGraphLanes(
       } else {
         lane = freeLane();
         if (key !== undefined && pinnedLane === undefined) {
-          pinned[key] = lane;
-          reserved.add(lane);
+          pinned.set(key, lane);
+          owners.set(lane, key);
         }
       }
       chain = nextChain++;
     }
 
     const edges: GraphEdge[] = [];
-    // 이 커밋을 기다리던 레인은 모두 커밋 점으로 모이고, 비워진다.
-    for (const index of expecting) {
-      edges.push({ kind: "in", fromLane: index, toLane: lane, chain: (topLanes[index] as LaneSlot).chain });
-      setLane(index, null);
+    if (expected !== undefined) {
+      // 이 커밋을 기다리던 레인은 커밋 점으로 이어지고, 비워진다.
+      edges.push({ kind: "in", fromLane: lane, toLane: lane, chain });
+      setLane(lane, null);
     }
 
-    const parents = unique(commit.parentIds);
+    // 남의 고정 레인에서 이어진 줄기는 첫 부모부터 그 레인을 비켜 준다.
+    // 그래야 그 키의 다음 새 줄기가 제 레인을 쓸 수 있다.
+    const owner = owners.get(lane);
+    const firstParentLane = owner !== undefined && owner !== key ? freeLane() : lane;
+
+    const parents = unique(commit.parentIds).filter((parent) => !seen.has(parent));
     parents.forEach((parent, i) => {
       const existing = waiting.get(parent);
-      if (existing && existing.length > 0) {
+      if (existing !== undefined) {
         // 다른 줄기가 이미 이 부모를 기다린다 → 그 레인으로 합류한다.
-        const target = Math.min(...existing);
-        const edgeChain = i === 0 ? chain : (lanes[target] as LaneSlot).chain;
-        edges.push({ kind: "out", fromLane: lane, toLane: target, chain: edgeChain });
+        const edgeChain = i === 0 ? chain : (lanes[existing] as LaneSlot).chain;
+        edges.push({ kind: "out", fromLane: lane, toLane: existing, chain: edgeChain });
         return;
       }
-      if (i === 0) {
-        setLane(lane, { oid: parent, chain });
-        edges.push({ kind: "out", fromLane: lane, toLane: lane, chain });
-        return;
-      }
-      const target = freeLane();
-      const newChain = nextChain++;
-      setLane(target, { oid: parent, chain: newChain });
-      edges.push({ kind: "out", fromLane: lane, toLane: target, chain: newChain });
+      const target = i === 0 ? firstParentLane : freeLane();
+      const parentChain = i === 0 ? chain : nextChain++;
+      setLane(target, { oid: parent, chain: parentChain });
+      edges.push({ kind: "out", fromLane: lane, toLane: target, chain: parentChain });
     });
 
     topLanes.forEach((slot, index) => {
@@ -181,21 +209,7 @@ export function computeGraphLanes(
     rows.push({ oid: commit.oid, lane, chain, edges, width: rowWidth(lane, edges) });
   }
 
-  return { rows, state: { lanes, pinned, nextChain } };
-}
-
-function addWaiting(waiting: Map<string, number[]>, oid: string, index: number) {
-  const list = waiting.get(oid);
-  if (list) list.push(index);
-  else waiting.set(oid, [index]);
-}
-
-function removeWaiting(waiting: Map<string, number[]>, oid: string, index: number) {
-  const list = waiting.get(oid);
-  if (!list) return;
-  const rest = list.filter((i) => i !== index);
-  if (rest.length > 0) waiting.set(oid, rest);
-  else waiting.delete(oid);
+  return { rows, state: { lanes, pinned, seen, nextChain }, duplicateOids };
 }
 
 function unique(ids: readonly string[]): string[] {

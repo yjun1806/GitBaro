@@ -155,6 +155,9 @@ describe("computeGraphLanes", () => {
       const second = computeGraphLanes(history.slice(3), first.state);
 
       expect(JSON.parse(JSON.stringify(first))).toEqual(snapshot);
+      // Map·Set은 JSON에 담기지 않으므로 따로 확인한다.
+      expect([...first.state.seen]).toEqual(["M2", "f2", "m1"]);
+      expect(first.state.pinned.size).toBe(0);
       expect(second.rows[0].oid).toBe("f1");
       // f1은 앞 페이지에서 f2가 기다리던 레인에 놓인다.
       expect(second.rows[0].lane).toBe(first.rows[1].lane);
@@ -192,7 +195,12 @@ describe("computeGraphLanes", () => {
         c("a1", [], "repoA"),
       ]);
       expect(lanesOf(first.rows)).toEqual([0, 1, 0]);
-      expect(first.state.pinned).toEqual({ repoA: 0, repoB: 1 });
+      expect(first.state.pinned).toEqual(
+        new Map([
+          ["repoA", 0],
+          ["repoB", 1],
+        ]),
+      );
 
       // repoB가 다음 페이지에서 새 줄기로 다시 나타나도 레인 1에 놓인다.
       // 키 없는 x는 예약된 레인 0·1을 피해 레인 2를 쓴다.
@@ -200,15 +208,87 @@ describe("computeGraphLanes", () => {
       expect(lanesOf(second.rows)).toEqual([2, 1]);
     });
 
-    it("기다리는 레인이 여럿이면 자기 키의 고정 레인을 고른다", () => {
-      const state = createGraphLaneState({ pinnedKeys: ["repoA"] });
-      // 레인 1의 side와 레인 0의 tip이 모두 base를 기다리는데, base의 키는 repoA(레인 0).
+    it("키 없는 커밋이 고정 레인에서 줄기를 이어받으면 부모부터 그 레인을 비켜 준다", () => {
+      const state = createGraphLaneState({ pinnedKeys: ["A"] });
       const { rows } = computeGraphLanes(
-        [c("tip", ["base"], "repoA"), c("side", ["base"], "other"), c("base", [], "repoA")],
+        [c("a1", ["u1"], "A"), c("u1", ["u0"]), c("a0", [], "A"), c("u0")],
         state,
       );
-      expect(rows[2].lane).toBe(0);
+      // u1은 a1이 기다리던 레인 0에 놓이지만, 그 부모 u0은 레인 1로 옮겨 간다.
+      expect(lanesOf(rows)).toEqual([0, 0, 0, 1]);
+      expect(edgesOf(rows[1], "out")).toEqual([[0, 1]]);
+      // 그래서 A의 새 줄기 a0은 고정 레인 0을 그대로 쓴다.
+      expect(edgesOf(rows[2], "pass")).toEqual([[1, 1]]);
     });
+
+    it("다른 키의 커밋도 남의 고정 레인에서는 부모부터 비켜 준다", () => {
+      const state = createGraphLaneState({ pinnedKeys: ["A", "B"] });
+      const { rows } = computeGraphLanes(
+        [c("a1", ["b1"], "A"), c("b1", ["b0"], "B"), c("a0", [], "A"), c("b0", [], "B")],
+        state,
+      );
+      // b1은 A의 레인 0에서 이어졌으므로, 그 부모 b0은 예약되지 않은 첫 빈 레인 2로 옮겨 간다.
+      expect(lanesOf(rows)).toEqual([0, 0, 0, 2]);
+    });
+
+    it("Object 원형의 속성 이름과 같은 키도 평범한 키처럼 다룬다", () => {
+      const state = createGraphLaneState({ pinnedKeys: ["toString"] });
+      const { rows, state: next } = computeGraphLanes(
+        [c("x", [], "constructor"), c("y", [], "toString")],
+        state,
+      );
+      expect(lanesOf(rows)).toEqual([1, 0]);
+      expect(rows.every((r) => Number.isInteger(r.width))).toBe(true);
+      expect(next.pinned.get("constructor")).toBe(1);
+    });
+  });
+
+  describe("어긋난 입력", () => {
+    it("부모가 자식보다 먼저 그려졌으면 그 부모로 가는 선을 열지 않는다", () => {
+      // 시간순 정렬만 쓰면 커밋 시각이 뒤틀려 root가 b보다 먼저 올 수 있다.
+      const { rows, state } = computeGraphLanes([
+        c("M", ["a", "b"]),
+        c("a", ["root"]),
+        c("root"),
+        c("b", ["root"]),
+        c("x"),
+      ]);
+      expect(edgesOf(rows[3], "out")).toEqual([]);
+      expect(rows[4].edges).toEqual([]);
+      expect(rows[4].width).toBe(1);
+      expect(state.lanes).toEqual([]);
+    });
+
+    it("이미 그린 커밋이 다시 오면 행을 만들지 않고 duplicateOids로 알린다", () => {
+      // 새 커밋 때문에 오프셋이 하나 밀려 c가 두 페이지에 모두 들어온 경우.
+      const first = computeGraphLanes([c("d", ["c"]), c("c", ["b"])]);
+      const second = computeGraphLanes([c("c", ["b"]), c("b", ["a"]), c("a")], first.state);
+
+      expect(first.duplicateOids).toEqual([]);
+      expect(second.duplicateOids).toEqual(["c"]);
+      expect(second.rows.map((r) => r.oid)).toEqual(["b", "a"]);
+      expect(edgesOf(second.rows[0], "in")).toEqual([[0, 0]]);
+      expect(second.state.lanes).toEqual([]);
+    });
+
+    it("한 페이지 안의 중복 커밋도 한 번만 그린다", () => {
+      const { rows, duplicateOids } = computeGraphLanes([c("b", ["a"]), c("b", ["a"]), c("a")]);
+      expect(rows.map((r) => r.oid)).toEqual(["b", "a"]);
+      expect(duplicateOids).toEqual(["b"]);
+    });
+  });
+
+  it("어떤 행에도 커밋 점으로 들어오는 선은 많아야 하나다", () => {
+    // 여러 자식이 같은 부모를 기다려도 뒤의 자식은 먼저 연 레인으로 합류하므로,
+    // 부모 행에는 들어오는 선이 하나뿐이다.
+    const { rows } = computeGraphLanes([
+      c("x", ["p"]),
+      c("y", ["p"]),
+      c("z", ["q", "p"]),
+      c("q", ["p"]),
+      c("p"),
+    ]);
+    for (const row of rows) expect(edgesOf(row, "in").length).toBeLessThanOrEqual(1);
   });
 
   it("1만 행을 100ms 안에 계산한다", () => {
