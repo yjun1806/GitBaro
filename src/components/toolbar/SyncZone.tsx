@@ -22,6 +22,7 @@ import { remoteErrorKey } from "@/lib/remote-error";
 import { useClickOutside } from "./useToolbarDropdown";
 import { AutoSyncHint } from "./AutoSyncHint";
 import { ActionButton, ActionGroup, ActionMenu, TOOLBAR_WIDE_LABEL_CLASS } from "./ActionButton";
+import { TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
 import { ConfirmCommandDialog } from "@/components/ui/ConfirmCommandDialog";
 import { MultiRepoRemoteDialog } from "@/components/review/MultiRepoRemoteDialog";
 
@@ -286,7 +287,7 @@ function RepoSyncGroup() {
   const toggleMenu = (id: "fetch" | "pull" | "push") => setOpenMenu((prev) => (prev === id ? null : id));
 
   return (
-    <div ref={zoneRef} className="relative flex items-center gap-1.5 shrink-0">
+    <div ref={zoneRef} className="relative flex items-center gap-1 shrink-0">
       {/* 좁은 툴바에서는 자동 최신화 안내를 숨긴다. 같은 내용은 설정에서 볼 수 있다. */}
       <span className="hidden @min-[1280px]:contents">
         <AutoSyncHint />
@@ -297,9 +298,9 @@ function RepoSyncGroup() {
           onClick={handleSyncErrorClick}
           title={syncError.description}
           aria-label={`${syncError.title} — ${syncError.description}`}
-          className="flex items-center gap-1 h-[30px] px-2 rounded-lg text-[12px] font-semibold text-danger hover:bg-danger/5 transition-colors"
+          className={cn(toolbarButtonClass(), "text-danger hover:text-danger")}
         >
-          <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+          <AlertTriangle className={TOOLBAR_ICON} aria-hidden="true" />
           <span className={cn("whitespace-nowrap", TOOLBAR_WIDE_LABEL_CLASS)}>{syncError.title}</span>
         </button>
       )}

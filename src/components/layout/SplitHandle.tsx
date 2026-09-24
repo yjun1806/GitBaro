@@ -15,6 +15,11 @@ export interface SplitHandleProps {
   variant?: "gap" | "inline";
   /** `gap`일 때 손잡이 두께(px). 없으면 패널 간격(`--g`, 8px). */
   size?: number;
+  /**
+   * 세로 손잡이가 머리 줄을 가로지를 때, 머리 줄 아래 테두리(1px)를 이 높이(px)에 이어 그린다.
+   * 사이드바 머리와 툴바의 아래 테두리가 손잡이 자리에서 끊기지 않게 한다.
+   */
+  headerRulePx?: number;
 }
 
 /**
@@ -29,6 +34,7 @@ export function SplitHandle({
   onReset,
   variant = "gap",
   size,
+  headerRulePx,
 }: SplitHandleProps) {
   const start = useRef<number | null>(null);
   const vertical = orientation === "vertical";
@@ -74,6 +80,14 @@ export function SplitHandle({
             : "h-px w-full bg-(--line)",
       )}
     >
+      {headerRulePx !== undefined && (
+        <span
+          aria-hidden="true"
+          data-header-rule
+          className="absolute inset-x-0 h-px bg-(--line2) pointer-events-none"
+          style={{ top: headerRulePx - 1 }}
+        />
+      )}
       {/* 잡는 영역은 선보다 넓다(가는 선도 잡기 쉽게). */}
       <span
         aria-hidden="true"
@@ -82,7 +96,7 @@ export function SplitHandle({
       <span
         aria-hidden="true"
         className={cn(
-          "rounded-full bg-transparent group-hover:bg-primary/40 group-active:bg-primary/60 transition-colors",
+          "rounded-full bg-transparent group-hover:bg-(--ln) group-active:bg-(--muted) transition-colors",
           vertical ? "w-[3px] h-10" : "h-[3px] w-10",
         )}
       />

@@ -23,8 +23,8 @@ export function StatusBar() {
     <div
       className={cn(
         "flex items-center gap-4 px-3 h-6 text-xs text-muted-foreground",
-        "border-t border-(--line) bg-background select-none cursor-pointer",
-        "hover:bg-accent transition-colors",
+        "border-t border-(--line2) bg-(--frame) select-none cursor-pointer",
+        "hover:bg-(--frame-hover) transition-colors",
       )}
       onClick={() => setActivityLogOpen(!isActivityLogOpen)}
       title={t("activity.title")}
@@ -39,7 +39,7 @@ export function StatusBar() {
       <div className="flex items-center gap-1.5">
         {isRunning ? (
           <>
-            <Loader2 className="w-3 h-3 animate-spin text-primary" />
+            <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
             <span className="font-mono truncate max-w-[300px]">
               {activeOps[0].operation}
             </span>

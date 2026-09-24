@@ -36,7 +36,7 @@ export function AddRepoButton({ onAdded }: AddRepoButtonProps) {
       <button
         type="button"
         onClick={() => setStep("choose")}
-        className="mt-1 shrink-0 flex items-center gap-2 h-[30px] px-2.5 rounded-[var(--radius-item)] text-xs text-muted-foreground hover:bg-[color-mix(in_srgb,var(--panel)_60%,transparent)] hover:text-foreground"
+        className="mt-1 shrink-0 flex items-center gap-2 h-[30px] px-2.5 rounded-[var(--radius-item)] text-xs text-muted-foreground hover:bg-(--frame-hover) hover:text-foreground"
       >
         <Plus className="w-[13px] h-[13px]" aria-hidden="true" />
         {t("sidebarTree.addRepo")}

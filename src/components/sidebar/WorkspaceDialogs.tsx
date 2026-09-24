@@ -2,9 +2,10 @@ import { useId, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Dialog } from "@/components/ui/Dialog";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
 import type { WorkspaceError, WorkspaceResult } from "@/stores/workspace";
 
-const PANEL = "bg-card rounded-xl shadow-2xl w-full max-w-sm";
+const PANEL = `rounded-xl w-full max-w-sm ${FLOATING_SURFACE}`;
 
 interface DialogHeaderProps {
   titleId: string;
@@ -85,7 +86,7 @@ export function WorkspaceNameDialog({
             placeholder={t("workspace.namePlaceholder")}
             aria-invalid={error !== null}
             aria-describedby={error ? errorId : undefined}
-            className="h-8 px-2.5 rounded-[var(--radius-item)] bg-background border border-border text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="h-8 px-2.5 rounded-[var(--radius-item)] bg-card border border-border text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
           />
           {error && (
             <p id={errorId} role="alert" className="text-xs text-danger">

@@ -4,6 +4,26 @@ import { cn } from "@/lib/utils";
 
 /** 들여쓰기 한 단계의 폭(px). 시안 `gen_d.py`의 `depth*14`. */
 export const INDENT_PX = 14;
+/** 행 왼쪽 안쪽 여백(px). 선택 막대(3px)와 겹치지 않을 만큼 둔다. */
+const ROW_PAD_LEFT = 6;
+/** ▾ 칸(16px, 좌우 -3px)의 가운데. 세로 안내선이 부모 행의 ▾ 바로 아래로 떨어지게 한다. */
+const CHEVRON_CENTER_PX = ROW_PAD_LEFT - 3 + 8;
+
+/** `depth` 단계 행의 i번째 안내선 x(1px 선의 왼쪽 끝). i단계 조상 행의 ▾ 가운데와 맞는다. */
+export function guideLineLeft(i: number): number {
+  return CHEVRON_CENTER_PX + i * INDENT_PX - 0.5;
+}
+
+/** 사이드바에서 선택된 줄의 왼쪽 막대(브랜드 색). 부모는 `relative`여야 한다. */
+export function SelectionBar() {
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="selection-bar"
+      className="absolute left-0 top-[5px] bottom-[5px] w-[3px] rounded-r-[2px] bg-(--acc)"
+    />
+  );
+}
 
 interface TreeRowFrameProps {
   /** 화면 읽기 프로그램에 알리는 트리 단계(1부터). */
@@ -76,23 +96,23 @@ export function TreeRowFrame({
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       onContextMenu={onContextMenu}
-      style={{ paddingLeft: 6 + depth * INDENT_PX }}
+      style={{ paddingLeft: ROW_PAD_LEFT + depth * INDENT_PX }}
       className={cn(
         "relative flex items-center gap-[var(--item)] pr-2 rounded-[var(--radius-item)] cursor-default select-none outline-none",
         tall ? "min-h-9 py-1" : "min-h-[var(--row)] py-[3px]",
-        "focus-visible:ring-2 focus-visible:ring-ring/40",
-        selected
-          ? "bg-card shadow-[var(--shadow-sm)]"
-          : "hover:bg-[color-mix(in_srgb,var(--panel)_60%,transparent)]",
+        "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40",
+        // 사이드바(층 0)에서는 흰 카드를 쓰지 않는다: 선택은 채움 + 브랜드 색 왼쪽 막대, hover는 옅은 채움.
+        selected ? "bg-(--frame-sel)" : "hover:bg-(--frame-hover)",
         className,
       )}
     >
+      {selected && <SelectionBar />}
       {Array.from({ length: depth }, (_, i) => (
         <span
           key={i}
           aria-hidden="true"
           className="absolute top-0 bottom-0 w-px bg-border"
-          style={{ left: 2 + (i + 1) * INDENT_PX }}
+          style={{ left: guideLineLeft(i) }}
         />
       ))}
       <span

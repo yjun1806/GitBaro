@@ -2,6 +2,8 @@ import { Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAccountStore } from "@/stores/account";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
+import { cn } from "@/lib/utils";
 import { useRepoAccountId, useAssignRepoAccount } from "@/hooks/useRepoAccountId";
 interface AccountDropdownProps {
   onClose: () => void;
@@ -21,7 +23,7 @@ export function AccountDropdown({
   const assignAccount = useAssignRepoAccount();
   return (
     <div
-      className="absolute right-0 top-full mt-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50 py-1"
+      className={cn("absolute right-0 top-full mt-2 w-56 rounded-lg z-50 py-1", FLOATING_SURFACE)}
     >
       {accounts.length === 0 ? (
         <div className="px-3 py-2">
@@ -50,7 +52,7 @@ export function AccountDropdown({
               <AccountAvatar account={account} size="sm" />
               <span className="text-sm truncate flex-1">{account.username}</span>
               {account.id === repoAccountId && (
-                <Check className="w-4 h-4 text-primary shrink-0" />
+                <Check className="w-4 h-4 text-foreground shrink-0" />
               )}
             </button>
           ))}

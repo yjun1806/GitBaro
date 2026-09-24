@@ -8,7 +8,7 @@ const light = css.slice(css.lastIndexOf(":root {", css.indexOf("--canvas:")), cs
 
 describe("design tokens (plans/design/README.md)", () => {
   it("uses the canvas as the page background and white panels", () => {
-    expect(light).toMatch(/--canvas:\s*#efefee;/);
+    expect(light).toMatch(/--canvas:\s*#f1f1ef;/);
     expect(light).toMatch(/--panel:\s*#ffffff;/);
     expect(css).toMatch(/--background:\s*var\(--canvas\);/);
     expect(css).toMatch(/--card:\s*var\(--panel\);/);

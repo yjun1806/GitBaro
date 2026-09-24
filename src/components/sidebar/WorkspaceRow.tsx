@@ -4,7 +4,9 @@ import { useTranslation } from "react-i18next";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
-import { RowBadges } from "./RowBadges";
+import { RowSubline } from "./RowSubline";
+import { metaLineParts, metaLineText } from "./row-meta";
+import { NEUTRAL_TILE, ROW_TITLE, TILE_ICON } from "./row-style";
 import { DraggableRow } from "./TreeDnd";
 import { TreeRowFrame } from "./TreeRowFrame";
 import type { Totals } from "./tree-model";
@@ -84,7 +86,8 @@ export function WorkspaceRow({
     }
   };
 
-  const badges = <RowBadges dirty={totals.dirty} newCommits={totals.newCommits} />;
+  // 둘째 줄: 「저장소 N · 수정 N · 새 커밋 N」(안에 든 저장소의 합계)
+  const parts = metaLineParts({ repoCount, dirty: totals.dirty, newCommits: totals.newCommits }, t);
   return (
     <>
       <DraggableRow
@@ -93,7 +96,6 @@ export function WorkspaceRow({
         label={name}
         depth={1}
         groupBelow={expanded && repoCount > 0}
-        badges={badges}
         disabled={!draggable}
       >
         <TreeRowFrame
@@ -107,16 +109,13 @@ export function WorkspaceRow({
           onContextMenu={handleContextMenu}
           tall
         >
-          <span className="w-5 h-5 rounded-[var(--radius-chip)] bg-muted flex items-center justify-center shrink-0">
-            <Folder className="w-[13px] h-[13px] text-[var(--fg2)]" aria-hidden="true" />
+          <span className={NEUTRAL_TILE}>
+            <Folder className={TILE_ICON} aria-hidden="true" />
           </span>
-          <span className="flex-1 min-w-0 flex flex-col gap-px">
-            <span className="text-[12.5px] font-bold text-foreground truncate">{name}</span>
-            <span className="text-[10.5px] text-muted-foreground truncate">
-              {t("sidebarTree.workspaceSubtitle", { count: repoCount })}
-            </span>
+          <span className="flex-1 min-w-0 flex flex-col gap-px" title={`${name}\n${metaLineText(parts)}`}>
+            <span className={`${ROW_TITLE} font-bold`}>{name}</span>
+            <RowSubline parts={parts} />
           </span>
-          {badges}
         </TreeRowFrame>
       </DraggableRow>
       {menuAt && (

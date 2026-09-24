@@ -4,6 +4,7 @@ import { AccountAvatar } from "@/components/account/AccountAvatar";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useClickOutside } from "./useToolbarDropdown";
 import { AccountDropdown } from "./AccountDropdown";
+import { toolbarButtonClass } from "./toolbar-button";
 
 interface AccountZoneProps {
   isOpen: boolean;
@@ -31,19 +32,21 @@ export function AccountZone({
     <div ref={zoneRef} className="relative shrink-0">
       <button
         onClick={onToggle}
-        className="flex items-center gap-2 px-3 h-[52px] hover:bg-accent transition-colors"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        className={toolbarButtonClass({ open: isOpen })}
       >
         {currentAccount ? (
           <>
-            <AccountAvatar account={currentAccount} size="sm" />
-            <span className="text-sm font-medium truncate max-w-[100px] hidden @min-[1100px]:inline">
+            <AccountAvatar account={currentAccount} size="sm" className="w-5! h-5! text-[10px]!" />
+            <span className="truncate max-w-[100px] hidden @min-[1100px]:inline">
               {currentAccount.username}
             </span>
           </>
         ) : (
-          <div className="w-6 h-6 rounded-full bg-muted/20 flex items-center justify-center">
+          <span className="w-5 h-5 rounded-full bg-foreground/[0.07] flex items-center justify-center">
             <span className="text-[10px] text-muted-foreground font-bold">?</span>
-          </div>
+          </span>
         )}
       </button>
 

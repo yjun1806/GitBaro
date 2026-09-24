@@ -47,7 +47,7 @@ export function WorkspaceSuggestion() {
       className="mb-2 p-2.5 rounded-[var(--radius-item)] bg-card shadow-[var(--shadow-sm)] flex flex-col gap-1.5"
     >
       <div className="flex items-start gap-1.5">
-        <FolderPlus className="w-3.5 h-3.5 mt-px shrink-0 text-primary" aria-hidden="true" />
+        <FolderPlus className="w-3.5 h-3.5 mt-px shrink-0 text-muted-foreground" aria-hidden="true" />
         <p className="flex-1 min-w-0 text-xs font-semibold text-foreground break-words">
           {t("workspace.suggestion.title", { name, count: repoPaths.length })}
         </p>
@@ -74,7 +74,7 @@ export function WorkspaceSuggestion() {
         <button
           type="button"
           onClick={() => dismissSuggestion(key)}
-          className="h-6 px-2 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted"
+          className="h-6 px-2 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent"
         >
           {t("workspace.suggestion.dismiss")}
         </button>

@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import { useMenuKeyboard } from "@/hooks/useMenuKeyboard";
 import { SORT_MODES, type SortMode } from "@/lib/repo-tree";
 import { cn } from "@/lib/utils";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
+import { SIDEBAR_ICON_BUTTON, TILE_ICON } from "./row-style";
 
 interface SortMenuProps {
   mode: SortMode;
@@ -64,9 +66,9 @@ export function SortMenu({ mode, onChange, onOpenChange }: SortMenuProps) {
           else open();
         }}
         onKeyDown={(e) => e.stopPropagation()}
-        className="ml-auto w-5 h-5 shrink-0 flex items-center justify-center rounded-[var(--radius-chip)] text-[var(--faint)] hover:text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className={cn("ml-auto", SIDEBAR_ICON_BUTTON)}
       >
-        <ArrowDownUp className="w-3 h-3" aria-hidden="true" />
+        <ArrowDownUp className={TILE_ICON} aria-hidden="true" />
       </button>
       {anchor &&
         createPortal(
@@ -127,7 +129,7 @@ function SortMenuPopup({ mode, position, onPick, onClose, ignore }: SortMenuPopu
       tabIndex={-1}
       onKeyDown={onKeyDown}
       onClick={(e) => e.stopPropagation()}
-      className="fixed z-[100] w-[220px] p-[5px] bg-popover rounded-[10px] shadow-lg border border-border outline-none"
+      className={cn("fixed z-[100] w-[220px] p-[5px] rounded-[10px] outline-none", FLOATING_SURFACE)}
       style={{ left: position.x, top: position.y }}
     >
       {SORT_MODES.map((m) => {
@@ -145,7 +147,7 @@ function SortMenuPopup({ mode, position, onPick, onClose, ignore }: SortMenuPopu
             className={cn(
               "w-full h-[30px] px-2.5 flex items-center gap-2 rounded-md text-[12.5px] text-foreground text-left outline-none",
               "hover:bg-accent focus-visible:bg-accent",
-              current && "bg-[var(--acc-sel)]",
+              current && "bg-accent font-medium",
             )}
           >
             <span className="w-3.5 shrink-0 flex items-center justify-center" aria-hidden="true">

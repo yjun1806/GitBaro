@@ -115,6 +115,10 @@ function renderTree(data: SidebarTreeData, onSelectRepo = vi.fn()) {
 }
 
 const item = (name: string) => screen.getByRole("treeitem", { name });
+/** 행 글 칸(이름 + 둘째 줄)에 걸린 툴팁 */
+const rowTooltip = (name: string) => item(name).querySelector("[title]:has([data-testid=row-meta])")?.getAttribute("title") ?? "";
+const worktreeTooltip = () => rowTooltip("feat/login");
+const metaText = (name: string) => item(name).querySelector("[data-testid=row-meta]")?.textContent ?? "";
 
 beforeEach(() => {
   vi.mocked(getWorktrees).mockReset();
@@ -152,13 +156,13 @@ describe("RepoTree — indentation levels", () => {
     expect(item("feat/login")).toHaveAttribute("aria-level", "4");
     expect(item("solo")).toHaveAttribute("aria-level", "2");
 
-    // 워크트리 행은 기반 브랜치(WorktreeBaseLabel)를 보여 준다.
-    await waitFor(() => expect(within(item("feat/login")).getByText(/main/)).toBeInTheDocument());
+    // 워크트리 행은 기반 브랜치를 둘째 줄이 아니라 툴팁에 둔다(폭을 아끼려고).
+    await waitFor(() => expect(worktreeTooltip()).toMatch(/behind main/));
   });
 
   it("indents each visual depth by one INDENT_PX step, so the hierarchy doesn't look flat", async () => {
     renderTree(makeData(baseSignals));
-    await waitFor(() => expect(within(item("feat/login")).getByText(/main/)).toBeInTheDocument());
+    await waitFor(() => expect(worktreeTooltip()).toMatch(/behind main/));
 
     // paddingLeft = 6 + depth * 14 (TreeRowFrame). account:0, workspace:1,
     // repo directly under the account:1, repo inside a workspace:2, worktree = its repo's depth + 1.
@@ -181,7 +185,7 @@ describe("RepoTree — indentation levels", () => {
 
   it("reads worktree bases once per expanded repository, not on every toolbar worktree refresh", async () => {
     const { client } = renderTree(makeData(baseSignals));
-    await waitFor(() => expect(within(item("feat/login")).getByText(/main/)).toBeInTheDocument());
+    await waitFor(() => expect(worktreeTooltip()).toMatch(/behind main/));
     const calls = vi.mocked(getWorktrees).mock.calls.length;
     expect(vi.mocked(getWorktrees).mock.calls.every(([p]) => p === API)).toBe(true);
 
@@ -223,33 +227,25 @@ describe("RepoTree — indentation levels", () => {
 });
 
 describe("RepoTree — badges", () => {
-  it("shows uncommitted files, new commits and ahead/behind only when they are not zero", () => {
+  it("writes the state in words on the second line, omitting zero values", () => {
     renderTree(makeData(baseSignals));
 
     // 저장소 행은 워크트리까지 더한 합계, ↑↓는 메인 작업 트리 값
-    const api = within(item("api"));
-    expect(api.getByRole("img", { name: "3 uncommitted files" })).toBeInTheDocument();
-    expect(api.getByRole("img", { name: "5 new commits" })).toBeInTheDocument();
-    expect(api.getByRole("img", { name: "3 commits to push" })).toHaveTextContent("↑3");
+    expect(metaText("api")).toBe(" · 3 modified · 5 new commits · ↑3");
+    expect(rowTooltip("api")).toContain("3 modified · 5 new commits · ↑3");
 
-    const wt = within(item("feat/login"));
-    expect(wt.getByRole("img", { name: "1 uncommitted file" })).toBeInTheDocument();
-    expect(wt.getByRole("img", { name: "4 new commits" })).toBeInTheDocument();
     // 워크트리 행은 시안대로 ↑↓를 그리지 않는다.
-    expect(wt.queryByRole("img", { name: /to push|to pull/ })).toBeNull();
+    expect(metaText("feat/login")).toBe(" · 1 modified · 4 new commits");
 
-    // 모두 0이면 표시 없음
+    // 모두 0이면 「clean」, 오른쪽에 숫자 배지는 없다.
+    expect(metaText("web")).toBe(" · clean");
     expect(within(item("web")).queryAllByRole("img")).toHaveLength(0);
 
     // ↓만 있는 저장소
-    const solo = within(item("solo"));
-    expect(solo.getByRole("img", { name: "2 commits to pull" })).toHaveTextContent("↓2");
-    expect(solo.queryByRole("img", { name: /uncommitted|new commit/ })).toBeNull();
+    expect(metaText("solo")).toBe("↓2"); // 브랜치를 모르는 저장소라 앞에 「·」가 없다
 
-    // 워크스페이스는 안에 든 저장소의 합계
-    const product = within(item("product"));
-    expect(product.getByRole("img", { name: "3 uncommitted files" })).toBeInTheDocument();
-    expect(product.getByRole("img", { name: "5 new commits" })).toBeInTheDocument();
+    // 워크스페이스는 저장소 수와 안에 든 저장소의 합계
+    expect(metaText("product")).toBe("2 repos · 3 modified · 5 new commits");
   });
 
   it("marks recently changed rows with a live dot, faded when the path is not watched live", () => {
@@ -260,12 +256,12 @@ describe("RepoTree — badges", () => {
         overflow: [SOLO],
       }),
     );
-    const webDot = within(item("web")).getByRole("img", { name: /last 10 minutes/ });
+    const webDot = within(item("web")).getByRole("img", { name: "Files changing now · 5s ago" });
     expect(webDot).toHaveAttribute("data-watched", "true");
     const soloDot = within(item("solo")).getByRole("img", { name: /not watched live/ });
     expect(soloDot).toHaveAttribute("data-watched", "false");
     expect(soloDot.className).toContain("opacity-40");
-    expect(within(item("api")).queryByRole("img", { name: /last 10 minutes|not watched/ })).toBeNull();
+    expect(within(item("api")).queryByRole("img", { name: /changing now|not watched/ })).toBeNull();
   });
 
   it("fades the dot of a path that is no longer watched, such as a folded repository's worktree", () => {

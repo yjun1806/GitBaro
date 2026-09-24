@@ -5,6 +5,7 @@ import type { SortMode } from "@/lib/repo-tree";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { SortMenu } from "./SortMenu";
+import { NEUTRAL_TILE, SIDEBAR_ICON_BUTTON, TILE_ICON } from "./row-style";
 import { TreeRowFrame } from "./TreeRowFrame";
 import { WorkspaceNameDialog } from "./WorkspaceDialogs";
 
@@ -61,9 +62,11 @@ export function AccountHeader({
         label={label}
         expanded={expanded}
         onToggle={onToggle}
-        className="mt-2 gap-1.5 group"
+        className="gap-[var(--item)] group"
       >
-        <Icon className="w-3 h-3 shrink-0 text-[var(--faint)]" aria-hidden="true" />
+        <span className={NEUTRAL_TILE}>
+          <Icon className={TILE_ICON} aria-hidden="true" />
+        </span>
         {/* 계정 이름 + 저장소 수가 너비를 먼저 갖는다 — 정렬·워크스페이스 버튼은 hover/focus/열림 때만
             나타나 이름을 밀어내지 않는다(W-Top-T4: 「MONDAY…」로 잘리던 문제). */}
         <span
@@ -77,7 +80,9 @@ export function AccountHeader({
         {showActions && (
           <span
             className={cn(
-              "flex items-center gap-1 shrink-0 transition-opacity",
+              // 버튼은 행 오른쪽 끝 위에 떠 있어 폭을 차지하지 않는다(계정 이름이 버튼 자리 때문에 잘리지 않게).
+              // 투명하게만 숨겨서 Tab과 화면 읽기 프로그램은 그대로 닿는다. 보일 때는 hover 채움을 깔아 이름 끝을 덮는다.
+              "absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded-[var(--radius-chip)] bg-(--frame-hover) transition-opacity",
               sortOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
             )}
           >
@@ -91,9 +96,9 @@ export function AccountHeader({
                 setCreating(true);
               }}
               onKeyDown={(e) => e.stopPropagation()}
-              className="w-5 h-5 shrink-0 flex items-center justify-center rounded-[var(--radius-chip)] text-[var(--faint)] hover:text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className={SIDEBAR_ICON_BUTTON}
             >
-              <FolderPlus className="w-3 h-3" aria-hidden="true" />
+              <FolderPlus className={TILE_ICON} aria-hidden="true" />
             </button>
           </span>
         )}

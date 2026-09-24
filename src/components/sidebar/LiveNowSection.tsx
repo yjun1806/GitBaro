@@ -2,7 +2,9 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import { cn } from "@/lib/utils";
-import { LiveDot } from "./RowBadges";
+import { LiveDot } from "./LiveDot";
+import { formatAgo, liveDotLabel } from "./row-meta";
+import { SelectionBar } from "./TreeRowFrame";
 import { liveAvatarStack, type LiveEntry } from "./tree-model";
 
 const AVATAR_STACK_MAX = 3;
@@ -59,24 +61,20 @@ export function LiveNowSection({
   const hasActivity = entries.length > 0;
   const stack = liveAvatarStack(entries, AVATAR_STACK_MAX);
 
-  const ago = (at: number) => {
-    const seconds = Math.max(0, Math.floor((now - at) / 1000));
-    return seconds < 60
-      ? t("sidebarTree.live.seconds", { count: seconds })
-      : t("sidebarTree.live.minutes", { count: Math.floor(seconds / 60) });
-  };
+  const ago = (at: number) => formatAgo(t, now, at);
 
   return (
     <section
       aria-label={t("sidebarTree.live.title")}
-      className="shrink-0 mx-0.5 mb-2 rounded-(--radius-item) border border-(--line2) bg-(--acc-faint) overflow-hidden"
+      className="shrink-0 mb-2 rounded-(--radius-item) border border-(--line2) overflow-hidden"
     >
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
         aria-controls={listId}
-        className="w-full flex items-center gap-2 h-8 px-2 text-left hover:bg-[color-mix(in_srgb,var(--panel)_50%,transparent)]"
+        // 접힌 카드 높이는 검색 칸(h-7 = 28px)과 같다: 26px + 위아래 테두리 1px.
+        className="w-full flex items-center gap-2 h-[26px] px-2 text-left hover:bg-(--frame-hover)"
       >
         <span
           aria-hidden="true"
@@ -90,14 +88,14 @@ export function LiveNowSection({
         </span>
         {!expanded && hasActivity && (
           <>
-            <span className="flex items-center shrink-0 -space-x-1.5 ml-0.5">
+            <span className="flex items-center shrink-0 -space-x-1 ml-0.5 py-0.5">
               {stack.shown.map((repo) =>
-                repoAvatar(repo.path, repo.name, repo.path, 16, "ring-2 ring-(--acc-faint) text-[9px]"),
+                repoAvatar(repo.path, repo.name, repo.path, 16, "ring-[1.5px] ring-(--frame) text-[9px]"),
               )}
               {stack.overflow > 0 && (
                 <span
                   aria-hidden="true"
-                  className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold bg-muted text-muted-foreground ring-2 ring-(--acc-faint)"
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold bg-(--frame-sel) text-muted-foreground ring-[1.5px] ring-(--frame)"
                 >
                   {t("sidebarTree.live.overflow", { count: stack.overflow })}
                 </span>
@@ -122,13 +120,12 @@ export function LiveNowSection({
                 onClick={() => onSelect(entry)}
                 title={entry.path}
                 className={cn(
-                  "w-full flex items-center gap-1.5 h-6 px-2.5 text-left",
-                  activePath === entry.path
-                    ? "bg-[color-mix(in_srgb,var(--acc)_8%,transparent)]"
-                    : "hover:bg-[color-mix(in_srgb,var(--panel)_50%,transparent)]",
+                  "relative w-full flex items-center gap-1.5 h-6 px-2.5 text-left",
+                  activePath === entry.path ? "bg-(--frame-sel)" : "hover:bg-(--frame-hover)",
                 )}
               >
-                <LiveDot watched={isWatched(entry.path)} className="shrink-0" />
+                {activePath === entry.path && <SelectionBar />}
+                <LiveDot watched={isWatched(entry.path)} label={liveDotLabel(t, isWatched(entry.path), now, entry.at)} />
                 {repoAvatar(`${entry.path}-avatar`, entry.repo.name, entry.repo.path, 14, "text-[8px]")}
                 <span className="flex-1 min-w-0 truncate text-[12px] text-[var(--fg2)]">
                   {entry.repo.name}

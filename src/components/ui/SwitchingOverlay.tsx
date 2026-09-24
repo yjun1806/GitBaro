@@ -11,7 +11,7 @@ export function SwitchingOverlay() {
   if (!isSwitching) return null;
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/50 backdrop-blur-[1px]">
-      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
     </div>
   );
 }

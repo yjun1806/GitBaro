@@ -19,6 +19,9 @@ import { useSelectionStore } from "@/stores/selection";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { useClickOutside, useToolbarDropdownContext } from "./useToolbarDropdown";
 import { ActionButton } from "./ActionButton";
+import { toolbarButtonClass } from "./toolbar-button";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { HEADER_HEIGHT_PX } from "@/lib/layout-tokens";
 import { BranchPanel } from "@/components/branch/BranchPanel";
 import { BranchMergeDialog } from "@/components/branch/BranchMergeDialog";
 import { useBranchRangeStore } from "@/components/branch/branch-range";
@@ -57,6 +60,9 @@ function useOpenBranchPanel(): () => void {
   const { toggle } = useToolbarDropdownContext();
   return () => toggle("branch");
 }
+
+/** 제목 툴팁을 머리 줄 아래 경계보다 6px 아래에 띄운다(28px 버튼은 줄 안에서 가운데 정렬). */
+const TITLE_TOOLTIP_OFFSET_PX = (HEADER_HEIGHT_PX - 28) / 2 + 6;
 
 interface BranchZoneProps {
   isOpen: boolean;
@@ -311,6 +317,14 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const repoTitle = mainWorktree?.path.split("/").filter(Boolean).pop() ?? activeRepoName;
   const avatar = avatarColor(activeRepoPath ?? repoTitle);
   const originAhead = !isInWorktree ? ahead : 0;
+  const branchText = currentBranch ?? (isDetached ? t("branch.detachedHead") : t("branch.noBranch"));
+  const titleTooltip = [
+    `${repoTitle} · ${branchText}`,
+    originAhead > 0 ? t("branch.originAhead", { count: originAhead }) : null,
+    behind > 0 ? t("sidebarTree.badge.behind", { count: behind }) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div
@@ -318,57 +332,51 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
       // 툴바가 좁으면 이 칸이 먼저 줄어든다(브랜치 이름은 말줄임). 오른쪽 git 작업·계정·설정이 잘리지 않게 한다.
       className={cn("relative min-w-[60px] shrink flex items-center", isOpen && "z-50")}
     >
-      <button
-        ref={triggerRef}
-        onClick={onToggle}
-        title={currentBranch ?? undefined}
-        className={cn(
-          "flex items-center gap-2.5 pl-1 pr-3 min-w-0 overflow-hidden h-[52px] rounded-(--radius-item) transition-colors text-left",
-          isOpen ? "relative z-50 bg-accent" : "hover:bg-accent",
-        )}
-      >
-        <span
-          aria-hidden="true"
-          className="w-7 h-7 rounded-(--radius-item) shrink-0 flex items-center justify-center text-[12px] font-extrabold shadow-(--shadow-sm)"
-          style={{ backgroundColor: avatar.background, color: avatar.foreground }}
+      {/* 제목 버튼: 다른 툴바 버튼과 같은 28px 모양의 한 줄(아바타 · 저장소 · 브랜치 · 기반/앞뒤 수 · ▾).
+          전체 글은 머리 줄 아래로 늦게 뜨는 툴팁으로 보인다(버튼 바로 밑에서 줄 경계와 겹치지 않게). */}
+      <Tooltip label={titleTooltip} side="bottom" offset={TITLE_TOOLTIP_OFFSET_PX} delayMs={600} className="min-w-0">
+        <button
+          ref={triggerRef}
+          onClick={onToggle}
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          className={cn(
+            toolbarButtonClass({ open: isOpen }),
+            "min-w-0 shrink overflow-hidden text-left pl-1",
+            isOpen && "relative z-50",
+          )}
         >
-          {avatarInitial(repoTitle)}
-        </span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <p className="text-sm font-bold text-(--fg) truncate max-w-[160px]">{repoTitle}</p>
-            <span className="flex items-center gap-1 font-mono text-xs text-(--fg2) min-w-0 shrink">
-              {isSwitchingBranch ? (
-                <Loader2 className="w-3 h-3 shrink-0 animate-spin text-primary" />
-              ) : (
-                <GitBranch className="w-3 h-3 shrink-0 opacity-60" />
-              )}
-              <span className="truncate">
-                {currentBranch ?? (isDetached ? t("branch.detachedHead") : t("branch.noBranch"))}
-              </span>
+          <span
+            aria-hidden="true"
+            className="w-5 h-5 rounded-[5px] shrink-0 flex items-center justify-center text-[10.5px] font-extrabold"
+            style={{ backgroundColor: avatar.background, color: avatar.foreground }}
+          >
+            {avatarInitial(repoTitle)}
+          </span>
+          <span className="text-[13px] font-bold text-(--fg) truncate max-w-[160px]">{repoTitle}</span>
+          <span className="flex items-center gap-1 font-mono text-xs text-(--fg2) min-w-0 shrink">
+            {isSwitchingBranch ? (
+              <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
+            ) : (
+              <GitBranch className="w-3 h-3 shrink-0 opacity-60" />
+            )}
+            <span className="truncate">{branchText}</span>
+          </span>
+          {isInWorktree && currentWorktree?.base ? (
+            <WorktreeBaseLabel base={currentWorktree.base} variant="compact" className="shrink-0 text-[11px]" />
+          ) : null}
+          {(originAhead > 0 || behind > 0) && (
+            <span className="shrink-0 text-[11px] text-(--muted) tabular-nums">
+              {[originAhead > 0 ? `↑${originAhead}` : null, behind > 0 ? `↓${behind}` : null].filter(Boolean).join(" ")}
             </span>
-          </div>
-          <div className="flex items-center gap-1 text-[11px] text-(--muted) min-w-0">
-            {isInWorktree && currentWorktree?.base ? (
-              <WorktreeBaseLabel base={currentWorktree.base} variant="compact" />
-            ) : null}
-            {originAhead > 0 && (
-              <span className="shrink-0 tabular-nums">
-                {isInWorktree && currentWorktree?.base ? " · " : ""}
-                {t("branch.originAhead", { count: originAhead })}
-              </span>
-            )}
-            {behind > 0 && (
-              <span className="shrink-0 tabular-nums text-danger">{" · "}{"↓"}{behind}</span>
-            )}
-          </div>
-        </div>
-        {isOpen ? (
-          <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-        )}
-      </button>
+          )}
+          {isOpen ? (
+            <ChevronUp className="w-3 h-3 opacity-60 shrink-0" />
+          ) : (
+            <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
+          )}
+        </button>
+      </Tooltip>
 
       {isOpen && (
         <BranchPanel

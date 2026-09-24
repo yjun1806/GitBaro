@@ -5,10 +5,10 @@
  * Kept as a plain constant (not a CSS variable) because it belongs to two
  * different component files, not `globals.css` — see `HEADER_HEIGHT_CLASS`.
  */
-export const HEADER_HEIGHT_PX = 52;
+export const HEADER_HEIGHT_PX = 44;
 
 /** Tailwind arbitrary-value class for `HEADER_HEIGHT_PX`, kept in one place so it can't drift from the constant above. */
-export const HEADER_HEIGHT_CLASS = "h-[52px]";
+export const HEADER_HEIGHT_CLASS = "h-[44px]";
 
 /**
  * Width reserved for macOS's traffic-light buttons under the app's Overlay

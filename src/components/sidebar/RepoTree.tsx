@@ -9,6 +9,7 @@ import { AccountHeader } from "./AccountHeader";
 import { AddRepoButton } from "./AddRepoButton";
 import { LiveNowSection } from "./LiveNowSection";
 import { QuietReposRow } from "./QuietReposRow";
+import { SIDEBAR_ICON_BUTTON, TILE_ICON } from "./row-style";
 import { RepoRow, type LiveState } from "./RepoRow";
 import { DropAfterLine, TreeDndProvider } from "./TreeDnd";
 import { WorkspaceRow } from "./WorkspaceRow";
@@ -178,8 +179,8 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* 검색 + 모두 접기 */}
-      <div className="flex gap-1.5 mb-2 shrink-0">
-        <label className="flex-1 min-w-0 flex items-center gap-1.5 h-7 px-2 rounded-[var(--radius-item)] bg-card shadow-[var(--shadow-sm)]">
+      <div className="flex items-center gap-1 mb-2 shrink-0">
+        <label className="flex-1 min-w-0 flex items-center gap-1.5 h-7 px-2 rounded-[var(--radius-item)] bg-card border border-(--line2) focus-within:border-ring">
           <Search className="w-3 h-3 shrink-0 text-[var(--faint)]" aria-hidden="true" />
           <input
             type="search"
@@ -195,12 +196,12 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
           onClick={handleToggleAll}
           title={allFolded ? t("sidebarTree.expandAll") : t("sidebarTree.collapseAll")}
           aria-label={allFolded ? t("sidebarTree.expandAll") : t("sidebarTree.collapseAll")}
-          className="w-7 h-7 shrink-0 rounded-[var(--radius-item)] bg-card shadow-[var(--shadow-sm)] flex items-center justify-center text-muted-foreground hover:text-foreground"
+          className={SIDEBAR_ICON_BUTTON}
         >
           {allFolded ? (
-            <ChevronsUpDown className="w-[13px] h-[13px]" />
+            <ChevronsUpDown className={TILE_ICON} />
           ) : (
-            <ChevronsDownUp className="w-[13px] h-[13px]" />
+            <ChevronsDownUp className={TILE_ICON} />
           )}
         </button>
       </div>
@@ -218,12 +219,12 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
         onSelect={revealLive}
       />
 
-      <div ref={treeScrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1">
+      <div ref={treeScrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         {!searching && <WorkspaceSuggestion />}
 
         {/* 끌어서 놓기는 검색으로 거르지 않은 전체 트리(`tree`)의 순서로 계산한다. */}
         <TreeDndProvider tree={tree}>
-          <div role="tree" aria-label={t("sidebarTree.tree")} className="flex flex-col">
+          <div role="tree" aria-label={t("sidebarTree.tree")} className="flex flex-col gap-2">
             {visibleTree.map((account) => {
               const accountOpen = isOpen(account.key);
               const quietOpen = openQuiet.includes(account.accountKey);
