@@ -1,5 +1,11 @@
 import type { Theme } from "@/types";
 
+const THEMES: readonly Theme[] = ["light", "dark", "system"];
+
+export function isTheme(value: unknown): value is Theme {
+  return THEMES.includes(value as Theme);
+}
+
 export function applyTheme(theme: Theme): void {
   const root = document.documentElement;
   if (theme === "dark") {

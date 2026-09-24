@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 
 interface ImageDiffOnionSkinProps {
   oldSrc: string;
@@ -6,6 +7,7 @@ interface ImageDiffOnionSkinProps {
 }
 
 export function ImageDiffOnionSkin({ oldSrc, newSrc }: ImageDiffOnionSkinProps) {
+  const { t } = useTranslation();
   const [opacity, setOpacity] = useState(50);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
@@ -34,7 +36,7 @@ export function ImageDiffOnionSkin({ oldSrc, newSrc }: ImageDiffOnionSkinProps) 
         {/* Old image (base layer) */}
         <img
           src={oldSrc}
-          alt="old"
+          alt={t("diff.imageDiff.oldImage")}
           className="absolute inset-0 w-full h-full object-contain"
           onLoad={handleImageLoad}
         />
@@ -42,7 +44,7 @@ export function ImageDiffOnionSkin({ oldSrc, newSrc }: ImageDiffOnionSkinProps) 
         {/* New image (overlay with variable opacity) */}
         <img
           src={newSrc}
-          alt="new"
+          alt={t("diff.imageDiff.newImage")}
           className="absolute inset-0 w-full h-full object-contain"
           style={{ opacity: opacity / 100 }}
           onLoad={handleImageLoad}

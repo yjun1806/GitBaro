@@ -4,7 +4,7 @@ import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
-import { applyTheme, watchSystemTheme } from "@/lib/theme";
+import { applyTheme, isTheme, watchSystemTheme } from "@/lib/theme";
 import { addLocalRepository, cloneRepository, getAccounts, getSettings, openRepository } from "@/api/commands";
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
@@ -85,6 +85,11 @@ function AppContent() {
 
       try {
         const settings = await getSettings();
+        // The settings file is the theme's source of truth — the settings
+        // screen shows it, so the running app must match it too.
+        if (isTheme(settings.theme)) {
+          useUIStore.getState().setTheme(settings.theme);
+        }
         if (settings.language && settings.language !== i18n.language) {
           i18n.changeLanguage(settings.language);
         }
@@ -124,9 +129,11 @@ function AppContent() {
     verifyWorktree(activeRepo.path, activeRepoPath);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // DEV: Cmd+Shift+W to preview welcome screen for testing (data preserved)
+  // DEV: Cmd+Shift+W to preview welcome screen for testing (data preserved).
+  // Dev builds only — in production it would hijack a real key combo.
   const [debugWelcome, setDebugWelcome] = useState(false);
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey && e.shiftKey && e.key === "w") {
         e.preventDefault();

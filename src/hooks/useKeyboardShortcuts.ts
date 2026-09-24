@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { isSubmitEnter } from "@/lib/keyboard";
 
 interface KeyboardShortcutHandlers {
   onCommit?: () => void;
@@ -13,7 +14,7 @@ export function useKeyboardShortcuts(handlers: KeyboardShortcutHandlers) {
     const handleKeyDown = (e: KeyboardEvent) => {
       const meta = e.metaKey;
 
-      if (meta && e.key === "Enter") {
+      if (meta && isSubmitEnter(e)) {
         e.preventDefault();
         handlers.onCommit?.();
         return;

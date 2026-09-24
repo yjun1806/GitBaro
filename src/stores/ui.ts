@@ -1,10 +1,14 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createSafeStorage } from "@/lib/safe-storage";
+import { MIN_SIDEBAR_WIDTH } from "@/lib/sidebar-width";
 import type { Theme } from "@/types";
 
 /** Repo rail display mode (Supabase-style sidebar control) */
 export type RailMode = "expanded" | "collapsed" | "hover";
+
+/** Line-diff layout the user last picked; remembered across files and restarts. */
+export type DiffLineMode = "unified" | "split";
 
 interface UIState {
   theme: Theme;
@@ -18,6 +22,7 @@ interface UIState {
   isActivityLogOpen: boolean;
   /** 브랜치 전환(checkout + 재조회) 진행 중 여부. 로딩 피드백 표시에 사용. */
   isSwitchingBranch: boolean;
+  diffLineMode: DiffLineMode;
   setTheme: (theme: Theme) => void;
   setActiveTab: (tab: "changes" | "history" | "stash" | "actions") => void;
   setSidebarWidth: (width: number) => void;
@@ -28,6 +33,29 @@ interface UIState {
   setPreviewBranch: (branch: string | null) => void;
   setActivityLogOpen: (open: boolean) => void;
   setSwitchingBranch: (switching: boolean) => void;
+  setDiffLineMode: (mode: DiffLineMode) => void;
+}
+
+const RAIL_MODES: readonly RailMode[] = ["expanded", "collapsed", "hover"];
+const DIFF_LINE_MODES: readonly DiffLineMode[] = ["unified", "split"];
+
+/**
+ * Picks only well-formed persisted fields. localStorage can hold values from an
+ * older build or a hand edit; a bad width would collapse the layout. The upper
+ * bound depends on the window, so MainLayout applies it with clampSidebarWidth.
+ */
+export function sanitizePersistedUI(persisted: unknown): Partial<UIState> {
+  if (typeof persisted !== "object" || persisted === null) return {};
+  const p = persisted as Record<string, unknown>;
+  const out: Partial<UIState> = {};
+  if (RAIL_MODES.includes(p.railMode as RailMode)) out.railMode = p.railMode as RailMode;
+  if (typeof p.sidebarWidth === "number" && Number.isFinite(p.sidebarWidth) && p.sidebarWidth >= MIN_SIDEBAR_WIDTH) {
+    out.sidebarWidth = p.sidebarWidth;
+  }
+  if (DIFF_LINE_MODES.includes(p.diffLineMode as DiffLineMode)) {
+    out.diffLineMode = p.diffLineMode as DiffLineMode;
+  }
+  return out;
 }
 
 export const useUIStore = create<UIState>()(
@@ -43,6 +71,7 @@ export const useUIStore = create<UIState>()(
       previewBranch: null,
       isActivityLogOpen: false,
       isSwitchingBranch: false,
+      diffLineMode: "unified",
 
       setTheme: (theme) => set({ theme }),
 
@@ -61,12 +90,19 @@ export const useUIStore = create<UIState>()(
       setPreviewBranch: (branch) => set({ previewBranch: branch }),
       setActivityLogOpen: (open) => set({ isActivityLogOpen: open }),
       setSwitchingBranch: (switching) => set({ isSwitchingBranch: switching }),
+      setDiffLineMode: (mode) => set({ diffLineMode: mode }),
     }),
     {
       name: "gitbaro-ui",
       storage: createJSONStorage(() => createSafeStorage()),
-      // Only the rail mode is persisted; all other UI state stays ephemeral.
-      partialize: (state) => ({ railMode: state.railMode }),
+      // Layout preferences are persisted here. The theme is not: its source of
+      // truth is the backend settings file, applied at startup (App.tsx).
+      partialize: (state) => ({
+        railMode: state.railMode,
+        sidebarWidth: state.sidebarWidth,
+        diffLineMode: state.diffLineMode,
+      }),
+      merge: (persisted, current) => ({ ...current, ...sanitizePersistedUI(persisted) }),
     },
   ),
 );

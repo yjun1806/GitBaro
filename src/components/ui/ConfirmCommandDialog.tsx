@@ -2,6 +2,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, X } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
+import { cn } from "@/lib/utils";
 
 interface ConfirmCommandDialogProps {
   title: string;
@@ -80,11 +81,12 @@ export function ConfirmCommandDialog({
           </button>
           <button
             onClick={() => { onConfirm(); onClose(); }}
-            className={`px-4 py-1.5 text-sm rounded-lg font-medium ${
+            className={cn(
+              "px-4 py-1.5 text-sm rounded-lg font-medium transition-colors",
               confirmVariant === "destructive"
-                ? "bg-red-600 hover:bg-red-700 text-white"
-                : "bg-accent hover:bg-accent/80 text-white"
-            }`}
+                ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                : "bg-primary hover:bg-primary-hover text-primary-foreground",
+            )}
           >
             {confirmLabel ?? t("common.proceed")}
           </button>

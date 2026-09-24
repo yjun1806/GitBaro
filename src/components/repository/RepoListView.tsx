@@ -6,7 +6,6 @@ import {
   FolderOpen,
   GitFork,
   GitBranch,
-  FolderPlus,
   Circle,
   EllipsisVertical,
   Globe,
@@ -352,13 +351,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                 <GitFork className="w-4 h-4 text-muted-foreground shrink-0" />
                 {t("repo.cloneRepo")}
               </button>
-              <button
-                onClick={() => setAddMenuOpen(false)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
-              >
-                <FolderPlus className="w-4 h-4 text-muted-foreground shrink-0" />
-                {t("repo.createNew")}
-              </button>
+              {/* "Create new repository" (git init) is hidden until it is implemented. */}
             </div>
           )}
         </div>

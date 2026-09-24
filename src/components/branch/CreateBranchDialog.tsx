@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { BranchInfo } from "@/types";
 import { Dialog } from "@/components/ui/Dialog";
 import { checkNewBranchName } from "./branch-name";
+import { isSubmitEnter } from "@/lib/keyboard";
 
 interface CreateBranchDialogProps {
   branches: BranchInfo[];
@@ -95,7 +96,7 @@ export function CreateBranchDialog({
                 onChange={(e) => setName(e.target.value)}
                 readOnly={isCreating}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.nativeEvent.isComposing) void handleCreate();
+                  if (isSubmitEnter(e)) void handleCreate();
                 }}
                 placeholder="feature/my-feature"
                 className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"

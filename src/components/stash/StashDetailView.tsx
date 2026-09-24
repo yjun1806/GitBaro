@@ -14,6 +14,7 @@ interface StashDetailViewProps {
 }
 
 function FileStatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
   const colors: Record<string, string> = {
     added: "text-success bg-success/10",
     deleted: "text-danger bg-danger/10",
@@ -24,7 +25,7 @@ function FileStatusBadge({ status }: { status: string }) {
     <span
       className={`text-[10px] px-1.5 py-0.5 rounded ${colors[status] ?? "text-muted-foreground bg-muted"}`}
     >
-      {status}
+      {t(`fileStatus.${status}`, { defaultValue: status })}
     </span>
   );
 }

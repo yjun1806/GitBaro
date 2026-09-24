@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useBackgroundFetch } from "@/hooks/useBackgroundFetch";
@@ -8,12 +8,10 @@ import { Sidebar } from "./Sidebar";
 import { ContentArea } from "./ContentArea";
 import { StatusBar } from "./StatusBar";
 import { ActivityLogPanel } from "./ActivityLogPanel";
-
-const MIN_SIDEBAR_WIDTH = 200;
-const MIN_RIGHT_PANEL_WIDTH = 700;
+import { clampSidebarWidth } from "@/lib/sidebar-width";
 
 export function MainLayout() {
-  const sidebarWidth = useUIStore((s) => s.sidebarWidth);
+  const storedSidebarWidth = useUIStore((s) => s.sidebarWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
   const activeTab = useUIStore((s) => s.activeTab);
   const repoListOpen = useUIStore((s) => s.repoListOpen);
@@ -23,6 +21,17 @@ export function MainLayout() {
 
   // 열린 모든 레포를 주기적으로 fetch해 사이드바 push/pull 인디케이터를 최신화
   useBackgroundFetch();
+
+  // The stored width may come from a wider screen, so fit it to the window on
+  // every render and on resize. The stored value itself is left alone, so the
+  // wider layout comes back when the window grows again.
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const sidebarWidth = clampSidebarWidth(storedSidebarWidth, viewportWidth);
 
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -37,12 +46,9 @@ export function MainLayout() {
       const onMouseMove = (ev: MouseEvent) => {
         if (!isDragging.current) return;
         const delta = ev.clientX - startX.current;
-        const maxWidth = window.innerWidth - MIN_RIGHT_PANEL_WIDTH;
-        const next = Math.min(
-          maxWidth,
-          Math.max(MIN_SIDEBAR_WIDTH, startWidth.current + delta),
+        setSidebarWidth(
+          clampSidebarWidth(startWidth.current + delta, window.innerWidth),
         );
-        setSidebarWidth(next);
       };
 
       const onMouseUp = () => {

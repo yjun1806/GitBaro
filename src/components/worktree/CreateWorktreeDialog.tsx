@@ -11,6 +11,7 @@ import { getErrorMessage } from "@/lib/utils";
 import { BranchCombobox } from "@/components/ui/BranchCombobox";
 import type { BranchInfo, WorktreeInfo } from "@/types";
 import { Dialog } from "@/components/ui/Dialog";
+import { isSubmitEnter } from "@/lib/keyboard";
 
 interface CreateWorktreeDialogProps {
   repoPath: string;
@@ -217,7 +218,7 @@ export function CreateWorktreeDialog({
                         type="text"
                         value={newBranchName}
                         onChange={(e) => setNewBranchName(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                        onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
                         placeholder="feature/my-feature"
                         className={cn(
                           "w-full text-sm bg-background border rounded-md px-2 py-1.5 text-foreground outline-none focus:ring-1 focus:ring-ring",
@@ -269,7 +270,7 @@ export function CreateWorktreeDialog({
                   type="text"
                   value={worktreePath}
                   onChange={(e) => handlePathChange(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                  onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
                   placeholder={activeBranchName ? "/path/to/worktree" : t("worktree.selectBranch")}
                   disabled={!activeBranchName}
                   className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed"
