@@ -9,6 +9,7 @@ import { Sidebar } from "./Sidebar";
 import { ContentArea } from "./ContentArea";
 import { StatusBar } from "./StatusBar";
 import { ActivityLogPanel } from "./ActivityLogPanel";
+import { AutoSyncSettingsDialogHost } from "@/components/repository/AutoSyncSettingsDialog";
 import { clampSidebarWidth } from "@/lib/sidebar-width";
 
 export function MainLayout() {
@@ -94,6 +95,9 @@ export function MainLayout() {
 
       {/* Status bar */}
       <StatusBar />
+
+      {/* 저장소 메뉴에서 여는 원격 자동 최신화 설정 */}
+      <AutoSyncSettingsDialogHost />
     </div>
   );
 }

@@ -21,6 +21,7 @@ import {
   User,
   ShieldAlert,
   ShieldX,
+  RefreshCw,
 } from "lucide-react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useRepositoryStore, useRepoViewPath } from "@/stores/repository";
@@ -32,6 +33,7 @@ import { cn, getErrorMessage, isAppErrorType, isSameFolder } from "@/lib/utils";
 import { extractOwnerFromRemoteUrl, groupReposByOwner, type GroupedRepos } from "@/lib/group-repos";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
+import { useAutoSyncStore } from "@/stores/auto-sync";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import { RepoSyncIndicator } from "@/components/repository/RepoSyncIndicator";
 import { useRepoSyncStatuses } from "@/api/queries";
@@ -43,16 +45,20 @@ function RepoContextMenu({
   accounts,
   currentAccountId,
   isFavorite,
+  hasRemote,
   onSelect,
   onToggleFavorite,
+  onOpenAutoSync,
   onRemoveRepo,
   onClose,
 }: {
   accounts: GitHubAccount[];
   currentAccountId: string | null;
   isFavorite: boolean;
+  hasRemote: boolean;
   onSelect: (accountId: string | null) => void;
   onToggleFavorite: () => void;
+  onOpenAutoSync: () => void;
   onRemoveRepo: () => void;
   onClose: () => void;
 }) {
@@ -125,6 +131,18 @@ function RepoContextMenu({
       <button
         onClick={(e) => {
           e.stopPropagation();
+          onOpenAutoSync();
+          onClose();
+        }}
+        disabled={!hasRemote}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors text-left disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <RefreshCw className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+        {t("autoSync.menuItem")}
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
           onRemoveRepo();
         }}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-danger hover:bg-accent transition-colors text-left"
@@ -162,6 +180,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
   const repoVisibility = useRepositoryStore((s) => s.repoVisibility);
   const ownerTypes = useRepositoryStore((s) => s.ownerTypes);
   const accounts = useAccountStore((s) => s.accounts);
+  const openAutoSyncSettings = useAutoSyncStore((s) => s.openSettings);
   const [accountPickerRepo, setAccountPickerRepo] = useState<string | null>(null);
 
   const repoPermissions = useRepositoryStore((s) => s.repoPermissions);
@@ -578,7 +597,9 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                             accounts={accounts}
                             currentAccountId={repo.accountId}
                             isFavorite={favoriteRepos.includes(repo.path)}
+                            hasRemote={repo.remotes.length > 0}
                             onToggleFavorite={() => toggleFavorite(repo.path)}
+                            onOpenAutoSync={() => openAutoSyncSettings(repo.path)}
                             onSelect={async (accountId: string | null) => {
                               updateRepoAccount(repo.path, accountId);
                               setAccountPickerRepo(null);

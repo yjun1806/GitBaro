@@ -20,6 +20,7 @@ import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { cn, getErrorMessage, isMergeConflictError } from "@/lib/utils";
 import { useClickOutside } from "./useToolbarDropdown";
 import { SyncDropdown } from "./SyncDropdown";
+import { AutoSyncHint } from "./AutoSyncHint";
 import { ConfirmCommandDialog } from "@/components/ui/ConfirmCommandDialog";
 
 interface SyncZoneProps {
@@ -259,6 +260,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
 
   return (
     <div ref={zoneRef} className="relative flex items-center shrink-0 pr-2">
+      <AutoSyncHint />
       {/* Split-button group */}
       <div className={cn(
         "flex items-center h-8 rounded-lg border transition-all",

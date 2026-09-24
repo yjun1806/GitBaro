@@ -716,6 +716,38 @@
   },
   "autoSync": {
     "fastForwardedToast_one": "{{repo}}: pulled {{count}} remote commit automatically",
-    "fastForwardedToast_other": "{{repo}}: pulled {{count}} remote commits automatically"
+    "fastForwardedToast_other": "{{repo}}: pulled {{count}} remote commits automatically",
+    "menuItem": "Auto sync with remote…",
+    "dialogTitle": "Auto sync settings",
+    "modeLabel": "Mode",
+    "mode": {
+      "off": "Off",
+      "fetch": "Check only",
+      "pull": "Pull automatically"
+    },
+    "modeDescription": {
+      "off": "Never check the remote automatically.",
+      "fetch": "Fetch the remote on a schedule and update incoming and outgoing commit counts. Your files are never touched.",
+      "pull": "Fetch, then fast-forward the current branch only when it is safe."
+    },
+    "pullSafety": "Pulls only when there are no local-only commits, no uncommitted changes, no merge or rebase in progress, and no file changes in the last 2 minutes. Otherwise it only checks. Applies to the main working tree; worktrees are only checked.",
+    "intervalLabel": "Check every",
+    "interval_one": "{{count}} minute",
+    "interval_other": "{{count}} minutes",
+    "intervalShort_one": "{{count}} min",
+    "intervalShort_other": "{{count}} min",
+    "save": "Save",
+    "hint": {
+      "fetch": "Auto check · {{interval}}",
+      "pull": "Auto pull · {{interval}}"
+    },
+    "last": {
+      "fetched": "Checked {{time}}",
+      "pulled_one": "Pulled {{count}} commit {{time}}",
+      "pulled_other": "Pulled {{count}} commits {{time}}",
+      "failed": "Auto check failed {{time}}"
+    },
+    "worktreeNote": "Worktrees are only checked, never pulled automatically.",
+    "openSettings": "Open auto sync settings"
   }
 }
