@@ -72,6 +72,15 @@ export function getFileName(path: string): string {
   return parts[parts.length - 1] ?? path;
 }
 
+/**
+ * Whether two folder paths name the same folder, ignoring trailing slashes.
+ * Used to tell when adding a folder found a repository above it.
+ */
+export function isSameFolder(a: string, b: string): boolean {
+  const trim = (p: string) => p.replace(/\/+$/, "") || "/";
+  return trim(a) === trim(b);
+}
+
 /** Whether `error` is a backend `AppError` of the given `type`. */
 export function isAppErrorType(error: unknown, type: AppError["type"]): boolean {
   return (

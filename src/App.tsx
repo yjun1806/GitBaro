@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
@@ -9,7 +9,7 @@ import { addLocalRepository, cloneRepository, getAccounts, getSettings, openRepo
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import i18n from "@/i18n/config";
-import { getErrorMessage, isAppErrorType } from "@/lib/utils";
+import { getErrorMessage, isAppErrorType, isSameFolder } from "@/lib/utils";
 import { onStorageFailure } from "@/lib/safe-storage";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { WelcomeScreen } from "@/components/welcome/WelcomeScreen";
@@ -189,6 +189,15 @@ function AppContent() {
       if (!selected) return;
       const dirPath = typeof selected === "string" ? selected : selected;
       const repoInfo = await addLocalRepository(dirPath);
+      // The folder may sit inside a repository further up (even one in the
+      // home folder). Adding that repository must be the user's choice.
+      if (!isSameFolder(dirPath, repoInfo.path)) {
+        const confirmed = await ask(
+          t("repo.addEnclosingConfirm", { picked: dirPath, root: repoInfo.path }),
+          { title: t("repo.addEnclosingTitle"), kind: "warning" },
+        );
+        if (!confirmed) return;
+      }
 
       const currentAccounts = useAccountStore.getState().accounts;
       if (currentAccounts.length >= 2) {

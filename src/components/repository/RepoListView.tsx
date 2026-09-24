@@ -23,13 +23,13 @@ import {
   ShieldAlert,
   ShieldX,
 } from "lucide-react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useRepositoryStore, useRepoViewPath } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { addLocalRepository, cloneRepository, getRepoVisibility, getOwnerType, validateToken } from "@/api/commands";
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
-import { cn, getErrorMessage, isAppErrorType } from "@/lib/utils";
+import { cn, getErrorMessage, isAppErrorType, isSameFolder } from "@/lib/utils";
 import { extractOwnerFromRemoteUrl, groupReposByOwner, type GroupedRepos } from "@/lib/group-repos";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
@@ -195,6 +195,15 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
       if (!selected) return;
       const dirPath = typeof selected === "string" ? selected : selected;
       const repoInfo = await addLocalRepository(dirPath);
+      // The folder may sit inside a repository further up (even one in the
+      // home folder). Adding that repository must be the user's choice.
+      if (!isSameFolder(dirPath, repoInfo.path)) {
+        const confirmed = await ask(
+          t("repo.addEnclosingConfirm", { picked: dirPath, root: repoInfo.path }),
+          { title: t("repo.addEnclosingTitle"), kind: "warning" },
+        );
+        if (!confirmed) return;
+      }
 
       if (accounts.length >= 2) {
         setPendingLocalRepo({ path: dirPath, repoInfo });
