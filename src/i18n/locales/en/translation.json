@@ -492,6 +492,8 @@
     "cherryPickInProgress": "Cherry-pick in progress",
     "revertInProgress": "Revert in progress",
     "squashInProgress": "Squash merge in progress",
+    "abortConfirmTitle": "Abort",
+    "abortConfirm": "Abort this operation? Conflicts you have resolved so far will be discarded.",
     "resolveHint": "Resolve and stage {{count}} conflicted file(s), then continue.",
     "readyHint": "All conflicts resolved. You can continue the operation.",
     "continue": "Continue",
