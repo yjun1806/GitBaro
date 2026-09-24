@@ -273,6 +273,37 @@ impl GitCliEngine {
             .map_err(map_io_err)
     }
 
+    /// Run a checkout that should leave HEAD on `refs/heads/<branch>`.
+    ///
+    /// git runs the post-checkout hook after HEAD has already moved, and a
+    /// failing hook makes `git checkout` exit non-zero even though the switch
+    /// happened. Reporting that as a failed switch would make callers undo
+    /// work (e.g. pop a stash onto the new branch) for a switch that did take
+    /// place, so when HEAD is on the target branch the switch counts as done.
+    /// The failed command, with the hook's output, stays in the activity log.
+    async fn run_branch_checkout(&self, args: &[&str], branch: &str) -> Result<(), AppError> {
+        let output = self.run_local(args).await?;
+        if output.status.success() {
+            return Ok(());
+        }
+        let head = self.run_local_probe(&["symbolic-ref", "-q", "HEAD"]).await?;
+        let head_ref = String::from_utf8_lossy(&head.stdout).trim().to_string();
+        if head.status.success() && head_ref == format!("refs/heads/{}", branch) {
+            tracing::warn!(
+                "[git] git {} exited {:?} after switching to {} (post-checkout hook failed)",
+                args.join(" "),
+                output.status.code(),
+                branch
+            );
+            return Ok(());
+        }
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(AppError::GitCli {
+            message: parse_git_error(&stderr),
+            exit_code: output.status.code(),
+        })
+    }
+
     /// Run a local git command and check for success. Returns stdout on success.
     async fn run_local_checked(&self, args: &[&str]) -> Result<String, AppError> {
         let output = self.run_local(args).await?;
@@ -355,8 +386,7 @@ impl GitCliEngine {
         // pathspec instead of switching branch. `validate_branch_name` rejects
         // leading '-' and other option-injection characters instead.
         crate::git::branch::validate_branch_name(name)?;
-        self.run_local_checked(&["checkout", name]).await?;
-        Ok(())
+        self.run_branch_checkout(&["checkout", name], name).await
     }
 
     /// Check out a remote-tracking branch by creating a local branch that
@@ -372,9 +402,8 @@ impl GitCliEngine {
         local_name: &str,
     ) -> Result<(), AppError> {
         crate::git::branch::validate_branch_name(local_name)?;
-        self.run_local_checked(&["checkout", start_point, "-b", local_name, "--"])
-            .await?;
-        Ok(())
+        self.run_branch_checkout(&["checkout", start_point, "-b", local_name, "--"], local_name)
+            .await
     }
 
     /// Check out a specific commit as a detached HEAD. Runs post-checkout hook.
@@ -1460,6 +1489,32 @@ branch refs/heads/feat
 
         assert_eq!(std::fs::read_to_string(dir.join("tracked.txt")).unwrap(), "first\n");
         assert!(git(&dir, &["stash", "list"]).contains("second"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// post-checkout 훅이 실패해도 HEAD가 이미 옮겨졌다면 전환은 성공이다.
+    /// 실패로 보고하면 호출 측이 스태시를 새 브랜치 위에 되돌려 놓는다.
+    #[tokio::test]
+    async fn switch_counts_as_done_when_only_post_checkout_hook_fails() {
+        let dir = temp_repo("hook");
+        git(&dir, &["branch", "other"]);
+        let hooks = dir.join("hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        let hook = hooks.join("post-checkout");
+        std::fs::write(&hook, "#!/bin/sh\necho hook failed >&2\nexit 1\n").unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        git(&dir, &["config", "core.hooksPath", hooks.to_str().unwrap()]);
+        let engine = GitCliEngine::new(&dir);
+
+        engine.switch_branch("other").await.unwrap();
+        assert_eq!(git(&dir, &["symbolic-ref", "HEAD"]), "refs/heads/other");
+
+        // HEAD가 움직이지 않은 진짜 실패는 그대로 오류다.
+        assert!(engine.switch_branch("missing").await.is_err());
+        assert_eq!(git(&dir, &["symbolic-ref", "HEAD"]), "refs/heads/other");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
