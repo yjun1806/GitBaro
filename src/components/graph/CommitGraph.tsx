@@ -27,49 +27,139 @@ import { HistoryView } from "@/components/history/HistoryView";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
 import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
 import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
-import type { CommitInfo, NewCommitBasis } from "@/types";
+import type { CommitInfo } from "@/types";
 import { GRAPH_COLUMNS, GraphRow, GraphWipRow, SeenDivider } from "./GraphRow";
 import {
   edgesThroughBottom,
   graphColumnWidth,
   laneColor,
   markNewCommits,
+  normalizePath,
   type GraphWip,
 } from "./graph-model";
 
 export interface CommitGraphProps {
   /** 맨 위 WIP 행(`useGraphReview`가 순서까지 정한 목록). */
   wips: GraphWip[];
-  /** 지금 연 워크트리의 새 커밋 수와 기준선. */
-  newCount: number | null;
-  basis: NewCommitBasis | null;
-  seenOid: string | null;
+  /** 지금 연 워크트리의 새 커밋 수와 새 커밋으로 센 커밋. 모르면 null. */
+  newCommits: { newCount: number; ids: readonly string[] } | null;
+  /** 지금 연 워크트리를 확인한 시각(epoch ms). */
   seenAt: number | null;
 }
 
 /**
  * 위 패널의 커밋 그래프(단일 저장소). 전체 폭 레인 그래프로 HEAD의 이력을 그리고,
  * 맨 위에 워크트리마다 WIP 행, 새 커밋 점, 「여기까지 확인함」 구분선을 둔다.
- * 브랜치 비교를 켜면 기존 비교 화면(`HistoryView`)으로 바뀐다.
+ * 브랜치 비교를 켜면 WIP 행 아래가 기존 비교 화면(`HistoryView`)으로 바뀐다.
  */
 export function CommitGraph(props: CommitGraphProps) {
   const compareBranch = useUIStore((s) => s.compareBranch);
+  const selection = useGraphSelection();
   // 비교 화면(선택기의 비교 해제 버튼, merge 패널 포함)은 기존 화면을 그대로 쓴다.
-  if (compareBranch) return <HistoryView />;
-  return <CommitGraphList {...props} />;
+  // WIP 행은 남겨 비교 중에도 스테이징 목록으로 갈 수 있게 한다.
+  if (compareBranch) {
+    return (
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <WipRows wips={props.wips} selection={selection} graphWidth={graphColumnWidth(1)} headChain={null} />
+        <HistoryView />
+      </div>
+    );
+  }
+  return <CommitGraphList {...props} selection={selection} />;
 }
 
-function CommitGraphList({ wips, newCount, basis, seenOid, seenAt }: CommitGraphProps) {
+type GraphSelection = ReturnType<typeof useGraphSelection>;
+
+/**
+ * 그래프에서 고른 것(WIP 행 또는 커밋)을 아래 칸에 연다. 다른 워크트리의 WIP 행은 그
+ * 워크트리를 연 다음에 스테이징 목록을 연다. 기다리는 사이 사용자가 다른 것을 골랐거나
+ * 열기에 실패해 이전 위치로 돌아갔으면 스테이징 목록으로 넘기지 않는다.
+ */
+function useGraphSelection() {
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const setActiveTab = useUIStore((s) => s.setActiveTab);
+  const selectCommitInStore = useSelectionStore((s) => s.selectCommit);
+  const { data: worktreeList = [] } = useWorktrees(activeRepoPath);
+  const openWorktree = useOpenWorktree(activeRepoPath, worktreeList);
+  // 고를 때마다 늘린다. 비동기 전환이 끝났을 때 그 뒤에 다른 것을 골랐는지 본다.
+  const intent = useRef(0);
+
+  const selectCommit = useCallback(
+    (id: string) => {
+      intent.current += 1;
+      selectCommitInStore(id);
+    },
+    [selectCommitInStore],
+  );
+
+  const selectWip = useCallback(
+    async (wip: GraphWip) => {
+      const mine = ++intent.current;
+      if (!wip.isCurrent) {
+        await openWorktree(wip.path);
+        const now = useRepositoryStore.getState().activeRepoPath;
+        const opened = now !== null && normalizePath(now) === normalizePath(wip.path);
+        if (!opened || intent.current !== mine) return;
+      }
+      setActiveTab("changes");
+    },
+    [openWorktree, setActiveTab],
+  );
+
+  return { selectCommit, selectWip };
+}
+
+interface WipRowsProps {
+  wips: GraphWip[];
+  selection: GraphSelection;
+  graphWidth: number;
+  /** 지금 연 워크트리의 HEAD 커밋이 있는 줄기. 그 행과 점선으로 잇는다. 없으면 null. */
+  headChain: number | null;
+}
+
+/** 맨 위 WIP 행들. 워크트리마다 한 행. */
+function WipRows({ wips, selection, graphWidth, headChain }: WipRowsProps) {
+  const { t } = useTranslation();
+  const activeTab = useUIStore((s) => s.activeTab);
+  const colorSeed = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? "");
+  return (
+    <>
+      {wips.map((wip) => (
+        <GraphWipRow
+          key={wip.path}
+          wipLabel={
+            wip.isCurrent
+              ? t("shell.uncommittedCount", { count: wip.count ?? 0 })
+              : t("graph.wipWorktreeLabel", { name: worktreeName(wip), count: wip.count ?? 0 })
+          }
+          worktreeName={wip.isCurrent ? null : worktreeName(wip)}
+          count={wip.count}
+          changedAt={wip.changedAt}
+          color={wip.isCurrent ? laneColor(colorSeed, headChain ?? 0) : laneColor(wip.path, 0)}
+          graphWidth={graphWidth}
+          selected={wip.isCurrent && activeTab === "changes"}
+          connectDown={wip.isCurrent && headChain !== null}
+          onSelect={() => void selection.selectWip(wip)}
+        />
+      ))}
+    </>
+  );
+}
+
+function CommitGraphList({
+  newCommits,
+  seenAt,
+  wips,
+  selection,
+}: CommitGraphProps & { selection: GraphSelection }) {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const colorSeed = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? "");
   const accounts = useAccountStore((s) => s.accounts);
-  const activeTab = useUIStore((s) => s.activeTab);
-  const setActiveTab = useUIStore((s) => s.setActiveTab);
   const compareBranch = useUIStore((s) => s.compareBranch);
   const setCompareBranch = useUIStore((s) => s.setCompareBranch);
   const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
-  const selectCommit = useSelectionStore((s) => s.selectCommit);
+  const { selectCommit } = selection;
   const repoAccountId = useRepoAccountId();
 
   const { data: historyData, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
@@ -84,8 +174,6 @@ function CommitGraphList({ wips, newCount, basis, seenOid, seenAt }: CommitGraph
     [remoteTagNames],
   );
   const { data: githubAvatarMap = {} } = useCommitAvatars(activeRepoPath);
-  const { data: worktreeList = [] } = useWorktrees(activeRepoPath);
-  const openWorktree = useOpenWorktree(activeRepoPath, worktreeList);
 
   const accountAvatarMap = useMemo(
     () => new Map(accounts.map((a) => [a.email.toLowerCase(), a.avatarUrl])),
@@ -109,8 +197,8 @@ function CommitGraphList({ wips, newCount, basis, seenOid, seenAt }: CommitGraph
   }, [historyData]);
 
   const marks = useMemo(
-    () => markNewCommits(commits, { newCount, basis, seenOid }),
-    [commits, newCount, basis, seenOid],
+    () => markNewCommits(commits, newCommits),
+    [commits, newCommits],
   );
   const colorOf = useCallback((chain: number) => laneColor(colorSeed, chain), [colorSeed]);
 
@@ -147,14 +235,10 @@ function CommitGraphList({ wips, newCount, basis, seenOid, seenAt }: CommitGraph
     return () => observer.disconnect();
   }, [isLoading, activeRepoPath]);
 
-  const handleSelectWip = async (wip: GraphWip) => {
-    if (!wip.isCurrent) await openWorktree(wip.path);
-    setActiveTab("changes");
-  };
-
   const menu = useCommitMenu(activeRepoPath);
 
   const headId = commits[0]?.id;
+  const headChain = headId ? (layouts.get(headId)?.chain ?? 0) : null;
   const currentWipShown = wips.some((w) => w.isCurrent);
 
   return (
@@ -183,27 +267,7 @@ function CommitGraphList({ wips, newCount, basis, seenOid, seenAt }: CommitGraph
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
-        {wips.map((wip) => (
-          <GraphWipRow
-            key={wip.path}
-            wipLabel={
-              wip.isCurrent
-                ? t("shell.uncommittedCount", { count: wip.count ?? 0 })
-                : t("graph.wipWorktreeLabel", { name: worktreeName(wip), count: wip.count ?? 0 })
-            }
-            worktreeName={wip.isCurrent ? null : worktreeName(wip)}
-            count={wip.count}
-            color={
-              wip.isCurrent
-                ? colorOf(headId ? (layouts.get(headId)?.chain ?? 0) : 0)
-                : laneColor(wip.path, 0)
-            }
-            graphWidth={graphWidth}
-            selected={wip.isCurrent && activeTab === "changes"}
-            connectDown={wip.isCurrent && headId !== undefined}
-            onSelect={() => void handleSelectWip(wip)}
-          />
-        ))}
+        <WipRows wips={wips} selection={selection} graphWidth={graphWidth} headChain={headChain} />
 
         {isLoading ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{t("history.loadingHistory")}</p>
@@ -236,6 +300,7 @@ function CommitGraphList({ wips, newCount, basis, seenOid, seenAt }: CommitGraph
                   isSelected={selectedCommitId === commit.id}
                   isHighlighted={activeIndex === index}
                   isNew={marks.newIds.has(commit.id)}
+                  isSeen={marks.dividerBefore !== null && index >= marks.dividerBefore}
                   wipAbove={index === 0 && currentWipShown}
                   onClick={() => selectCommit(commit.id)}
                   onContextMenu={(e) => {

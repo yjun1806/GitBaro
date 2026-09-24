@@ -1,5 +1,4 @@
 import { avatarColor } from "@/lib/avatar-color";
-import type { NewCommitBasis } from "@/types";
 
 /**
  * 커밋 그래프의 화면 계산(순수 함수). 레인 위치는 `@/lib/graph-lanes`가 정하고,
@@ -25,25 +24,24 @@ export function graphColumnWidth(maxLanes: number): number {
   return laneX(lanes - 1) + LANE_START_X;
 }
 
+/** 줄기마다 돌려 쓰는 명도(%). 첫 값이 저장소 아바타 색 그대로(`avatarColor`의 45%)다. */
+const LANE_LIGHTNESS = [45, 62, 32, 54, 38];
+
 /**
- * 줄기(chain)의 선 색. 저장소 아바타 색(`avatarColor`)의 색조를 쓴다.
- * 첫 줄기(0, 보통 HEAD가 있는 줄기)는 저장소 색 그대로, 나머지 줄기는 저장소 경로와
- * 줄기 번호를 합친 값의 색조를 쓴다. 같은 저장소면 늘 같은 색이 나온다.
+ * 줄기(chain)의 선 색. 모든 줄기가 저장소 아바타 색(`avatarColor`)의 색조를 그대로 쓴다
+ * (README: 저장소 색 = 그래프 레인 색). 한 저장소 안의 여러 줄기는 명도만 바꿔 구별한다.
+ * 첫 줄기(0, 보통 HEAD가 있는 줄기)는 저장소 색 그대로다.
  */
 export function laneColor(seed: string, chain: number): string {
-  return avatarColor(chain === 0 ? seed : `${seed}#${chain}`).background;
-}
-
-export interface NewCommitMarkInput {
-  /** 이 워크트리의 새 커밋 수. 아직 모르면 null. */
-  newCount: number | null;
-  basis: NewCommitBasis | null;
-  /** 기준선으로 기록된 커밋. 기록이 없으면 null. */
-  seenOid: string | null;
+  const base = avatarColor(seed).background;
+  if (chain === 0) return base;
+  const hue = /hsl\((\d+)/.exec(base)?.[1] ?? "0";
+  const lightness = LANE_LIGHTNESS[chain % LANE_LIGHTNESS.length];
+  return `hsl(${hue}, 55%, ${lightness}%)`;
 }
 
 export interface NewCommitMarks {
-  /** 새 커밋으로 표시할 커밋. */
+  /** 새 커밋으로 표시할 커밋(불러온 것 중). */
   newIds: ReadonlySet<string>;
   /**
    * 「여기까지 확인함」 구분선을 이 번호의 행 앞에 그린다(`commits.length`면 맨 끝).
@@ -57,29 +55,22 @@ const NO_MARKS: NewCommitMarks = { newIds: new Set(), dividerBefore: null };
 /**
  * 불러온 커밋 중 어느 것이 새 커밋이고, 구분선이 어디에 오는지 정한다.
  *
- * 목록은 HEAD에서 닿는 커밋을 시간순으로 늘어놓은 것이다(`get_commit_history`).
- * - 기준선 커밋에서 셌고(`basis: "oid"`) 그 커밋이 목록에 있으면: 기준선 커밋에서 닿지 않는
- *   커밋이 새 커밋이다. 병합으로 들어온 옛 커밋이 시간순으로 위쪽에 섞여도 새 커밋으로 치지 않는다.
- * - 그 밖(작성 시각·갈라진 지점으로 셈, 기준선 커밋을 아직 불러오지 않음): 위에서부터 `newCount`개다.
+ * 새 커밋은 백엔드가 개수를 셀 때 고른 커밋 그대로다(`list_new_commit_ids`의 `ids`).
+ * 그래서 점과 구분선이 버튼의 N과 늘 같은 커밋을 가리킨다. 기반 브랜치에서 병합해 들어온
+ * 커밋처럼 시간순으로 새 커밋 사이에 끼어도 새 커밋이 아닌 커밋에는 점을 찍지 않는다.
  *
- * 구분선은 마지막 새 커밋 바로 아래에 둔다. 새 커밋을 다 찾지 못했으면(다음 페이지에 있음) 그리지 않는다.
+ * 구분선은 마지막 새 커밋 바로 아래에 둔다. 새 커밋을 다 찾지 못했으면(다음 페이지에 있거나,
+ * 백엔드 목록이 상한에서 잘렸으면) 그리지 않는다.
  */
 export function markNewCommits(
-  commits: readonly { id: string; parentIds: readonly string[] }[],
-  { newCount, basis, seenOid }: NewCommitMarkInput,
+  commits: readonly { id: string }[],
+  newCommits: { newCount: number; ids: readonly string[] } | null,
 ): NewCommitMarks {
-  if (!newCount || newCount <= 0 || commits.length === 0) return NO_MARKS;
-
-  const seenIndex = seenOid ? commits.findIndex((c) => c.id === seenOid) : -1;
-  let newIds: Set<string>;
-  if (basis === "oid" && seenIndex >= 0) {
-    const reachable = reachableFrom(commits, seenOid as string);
-    newIds = new Set(commits.filter((c) => !reachable.has(c.id)).map((c) => c.id));
-  } else {
-    newIds = new Set(commits.slice(0, newCount).map((c) => c.id));
-  }
-
-  if (newIds.size < newCount) return { newIds, dividerBefore: null };
+  if (!newCommits || newCommits.newCount <= 0 || newCommits.ids.length === 0) return NO_MARKS;
+  const wanted = new Set(newCommits.ids);
+  const newIds = new Set(commits.filter((c) => wanted.has(c.id)).map((c) => c.id));
+  const complete = newCommits.ids.length >= newCommits.newCount && newIds.size === wanted.size;
+  if (!complete) return { newIds, dividerBefore: null };
   let last = -1;
   commits.forEach((c, i) => {
     if (newIds.has(c.id)) last = i;
@@ -87,23 +78,25 @@ export function markNewCommits(
   return { newIds, dividerBefore: last + 1 };
 }
 
-/** 불러온 커밋 안에서 `start`와 그 조상을 모은다. */
-function reachableFrom(
-  commits: readonly { id: string; parentIds: readonly string[] }[],
-  start: string,
-): Set<string> {
-  const byId = new Map(commits.map((c) => [c.id, c]));
-  const seen = new Set<string>();
-  const stack = [start];
-  while (stack.length > 0) {
-    const id = stack.pop() as string;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    for (const parent of byId.get(id)?.parentIds ?? []) {
-      if (!seen.has(parent)) stack.push(parent);
-    }
-  }
-  return seen;
+/**
+ * 「여기까지 확인함 · 오늘 14:10」의 시각 부분. 오늘·어제는 그 말과 시:분, 그보다 전은
+ * 날짜와 시:분으로 쓴다(시안 `gen_d.py`의 구분선 문구).
+ */
+export function formatSeenClock(
+  seenAtMs: number,
+  nowMs: number,
+  labels: { today: (time: string) => string; yesterday: (time: string) => string },
+  locale?: string,
+): string {
+  const seen = new Date(seenAtMs);
+  const time = `${String(seen.getHours()).padStart(2, "0")}:${String(seen.getMinutes()).padStart(2, "0")}`;
+  const startOfToday = new Date(nowMs);
+  startOfToday.setHours(0, 0, 0, 0);
+  const dayMs = 24 * 60 * 60 * 1000;
+  if (seenAtMs >= startOfToday.getTime()) return labels.today(time);
+  if (seenAtMs >= startOfToday.getTime() - dayMs) return labels.yesterday(time);
+  const date = seen.toLocaleDateString(locale, { month: "short", day: "numeric" });
+  return `${date} ${time}`;
 }
 
 export interface GraphWip {
@@ -113,6 +106,8 @@ export interface GraphWip {
   branch: string | null;
   /** 커밋하지 않은 파일 수. 아직 모르면 null. */
   count: number | null;
+  /** 커밋하지 않은 파일이 마지막으로 바뀐 시각(epoch ms). 모르거나 없으면 null. */
+  changedAt: number | null;
   /** 지금 열어 둔 워크트리(그래프가 보여 주는 이력의 주인)인지. */
   isCurrent: boolean;
   isMain: boolean;

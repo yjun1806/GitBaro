@@ -109,13 +109,13 @@ export function GraphPanel() {
             {t("actions.title")}
           </Tab>
         </TabGroup>
-        {tab === "graph" && review.newCount !== null && review.newCount > 0 && (
+        {tab === "graph" && review.newCommits !== null && review.newCommits.newCount > 0 && (
           <button
             type="button"
             onClick={review.markSeen}
             className="shrink-0 h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
           >
-            {t("graph.markSeen", { count: review.newCount })}
+            {t("graph.markSeen", { count: review.newCommits.newCount })}
           </button>
         )}
       </div>
@@ -124,9 +124,7 @@ export function GraphPanel() {
         {tab === "graph" ? (
           <CommitGraph
             wips={review.wips}
-            newCount={review.newCount}
-            basis={review.basis}
-            seenOid={review.seenOid}
+            newCommits={review.newCommits}
             seenAt={review.seenAt}
           />
         ) : tab === "stash" ? (

@@ -819,6 +819,9 @@
     "seenHere": "Seen up to here",
     "seenHereAt": "Seen up to here · {{time}}",
     "seenHint": "Commits above this line are new",
+    "seenToday": "today {{time}}",
+    "seenYesterday": "yesterday {{time}}",
+    "modifiedAgo": "modified {{time}}",
     "markSeen_one": "Mark {{count}} new commit as seen",
     "markSeen_other": "Mark {{count}} new commits as seen"
   }

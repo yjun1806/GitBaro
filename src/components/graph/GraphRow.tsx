@@ -5,7 +5,7 @@ import { RefBadge } from "@/components/history/CommitItem";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { GraphEdge, GraphRowLayout } from "@/lib/graph-lanes";
 import type { CommitInfo } from "@/types";
-import { GRAPH_ROW_HEIGHT, laneX } from "./graph-model";
+import { formatSeenClock, GRAPH_ROW_HEIGHT, laneX } from "./graph-model";
 
 const H = GRAPH_ROW_HEIGHT;
 const MID = H / 2;
@@ -85,6 +85,8 @@ interface GraphRowProps {
   isSelected: boolean;
   isHighlighted: boolean;
   isNew: boolean;
+  /** 「여기까지 확인함」 아래(이미 확인한) 커밋. 시안처럼 흐리게 그린다. */
+  isSeen: boolean;
   wipAbove: boolean;
   onClick: () => void;
   onContextMenu: (e: MouseEvent) => void;
@@ -105,6 +107,7 @@ export function GraphRow({
   isSelected,
   isHighlighted,
   isNew,
+  isSeen,
   wipAbove,
   onClick,
   onContextMenu,
@@ -123,8 +126,11 @@ export function GraphRow({
       onContextMenu={onContextMenu}
       aria-current={isSelected ? "true" : undefined}
       data-commit-id={commit.id}
+      data-seen={isSeen || undefined}
       className={cn(
         "flex items-center w-full text-left border-b border-(--line) select-none transition-colors",
+        // 시안(gen_d.py)의 확인한 커밋: opacity 0.55. 고른 행은 또렷하게 둔다.
+        isSeen && !isSelected && "[&>*]:opacity-55",
         isSelected
           ? "bg-(--acc-sel)"
           : isHighlighted
@@ -192,6 +198,8 @@ interface GraphWipRowProps {
   /** 다른 워크트리의 WIP 행이면 그 브랜치(또는 폴더) 이름. 지금 연 워크트리면 null. */
   worktreeName: string | null;
   count: number | null;
+  /** 커밋하지 않은 파일이 마지막으로 바뀐 시각(epoch ms). */
+  changedAt: number | null;
   color: string;
   graphWidth: number;
   selected: boolean;
@@ -208,6 +216,7 @@ export function GraphWipRow({
   wipLabel,
   worktreeName,
   count,
+  changedAt,
   color,
   graphWidth,
   selected,
@@ -243,21 +252,30 @@ export function GraphWipRow({
           strokeDasharray="2.5 2"
         />
       </svg>
-      <span className="flex items-center gap-2 flex-1 min-w-0 pl-2 pr-3 text-[12.5px]">
-        <span className="w-1.5 shrink-0" />
-        {worktreeName && (
-          <span
-            className="inline-flex items-center gap-1 max-w-[180px] shrink-0 px-[7px] py-px rounded-[6px] border border-(--line2) text-[10.5px] font-bold text-(--fg2)"
-            title={t("graph.worktree")}
-          >
-            <FolderGit2 className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
-            <span className="truncate font-mono">{worktreeName}</span>
+      <span className={cn(GRAPH_COLUMNS, "flex-1 min-w-0 pl-2 pr-3 text-[12.5px]")}>
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="w-1.5 shrink-0" />
+          {worktreeName && (
+            <span
+              className="inline-flex items-center gap-1 max-w-[180px] shrink-0 px-[7px] py-px rounded-[6px] border border-(--line2) text-[10.5px] font-bold text-(--fg2)"
+              title={t("graph.worktree")}
+            >
+              <FolderGit2 className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+              <span className="truncate font-mono">{worktreeName}</span>
+            </span>
+          )}
+          <span className="italic text-(--fg2) truncate">{t("shell.uncommitted")}</span>
+          <span className="text-[11.5px] text-muted-foreground shrink-0">
+            {count === null ? "…" : t("graph.fileCount", { count })}
           </span>
-        )}
-        <span className="italic text-(--fg2) truncate">{t("shell.uncommitted")}</span>
-        <span className="text-[11.5px] text-muted-foreground shrink-0">
-          {count === null ? "…" : t("graph.fileCount", { count })}
         </span>
+        <span />
+        <span className="truncate text-[12px] text-muted-foreground">
+          {changedAt !== null && (count ?? 0) > 0
+            ? t("graph.modifiedAgo", { time: formatRelativeTime(changedAt / 1000) })
+            : null}
+        </span>
+        <span />
       </span>
     </button>
   );
@@ -273,7 +291,7 @@ interface SeenDividerProps {
 
 /** 「여기까지 확인함」 구분선. 이 선 위의 커밋이 새 커밋이다. 그래프 선은 끊기지 않고 지나간다. */
 export function SeenDivider({ seenAt, graphWidth, through, colorOf }: SeenDividerProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <div
       role="separator"
@@ -296,7 +314,17 @@ export function SeenDivider({ seenAt, graphWidth, through, colorOf }: SeenDivide
       <span className="flex items-center gap-2.5 flex-1 min-w-0 pl-2 pr-3">
         <span className="shrink-0 text-[11px] font-bold text-(--acc)">
           {seenAt !== null
-            ? t("graph.seenHereAt", { time: formatRelativeTime(seenAt / 1000) })
+            ? t("graph.seenHereAt", {
+                time: formatSeenClock(
+                  seenAt,
+                  Date.now(),
+                  {
+                    today: (time) => t("graph.seenToday", { time }),
+                    yesterday: (time) => t("graph.seenYesterday", { time }),
+                  },
+                  i18n.language,
+                ),
+              })
             : t("graph.seenHere")}
         </span>
         <span className="flex-1 h-px bg-(--acc-line)" />

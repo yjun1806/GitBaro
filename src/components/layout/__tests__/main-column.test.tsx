@@ -61,6 +61,7 @@ vi.mock("@/api/queries", () => ({
   useRepoSyncStatuses: () => ({ data: undefined }),
   useReviewStatusQuery: () => ({ data: undefined, isLoading: false }),
   useNewCommitCountsQuery: () => ({ data: undefined, isLoading: false }),
+  useNewCommitIdsQuery: () => ({ data: undefined }),
   useStashList: () => ({ data: [] }),
   useWorkflowRuns: () => ({ data: [] }),
   useFileDiff: () => ({ data: null, isLoading: false, isError: false }),

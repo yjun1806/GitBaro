@@ -8,7 +8,7 @@ import { useLiveChangesStore } from "@/stores/live-changes";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
 import type { RepoReviewStatus, RepoSyncStatus } from "@/types";
-import { buildSignals, worktreesByRepoFrom } from "./tree-model";
+import { buildSignals, syncStatusPaths, worktreesByRepoFrom } from "./tree-model";
 
 /** 사이드바가 활동 감시 대상에 경로를 더할 때 쓰는 키. */
 export const SIDEBAR_WATCH_KEY = "sidebar";
@@ -81,8 +81,8 @@ export function useSidebarTreeData(): SidebarTreeData {
   const worktreesByRepo = useMemo(() => worktreesByRepoFrom(review.repos), [review.repos]);
 
   const statusPaths = useMemo(
-    () => [...repoPathList, ...Object.values(worktreesByRepo).flatMap((wts) => wts.map((w) => w.path))],
-    [repoPathList, worktreesByRepo],
+    () => syncStatusPaths(repoPathList, review.repos),
+    [repoPathList, review.repos],
   );
   const { data: syncData } = useRepoSyncStatuses(statusPaths);
   // 워크트리 목록이 바뀌면 조회 키가 바뀌어 잠깐 결과가 비는데, 그동안 앞 결과를 보여 줘
