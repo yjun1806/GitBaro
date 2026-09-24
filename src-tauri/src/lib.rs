@@ -121,6 +121,8 @@ pub fn run() {
             commands::review::count_new_commits,
             // W3-T3
             commands::review::list_new_commit_ids,
+            // W4-T2
+            commands::workspace_history::get_workspace_history,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");

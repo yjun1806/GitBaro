@@ -532,3 +532,29 @@ export interface NewCommitCount {
 export interface NewCommitIds extends NewCommitCount {
   ids: string[];
 }
+
+// W4-T2 — 워크스페이스 타임라인 (Rust: src-tauri/src/commands/workspace_history.rs)
+
+/**
+ * `get_workspace_history`의 저장소 하나. 저장소마다 따로 계산하고, 브랜치 이름이 같아도 합치지 않는다.
+ * 읽지 못한 저장소는 `error`만 채워지고 나머지는 비어 있다.
+ */
+export interface WorkspaceRepoHistory {
+  /** 요청에 넘긴 저장소 경로 그대로. */
+  path: string;
+  /** 체크아웃한 로컬 브랜치. detached HEAD면 null. */
+  branch: string | null;
+  /** HEAD 커밋. 커밋이 없는 저장소면 null. */
+  headOid: string | null;
+  /** 기본 브랜치(origin/HEAD → main → master 순). 못 찾으면 null. */
+  defaultBranch: string | null;
+  /** 실제로 비교한 참조(`main`, `origin/main`). HEAD가 기본 브랜치 자신이면 그 원격 추적 브랜치. */
+  baseRef: string | null;
+  /** main과 갈라진 지점. null이면 `commits`는 HEAD 이력을 한도까지 담는다. */
+  mergeBaseOid: string | null;
+  /** HEAD부터 갈라진 지점 바로 위까지, 최신 순. */
+  commits: CommitInfo[];
+  /** 한도(`limitPerRepo`)를 넘어 잘렸는가. */
+  truncated: boolean;
+  error: string | null;
+}

@@ -20,3 +20,5 @@ pub use engine::{
 };
 // W1-T4
 pub mod new_commits;
+// W4-T2
+pub mod merge_base;
