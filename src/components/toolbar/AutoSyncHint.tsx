@@ -59,7 +59,7 @@ export function AutoSyncHint() {
       type="button"
       onClick={() => openSettings(ownerPath)}
       title={tooltip}
-      className="flex flex-col items-end justify-center h-8 px-1.5 mr-1 rounded-md leading-tight hover:bg-accent transition-colors"
+      className="flex flex-col items-end justify-center gap-px h-7 px-2 rounded-md leading-[12px] text-(--fg2) hover:bg-(--frame-hover) transition-colors"
     >
       <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">
         {modeLabel}

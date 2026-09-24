@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { ChevronDown, Loader2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
+import { TOOLBAR_BADGE, TOOLBAR_DIVIDER, TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
 
 /**
  * 툴바 폭이 이보다 좁으면 버튼 이름을 숨기고 아이콘·배지만 둔다. 툴바 줄(`@container`)의 폭 기준이다.
@@ -15,18 +17,19 @@ export const TOOLBAR_LABEL_CLASS = "hidden @min-[1100px]:inline";
 export const TOOLBAR_WIDE_LABEL_CLASS = "hidden @min-[1280px]:inline";
 
 /**
- * 툴바 git 작업 버튼 묶음. 시안 `toolbar()`(`gen_d.py:111-116`)의 흰 카드 한 칸이다.
+ * 툴바 git 작업 버튼 묶음. 층 0 위에 바탕 없이 버튼을 붙여 두고, 묶음 사이는 `ToolbarDivider`로 나눈다.
  */
 export function ActionGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div
-      role="group"
-      aria-label={label}
-      className="flex items-center gap-0.5 p-[3px] rounded-[11px] bg-card shadow-(--shadow-sm)"
-    >
+    <div role="group" aria-label={label} className="flex items-center gap-0.5">
       {children}
     </div>
   );
+}
+
+/** 툴바 묶음 사이의 가는 세로 선 */
+export function ToolbarDivider() {
+  return <span aria-hidden="true" data-toolbar-divider className={cn("mx-1", TOOLBAR_DIVIDER)} />;
 }
 
 interface ActionButtonProps {
@@ -53,7 +56,7 @@ interface ActionButtonProps {
   caret?: boolean;
 }
 
-/** 시안 `gbtn()`: 30px 높이, 아이콘 + 이름 + 배지. 메뉴가 있으면 ▾ 버튼을 오른쪽에 붙인다. */
+/** 툴바 버튼(`toolbarButtonClass`): 아이콘 + 이름 + 배지. 메뉴가 있으면 ▾ 버튼을 오른쪽에 붙인다. */
 export function ActionButton({
   action,
   icon: Icon,
@@ -82,22 +85,21 @@ export function ActionButton({
         aria-label={accessibleLabel}
         data-action={action}
         className={cn(
-          "flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg text-[12.5px] font-semibold transition-colors",
-          menu && "pr-1.5 rounded-r-none",
-          highlighted ? "text-primary" : "text-(--fg2)",
-          disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-accent",
+          toolbarButtonClass({ disabled, joinRight: Boolean(menu), open: menu?.isOpen }),
+          // 할 일이 있는 작업(받을·올릴 커밋)은 글자를 한 단계 진하게 한다. 색은 쓰지 않는다.
+          highlighted && !disabled && "text-foreground font-semibold",
         )}
       >
         {busy ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+          <Loader2 className={cn(TOOLBAR_ICON, "animate-spin")} aria-hidden="true" />
         ) : (
-          <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+          <Icon className={TOOLBAR_ICON} aria-hidden="true" />
         )}
         <span className={cn("whitespace-nowrap", TOOLBAR_LABEL_CLASS)}>{label}</span>
         {showBadge && (
           <span
             aria-hidden="true"
-            className="h-4 min-w-4 px-[5px] box-border rounded-lg bg-primary text-primary-foreground text-[10.5px] font-bold flex items-center justify-center tabular-nums leading-none"
+            className={TOOLBAR_BADGE}
           >
             {badgePrefix}
             {badge}
@@ -113,11 +115,7 @@ export function ActionButton({
           aria-label={menu.label}
           aria-haspopup="menu"
           aria-expanded={menu.isOpen}
-          className={cn(
-            "flex items-center justify-center h-[30px] w-5 rounded-r-lg text-(--fg2) transition-colors",
-            menuDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-accent",
-            menu.isOpen && "bg-accent",
-          )}
+          className={toolbarButtonClass({ joinLeft: true, disabled: menuDisabled, open: menu.isOpen })}
         >
           <ChevronDown className="w-3 h-3 opacity-60" aria-hidden="true" />
         </button>
@@ -140,7 +138,7 @@ export function ActionMenu({ items, onClose }: { items: ActionMenuItem[]; onClos
   return (
     <div
       role="menu"
-      className="absolute right-0 top-full mt-2 w-64 py-1 bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
+      className={cn("absolute right-0 top-full mt-2 w-64 py-1 rounded-xl z-50 overflow-hidden", FLOATING_SURFACE)}
     >
       {items.map((item) => (
         <button

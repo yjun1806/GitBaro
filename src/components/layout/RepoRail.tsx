@@ -18,6 +18,7 @@ import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import { HEADER_HEIGHT_CLASS, TRAFFIC_LIGHT_INSET_PX } from "@/lib/layout-tokens";
 import { cn } from "@/lib/utils";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
+import { TOOLBAR_ICON, toolbarButtonClass } from "@/components/toolbar/toolbar-button";
 import type { RepoInfo, RepoSyncStatus } from "@/types";
 
 export const RAIL_COLLAPSED_WIDTH = 56;
@@ -281,7 +282,7 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
             맨 왼쪽 위, 즉 이 줄 안에 있으므로 그 자리(TRAFFIC_LIGHT_INSET_PX)는 여기서
             예약한다(Overlay 타이틀바). 접힌 사이드바는 그 폭(56px)이 트래픽 라이트보다
             좁아 예약할 자리가 없어 이 예약은 펼침(hover 포함) 상태에서만 둔다. */}
-        <div className={cn("flex items-center shrink-0 border-b border-(--line2)", HEADER_HEIGHT_CLASS)}>
+        <div className={cn("flex items-center shrink-0 border-b border-(--line2)", isExpanded ? "pr-2" : "justify-center", HEADER_HEIGHT_CLASS)}>
           {isExpanded && (
             <div className="h-full shrink-0" style={{ width: TRAFFIC_LIGHT_INSET_PX }} data-tauri-drag-region />
           )}
@@ -290,17 +291,12 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
             title={t("rail.allRepos")}
             aria-pressed={repoListOpen}
             className={cn(
-              "flex items-center gap-2.5 flex-1 min-w-0 h-full hover:bg-(--frame-hover) transition-colors",
-              isExpanded ? "pr-4" : "justify-center",
-              repoListOpen ? "text-foreground" : "text-muted-foreground",
+              toolbarButtonClass({ open: repoListOpen, iconOnly: !isExpanded }),
+              isExpanded && "min-w-0 shrink justify-start",
             )}
           >
-            <ListTree className="w-4 h-4 shrink-0" />
-            {isExpanded && (
-              <span className="text-xs font-semibold uppercase tracking-wider truncate">
-                {t("rail.allRepos")}
-              </span>
-            )}
+            <ListTree className={TOOLBAR_ICON} />
+            {isExpanded && <span className="truncate">{t("rail.allRepos")}</span>}
           </button>
         </div>
 

@@ -8,6 +8,7 @@ import "@/stores/selection"; // ensure cross-store subscriptions are registered
 import { RepoRail } from "./RepoRail";
 import { MainColumn } from "./MainColumn";
 import { SIDEBAR_HANDLE_WIDTH } from "./sidebar-layout";
+import { HEADER_HEIGHT_PX } from "@/lib/layout-tokens";
 import { StatusBar } from "./StatusBar";
 import { SplitHandle } from "./SplitHandle";
 import { useDiffMaximizeEscape } from "./useDiffMaximize";
@@ -66,6 +67,7 @@ export function MainLayout() {
           <SplitHandle
             orientation="vertical"
             size={SIDEBAR_HANDLE_WIDTH}
+            headerRulePx={HEADER_HEIGHT_PX}
             aria-label={t("shell.resizeSidebar")}
             onDragStart={handleDragStart}
             onDrag={handleDrag}

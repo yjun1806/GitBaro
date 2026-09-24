@@ -16,6 +16,7 @@ import {
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { TOOLBAR_LABEL_CLASS } from "./ActionButton";
+import { TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
 import { useClickOutside } from "./useToolbarDropdown";
 import { WorktreePanel } from "@/components/worktree/WorktreePanel";
 import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog";
@@ -98,36 +99,35 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
       <button
         ref={triggerRef}
         onClick={onToggle}
-        className={cn(
-          "flex items-center gap-1.5 h-[30px] px-2.5 rounded-(--radius-item) border border-(--line2) bg-card shadow-(--shadow-sm) min-w-0 overflow-hidden transition-colors text-left",
-          isOpen && "relative z-50 bg-accent",
-        )}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        className={cn(toolbarButtonClass({ open: isOpen }), "min-w-0 shrink overflow-hidden", isOpen && "relative z-50")}
       >
-        <WorktreeIcon className={cn("w-3.5 h-3.5 shrink-0", isInWorktree ? "text-info" : "text-(--faint)")} />
-        <span className={cn("text-xs font-mono font-semibold truncate max-w-[140px]", isInWorktree && "text-info")}>
+        <WorktreeIcon className={TOOLBAR_ICON} />
+        <span className={cn("font-mono truncate max-w-[140px]", isInWorktree && "text-foreground font-semibold")}>
           {currentLabel}
         </span>
         {linkedCount > 0 && (
-          <span className="text-[10px] font-semibold text-info bg-info/10 px-1.5 py-0.5 rounded-full shrink-0 tabular-nums">
+          <span className="h-4 min-w-4 px-1 rounded-full bg-foreground/[0.08] text-[10.5px] font-semibold flex items-center justify-center shrink-0 tabular-nums">
             {linkedCount}
           </span>
         )}
         {isOpen ? (
-          <ChevronUp className="w-3 h-3 text-muted-foreground shrink-0" />
+          <ChevronUp className="w-3 h-3 opacity-60 shrink-0" />
         ) : (
-          <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
+          <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
         )}
       </button>
 
       {isInWorktree && mainWorktree && (
         <button
           onClick={() => openWorktree(mainWorktree.path)}
-          className="flex items-center gap-1 h-[30px] px-2 ml-1.5 rounded-(--radius-item) shrink-0 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          className={cn(toolbarButtonClass(), "ml-0.5")}
           title={t("worktree.returnToMain")}
           aria-label={t("worktree.returnToMain")}
         >
-          <Undo2 className="w-3.5 h-3.5" />
-          <span className={cn("text-xs font-medium", TOOLBAR_LABEL_CLASS)}>{t("worktree.returnToMainShort")}</span>
+          <Undo2 className={TOOLBAR_ICON} />
+          <span className={TOOLBAR_LABEL_CLASS}>{t("worktree.returnToMainShort")}</span>
         </button>
       )}
 
