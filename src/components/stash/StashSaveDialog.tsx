@@ -165,7 +165,7 @@ export function StashSaveDialog({ onSave, onClose }: StashSaveDialogProps) {
                       }`}
                     >
                       {selectedPaths.has(file.path) && (
-                        <Check className="w-3 h-3 text-white" />
+                        <Check className="w-3 h-3 text-primary-foreground" />
                       )}
                     </div>
                     <span className="text-xs truncate flex-1">{file.path}</span>

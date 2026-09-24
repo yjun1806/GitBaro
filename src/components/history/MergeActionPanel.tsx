@@ -132,7 +132,7 @@ export function MergeActionPanel({
                   "flex-1 flex items-center justify-center gap-1 px-2 py-2.5 text-[11px] font-medium transition-colors border-r border-border last:border-r-0",
                   isActive
                     ? "bg-primary text-primary-foreground"
-                    : "bg-white dark:bg-gray-900 text-muted-foreground hover:bg-secondary hover:text-foreground cursor-pointer",
+                    : "bg-card text-muted-foreground hover:bg-secondary hover:text-foreground cursor-pointer",
                 )}
               >
                 <Icon className="w-3 h-3 shrink-0" />
