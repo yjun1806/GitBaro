@@ -318,6 +318,19 @@ pub async fn validate_token(
         repo_path
     );
 
+    // Resolve the remote before touching the GitHub token: a non-GitHub remote
+    // (GitLab, GHE, no origin) syncs through the user's own credentials, so the
+    // GitHub token's state or api.github.com reachability must not block it.
+    let github_repo = match &repo_path {
+        Some(rp) => match resolve_repo_owner(rp).await {
+            Some(pair) => Some(pair),
+            None => {
+                return Ok(json!({ "valid": true, "canPush": null, "reason": "not_github" }));
+            }
+        },
+        None => None,
+    };
+
     if resolve_token(&token_store, &account_id).await.is_err() {
         return Ok(json!({ "valid": false, "canPush": false, "reason": "token_not_found" }));
     }
@@ -342,14 +355,9 @@ pub async fn validate_token(
         }
     }
 
-    // 2. If repo_path given, check repo write permission
-    let Some(rp) = repo_path else {
+    // 2. If a GitHub repo was given, check repo write permission
+    let Some((owner, repo)) = github_repo else {
         return Ok(json!({ "valid": true, "canPush": true }));
-    };
-    let Some((owner, repo)) = resolve_repo_owner(&rp).await else {
-        // Not a github.com remote (GitLab, GHE, no origin): the GitHub token
-        // says nothing about push access there, so report it as unknown.
-        return Ok(json!({ "valid": true, "canPush": null, "reason": "not_github" }));
     };
 
     let repo_resp = call_with_token_retry(&token_store, &account_id, |token| {
