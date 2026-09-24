@@ -354,9 +354,9 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         />
       )}
 
-      {pendingSwitch && currentBranch && (
+      {pendingSwitch && (
         <SwitchBranchDialog
-          currentBranch={currentBranch}
+          currentBranch={currentBranch ?? t("branch.detachedHead")}
           targetBranch={pendingSwitch}
           onConfirm={handleSwitchConfirm}
           onClose={() => setPendingSwitch(null)}
