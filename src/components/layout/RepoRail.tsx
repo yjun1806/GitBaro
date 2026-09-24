@@ -8,7 +8,12 @@ import { useSettings } from "@/api/queries";
 import { RepoSyncIndicator } from "@/components/repository/RepoSyncIndicator";
 import { RepoHeaderContextMenu } from "@/components/repository/RepoHeaderContextMenu";
 import { RepoTree } from "@/components/sidebar/RepoTree";
-import { useSidebarTreeData } from "@/components/sidebar/useSidebarTreeData";
+import {
+  allWorktreePaths,
+  SIDEBAR_FALLBACK_WATCH_KEY,
+  useSidebarTreeData,
+  useSidebarWatchPaths,
+} from "@/components/sidebar/useSidebarTreeData";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import { cn } from "@/lib/utils";
 import type { RepoInfo, RepoSyncStatus } from "@/types";
@@ -218,6 +223,16 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
   const flowWidth = railFlowWidth(railMode, expandedWidth);
   const panelWidth = isExpanded ? expandedWidth : COLLAPSED_WIDTH;
   const isOverlay = railMode === "hover" && isExpanded;
+
+  // 트리가 펼쳐져 있으면 RepoTree가 보이는 워크트리 행만 정확히 감시 등록한다
+  // (SIDEBAR_WATCH_KEY). 접히거나 hover 모드에서 마우스가 떠나 있으면 RepoTree가
+  // unmount돼 그 등록이 사라지므로, 다른 화면이 감시하지 않는 워크트리(저장소 옆에 따로 만든
+  // 것 등)가 통째로 감시에서 빠진다. 그 사이에는 이 키로 저장소의 모든 워크트리를 대신 감시한다.
+  const fallbackWatchPaths = useMemo(
+    () => (isExpanded ? [] : allWorktreePaths(treeData.worktreesByRepo)),
+    [isExpanded, treeData.worktreesByRepo],
+  );
+  useSidebarWatchPaths(fallbackWatchPaths, SIDEBAR_FALLBACK_WATCH_KEY);
 
   // Collapsed mode has no room for names — show a hover tooltip so repos with
   // the same initial can be told apart. Rendered `fixed` to escape the list's

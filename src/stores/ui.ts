@@ -50,17 +50,23 @@ export const UI_STORE_VERSION = 1;
 
 /**
  * Moves stored UI state to the current version. Up to v0, `sidebarWidth` was
- * the width of the old Changes/History tab column (default 500). Persist writes
- * the whole state on every change, so almost every v0 user has that value
- * stored even if they never resized anything. In v1 the same key sizes the
- * tree sidebar (design 276px), so the old value is dropped and the new default
- * applies. Other fields keep their meaning and pass through.
+ * the width of the old Changes/History tab column (default 500), and
+ * `railMode` defaulted to "hover" (the old rail-only shell). Persist writes
+ * the whole state on every change, so almost every v0 user has both values
+ * stored even if they never touched them. In v1 `sidebarWidth` sizes the tree
+ * sidebar (design 276px) and the tree sidebar is meant to start expanded, so
+ * both old values are dropped and the new defaults apply. A v0 user who
+ * deliberately chose "collapsed" or "hover" picks it again from the sidebar
+ * control; that one-time reset is preferable to silently hiding the new tree
+ * sidebar from almost everyone. Other fields keep their meaning and pass
+ * through.
  */
 export function migrateUI(persisted: unknown, version: number): unknown {
   if (typeof persisted !== "object" || persisted === null) return persisted;
   if (version < 1) {
     const next: Record<string, unknown> = { ...(persisted as Record<string, unknown>) };
     delete next.sidebarWidth;
+    delete next.railMode;
     return next;
   }
   return persisted;
@@ -93,8 +99,9 @@ export const useUIStore = create<UIState>()(
       // W2-T1: 두 칸 셸에서 이 폭은 트리 사이드바 폭이다(시안 276px). 저장된 값이 있으면 그 값을 쓴다.
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
       isSidebarCollapsed: false,
-      // 시안은 트리 사이드바가 늘 보이는 두 칸이다(gen_d.py sidebar 276px). 새로 설치하면
-      // 고정으로 펼친 모드로 시작한다. 이미 저장된 모드는 사용자 선택이라 그대로 둔다.
+      // 시안은 트리 사이드바가 늘 보이는 두 칸이다(gen_d.py sidebar 276px). 새로 설치하거나
+      // v0 저장값을 이어받으면(migrateUI가 railMode를 지운다) 고정으로 펼친 모드로 시작한다.
+      // v1부터 저장된 모드는 사용자가 다시 고른 것이라 그대로 둔다.
       railMode: "expanded",
       repoListOpen: false,
       compareBranch: null,

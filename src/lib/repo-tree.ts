@@ -96,6 +96,12 @@ export interface BuildRepoTreeInput {
   worktreesByRepo?: Record<string, WorktreeInput[]>;
   /** 조용한 저장소 판정 기준 시각. 테스트에서 고정한다. */
   now?: number;
+  /**
+   * 지금 메인 칸에서 보고 있는 저장소(소유 저장소 경로, 워크트리를 보는 중이면 그 소유
+   * 저장소). 조용하다고 판정돼도 이 저장소는 「조용한 저장소」 줄로 접지 않는다 — 접으면
+   * 트리 어디에도 선택 표시가 없어진다(QuietReposRow는 선택 상태를 표시하지 않는다).
+   */
+  activeRepoPath?: string | null;
 }
 
 /** 이 시간 안에 파일이 바뀐 저장소는 조용하지 않다(질문 2 기본값). */
@@ -261,6 +267,7 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
     signals = {},
     worktreesByRepo = {},
     now = Date.now(),
+    activeRepoPath = null,
   } = input;
 
   const accountByPath = repoAccountsByPath(repos, accounts);
@@ -326,7 +333,9 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
     const looseRepos = repos
       .filter((r) => accountByPath.get(r.path)?.key === accountKey && !claimedBy.has(r.path))
       .map(makeRepoNode);
-    const quietRepos = looseRepos.filter((n) => isQuietRepo(n, signals, now));
+    const quietRepos = looseRepos.filter(
+      (n) => n.repo.path !== activeRepoPath && isQuietRepo(n, signals, now),
+    );
     const activeRepos = looseRepos.filter((n) => !quietRepos.includes(n));
     const key = accountNodeKey(accountKey);
     const order = orderByParent[key];

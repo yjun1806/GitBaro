@@ -27,11 +27,13 @@ export function useListKeyboardNav<T>({
   const [activeIndex, setActiveIndex] = useState(-1);
   const itemRefs = useRef<Map<number, HTMLElement>>(new Map());
 
-  // Sync activeIndex when selected item changes (e.g. mouse click)
+  // Sync activeIndex when selected item changes (e.g. mouse click, or the
+  // selection being cleared to -1 elsewhere — e.g. switching to the
+  // "uncommitted changes" row). Every arrow-key move also calls onSelect, so
+  // selectedIndex tracks activeIndex closely; always mirroring it here (not
+  // only when >= 0) keeps a cleared selection from leaving a stale highlight.
   useEffect(() => {
-    if (selectedIndex >= 0) {
-      setActiveIndex(selectedIndex);
-    }
+    setActiveIndex(selectedIndex);
   }, [selectedIndex]);
 
   // Clamp activeIndex when items change

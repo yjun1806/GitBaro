@@ -33,7 +33,12 @@ function state() {
 describe("useReviewSeenStore", () => {
   beforeEach(() => {
     localStorage.clear();
-    useReviewSeenStore.setState({ entries: {}, initialScanDone: false, scannedRepos: [] });
+    useReviewSeenStore.setState({
+      entries: {},
+      initialScanDone: false,
+      scannedRepos: [],
+      worktreesByRepo: {},
+    });
   });
 
   it("첫 실행 스캔은 그때 있는 모든 워크트리의 HEAD를 기준선으로 잡는다", () => {
@@ -119,7 +124,16 @@ describe("useReviewSeenStore", () => {
     state().applyScan(scan, 2000);
     expect(state().entries).toBe(before);
     expect(
-      baselinesFromScan({ entries: before, initialScanDone: true, scannedRepos: [ALPHA] }, scan, 3000),
+      baselinesFromScan(
+        {
+          entries: before,
+          initialScanDone: true,
+          scannedRepos: [ALPHA],
+          worktreesByRepo: { [ALPHA]: [ALPHA, ALPHA_WT] },
+        },
+        scan,
+        3000,
+      ),
     ).toBeNull();
   });
 
@@ -155,7 +169,12 @@ describe("useReviewSeenStore", () => {
     state().markSeen(ALPHA, "a1", null);
     const saved = JSON.parse(localStorage.getItem(REVIEW_SEEN_STORAGE_KEY) ?? "{}");
     expect(saved.version).toBe(REVIEW_SEEN_VERSION);
-    expect(Object.keys(saved.state).sort()).toEqual(["entries", "initialScanDone", "scannedRepos"]);
+    expect(Object.keys(saved.state).sort()).toEqual([
+      "entries",
+      "initialScanDone",
+      "scannedRepos",
+      "worktreesByRepo",
+    ]);
     expect(saved.state.entries[ALPHA]).toMatchObject({ branch: null, oid: "a1" });
   });
 
@@ -195,8 +214,14 @@ describe("migrateReviewSeen", () => {
       entries: { [ALPHA]: { branch: null, oid: "a1", seenAt: 5 } },
       initialScanDone: true,
       scannedRepos: [],
+      worktreesByRepo: {},
     });
-    expect(migrateReviewSeen(null, 0)).toEqual({ entries: {}, initialScanDone: false, scannedRepos: [] });
+    expect(migrateReviewSeen(null, 0)).toEqual({
+      entries: {},
+      initialScanDone: false,
+      scannedRepos: [],
+      worktreesByRepo: {},
+    });
   });
 });
 
@@ -245,6 +270,38 @@ describe("지운 저장소 정리", () => {
 
     expect(state().entries).toEqual({ [BETA]: { branch: "main", oid: "b1", seenAt: 1000 } });
     expect(state().scannedRepos).toEqual([BETA]);
+  });
+
+  it("저장소 폴더 밖(형제 폴더)에 만든 워크트리의 기준선도 함께 지운다", () => {
+    // 앱이 기본 제안하는 워크트리 위치는 저장소 폴더 옆이다 (CreateWorktreeDialog의
+    // suggestWorktreePath: `${parent}/${repo}-${branch}`), 저장소 폴더 안이 아니다.
+    // belongsToRepo의 경로 접두어 판정만으로는 이런 워크트리를 찾지 못하므로
+    // forgetRepos는 마지막 스캔이 기록한 worktreesByRepo로 대신 찾아야 한다.
+    const SIBLING_WT = "/repos/alpha-feat/work";
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1"), wt(SIBLING_WT, false, "f1", "feat")])], 1000);
+    expect(state().entries[SIBLING_WT]).toBeDefined();
+
+    state().forgetRepos([ALPHA]);
+
+    expect(state().entries[SIBLING_WT]).toBeUndefined();
+    expect(state().worktreesByRepo[ALPHA]).toBeUndefined();
+  });
+
+  it("형제 폴더 워크트리를 지운 뒤 저장소를 다시 추가하면 새 커밋 수가 0부터 다시 잡힌다", () => {
+    const SIBLING_WT = "/repos/alpha-feat/work";
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1"), wt(SIBLING_WT, false, "x1", "feat")])], 1000);
+
+    useRepositoryStore.getState().removeRepo(ALPHA);
+    expect(state().entries[SIBLING_WT]).toBeUndefined();
+
+    useRepositoryStore.getState().addRepo(alphaRepo);
+    // 그 사이 30개 커밋이 쌓였어도 첫 실행으로 다시 잡혀 옛 기준선(x1)이 아니라
+    // 새 HEAD를 기준선으로 삼는다.
+    state().applyScan(
+      [repo(ALPHA, [wt(ALPHA, true, "a1"), wt(SIBLING_WT, false, "x31", "feat")])],
+      2000,
+    );
+    expect(state().entries[SIBLING_WT]).toEqual({ branch: "feat", oid: "x31", seenAt: 2000 });
   });
 
   it("저장소를 지우면 기준선도 함께 지워져, 다시 추가했을 때 첫 실행으로 다시 잡힌다", () => {

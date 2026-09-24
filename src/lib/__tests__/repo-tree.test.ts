@@ -278,6 +278,19 @@ describe("buildRepoTree", () => {
       expect(account(tree, "yjun").quietRepos).toEqual([]);
     });
 
+    it("지금 보고 있는 저장소는 조용해도 접힌 줄로 빼지 않는다", () => {
+      // QuietReposRow는 기본으로 접혀 있고 선택 상태를 표시하지 않는다. 활성 저장소가
+      // 여기로 숨으면 트리 어디에도 선택 표시가 남지 않는다.
+      const tree = build({
+        signals: { [muxa.path]: quiet, [gitbaro.path]: quiet },
+        activeRepoPath: gitbaro.path,
+      });
+      const yjun = account(tree, "yjun");
+
+      expect(labels(yjun.children)).toEqual(["GitBaro"]);
+      expect(yjun.quietRepos.map((r) => r.repo.name)).toEqual(["muxa"]);
+    });
+
     it("워크스페이스 안 저장소는 조용해도 빼지 않는다", () => {
       const tree = build({
         workspaces: [{ id: "w1", name: "x", accountKey: "yjun", repoPaths: [muxa.path] }],

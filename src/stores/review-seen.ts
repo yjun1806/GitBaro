@@ -40,6 +40,13 @@ export interface PersistedReviewSeen {
   initialScanDone: boolean;
   /** 한 번이라도 스캔된 저장소 경로(`review_status`의 `repoPath`). */
   scannedRepos: string[];
+  /**
+   * 저장소 경로 → 마지막으로 스캔에서 본 그 저장소의 워크트리 경로 목록(메인 포함).
+   * `forgetRepos`가 저장소를 뺄 때 경로 접두어 대신 이 목록으로 정확히 지운다 — 앱이
+   * 기본 제안하는 워크트리 위치(`${parent}/${repo}-${branch}`)는 저장소 폴더 밖이라
+   * 접두어로는 찾을 수 없다.
+   */
+  worktreesByRepo: Record<string, string[]>;
 }
 
 interface ReviewSeenState extends PersistedReviewSeen {
@@ -64,6 +71,13 @@ function belongsToRepo(path: string, repoPath: string): boolean {
  * 스캔 결과로 기준선을 잡은 새 상태. 바뀐 게 없으면 null.
  * 저장소가 하나도 없는 스캔은 첫 실행으로 치지 않는다(저장소를 추가하기 전 첫 실행).
  */
+/** `a`(기록된 목록, 없으면 undefined)와 `b`(이번 스캔 목록)가 같은 경로 집합인지. */
+function sameWorktreeList(a: string[] | undefined, b: string[]): boolean {
+  if (a === undefined || a.length !== b.length) return false;
+  const sa = new Set(a);
+  return b.every((p) => sa.has(p));
+}
+
 export function baselinesFromScan(
   state: PersistedReviewSeen,
   repos: RepoReviewStatus[],
@@ -74,8 +88,16 @@ export function baselinesFromScan(
   const known = new Set(state.scannedRepos);
   const firstSeenRepos = repos.map((r) => r.repoPath).filter((p) => !known.has(p));
   const additions: Record<string, SeenEntry> = {};
+  let worktreesByRepo = state.worktreesByRepo;
+  let worktreesChanged = false;
   for (const repo of repos) {
     const firstScan = !known.has(repo.repoPath);
+    const paths = repo.worktrees.map((wt) => wt.path);
+    if (!sameWorktreeList(worktreesByRepo[repo.repoPath], paths)) {
+      if (!worktreesChanged) worktreesByRepo = { ...worktreesByRepo };
+      worktreesChanged = true;
+      worktreesByRepo[repo.repoPath] = paths;
+    }
     for (const wt of repo.worktrees) {
       if (wt.headOid === null || state.entries[wt.path] !== undefined) continue;
       if (!firstScan && !wt.isMain) continue;
@@ -84,12 +106,16 @@ export function baselinesFromScan(
   }
 
   const unchanged =
-    state.initialScanDone && firstSeenRepos.length === 0 && Object.keys(additions).length === 0;
+    state.initialScanDone &&
+    firstSeenRepos.length === 0 &&
+    Object.keys(additions).length === 0 &&
+    !worktreesChanged;
   if (unchanged) return null;
   return {
     entries: { ...state.entries, ...additions },
     initialScanDone: true,
     scannedRepos: [...state.scannedRepos, ...new Set(firstSeenRepos)],
+    worktreesByRepo,
   };
 }
 
@@ -146,6 +172,15 @@ export function sanitizePersistedReviewSeen(persisted: unknown): Partial<Persist
   if (Array.isArray(p.scannedRepos)) {
     out.scannedRepos = p.scannedRepos.filter((r): r is string => typeof r === "string");
   }
+  if (typeof p.worktreesByRepo === "object" && p.worktreesByRepo !== null) {
+    const worktreesByRepo: Record<string, string[]> = {};
+    for (const [repoPath, paths] of Object.entries(p.worktreesByRepo as Record<string, unknown>)) {
+      if (Array.isArray(paths)) {
+        worktreesByRepo[repoPath] = paths.filter((v): v is string => typeof v === "string");
+      }
+    }
+    out.worktreesByRepo = worktreesByRepo;
+  }
   return out;
 }
 
@@ -159,6 +194,8 @@ export function migrateReviewSeen(persisted: unknown, _version: number): Persist
     entries: clean.entries ?? {},
     initialScanDone: clean.initialScanDone ?? false,
     scannedRepos: clean.scannedRepos ?? [],
+    // v1 저장값에는 없던 필드. 다음 스캔이 다시 채운다(baselinesFromScan).
+    worktreesByRepo: clean.worktreesByRepo ?? {},
   };
 }
 
@@ -168,6 +205,7 @@ export const useReviewSeenStore = create<ReviewSeenState>()(
       entries: {},
       initialScanDone: false,
       scannedRepos: [],
+      worktreesByRepo: {},
 
       applyScan: (repos, now = Date.now()) =>
         set((state) => baselinesFromScan(state, repos, now) ?? state),
@@ -181,14 +219,22 @@ export const useReviewSeenStore = create<ReviewSeenState>()(
         set((state) => {
           if (repoPaths.length === 0) return state;
           const gone = new Set(repoPaths);
+          // 접두어 판정(belongsToRepo)만으로는 저장소 폴더 밖에 만든 워크트리(앱이 기본
+          // 제안하는 위치 포함)를 찾지 못한다. 마지막 스캔이 기록해 둔 정확한 목록을 더한다.
+          const explicitPaths = new Set(repoPaths.flatMap((p) => state.worktreesByRepo[p] ?? []));
           const entries = Object.fromEntries(
             Object.entries(state.entries).filter(
-              ([path]) => ![...gone].some((repoPath) => belongsToRepo(path, repoPath)),
+              ([path]) =>
+                !explicitPaths.has(path) &&
+                ![...gone].some((repoPath) => belongsToRepo(path, repoPath)),
             ),
           );
+          const worktreesByRepo = { ...state.worktreesByRepo };
+          for (const p of repoPaths) delete worktreesByRepo[p];
           return {
             entries,
             scannedRepos: state.scannedRepos.filter((p) => !gone.has(p)),
+            worktreesByRepo,
           };
         }),
     }),
@@ -200,6 +246,7 @@ export const useReviewSeenStore = create<ReviewSeenState>()(
         entries: state.entries,
         initialScanDone: state.initialScanDone,
         scannedRepos: state.scannedRepos,
+        worktreesByRepo: state.worktreesByRepo,
       }),
       migrate: migrateReviewSeen,
       merge: (persisted, current) => ({ ...current, ...sanitizePersistedReviewSeen(persisted) }),
