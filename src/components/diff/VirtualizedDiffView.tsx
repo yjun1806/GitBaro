@@ -73,6 +73,18 @@ export interface DiffLayout {
  */
 export const DIFF_SCROLL_STYLE: React.CSSProperties = { scrollbarGutter: "stable" };
 
+// diff 줄 높이는 원래 fontSize(12) * 1.6 ≈ 19px로 어림했다. W1-T1이 globals.css에 둔
+// `--code-lh`(촘촘 밀도, 21px — plans/design/README.md:49)를 실제로 반영하려면 이 계산을
+// 대신해야 한다. DOM 계측이 필요해 순수 함수는 아니지만, `document`가 없는 환경(SSR 등)과
+// 토큰이 비어 있는 환경(테스트에서 값을 안 심은 경우)에는 기존 어림값으로 그대로 되돌아간다.
+export function resolveRowHeight(fontSize: number): number {
+  const fallback = Math.round(fontSize * 1.6);
+  if (typeof document === "undefined") return fallback;
+  const raw = getComputedStyle(document.documentElement).getPropertyValue("--code-lh").trim();
+  const parsed = parseFloat(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export function contentStyleFor(rowHeight: number): React.CSSProperties {
   return {
     flex: 1,
@@ -279,7 +291,7 @@ export function VirtualizedDiffView({
   const contentRef = useRef<HTMLDivElement>(null);
   const [scrollable, setScrollable] = useState(false);
 
-  const rowHeight = Math.round(fontSize * 1.6);
+  const rowHeight = resolveRowHeight(fontSize);
   const isSplit = viewMode === "split";
 
   // 펼치기는 `diffFile` 내부 상태를 바꿀 뿐 새 객체를 만들지 않는다 — React가 알아채도록

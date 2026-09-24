@@ -4,21 +4,25 @@
  * 동일 specificity에서 cascade 우선순위로 라이브러리 기본값을 덮어씁니다.
  */
 
-/* Light 테마 */
+/* Light 테마 — 색은 리뷰 개편 시각 토큰(plans/design/README.md)을 따른다:
+   diff 추가 #e8f6ee, 삭제 #fdeeed, 줄 번호 #b6b6b2 */
 [data-theme="light"] .diff-style-root {
-  --diff-add-content--: #e6f4ea;
-  --diff-del-content--: #fce8e6;
+  --diff-add-content--: var(--diff-add);
+  --diff-del-content--: var(--diff-del);
   --diff-add-content-highlight--: #c8e6c9;
   --diff-del-content-highlight--: #f5c6cb;
-  --diff-add-lineNumber--: #c8e6c9;
-  --diff-del-lineNumber--: #f5c6cb;
-  --diff-plain-lineNumber-color--: var(--gray-600);
+  /* 줄번호 칸은 행 배경과 같은 색을 쓴다(mockup D1Review.dc.html: 줄번호 span에 별도
+     background가 없고 행 전체의 var(--add)/var(--del)를 그대로 물려받는다). 예전 진한
+     녹/빨 셀 배경(#c8e6c9/#f5c6cb)은 새 시각 토큰에 없는 값이라 걷어낸다. */
+  --diff-add-lineNumber--: var(--diff-add-content--);
+  --diff-del-lineNumber--: var(--diff-del-content--);
+  --diff-plain-lineNumber-color--: var(--ln, var(--gray-600));
   --diff-hunk-content--: #eaecf5;
   --diff-hunk-lineNumber--: #d4d8ed;
   --diff-hunk-content-color--: #5E6AD2;
-  --diff-border--: var(--gray-300);
-  --diff-plain-content--: var(--white);
-  --diff-empty-content--: var(--gray-100);
+  --diff-border--: var(--line2, var(--gray-300));
+  --diff-plain-content--: var(--panel, var(--white));
+  --diff-empty-content--: var(--chip, var(--gray-100));
 }
 
 /* Dark 테마 */
