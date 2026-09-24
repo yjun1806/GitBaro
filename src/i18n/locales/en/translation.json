@@ -88,8 +88,10 @@
     "close": "Close",
     "stageFailed": "Stage failed: {{error}}",
     "unstageFailed": "Unstage failed: {{error}}",
-    "commitNow": "Commit ({{count}})",
-    "target": "Commit to {{branch}} · {{worktree}}"
+    "workingChanges": "Working changes {{count}}",
+    "target": "Commit to {{branch}} · {{worktree}}",
+    "addDescription": "Add description",
+    "author": "Author {{name}}"
   },
   "history": {
     "title": "History",
@@ -966,7 +968,7 @@
     "emptyHint": "Drag repositories onto the workspace in the sidebar.",
     "selectTitle": "Pick a commit or uncommitted changes",
     "selectHint": "Its files and diff show here.",
-    "openToCommit": "Open to commit",
+    "openToCommit": "Open this working tree",
     "noChanges": "No uncommitted changes",
     "staged": "staged",
     "allQuiet_one": "{{count}} quiet repository is hidden: it is on its default branch with no new commits and no uncommitted changes. Use Show all to see it.",
@@ -1078,7 +1080,7 @@
     "remoteOf": "Remote · {{remote}}",
     "current": "Current branch",
     "mainWorktree": "primary folder",
-    "switch": "Switch",
+    "switch": "Check out",
     "open": "Go to",
     "openHint": "Open the worktree {{name}} that uses this branch",
     "compare": "Compare",
@@ -1088,13 +1090,16 @@
     "sameAsUpstream": "same as {{upstream}}",
     "mergedInto": "Merged into {{base}}",
     "canCleanUp": "can be cleaned up",
-    "hint": "Compare switches the graph to the commits between the current branch and that branch. A branch used in another worktree opens that worktree instead of switching.",
+    "hint": "Click a row to view that branch's history without checking it out. Only Check out changes the working tree. Compare switches the graph to the commits between the current branch and that branch. A branch used in another worktree opens that worktree instead of checking out.",
     "rangeTitle": "Range",
     "rangeCount_one": "{{count}} commit",
     "rangeCount_other": "{{count}} commits",
     "rangeSwap": "Swap direction",
     "rangeClose": "Leave range view",
-    "rangeEmpty": "{{target}} has no commits that are not in {{base}}"
+    "rangeEmpty": "{{target}} has no commits that are not in {{base}}",
+    "viewHint": "View {{name}} without checking it out",
+    "viewCurrentHint": "View the current checkout",
+    "viewing": "Viewing"
   },
   "live": {
     "following": "Following",
@@ -1126,7 +1131,7 @@
     "modifiedAt": "Modified {{when}}",
     "pickedGone": "{{file}} has no uncommitted changes any more.",
     "stageAll": "Stage all",
-    "commit": "Commit…",
+    "commit": "Open staging",
     "stash": "Stash"
   },
   "overlap": {
@@ -1155,23 +1160,21 @@
     "close": "Close"
   },
   "filesByRepo": {
-    "tab": "Changes by file",
-    "title": "Files changed since main",
-    "subtitleSingle": "1 repository · compared with its main · uncommitted changes included",
-    "subtitleMany": "{{count}} repositories · each compared with its own main · uncommitted changes included",
+    "tab": "Changes vs {{base}}",
+    "subtitleSingle": "1 repository · changes since it left the comparison base · uncommitted changes included",
+    "subtitleMany": "{{count}} repositories · each compared with its own base · uncommitted changes included",
     "linksTruncated": "links searched in the first {{count}} files only",
     "loadFailed": "Couldn't read the changes: {{error}}",
     "loading": "Loading…",
-    "noChanges": "No files changed since main.",
+    "noChanges": "No files changed since the comparison base.",
     "linkHint": "Linked changes are guesses based on matching strings (8+ characters) added in two repositories.",
     "selectTitle": "Pick a file",
-    "selectHint": "Choose a file to see its diff against main, or a link chip to compare linked changes.",
+    "selectHint": "Choose a file to see its diff against the comparison base, or a link chip to compare linked changes.",
     "detached": "detached HEAD",
     "fileCount_one": "{{count}} file",
     "fileCount_other": "{{count}} files",
     "noBase": "Couldn't find where this branch left {{branch}}. Showing uncommitted changes only.",
     "unborn": "No commits yet. Showing uncommitted changes only.",
-    "onDefault": "On the default branch: compared with {{base}}, so these are commits not pushed yet.",
     "linkChipTitleSingle": "The same string \"{{token}}\" was added in another repository. Click to compare.",
     "linkChipTitleMany": "The same string \"{{token}}\" was added in another repository ({{count}} links). Click to compare.",
     "binary": "binary",
@@ -1182,10 +1185,68 @@
     "closeLink": "Close link",
     "groupBy": "Group files",
     "groupByRepo": "By repository",
-    "groupByFolder": "By folder"
+    "groupByFolder": "By folder",
+    "tabDefault": "Changes vs default branch",
+    "summary_one": "{{count}} file changed on {{branch}} since it left {{base}} · {{committed}} committed + {{uncommitted}} uncommitted",
+    "summary_other": "{{count}} files changed on {{branch}} since it left {{base}} · {{committed}} committed + {{uncommitted}} uncommitted",
+    "summaryViewing_one": "{{count}} file changed on {{branch}} since it left {{base}} · {{committed}} committed (viewing, so uncommitted changes are left out)",
+    "summaryViewing_other": "{{count}} files changed on {{branch}} since it left {{base}} · {{committed}} committed (viewing, so uncommitted changes are left out)",
+    "summaryOnDefault_one": "Changes on {{branch}} not pushed yet (vs {{base}}) · {{count}} file · {{committed}} committed + {{uncommitted}} uncommitted",
+    "summaryOnDefault_other": "Changes on {{branch}} not pushed yet (vs {{base}}) · {{count}} files · {{committed}} committed + {{uncommitted}} uncommitted",
+    "baseLabel": "Base",
+    "basePicker": "Comparison base",
+    "baseDefault": "Default branch ({{branch}})",
+    "baseWorktree": "Worktree base ({{branch}})"
   },
   "layout": {
     "resizeFileList": "Resize file list (double-click to reset)",
     "resizeGraph": "Resize graph panel (double-click to reset)"
+  },
+  "historyView": {
+    "current": "Current checkout",
+    "allBranches": "All branches",
+    "pickerLabel": "Viewing",
+    "pickerTitle": "Choose what to view",
+    "pickerHint": "See another branch's history without checking it out",
+    "checkedOut": "checked out",
+    "checkoutThis": "Check out this branch",
+    "backToCurrent": "Back to current branch",
+    "wipHidden": "Uncommitted changes are hidden while viewing. They belong to the checked-out working tree.",
+    "composerHidden": "You're viewing another branch. Staging and committing happen on the checked-out branch only."
+  },
+  "statusLine": {
+    "mainWorktree": "Primary folder",
+    "linkedWorktree": "Working tree {{name}}",
+    "checkout": "Checked out ⎇ {{branch}}",
+    "detached": "No branch · {{sha}}",
+    "detachedUnknown": "No branch",
+    "upstream": "↑{{ahead}} ↓{{behind}} vs {{upstream}}",
+    "noUpstream": "No remote branch",
+    "clean": "No uncommitted changes",
+    "uncommitted_one": "{{count}} uncommitted change",
+    "uncommitted_other": "{{count}} uncommitted changes",
+    "uncommittedStaged_one": "{{count}} uncommitted change ({{staged}} staged)",
+    "uncommittedStaged_other": "{{count}} uncommitted changes ({{staged}} staged)",
+    "viewing": "Viewing {{target}} · not checked out",
+    "operation": "{{op}} in progress",
+    "operationConflicts_one": "{{op}} in progress · {{count}} conflict",
+    "operationConflicts_other": "{{op}} in progress · {{count}} conflicts",
+    "detachedHeadline": "Detached HEAD · new commits won't be on any branch",
+    "op": {
+      "merge": "Merge",
+      "rebase": "Rebase",
+      "cherryPick": "Cherry-pick",
+      "revert": "Revert",
+      "squash": "Squash"
+    }
+  },
+  "workSwitcher": {
+    "label": "What the lower area shows",
+    "working": "Working changes {{count}}",
+    "workingDisabled": "Working changes · checked-out branch only",
+    "workingDisabledHint": "You're viewing another branch. Working changes belong to the checked-out branch.",
+    "commit": "Commit",
+    "noCommit": "No commit selected",
+    "noWorkingHint": "This repository has no uncommitted changes."
   }
 }

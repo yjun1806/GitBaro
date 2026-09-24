@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2, ChevronDown, ChevronRight, GitBranch, Loader2 } from "lucide-react";
+import { useHistoryView, useSetHistoryView } from "@/components/graph/useHistoryView";
+import { CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useSelectionStore } from "@/stores/selection";
@@ -36,7 +37,9 @@ import {
 } from "@/lib/file-selection";
 import type { StatusEntry } from "@/types";
 import { isComposerCollapsed } from "./composer-state";
-import { isFreshCommitFocus } from "./useStartCommit";
+import { isFreshWorkingFocus } from "./useOpenWorkingChanges";
+import { RepoWorkSwitcher } from "./WorkSwitcher";
+import { CommitComposer } from "./CommitComposer";
 import { useCommitTarget } from "./useCommitTarget";
 import { useUIStore } from "@/stores/ui";
 
@@ -54,7 +57,38 @@ function discardMessageKey(entry: StatusEntry): string {
     : "changes.discardStagedMessage";
 }
 
+/**
+ * 스테이징 목록과 커밋 입력. 체크아웃하지 않고 다른 브랜치를 보는 중에는 그리지 않고 안내를
+ * 둔다 — 커밋 안 한 변경과 스테이징은 체크아웃한 작업 트리의 것이라, 보는 브랜치와 섞이면
+ * 어느 브랜치에 커밋하는지 헷갈린다.
+ */
 export function ChangesView() {
+  const { target } = useHistoryView();
+  if (target !== null) return <ViewingComposerNote />;
+  return <ChangesViewBody />;
+}
+
+function ViewingComposerNote() {
+  const { t } = useTranslation();
+  const setView = useSetHistoryView();
+  return (
+    <div className="flex flex-col h-full">
+      <RepoWorkSwitcher mode="working" />
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
+      <p className="text-[12.5px] leading-[19px] text-muted-foreground">{t("historyView.composerHidden")}</p>
+      <button
+        type="button"
+        onClick={() => setView(null)}
+        className="h-7 px-3 rounded-(--radius-chip) bg-(--chip) text-[12px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
+      >
+        {t("historyView.backToCurrent")}
+      </button>
+      </div>
+    </div>
+  );
+}
+
+function ChangesViewBody() {
   const { t } = useTranslation();
   const discardTitleId = useId();
   const conflictStageTitleId = useId();
@@ -68,9 +102,8 @@ export function ChangesView() {
   const statusEntries = useMemo(() => statusData ?? [], [statusData]);
   const { data: mergeState } = useMergeState(activeRepoPath);
   const target = useCommitTarget();
-  const summaryRef = useRef<HTMLInputElement | null>(null);
-  const commitFocusAt = useUIStore((s) => s.commitFocusAt);
-  const setCommitFocusAt = useUIStore((s) => s.setCommitFocusAt);
+  const workingFocusAt = useUIStore((s) => s.workingFocusAt);
+  const setWorkingFocusAt = useUIStore((s) => s.setWorkingFocusAt);
   const collapsed = isComposerCollapsed(
     statusData ? statusData.length : null,
     mergeState !== undefined && mergeState !== null,
@@ -346,15 +379,18 @@ export function ChangesView() {
     }
   };
 
-  // 「커밋하기」를 누르고 왔으면 요약 칸으로 포커스를 옮긴다(입력이 보일 때만).
+  // 「작업 중인 변경」으로 왔으면 파일 목록으로 포커스를 옮긴다(목록이 보일 때만). 요약 칸이 아니다 —
+  // 이동한 것뿐이고, 무엇을 커밋할지는 목록을 보고 고른다.
+  const listRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (collapsed || !isFreshCommitFocus(commitFocusAt, Date.now())) return;
-    summaryRef.current?.focus();
-    setCommitFocusAt(null);
-  }, [commitFocusAt, collapsed, setCommitFocusAt]);
+    if (collapsed || !isFreshWorkingFocus(workingFocusAt, Date.now())) return;
+    listRef.current?.focus();
+    setWorkingFocusAt(null);
+  }, [workingFocusAt, collapsed, setWorkingFocusAt]);
 
   return (
     <div className="flex flex-col h-full">
+      <RepoWorkSwitcher mode="working" />
       {/* Merge/rebase recovery banner (abort / continue) */}
       <MergeConflictBanner repoPath={activeRepoPath} conflictCount={conflictCount} />
       {collapsed ? (
@@ -370,7 +406,7 @@ export function ChangesView() {
       ) : (
       <>
       {/* File list */}
-      <div className="flex-1 overflow-y-auto" {...containerProps}>
+      <div ref={listRef} data-testid="changes-file-list" className="flex-1 overflow-y-auto" {...containerProps}>
         {statusEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
             <p className="text-sm">{t("changes.noChanges")}</p>
@@ -514,86 +550,35 @@ export function ChangesView() {
         )}
       </div>
 
-      {/* Commit panel */}
-      <div className="border-t border-border p-3 flex flex-col gap-2">
-        {/* 어느 브랜치·워크트리에 커밋하는지 늘 밝힌다. */}
-        <p className="flex items-center gap-1 min-w-0 text-[11.5px] text-muted-foreground" data-testid="commit-target">
-          <GitBranch className="w-3 h-3 shrink-0" aria-hidden="true" />
-          <span className="truncate">
-            {t("commit.target", {
-              branch: target.branchText,
-              worktree: target.worktreeText,
-            })}
-          </span>
-        </p>
-        <input
-          ref={summaryRef}
-          type="text"
-          placeholder={t("commit.summary")}
-          value={commitSummary}
-          onChange={(e) => setCommitSummary(e.target.value)}
-          className={cn(
-            "w-full px-3 py-2 text-sm rounded-md border border-border",
-            "bg-card outline-none",
-            "focus:border-primary transition-colors",
-          )}
+      {/* Commit composer: 한 줄 요약 + 「설명 추가」 + 「<브랜치>에 커밋」. */}
+      <CommitComposer
+        summary={commitSummary}
+        description={commitDescription}
+        onSummaryChange={setCommitSummary}
+        onDescriptionChange={setCommitDescription}
+        branchLabel={currentBranch ?? "HEAD"}
+        targetTitle={[
+          t("commit.target", { branch: target.branchText, worktree: target.worktreeText }),
+          activeAccount
+            ? t("commit.author", {
+                name: activeAccount.email
+                  ? `${activeAccount.username} <${activeAccount.email}>`
+                  : activeAccount.username,
+              })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+        canCommit={stagedFiles.length > 0 && commitSummary.trim().length > 0}
+        isCommitting={isCommitting}
+        onCommit={() => void handleCommit()}
+      />
+      {commitError && (
+        <CommitErrorDialog
+          message={commitError}
+          onClose={() => setCommitError(null)}
         />
-        <textarea
-          placeholder={t("commit.description")}
-          rows={3}
-          value={commitDescription}
-          onChange={(e) => setCommitDescription(e.target.value)}
-          className={cn(
-            "w-full px-3 py-2 text-sm rounded-md border border-border",
-            "bg-card outline-none resize-none",
-            "focus:border-primary transition-colors",
-          )}
-        />
-        {activeAccount && (
-          <div className="flex items-center gap-1.5 px-1">
-            {activeAccount.avatarUrl ? (
-              <img
-                src={activeAccount.avatarUrl}
-                alt={activeAccount.username}
-                className="w-4 h-4 rounded-full shrink-0 object-cover"
-              />
-            ) : (
-              <div className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-bold shrink-0">
-                {activeAccount.username[0]?.toUpperCase() ?? "?"}
-              </div>
-            )}
-            <span className="text-xs text-muted-foreground truncate">
-              {activeAccount.username}
-              {activeAccount.email ? ` <${activeAccount.email}>` : ""}
-            </span>
-          </div>
-        )}
-        <button
-          onClick={handleCommit}
-          className={cn(
-            "w-full py-2 rounded-md text-sm font-medium",
-            "bg-primary text-primary-foreground hover:bg-primary-hover transition-colors",
-            (stagedFiles.length === 0 || !commitSummary.trim() || isCommitting) &&
-              "opacity-50 cursor-not-allowed",
-          )}
-          disabled={stagedFiles.length === 0 || !commitSummary.trim() || isCommitting}
-        >
-          {isCommitting ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              {t("commit.committing")}
-            </span>
-          ) : (
-            t("commit.submit", { branch: currentBranch ?? "HEAD" })
-          )}
-        </button>
-        {commitError && (
-          <CommitErrorDialog
-            message={commitError}
-            onClose={() => setCommitError(null)}
-          />
-        )}
-      </div>
+      )}
       </>
       )}
 

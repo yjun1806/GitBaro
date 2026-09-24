@@ -13,6 +13,11 @@
 //! 로 화면이 구분해 보여 줄 수 있다).
 //!
 //! 파일 하나의 줄 단위 diff(갈라진 지점 → 작업 트리)는 `get_file_diff_vs_default` 가 돌려준다.
+//!
+//! 두 명령 모두 선택 인자 둘을 받는다. 둘 다 없으면 위 동작 그대로다.
+//! - `base`: 기본 브랜치 대신 비교할 브랜치(로컬·원격). 갈라진 지점은 HEAD 와 그 브랜치의 공통 조상이다.
+//! - `target`: HEAD 대신 볼 브랜치(체크아웃하지 않고 보는 브랜치). 커밋 안 한 변경은 체크아웃한
+//!   작업 트리의 것이라 넣지 않는다 — `uncommitted` 는 비고 `files` 는 `committed` 와 같다.
 
 use std::collections::HashSet;
 use std::path::{Component, Path};
@@ -22,7 +27,7 @@ use serde::Serialize;
 
 use crate::error::AppError;
 use crate::git::engine::FileStatus;
-use crate::git::merge_base::{divergence_point, BaseStatus};
+use crate::git::merge_base::{divergence_point, BaseStatus, DivergencePoint};
 use crate::git::worktree_base::default_branch_with_fallback;
 
 /// 바뀐 파일 하나.
@@ -67,11 +72,84 @@ pub struct BranchChanges {
     pub files: Vec<ChangedFile>,
 }
 
-/// 저장소 하나의 main 대비 변경.
-pub fn changes_vs_default(path: &str) -> Result<BranchChanges, AppError> {
+/// 짧은 이름(`feat/x`, `origin/x`, 태그)을 커밋으로 푼다. `-`로 시작하거나 빈 이름은 거부한다.
+fn resolve_commit(repo: &Repository, name: &str) -> Result<Oid, AppError> {
+    let name = name.trim();
+    if name.is_empty() || name.starts_with('-') {
+        return Err(AppError::Git(git2::Error::from_str(&format!("invalid ref name: {name:?}"))));
+    }
+    Ok(repo.resolve_reference_from_short_name(name)?.peel_to_commit()?.id())
+}
+
+/// `head` 의 갈라진 지점. `base` 가 없으면 기본 브랜치 규칙(`divergence_point`), 있으면 그 브랜치와의 공통 조상.
+fn point_against(
+    repo: &Repository,
+    head: Oid,
+    head_branch: Option<&str>,
+    base: Option<&str>,
+) -> Result<DivergencePoint, AppError> {
+    let Some(base) = base else {
+        return Ok(divergence_point(repo, head, head_branch)?);
+    };
+    let default_branch = default_branch_with_fallback(repo);
+    let base_oid = resolve_commit(repo, base)?;
+    Ok(match repo.merge_base(head, base_oid) {
+        Ok(merge_base) => DivergencePoint {
+            default_branch,
+            base_ref: Some(base.trim().to_string()),
+            merge_base: Some(merge_base),
+            status: BaseStatus::Found,
+        },
+        Err(e) if e.code() == ErrorCode::NotFound => DivergencePoint {
+            default_branch,
+            base_ref: None,
+            merge_base: None,
+            status: BaseStatus::NoSharedHistory,
+        },
+        Err(e) => return Err(e.into()),
+    })
+}
+
+/// 체크아웃하지 않고 보는 브랜치 `target` 의 변경: 갈라진 지점 → `target`. 커밋 안 한 변경은 없다.
+fn changes_of_target(
+    repo: &Repository,
+    path: &str,
+    target: &str,
+    base: Option<&str>,
+) -> Result<BranchChanges, AppError> {
+    let oid = resolve_commit(repo, target)?;
+    let target_tree = tree_of(repo, oid)?;
+    let point = point_against(repo, oid, Some(target.trim()), base)?;
+    let committed = match point.merge_base {
+        Some(merge_base) => tree_to_tree(repo, &tree_of(repo, merge_base)?, &target_tree)?,
+        None => Vec::new(),
+    };
+    Ok(BranchChanges {
+        path: path.to_string(),
+        branch: Some(target.trim().to_string()),
+        head_oid: Some(oid.to_string()),
+        default_branch: point.default_branch,
+        base_ref: point.base_ref,
+        base_status: Some(point.status),
+        merge_base_oid: point.merge_base.map(|o| o.to_string()),
+        files: committed.clone(),
+        committed,
+        uncommitted: Vec::new(),
+    })
+}
+
+/// 저장소 하나의 main(또는 `base`) 대비 변경. `target` 이 있으면 HEAD 대신 그 브랜치를 본다.
+pub fn changes_vs_default(
+    path: &str,
+    base: Option<&str>,
+    target: Option<&str>,
+) -> Result<BranchChanges, AppError> {
     let repo = Repository::open(path)?;
     if repo.is_bare() {
         return Err(AppError::BareRepository(path.to_string()));
+    }
+    if let Some(target) = target {
+        return changes_of_target(&repo, path, target, base);
     }
 
     let head = match repo.head() {
@@ -101,7 +179,7 @@ pub fn changes_vs_default(path: &str) -> Result<BranchChanges, AppError> {
     let branch = head_ref.is_branch().then(|| head_ref.shorthand().map(str::to_string)).flatten();
     let head_tree = head_commit.tree()?;
 
-    let point = divergence_point(&repo, head_oid, branch.as_deref())?;
+    let point = point_against(&repo, head_oid, branch.as_deref(), base)?;
     let base_tree = point.merge_base.map(|oid| tree_of(&repo, oid)).transpose()?;
 
     let uncommitted = to_workdir(&repo, Some(&head_tree))?;
@@ -327,12 +405,15 @@ pub struct FileDiffVsDefault {
     pub base_is_divergence_point: bool,
 }
 
-/// 파일 하나의 main 대비 diff: 갈라진 지점 → 작업 트리(스테이징 포함).
+/// 파일 하나의 main(또는 `base`) 대비 diff: 갈라진 지점 → 작업 트리(스테이징 포함).
+/// `target` 이 있으면 작업 트리 대신 그 브랜치의 내용과 비교한다.
 /// `old_path` 는 `ChangedFile::old_path`(이름을 바꾼 파일의 이전 경로)를 그대로 넘긴다.
 pub fn file_diff_vs_default(
     path: &str,
     file_path: &str,
     old_path: Option<&str>,
+    base: Option<&str>,
+    target: Option<&str>,
 ) -> Result<FileDiffVsDefault, AppError> {
     ensure_relative(file_path)?;
     if let Some(old) = old_path {
@@ -342,7 +423,7 @@ pub fn file_diff_vs_default(
     if repo.is_bare() {
         return Err(AppError::BareRepository(path.to_string()));
     }
-    let (base_tree, base_oid, is_point) = comparison_base(&repo)?;
+    let (base_tree, base_oid, is_point, target_tree) = comparison_base(&repo, base, target)?;
 
     let mut opts = DiffOptions::new();
     opts.include_untracked(true)
@@ -354,7 +435,10 @@ pub fn file_diff_vs_default(
     if let Some(old) = old_path {
         opts.pathspec(old);
     }
-    let mut diff = repo.diff_tree_to_workdir_with_index(base_tree.as_ref(), Some(&mut opts))?;
+    let mut diff = match &target_tree {
+        Some(new_tree) => repo.diff_tree_to_tree(base_tree.as_ref(), Some(new_tree), Some(&mut opts))?,
+        None => repo.diff_tree_to_workdir_with_index(base_tree.as_ref(), Some(&mut opts))?,
+    };
     if old_path.is_some() {
         diff.find_similar(Some(DiffFindOptions::new().renames(true).for_untracked(true)))?;
     }
@@ -381,7 +465,14 @@ pub fn file_diff_vs_default(
         .and_then(|tree| tree.get_path(Path::new(base_path)).ok())
         .and_then(|entry| repo.find_blob(entry.id()).ok())
         .map(|blob| blob.content().to_vec());
-    let new_bytes = repo.workdir().and_then(|dir| std::fs::read(dir.join(file_path)).ok());
+    let new_bytes = match &target_tree {
+        Some(tree) => tree
+            .get_path(Path::new(file_path))
+            .ok()
+            .and_then(|entry| repo.find_blob(entry.id()).ok())
+            .map(|blob| blob.content().to_vec()),
+        None => repo.workdir().and_then(|dir| std::fs::read(dir.join(file_path)).ok()),
+    };
     let text = |bytes: Option<Vec<u8>>| {
         bytes.filter(|_| !binary).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default()
     };
@@ -414,22 +505,37 @@ fn ensure_relative(file_path: &str) -> Result<(), AppError> {
     }
 }
 
-/// `files` 와 같은 비교 기준: 갈라진 지점, 못 찾으면 HEAD, 커밋이 없으면 빈 트리.
-/// 세 번째 값은 기준이 갈라진 지점인가.
-fn comparison_base(repo: &Repository) -> Result<(Option<Tree<'_>>, Option<Oid>, bool), AppError> {
-    let head_ref = match repo.head() {
-        Ok(head_ref) => head_ref,
-        Err(e) if e.code() == ErrorCode::UnbornBranch => return Ok((None, None, false)),
-        Err(e) => return Err(e.into()),
+/// 비교 기준 트리, 그 커밋, 기준이 갈라진 지점인가, 새 쪽 트리(`target` 을 볼 때만; 없으면 작업 트리).
+type ComparisonBase<'r> = (Option<Tree<'r>>, Option<Oid>, bool, Option<Tree<'r>>);
+
+/// `files` 와 같은 비교 기준: 갈라진 지점, 못 찾으면 HEAD(또는 `target`), 커밋이 없으면 빈 트리.
+fn comparison_base<'r>(
+    repo: &'r Repository,
+    base: Option<&str>,
+    target: Option<&str>,
+) -> Result<ComparisonBase<'r>, AppError> {
+    let (head_oid, branch, target_tree) = match target {
+        Some(name) => {
+            let oid = resolve_commit(repo, name)?;
+            (oid, Some(name.trim().to_string()), Some(tree_of(repo, oid)?))
+        }
+        None => {
+            let head_ref = match repo.head() {
+                Ok(head_ref) => head_ref,
+                Err(e) if e.code() == ErrorCode::UnbornBranch => return Ok((None, None, false, None)),
+                Err(e) => return Err(e.into()),
+            };
+            let oid = head_ref.peel_to_commit()?.id();
+            let branch = head_ref.is_branch().then(|| head_ref.shorthand().map(str::to_string)).flatten();
+            (oid, branch, None)
+        }
     };
-    let head_oid = head_ref.peel_to_commit()?.id();
-    let branch = head_ref.is_branch().then(|| head_ref.shorthand().map(str::to_string)).flatten();
-    let point = divergence_point(repo, head_oid, branch.as_deref())?;
+    let point = point_against(repo, head_oid, branch.as_deref(), base)?;
     let (oid, is_point) = match point.merge_base {
-        Some(base) => (base, true),
+        Some(merge_base) => (merge_base, true),
         None => (head_oid, false),
     };
-    Ok((Some(tree_of(repo, oid)?), Some(oid), is_point))
+    Ok((Some(tree_of(repo, oid)?), Some(oid), is_point, target_tree))
 }
 
 fn patch_hunks(patch: &Patch) -> Result<Vec<VsDefaultDiffHunk>, git2::Error> {
@@ -465,23 +571,32 @@ fn patch_hunks(patch: &Patch) -> Result<Vec<VsDefaultDiffHunk>, git2::Error> {
         .collect()
 }
 
-/// 파일 하나를 그 저장소 main 과 갈라진 지점 → 작업 트리로 비교한 줄 단위 diff.
+/// 파일 하나를 그 저장소 main(또는 `base`)과 갈라진 지점 → 작업 트리(또는 `target`)로 비교한 줄 단위 diff.
 #[tauri::command]
 pub async fn get_file_diff_vs_default(
     path: String,
     file_path: String,
     old_path: Option<String>,
+    base: Option<String>,
+    target: Option<String>,
 ) -> Result<FileDiffVsDefault, AppError> {
-    tokio::task::spawn_blocking(move || file_diff_vs_default(&path, &file_path, old_path.as_deref()))
-        .await
-        .map_err(|e| AppError::Channel(e.to_string()))?
+    tokio::task::spawn_blocking(move || {
+        file_diff_vs_default(&path, &file_path, old_path.as_deref(), base.as_deref(), target.as_deref())
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
 }
 
-/// 저장소 하나가 main 과 갈라진 지점 이후로 바꾼 파일과 커밋하지 않은 변경.
+/// 저장소 하나가 main(또는 `base`)과 갈라진 지점 이후로 바꾼 파일과 커밋하지 않은 변경.
+/// `target` 이 있으면 체크아웃하지 않고 그 브랜치를 본다(커밋 안 한 변경 없음).
 /// 여러 저장소는 저장소마다 따로 부른다.
 #[tauri::command]
-pub async fn get_changes_vs_default(path: String) -> Result<BranchChanges, AppError> {
-    tokio::task::spawn_blocking(move || changes_vs_default(&path))
+pub async fn get_changes_vs_default(
+    path: String,
+    base: Option<String>,
+    target: Option<String>,
+) -> Result<BranchChanges, AppError> {
+    tokio::task::spawn_blocking(move || changes_vs_default(&path, base.as_deref(), target.as_deref()))
         .await
         .map_err(|e| AppError::Channel(e.to_string()))?
 }
@@ -565,7 +680,7 @@ mod tests {
         commit_all(&dir, "main later");
         git(&dir, &["checkout", "-q", "feat"]);
 
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         assert_eq!(c.branch.as_deref(), Some("feat"));
         assert_eq!(c.default_branch.as_deref(), Some("main"));
         assert_eq!(c.base_status, Some(BaseStatus::Found));
@@ -589,7 +704,7 @@ mod tests {
         write(&dir, "new-dir/deep/y.txt", "y\n");
         std::fs::remove_file(dir.join("b.txt")).unwrap();
 
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         assert_eq!(
             paths(&c.uncommitted),
             vec!["b.txt", "keep.txt", "new-dir/deep/y.txt", "new-dir/x.txt", "staged.txt"]
@@ -613,7 +728,7 @@ mod tests {
         feature_repo(&dir);
         write(&dir, "a.txt", "one\ntwo\n");
 
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         assert_eq!(paths(&c.committed), vec!["a.txt", "b.txt"]);
         assert_eq!(paths(&c.uncommitted), vec!["a.txt"]);
         assert_eq!(paths(&c.files), vec!["b.txt"]);
@@ -626,7 +741,7 @@ mod tests {
         git(&dir, &["mv", "keep.txt", "moved.txt"]);
         commit_all(&dir, "move");
 
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         let moved = find(&c.committed, "moved.txt");
         assert_eq!(moved.status, FileStatus::Renamed);
         assert_eq!(moved.old_path.as_deref(), Some("keep.txt"));
@@ -639,7 +754,7 @@ mod tests {
         std::fs::write(dir.join("img.bin"), [0u8, 1, 2, 0, 255, 0, 3]).unwrap();
         commit_all(&dir, "binary");
 
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         let bin = find(&c.committed, "img.bin");
         assert!(bin.is_binary);
         assert_eq!((bin.additions, bin.deletions), (0, 0));
@@ -654,7 +769,7 @@ mod tests {
         commit_all(&dir, "base");
         write(&dir, "a.txt", "b\n");
 
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         assert_eq!(c.base_status, Some(BaseStatus::Found));
         assert_eq!(c.merge_base_oid, c.head_oid);
         assert!(c.committed.is_empty());
@@ -676,7 +791,7 @@ mod tests {
         write(&clone, "local.txt", "l\n");
         commit_all(&clone, "local");
 
-        let c = changes_vs_default(clone.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(clone.to_str().unwrap(), None, None).unwrap();
         assert_eq!(c.base_ref.as_deref(), Some("origin/main"));
         assert_eq!(paths(&c.committed), vec!["local.txt"]);
     }
@@ -689,7 +804,7 @@ mod tests {
         commit_all(&dir, "base");
         write(&dir, "u.txt", "u\n");
 
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         assert!(c.default_branch.is_none());
         assert_eq!(c.base_status, Some(BaseStatus::NoDefaultBranch));
         assert!(c.committed.is_empty());
@@ -703,7 +818,7 @@ mod tests {
         init(&dir, "main");
         write(&dir, "first.txt", "hi\n");
 
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         assert!(c.head_oid.is_none());
         assert!(c.base_status.is_none());
         assert_eq!(c.branch.as_deref(), Some("main"));
@@ -719,7 +834,7 @@ mod tests {
         commit_all(&dir, "ignore");
         write(&dir, "build/out.txt", "o\n");
 
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         assert!(c.uncommitted.is_empty());
     }
 
@@ -740,8 +855,8 @@ mod tests {
         write(&b, "only-b.txt", "b\n");
         commit_all(&b, "b only");
 
-        let ca = get_changes_vs_default(a.to_str().unwrap().to_string()).await.unwrap();
-        let cb = get_changes_vs_default(b.to_str().unwrap().to_string()).await.unwrap();
+        let ca = get_changes_vs_default(a.to_str().unwrap().to_string(), None, None).await.unwrap();
+        let cb = get_changes_vs_default(b.to_str().unwrap().to_string(), None, None).await.unwrap();
         assert_eq!((ca.branch.as_deref(), cb.branch.as_deref()), (Some("feat"), Some("feat")));
         assert_eq!(ca.default_branch.as_deref(), Some("main"));
         assert_eq!(cb.default_branch.as_deref(), Some("master"));
@@ -758,7 +873,7 @@ mod tests {
         feature_repo(&dir);
         git(&dir, &["rm", "-q", "--cached", "keep.txt"]);
 
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         let entries: Vec<_> = c
             .uncommitted
             .iter()
@@ -770,7 +885,7 @@ mod tests {
         );
         // 디스크에서도 지우면 추적하지 않는 항목은 없다.
         std::fs::remove_file(dir.join("keep.txt")).unwrap();
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         assert_eq!(paths(&c.uncommitted), vec!["keep.txt"]);
         assert_eq!(c.uncommitted[0].status, FileStatus::Deleted);
     }
@@ -780,7 +895,7 @@ mod tests {
         // src/types/index.ts 의 BranchChanges·BranchChangedFile 와 키가 같아야 한다.
         let dir = tmp_dir("shape").join("r");
         feature_repo(&dir);
-        let c = changes_vs_default(dir.to_str().unwrap()).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         let json = serde_json::to_value(&c).unwrap();
         let keys = |v: &serde_json::Value| {
             let mut k: Vec<String> = v.as_object().unwrap().keys().cloned().collect();
@@ -823,7 +938,7 @@ mod tests {
         // 커밋한 변경(three) + 커밋하지 않은 변경(four).
         write(&dir, "a.txt", "one\ntwo\nthree\nfour\n");
 
-        let d = file_diff_vs_default(dir.to_str().unwrap(), "a.txt", None).unwrap();
+        let d = file_diff_vs_default(dir.to_str().unwrap(), "a.txt", None, None, None).unwrap();
         assert!(d.base_is_divergence_point);
         assert_eq!(d.base_oid, Some(head_of(&dir, "main~1")));
         assert_eq!(lines_of(&d, "addition"), vec!["three", "four"]);
@@ -845,14 +960,14 @@ mod tests {
         write(&dir, "later.txt", "l\n");
 
         let path = dir.to_str().unwrap();
-        let b = file_diff_vs_default(path, "b.txt", None).unwrap();
+        let b = file_diff_vs_default(path, "b.txt", None, None, None).unwrap();
         assert_eq!(lines_of(&b, "addition"), vec!["new"]);
         assert_eq!(b.old_content, "");
 
-        let u = file_diff_vs_default(path, "later.txt", None).unwrap();
+        let u = file_diff_vs_default(path, "later.txt", None, None, None).unwrap();
         assert_eq!(lines_of(&u, "addition"), vec!["l"]);
 
-        let moved = file_diff_vs_default(path, "moved.txt", Some("keep.txt")).unwrap();
+        let moved = file_diff_vs_default(path, "moved.txt", Some("keep.txt"), None, None).unwrap();
         assert!(lines_of(&moved, "addition").is_empty(), "{moved:?}");
         assert_eq!(moved.old_content, "keep\n");
         assert_eq!(moved.new_content, "keep\n");
@@ -866,7 +981,7 @@ mod tests {
         commit_all(&dir, "base");
         write(&dir, "a.txt", "a\nb\n");
 
-        let d = file_diff_vs_default(dir.to_str().unwrap(), "a.txt", None).unwrap();
+        let d = file_diff_vs_default(dir.to_str().unwrap(), "a.txt", None, None, None).unwrap();
         assert!(!d.base_is_divergence_point);
         assert_eq!(d.base_oid, Some(head_of(&dir, "HEAD")));
         assert_eq!(lines_of(&d, "addition"), vec!["b"]);
@@ -877,15 +992,105 @@ mod tests {
         let dir = tmp_dir("file-diff-escape").join("r");
         feature_repo(&dir);
         let path = dir.to_str().unwrap();
-        assert!(file_diff_vs_default(path, "../secret", None).is_err());
-        assert!(file_diff_vs_default(path, "/etc/hosts", None).is_err());
-        assert!(file_diff_vs_default(path, "a.txt", Some("../x")).is_err());
+        assert!(file_diff_vs_default(path, "../secret", None, None, None).is_err());
+        assert!(file_diff_vs_default(path, "/etc/hosts", None, None, None).is_err());
+        assert!(file_diff_vs_default(path, "a.txt", Some("../x"), None, None).is_err());
     }
 
     #[tokio::test]
     async fn a_missing_repo_is_an_error() {
         let missing = tmp_dir("missing").join("nope");
-        let err = get_changes_vs_default(missing.to_str().unwrap().to_string()).await;
+        let err = get_changes_vs_default(missing.to_str().unwrap().to_string(), None, None).await;
         assert!(err.is_err());
+    }
+
+    /// main ← dev(d.txt) ← feat(b.txt, a.txt 수정). HEAD 는 feat, 작업 트리에 w.txt.
+    fn stacked_repo(dir: &Path) {
+        init(dir, "main");
+        write(dir, "a.txt", "one\ntwo\n");
+        commit_all(dir, "base");
+        git(dir, &["checkout", "-q", "-b", "dev"]);
+        write(dir, "d.txt", "dev\n");
+        commit_all(dir, "dev work");
+        git(dir, &["checkout", "-q", "-b", "feat"]);
+        write(dir, "a.txt", "one\ntwo\nthree\n");
+        write(dir, "b.txt", "new\n");
+        commit_all(dir, "feat work");
+        write(dir, "w.txt", "wip\n");
+    }
+
+    #[test]
+    fn a_chosen_base_replaces_the_default_branch() {
+        let dir = tmp_dir("base").join("r");
+        stacked_repo(&dir);
+        let path = dir.to_str().unwrap();
+
+        // 기본(main) 대비: dev 의 d.txt 도 들어간다.
+        let by_default = changes_vs_default(path, None, None).unwrap();
+        assert_eq!(paths(&by_default.committed), vec!["a.txt", "b.txt", "d.txt"]);
+        assert_eq!(by_default.base_ref.as_deref(), Some("main"));
+
+        // dev 대비: feat 이 dev 에서 갈라진 뒤의 변경만.
+        let by_dev = changes_vs_default(path, Some("dev"), None).unwrap();
+        assert_eq!(by_dev.base_ref.as_deref(), Some("dev"));
+        assert_eq!(by_dev.merge_base_oid.as_deref(), Some(head_of(&dir, "dev").as_str()));
+        assert_eq!(by_dev.default_branch.as_deref(), Some("main"));
+        assert_eq!(paths(&by_dev.committed), vec!["a.txt", "b.txt"]);
+        assert_eq!(paths(&by_dev.uncommitted), vec!["w.txt"]);
+        assert_eq!(paths(&by_dev.files), vec!["a.txt", "b.txt", "w.txt"]);
+
+        // 파일 diff 도 같은 기준을 쓴다: dev 대비 d.txt 는 바뀌지 않았다.
+        let d = file_diff_vs_default(path, "d.txt", None, Some("dev"), None).unwrap();
+        assert!(d.hunks.is_empty());
+        assert_eq!(d.base_oid.as_deref(), Some(head_of(&dir, "dev").as_str()));
+        let a = file_diff_vs_default(path, "a.txt", None, Some("dev"), None).unwrap();
+        assert_eq!((a.insertions, a.deletions), (1, 0));
+    }
+
+    #[test]
+    fn a_viewed_branch_is_compared_without_uncommitted_changes() {
+        let dir = tmp_dir("target").join("r");
+        stacked_repo(&dir);
+        // 체크아웃은 dev 로 옮기고, feat 은 보기만 한다. 작업 트리의 w.txt 는 dev 의 것이다.
+        git(&dir, &["stash", "-u", "-q"]);
+        git(&dir, &["checkout", "-q", "dev"]);
+        git(&dir, &["stash", "pop", "-q"]);
+        let path = dir.to_str().unwrap();
+
+        let c = changes_vs_default(path, None, Some("feat")).unwrap();
+        assert_eq!(c.branch.as_deref(), Some("feat"));
+        assert_eq!(c.head_oid.as_deref(), Some(head_of(&dir, "feat").as_str()));
+        assert_eq!(paths(&c.committed), vec!["a.txt", "b.txt", "d.txt"]);
+        assert!(c.uncommitted.is_empty());
+        assert_eq!(paths(&c.files), paths(&c.committed));
+
+        let by_dev = changes_vs_default(path, Some("dev"), Some("feat")).unwrap();
+        assert_eq!(paths(&by_dev.files), vec!["a.txt", "b.txt"]);
+
+        // 파일 diff 의 새 쪽은 작업 트리가 아니라 feat 의 내용이다.
+        let b = file_diff_vs_default(path, "b.txt", None, Some("dev"), Some("feat")).unwrap();
+        assert_eq!(b.new_content, "new\n");
+        let w = file_diff_vs_default(path, "w.txt", None, None, Some("feat")).unwrap();
+        assert!(w.hunks.is_empty() && w.new_content.is_empty(), "{w:?}");
+    }
+
+    #[test]
+    fn an_unrelated_base_reports_no_shared_history_and_bad_names_fail() {
+        let dir = tmp_dir("unrelated").join("r");
+        stacked_repo(&dir);
+        git(&dir, &["checkout", "-q", "--orphan", "island"]);
+        git(&dir, &["rm", "-rfq", "--cached", "."]);
+        write(&dir, "i.txt", "island\n");
+        git(&dir, &["add", "i.txt"]);
+        git(&dir, &["commit", "-q", "-m", "island"]);
+        git(&dir, &["checkout", "-q", "-f", "feat"]);
+        let path = dir.to_str().unwrap();
+
+        let c = changes_vs_default(path, Some("island"), None).unwrap();
+        assert_eq!(c.base_status, Some(BaseStatus::NoSharedHistory));
+        assert!(c.committed.is_empty());
+        assert!(changes_vs_default(path, Some("nope"), None).is_err());
+        assert!(changes_vs_default(path, Some("--all"), None).is_err());
+        assert!(changes_vs_default(path, None, Some("")).is_err());
     }
 }

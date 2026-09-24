@@ -26,8 +26,9 @@ export function RefBadge({
       className={cn(
         "inline-flex items-center gap-0.5 max-w-[140px] rounded px-1 py-px text-[10px] font-medium leading-none border",
         label.isHead
-          ? // HEAD ("you are here"): solid primary fill, strongest emphasis.
-            "bg-primary text-primary-foreground border-primary font-semibold"
+          ? // HEAD ("you are here"): neutral chip, strongest outline and weight. Brand color is
+            // kept for selection and primary actions only.
+            "bg-(--chip) text-foreground border-foreground/50 font-semibold"
           : isLocalOnlyTag
             ? // Local-only tag: green, outlined + dashed = "not yet pushed".
               "bg-transparent text-success border-success/45 border-dashed"
@@ -80,7 +81,7 @@ export function CommitItem({
       className={cn(
         "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors border-b border-border select-none",
         isSelected
-          ? "bg-primary/10 text-primary font-semibold"
+          ? "bg-(--acc-sel) text-foreground"
           : !isSelected && isHighlighted
             ? "bg-accent ring-1 ring-primary/30"
             : "hover:bg-accent",
@@ -113,9 +114,7 @@ export function CommitItem({
               className={cn(
                 "w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0",
                 "text-[8px] font-bold",
-                isSelected
-                  ? "bg-primary/20 text-primary"
-                  : "bg-primary/10 text-primary",
+                "bg-(--chip) text-muted-foreground",
               )}
             >
               {(commit.author.name ?? "?")[0].toUpperCase()}
@@ -123,24 +122,21 @@ export function CommitItem({
           )}
           <span
             className={cn(
-              "text-xs truncate",
-              isSelected ? "text-primary/70" : "text-muted-foreground",
+              "text-xs truncate text-muted-foreground",
             )}
           >
             {commit.author.name}
           </span>
           <span
             className={cn(
-              "text-xs shrink-0 leading-none",
-              isSelected ? "text-primary/50" : "text-muted-foreground",
+              "text-xs shrink-0 leading-none text-muted-foreground",
             )}
           >
             {"\u00B7"}
           </span>
           <span
             className={cn(
-              "text-xs shrink-0",
-              isSelected ? "text-primary/70" : "text-muted-foreground",
+              "text-xs shrink-0 text-muted-foreground",
             )}
           >
             {formatRelativeTime(commit.timestamp)}

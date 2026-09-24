@@ -10,7 +10,7 @@ import { useSelectionStore } from "@/stores/selection";
 import { useToastStore } from "@/stores/toast";
 import { useFollowStore, type FollowMode } from "@/stores/follow";
 import { FollowBadge } from "@/components/live/FollowPanel";
-import { CommitNowButton } from "@/components/commit/CommitNowButton";
+import { WorkingChangesButton } from "@/components/commit/WorkingChangesButton";
 import {
   useBranches,
   useCommitAvatars,
@@ -29,7 +29,7 @@ import { HistoryView } from "@/components/history/HistoryView";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
 import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
 import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
-import type { CommitInfo } from "@/types";
+import type { CommitInfo, HistoryTarget } from "@/types";
 import type { GraphRowLayout } from "@/lib/graph-lanes";
 import { edgePath, ForkPointRow, GRAPH_COLUMNS, GraphRow, GraphWipRow, SeenDivider } from "./GraphRow";
 import {
@@ -62,6 +62,12 @@ export interface CommitGraphProps {
    * 이력과 합쳐 한 그래프에 그린다. 없으면 지금 연 워크트리의 이력만.
    */
   worktreeHeads?: readonly WorktreeHead[];
+  /**
+   * 커밋 목록의 시작점. 기본은 HEAD(지금 체크아웃). 다른 브랜치나 모든 브랜치를 보면
+   * 체크아웃하지 않고 그 이력을 그린다 — 그때는 main에서 갈라진 지점 행을 그리지 않고,
+   * 커밋 메뉴의 reset·revert(체크아웃한 브랜치를 바꾸는 일)를 막는다.
+   */
+  historyTarget?: HistoryTarget;
 }
 
 /** 그래프에 함께 그릴 다른 워크트리. */
@@ -201,7 +207,7 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
             layout={lanes?.get(wipLaneOid(wip.path))}
             colorOf={lanes ? colorOf : undefined}
             // 지금 연 워크트리는 여기서 바로 커밋한다. 다른 워크트리는 행을 눌러 따라간 뒤 그 워크트리를 연다.
-            action={wip.isCurrent && (wip.count ?? 0) > 0 ? <CommitNowButton count={wip.count ?? 0} /> : undefined}
+            action={wip.isCurrent && (wip.count ?? 0) > 0 ? <WorkingChangesButton count={wip.count ?? 0} /> : undefined}
             onSelect={() => selection.selectWip(wip)}
           />
         );
@@ -215,6 +221,7 @@ function CommitGraphList({
   seenAt,
   wips,
   worktreeHeads = NO_WORKTREE_HEADS,
+  historyTarget,
   selection,
 }: CommitGraphProps & { selection: GraphSelection }) {
   const { t } = useTranslation();
@@ -226,7 +233,8 @@ function CommitGraphList({
   const repoAccountId = useRepoAccountId();
 
   const { data: historyData, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useCommitHistoryInfinite(activeRepoPath);
+    useCommitHistoryInfinite(activeRepoPath, historyTarget);
+  const viewing = historyTarget !== undefined && historyTarget.kind !== "head";
   const otherHistories = useWorktreeHeadHistories(worktreeHeads);
   // 결과 배열은 렌더마다 새로 오므로, 받은 데이터 묶음이 바뀔 때만 다시 합친다.
   const otherData = otherHistories.map((q) => q.data);
@@ -293,9 +301,10 @@ function CommitGraphList({
     [commits, newCommits],
   );
   // 「main에서 갈라진 지점」 행(D4). 「파일별 변경」 배지와 같은 조회(HEAD가 바뀔 때만 다시 읽음)를 쓴다.
+  // 보는 중이면 그리지 않는다 — 그 기준(main 대비)은 체크아웃한 HEAD의 것이다.
   const forkEntries = useMemo(
-    () => (activeRepoPath ? [{ path: activeRepoPath, headOid: ownHead }] : []),
-    [activeRepoPath, ownHead],
+    () => (activeRepoPath && !viewing ? [{ path: activeRepoPath, headOid: ownHead }] : []),
+    [activeRepoPath, ownHead, viewing],
   );
   const changes = useChangesVsDefaultOnHead(forkEntries)[0]?.data;
   const forkIdx = forkPointIndex(commits, changes);
@@ -354,14 +363,18 @@ function CommitGraphList({
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
-        <WipRows
-          wips={wips}
-          selection={selection}
-          graphWidth={graphWidth}
-          lanes={layouts}
-          colorOf={colorOf}
-          currentHead={ownHead}
-        />
+        {viewing ? (
+          <ViewingNote />
+        ) : (
+          <WipRows
+            wips={wips}
+            selection={selection}
+            graphWidth={graphWidth}
+            lanes={layouts}
+            colorOf={colorOf}
+            currentHead={ownHead}
+          />
+        )}
 
         {isLoading ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{t("history.loadingHistory")}</p>
@@ -409,7 +422,7 @@ function CommitGraphList({
                   onContextMenu={(e) => {
                     e.preventDefault();
                     selectCommit(commit.id);
-                    menu.open(commit, e.clientX, e.clientY, ownIds.has(commit.id));
+                    menu.open(commit, e.clientX, e.clientY, !viewing && ownIds.has(commit.id));
                   }}
                 />
               </Fragment>
@@ -441,6 +454,16 @@ function CommitGraphList({
   );
 }
 
+
+/** 보는 중에 WIP 행 자리에 두는 안내. 커밋 안 한 변경은 체크아웃한 작업 트리의 것이다. */
+function ViewingNote() {
+  const { t } = useTranslation();
+  return (
+    <p className="flex items-center h-7 px-3.5 border-b border-(--line) text-[11.5px] text-muted-foreground bg-(--acc-faint)">
+      {t("historyView.wipHidden")}
+    </p>
+  );
+}
 
 /**
  * 커밋 우클릭 메뉴(`CommitContextMenu`)와 그 메뉴가 여는 확인 창·대화상자.

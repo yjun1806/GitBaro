@@ -17,6 +17,7 @@ import {
 import type { CommitInfo, DiffOutput, FileStatus, RepoSyncStatus, WorkflowRun } from "@/types";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import { DiffViewer } from "@/components/diff/DiffViewer";
+import { RepoWorkSwitcher } from "@/components/commit/WorkSwitcher";
 
 function AuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
   const [imgError, setImgError] = useState(false);
@@ -160,6 +161,11 @@ interface CommitDetailProps {
   changedFiles?: Array<{ path: string; status: FileStatus }>;
   selectedFileDiff?: DiffOutput | null;
   onSelectFile?: (path: string) => void;
+  /**
+   * 목록 맨 위의 [작업 중인 변경 | 커밋] 전환. 빼면 지금 연 저장소의 전환(`RepoWorkSwitcher`)을 둔다.
+   * 다른 저장소의 커밋(워크스페이스 화면)은 그 화면이 자기 전환을 넘긴다.
+   */
+  switcher?: ReactNode;
 }
 
 export function CommitDetail({
@@ -169,6 +175,7 @@ export function CommitDetail({
   changedFiles = [],
   selectedFileDiff,
   onSelectFile,
+  switcher,
 }: CommitDetailProps) {
   const { t } = useTranslation();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -366,6 +373,7 @@ export function CommitDetail({
       variant="inline"
       list={
         <>
+          {switcher === undefined ? <RepoWorkSwitcher mode="commit" /> : switcher}
           {commitInfo}
           <div className="px-3 pt-2 pb-1 text-[11px] font-semibold text-(--faint) shrink-0">
             {t("commitDetail2.changedFiles", { count: changedFiles.length })}
@@ -388,7 +396,7 @@ export function CommitDetail({
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors",
                     isSelected
-                      ? "bg-primary/10"
+                      ? "bg-(--acc-sel)"
                       : !isSelected && isHighlighted
                         ? "bg-accent ring-1 ring-primary/30"
                         : "hover:bg-accent",
@@ -398,7 +406,7 @@ export function CommitDetail({
                   <span className="flex-1 min-w-0 flex flex-col">
                     <span className={cn(
                       "text-xs font-medium truncate",
-                      isSelected ? "text-primary" : "text-foreground",
+                      "text-foreground",
                     )}>
                       {filename}
                     </span>

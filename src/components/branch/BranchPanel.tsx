@@ -18,6 +18,8 @@ import {
   type BranchPanelSort,
 } from "./branch-panel-model";
 import { nextActiveName } from "./visible-branches";
+import { useHistoryViewStore, viewTargetFor, type ViewTarget } from "@/stores/history-view";
+import { useSetHistoryView } from "@/components/graph/useHistoryView";
 
 /** 관찰자를 쓸 수 없는 환경(테스트 등)에서 기반 브랜치를 계산할 앞쪽 행 수. */
 const FALLBACK_VISIBLE_ROWS = 30;
@@ -45,8 +47,9 @@ export interface BranchPanelProps {
 
 /**
  * 브랜치 패널(시안 D6). 「워크트리에서 쓰는 중 / 로컬 / 원격」 세 칸으로 나누고, 행마다
- * 기반 브랜치와 ↑, 전환(또는 이동)·비교·Merge 버튼을 둔다. 다른 워크트리가 쓰는 브랜치는
- * 전환 대신 그 워크트리로 이동한다. 우클릭 메뉴로 이름 변경·삭제·이름 복사를 한다.
+ * 기반 브랜치와 ↑, 체크아웃(또는 이동)·비교·Merge 버튼을 둔다. 행을 누르면 체크아웃하지 않고
+ * 그 브랜치의 이력을 그래프에서 본다. 체크아웃은 「체크아웃」 버튼으로만 한다. 다른 워크트리가
+ * 쓰는 브랜치는 체크아웃 대신 그 워크트리로 이동한다. 우클릭 메뉴로 이름 변경·삭제·이름 복사를 한다.
  * 기반 브랜치는 추정값이 섞여 있고 비용이 들어서 화면에 보이는 행만 계산한다.
  */
 export function BranchPanel({
@@ -101,8 +104,24 @@ export function BranchPanel({
       ? t("branchPanel.remoteOf", { remote: [...remoteNames][0] })
       : t("branchPanel.remote");
 
+  // 행을 누르면 체크아웃하지 않고 본다. 지금 브랜치 행은 「현재 체크아웃」 보기로 돌아간다.
+  const viewed = useHistoryViewStore((s) => viewTargetFor(s, activeRepoPath));
+  const setView = useSetHistoryView();
+  const viewRow = (row: BranchPanelRow) => {
+    const target: ViewTarget | null =
+      row.action === "current" ? null : { kind: "ref", name: row.branch.name, isRemote: row.branch.isRemote };
+    setView(target);
+    onClose();
+  };
+  const isViewed = (row: BranchPanelRow) =>
+    viewed?.kind === "ref" && viewed.name === row.branch.name && viewed.isRemote === row.branch.isRemote;
+  // 보기와 섞이지 않게, 체크아웃·비교·Merge를 시작하면 보기를 끝낸다.
+  const endView = () => useHistoryViewStore.getState().reset();
+
+  // 명시적인 체크아웃(다른 워크트리가 쓰는 브랜치는 그 워크트리로 이동).
   const runPrimary = (row: BranchPanelRow) => {
     if (row.action === "current") return;
+    endView();
     if (row.action === "openWorktree" && row.worktree) onOpenWorktree(row.worktree.path);
     else onSwitch(row.branch.name);
     onClose();
@@ -123,7 +142,7 @@ export function BranchPanel({
         const row = rows.find((r) => r.branch.name === activeName);
         if (row) {
           e.preventDefault();
-          runPrimary(row);
+          viewRow(row);
         }
         break;
       }
@@ -197,12 +216,16 @@ export function BranchPanel({
             baseInfo={bases.get(row.branch.name)}
             isActive={activeName === row.branch.name}
             canCompare={canCompare(row)}
+            isViewed={isViewed(row)}
+            onView={() => viewRow(row)}
             onPrimary={() => runPrimary(row)}
             onCompare={() => {
+              endView();
               onCompare(row.branch.name);
               onClose();
             }}
             onMerge={() => {
+              endView();
               onMerge(row.branch.name);
               onClose();
             }}
@@ -275,6 +298,7 @@ export function BranchPanel({
           }}
           onCompare={() => {
             if (canCompare(menu.row)) {
+              endView();
               onCompare(menu.row.branch.name);
               onClose();
             }
@@ -282,6 +306,7 @@ export function BranchPanel({
           }}
           onMerge={() => {
             if (canCompare(menu.row)) {
+              endView();
               onMerge(menu.row.branch.name);
               onClose();
             }

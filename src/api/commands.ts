@@ -28,6 +28,7 @@ import type {
   AutoSyncSnapshot,
   AutoFastForwardResult,
   ActivityWatchResult,
+  HistoryTarget,
 } from "@/types";
 
 // Git operations — backend returns indexStatus/worktreeStatus separately,
@@ -502,12 +503,19 @@ export interface CommitDetailResult {
   stats: { filesChanged: number; insertions: number; deletions: number };
 }
 
+/** `target`을 빼면 HEAD(지금 체크아웃)의 이력이다. */
 export async function getCommitHistory(
   repoPath: string,
   limit = 50,
   offset = 0,
+  target?: HistoryTarget,
 ): Promise<CommitInfo[]> {
-  const raw: RawCommitHistory[] = await invoke("get_commit_history", { repoPath, limit, offset });
+  const raw: RawCommitHistory[] = await invoke("get_commit_history", {
+    repoPath,
+    limit,
+    offset,
+    ...(target && target.kind !== "head" ? { target } : {}),
+  });
   return raw.map((c) => ({
     id: c.oid,
     shortId: c.oid.slice(0, 7),
@@ -948,11 +956,22 @@ export async function getWipFiles(path: string): Promise<WipFile[]> {
 
 // W5-T5 — main 대비 변경
 
-import type { BranchChanges, FileDiffVsDefault } from "@/types";
+import type { BranchChanges, ChangesScope, FileDiffVsDefault } from "@/types";
 
-/** 저장소 하나가 main과 갈라진 지점 이후로 바꾼 파일과 커밋하지 않은 변경. 저장소마다 따로 부른다. */
-export async function getChangesVsDefault(path: string): Promise<BranchChanges> {
-  return invoke("get_changes_vs_default", { path });
+/** 범위 인자 중 정한 것만 넘긴다(없으면 백엔드 기본값: 기본 브랜치 대비, HEAD + 작업 트리). */
+function scopeArgs(scope?: ChangesScope): Partial<ChangesScope> {
+  return {
+    ...(scope?.base ? { base: scope.base } : {}),
+    ...(scope?.target ? { target: scope.target } : {}),
+  };
+}
+
+/**
+ * 저장소 하나가 main(또는 `scope.base`)과 갈라진 지점 이후로 바꾼 파일과 커밋 안 한 변경.
+ * `scope.target`을 주면 체크아웃하지 않고 그 브랜치를 본다. 저장소마다 따로 부른다.
+ */
+export async function getChangesVsDefault(path: string, scope?: ChangesScope): Promise<BranchChanges> {
+  return invoke("get_changes_vs_default", { path, ...scopeArgs(scope) });
 }
 
 interface RawFileDiffVsDefault extends Omit<RawFileDiff, "staged" | "binaryPreview"> {
@@ -995,11 +1014,13 @@ export async function getFileDiffVsDefault(
   path: string,
   filePath: string,
   oldPath: string | null = null,
+  scope?: ChangesScope,
 ): Promise<FileDiffVsDefault> {
   const raw: RawFileDiffVsDefault = await invoke("get_file_diff_vs_default", {
     path,
     filePath,
     oldPath,
+    ...scopeArgs(scope),
   });
   return fileDiffVsDefaultFromRaw(raw);
 }

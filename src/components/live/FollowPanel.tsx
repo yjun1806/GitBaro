@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { RepoWorkSwitcher } from "@/components/commit/WorkSwitcher";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
@@ -354,6 +355,11 @@ export interface FollowPanelProps {
   variant: "cards" | "inline";
   /** 목록 머리 아래에 둘 것(저장소 표시 등). */
   header?: ReactNode;
+  /**
+   * 목록 맨 위의 [작업 중인 변경 | 커밋] 전환. 빼면 저장소 화면(`cards`)은 지금 연 저장소의 전환
+   * (`RepoWorkSwitcher`)을 쓰고, 한 카드 판(`inline`)은 두지 않는다.
+   */
+  switcher?: ReactNode;
   /** 목록 아래에 둘 것(스테이징·커밋으로 가는 버튼 등). */
   footer?: ReactNode;
 }
@@ -363,7 +369,7 @@ export interface FollowPanelProps {
  * 따라가는 중에는 가장 최근 파일을 자동으로 골라 방금 생긴 줄을 강조한다.
  * 사용자가 파일을 고르거나 diff를 스크롤하면 멈춘다.
  */
-export function FollowPanel({ path, variant, header, footer }: FollowPanelProps) {
+export function FollowPanel({ path, variant, header, footer, switcher }: FollowPanelProps) {
   const { t } = useTranslation();
   const target = useFollowStore((s) => s.target);
   const mode = useFollowStore((s) => s.mode);
@@ -439,6 +445,7 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
 
   const listPane = (
     <>
+      {switcher === undefined ? variant === "cards" ? <RepoWorkSwitcher mode="working" /> : null : switcher}
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5 shrink-0">
         <strong className="text-[12.5px] font-bold text-foreground">{t("live.uncommitted")}</strong>
         <span className="text-[11.5px] text-muted-foreground">{t("live.fileCount", { count: list.length })}</span>
