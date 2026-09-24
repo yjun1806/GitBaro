@@ -97,9 +97,16 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
     await openUrl("https://github.com/login/device");
   };
 
+  // After sign-in, any way out (Continue or Escape) must run onSuccess so the
+  // caller refreshes accounts; closing alone would leave the new account unseen.
+  const handleDismiss = () => {
+    if (flowState === "success") onSuccess?.(successUsername);
+    onClose();
+  };
+
   return (
     <Dialog
-      onClose={onClose}
+      onClose={handleDismiss}
       dismissible={flowState !== "idle"}
       ariaLabel={t("account.signInToGitHub")}
       className="bg-card rounded-xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-5"
@@ -199,10 +206,7 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
               </p>
             </div>
             <button
-              onClick={() => {
-                onSuccess?.(successUsername);
-                onClose();
-              }}
+              onClick={handleDismiss}
               className="px-5 py-2.5 bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-medium rounded-lg transition-colors"
             >
               {t("account.continue", "Continue")}
