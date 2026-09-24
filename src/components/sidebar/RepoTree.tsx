@@ -25,6 +25,8 @@ import {
   type LiveEntry,
 } from "./tree-model";
 import { useSidebarWatchPaths, type SidebarTreeData } from "./useSidebarTreeData";
+import { PANEL_SURFACE } from "@/components/ui/layers";
+import { cn } from "@/lib/utils";
 
 /** 「지금 바뀌는 곳」 칸의 접힘 상태를 저장하는 키(워크스페이스 스토어의 `collapsed`). */
 export const LIVE_SECTION_KEY = "live";
@@ -219,7 +221,8 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
         onSelect={revealLive}
       />
 
-      <div ref={treeScrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+      {/* 스크롤 칸은 사이드바 좌우 여백(10px)까지 넓혀 섬 그림자가 가장자리에서 잘리지 않게 한다. */}
+      <div ref={treeScrollRef} className="flex-1 min-h-0 -mx-2.5 px-2.5 pb-2 overflow-y-auto overflow-x-hidden">
         {!searching && <WorkspaceSuggestion />}
 
         {/* 끌어서 놓기는 검색으로 거르지 않은 전체 트리(`tree`)의 순서로 계산한다. */}
@@ -229,7 +232,8 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
               const accountOpen = isOpen(account.key);
               const quietOpen = openQuiet.includes(account.accountKey);
               return (
-                <div key={account.key} role="none" className="flex flex-col">
+                // 계정마다 흰 섬(층 2) 하나. 「지금 바뀌는 중」 섬과 같은 모양·안쪽 여백(6px)이다.
+                <div key={account.key} role="none" className={cn("flex flex-col p-1.5", PANEL_SURFACE)}>
                   <AccountHeader
                     label={account.label}
                     accountKey={account.accountKey}

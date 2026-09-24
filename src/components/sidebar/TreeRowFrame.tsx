@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils";
 
 /** 들여쓰기 한 단계의 폭(px). 시안 `gen_d.py`의 `depth*14`. */
 export const INDENT_PX = 14;
-/** 행 왼쪽 안쪽 여백(px). 선택 막대(3px)와 겹치지 않을 만큼 둔다. */
-const ROW_PAD_LEFT = 6;
+/** 행 왼쪽 안쪽 여백(px). 오른쪽 여백(pr-2)과 같게 두고, 선택 막대(3px)와 겹치지 않는다. */
+const ROW_PAD_LEFT = 8;
 /** ▾ 칸(16px, 좌우 -3px)의 가운데. 세로 안내선이 부모 행의 ▾ 바로 아래로 떨어지게 한다. */
 const CHEVRON_CENTER_PX = ROW_PAD_LEFT - 3 + 8;
 
@@ -101,8 +101,8 @@ export function TreeRowFrame({
         "relative flex items-center gap-[var(--item)] pr-2 rounded-[var(--radius-item)] cursor-default select-none outline-none",
         tall ? "min-h-9 py-1" : "min-h-[var(--row)] py-[3px]",
         "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40",
-        // 사이드바(층 0)에서는 흰 카드를 쓰지 않는다: 선택은 채움 + 브랜드 색 왼쪽 막대, hover는 옅은 채움.
-        selected ? "bg-(--frame-sel)" : "hover:bg-(--frame-hover)",
+        // 행은 사이드바의 흰 섬(층 2) 안에 놓인다: 선택은 회색 채움 + 브랜드 색 왼쪽 막대, hover는 더 옅은 채움.
+        selected ? "bg-(--panel-sel)" : "hover:bg-(--panel-hover)",
         className,
       )}
     >

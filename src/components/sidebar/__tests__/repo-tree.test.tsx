@@ -164,16 +164,16 @@ describe("RepoTree — indentation levels", () => {
     renderTree(makeData(baseSignals));
     await waitFor(() => expect(worktreeTooltip()).toMatch(/behind main/));
 
-    // paddingLeft = 6 + depth * 14 (TreeRowFrame). account:0, workspace:1,
+    // paddingLeft = 8 + depth * 14 (TreeRowFrame). account:0, workspace:1,
     // repo directly under the account:1, repo inside a workspace:2, worktree = its repo's depth + 1.
     const paddingLeft = (name: string) => Number(item(name).style.paddingLeft.replace("px", ""));
 
-    expect(paddingLeft("acme")).toBe(6);
-    expect(paddingLeft("product")).toBe(20); // workspace, depth 1
-    expect(paddingLeft("solo")).toBe(20); // repo directly under the account, depth 1
-    expect(paddingLeft("api")).toBe(34); // repo inside "product", depth 2
-    expect(paddingLeft("web")).toBe(34);
-    expect(paddingLeft("feat/login")).toBe(48); // worktree of "api" (depth 2 + 1)
+    expect(paddingLeft("acme")).toBe(8);
+    expect(paddingLeft("product")).toBe(22); // workspace, depth 1
+    expect(paddingLeft("solo")).toBe(22); // repo directly under the account, depth 1
+    expect(paddingLeft("api")).toBe(36); // repo inside "product", depth 2
+    expect(paddingLeft("web")).toBe(36);
+    expect(paddingLeft("feat/login")).toBe(50); // worktree of "api" (depth 2 + 1)
 
     // A workspace member repo must sit strictly deeper than a loose repo at the
     // account level, and the worktree strictly deeper than its own repo — this

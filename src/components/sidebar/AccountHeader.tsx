@@ -82,7 +82,7 @@ export function AccountHeader({
             className={cn(
               // 버튼은 행 오른쪽 끝 위에 떠 있어 폭을 차지하지 않는다(계정 이름이 버튼 자리 때문에 잘리지 않게).
               // 투명하게만 숨겨서 Tab과 화면 읽기 프로그램은 그대로 닿는다. 보일 때는 hover 채움을 깔아 이름 끝을 덮는다.
-              "absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded-[var(--radius-chip)] bg-(--frame-hover) transition-opacity",
+              "absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded-[var(--radius-chip)] bg-(--panel-hover) transition-opacity",
               sortOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
             )}
           >

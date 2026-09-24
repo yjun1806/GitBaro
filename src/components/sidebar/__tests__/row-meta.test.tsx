@@ -89,8 +89,8 @@ describe("RowSubline", () => {
 
 describe("tree guide lines", () => {
   it("sit under the chevron of the ancestor row, one indent apart", () => {
-    // ▾ 칸은 행 왼쪽 여백 6px에서 -3px 당겨진 16px 칸이라 가운데가 11px이다.
-    expect(guideLineLeft(0) + 0.5).toBe(11);
+    // ▾ 칸은 행 왼쪽 여백 8px에서 -3px 당겨진 16px 칸이라 가운데가 13px이다.
+    expect(guideLineLeft(0) + 0.5).toBe(13);
     expect(guideLineLeft(2) - guideLineLeft(1)).toBe(INDENT_PX);
   });
 });

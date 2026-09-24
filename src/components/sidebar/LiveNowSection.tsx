@@ -2,6 +2,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import { cn } from "@/lib/utils";
+import { PANEL_SURFACE } from "@/components/ui/layers";
 import { LiveDot } from "./LiveDot";
 import { formatAgo, liveDotLabel } from "./row-meta";
 import { SelectionBar } from "./TreeRowFrame";
@@ -66,15 +67,15 @@ export function LiveNowSection({
   return (
     <section
       aria-label={t("sidebarTree.live.title")}
-      className="shrink-0 mb-2 rounded-(--radius-item) border border-(--line2) overflow-hidden"
+      // 계정 묶음과 같은 흰 섬(층 2). 안쪽 여백은 사방 6px로 같고, 줄(선택 막대 포함)은 그 안에 놓인다.
+      className={cn("shrink-0 mb-2 p-1.5", PANEL_SURFACE)}
     >
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
         aria-controls={listId}
-        // 접힌 카드 높이는 검색 칸(h-7 = 28px)과 같다: 26px + 위아래 테두리 1px.
-        className="w-full flex items-center gap-2 h-[26px] px-2 text-left hover:bg-(--frame-hover)"
+        className="w-full flex items-center gap-2 h-7 px-2 rounded-(--radius-item) text-left hover:bg-(--panel-hover)"
       >
         <span
           aria-hidden="true"
@@ -90,12 +91,12 @@ export function LiveNowSection({
           <>
             <span className="flex items-center shrink-0 -space-x-1 ml-0.5 py-0.5">
               {stack.shown.map((repo) =>
-                repoAvatar(repo.path, repo.name, repo.path, 16, "ring-[1.5px] ring-(--frame) text-[9px]"),
+                repoAvatar(repo.path, repo.name, repo.path, 16, "ring-[1.5px] ring-(--panel) text-[9px]"),
               )}
               {stack.overflow > 0 && (
                 <span
                   aria-hidden="true"
-                  className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold bg-(--frame-sel) text-muted-foreground ring-[1.5px] ring-(--frame)"
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold bg-(--panel-sel) text-muted-foreground ring-[1.5px] ring-(--panel)"
                 >
                   {t("sidebarTree.live.overflow", { count: stack.overflow })}
                 </span>
@@ -107,9 +108,9 @@ export function LiveNowSection({
         )}
       </button>
       {expanded && (
-        <ul id={listId} className="flex flex-col border-t border-(--line2)">
+        <ul id={listId} className="flex flex-col mt-1 pt-1 border-t border-(--line)">
           {entries.length === 0 && (
-            <li className="px-2.5 h-6 flex items-center text-[11px] text-[var(--faint)]">
+            <li className="px-2 h-6 flex items-center text-[11px] text-[var(--faint)]">
               {t("sidebarTree.live.empty")}
             </li>
           )}
@@ -120,8 +121,8 @@ export function LiveNowSection({
                 onClick={() => onSelect(entry)}
                 title={entry.path}
                 className={cn(
-                  "relative w-full flex items-center gap-1.5 h-6 px-2.5 text-left",
-                  activePath === entry.path ? "bg-(--frame-sel)" : "hover:bg-(--frame-hover)",
+                  "relative w-full flex items-center gap-1.5 h-6 px-2 rounded-(--radius-item) text-left",
+                  activePath === entry.path ? "bg-(--panel-sel)" : "hover:bg-(--panel-hover)",
                 )}
               >
                 {activePath === entry.path && <SelectionBar />}

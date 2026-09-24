@@ -6,6 +6,8 @@ import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
 import { useToastStore } from "@/stores/toast";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { PANEL_SURFACE } from "@/components/ui/layers";
+import { cn } from "@/lib/utils";
 
 /**
  * 워크스페이스 제안 배너(README: 이름 앞부분이 같은 저장소를 보면 한 번 제안한다).
@@ -44,7 +46,7 @@ export function WorkspaceSuggestion() {
   return (
     <section
       aria-label={t("workspace.suggestion.title", { name, count: repoPaths.length })}
-      className="mb-2 p-2.5 rounded-[var(--radius-item)] bg-card shadow-[var(--shadow-sm)] flex flex-col gap-1.5"
+      className={cn("mb-2 p-2.5 flex flex-col gap-1.5", PANEL_SURFACE)}
     >
       <div className="flex items-start gap-1.5">
         <FolderPlus className="w-3.5 h-3.5 mt-px shrink-0 text-muted-foreground" aria-hidden="true" />

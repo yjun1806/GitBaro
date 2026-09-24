@@ -197,6 +197,9 @@
   --frame: #e9e9e7;
   --frame-hover: #e2e2e0;
   --frame-sel: #dededc;
+  /* 사이드바 흰 섬(층 2) 안 행의 hover·선택 채움. --frame-sel은 흰 바탕 위에서 너무 진해 따로 둔다. */
+  --panel-hover: #f4f4f3;
+  --panel-sel: #ebebe9;
   --canvas: #f1f1ef;
   --panel: #ffffff;
   --float: #ffffff;
@@ -296,6 +299,8 @@
   --frame: #151515;
   --frame-hover: #202020;
   --frame-sel: #292929;
+  --panel-hover: #292929;
+  --panel-sel: #303030;
   --canvas: var(--gray-1000);
   --panel: var(--gray-950);
   --float: var(--gray-900);
