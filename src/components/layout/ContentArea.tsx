@@ -12,6 +12,8 @@ import { StashDetailView } from "@/components/stash/StashDetailView";
 import { ActionsDetailView } from "@/components/actions/ActionsDetailView";
 import { ChangesView } from "@/components/commit/ChangesView";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
+import { FollowPanel, FollowRepoFooter } from "@/components/live/FollowPanel";
+import { useFollowStore } from "@/stores/follow";
 import type { FileStatus } from "@/types";
 
 /* --- Empty / Placeholder States --- */
@@ -137,6 +139,19 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
   const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
   const selectedStashIndex = useSelectionStore((s) => s.selectedStashIndex);
   const selectedRunId = useSelectionStore((s) => s.selectedRunId);
+  const followTarget = useFollowStore((s) => s.target);
+
+  // WIP 행을 고르면 그 워크트리를 따라간다(D4). 스테이징 목록은 따라가기 칸의 버튼으로 연다.
+  if (activeTab === "changes" && followTarget !== null) {
+    return (
+      <FollowPanel
+        key={followTarget}
+        path={followTarget}
+        variant="cards"
+        footer={<FollowRepoFooter path={followTarget} />}
+      />
+    );
+  }
 
   if (activeTab === "changes") {
     return (

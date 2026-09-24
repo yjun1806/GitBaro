@@ -8,17 +8,17 @@ import { useAccountStore } from "@/stores/account";
 import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
 import { useToastStore } from "@/stores/toast";
+import { useFollowStore, type FollowMode } from "@/stores/follow";
+import { FollowBadge } from "@/components/live/FollowPanel";
 import {
   useBranches,
   useCommitAvatars,
   useCommitHistoryInfinite,
   useRemoteTags,
-  useWorktrees,
 } from "@/api/queries";
 import { createBranch, type ResetMode } from "@/api/commands";
 import { useCommitActions } from "@/hooks/useCommitActions";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
-import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { computeGraphLanes } from "@/lib/graph-lanes";
 import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
@@ -107,42 +107,34 @@ function useActiveBranchRange() {
 }
 
 /**
- * 그래프에서 고른 것(WIP 행 또는 커밋)을 아래 칸에 연다. 다른 워크트리의 WIP 행은 그
- * 워크트리를 연 다음에 스테이징 목록을 연다. 기다리는 사이 사용자가 다른 것을 골랐거나
- * 열기에 실패해 이전 위치로 돌아갔으면 스테이징 목록으로 넘기지 않는다.
+ * 그래프에서 고른 것(WIP 행 또는 커밋)을 아래 칸에 연다. WIP 행은 그 워크트리를 따라가기
+ * 시작한다(D4). 다른 워크트리여도 열지 않고 그 자리에서 따라간다. 그 워크트리를 열어
+ * 스테이징하려면 따라가기 칸의 「이 워크트리 열기」를 쓴다.
  */
 function useGraphSelection() {
-  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const setActiveTab = useUIStore((s) => s.setActiveTab);
-  const selectCommitInStore = useSelectionStore((s) => s.selectCommit);
-  const { data: worktreeList = [] } = useWorktrees(activeRepoPath);
-  const openWorktree = useOpenWorktree(activeRepoPath, worktreeList);
-  // 고를 때마다 늘린다. 비동기 전환이 끝났을 때 그 뒤에 다른 것을 골랐는지 본다.
-  const intent = useRef(0);
-
-  const selectCommit = useCallback(
-    (id: string) => {
-      intent.current += 1;
-      selectCommitInStore(id);
-    },
-    [selectCommitInStore],
-  );
+  const selectCommit = useSelectionStore((s) => s.selectCommit);
+  const startFollow = useFollowStore((s) => s.start);
 
   const selectWip = useCallback(
-    async (wip: GraphWip) => {
-      const mine = ++intent.current;
-      if (!wip.isCurrent) {
-        await openWorktree(wip.path);
-        const now = useRepositoryStore.getState().activeRepoPath;
-        const opened = now !== null && normalizePath(now) === normalizePath(wip.path);
-        if (!opened || intent.current !== mine) return;
-      }
+    (wip: GraphWip) => {
+      startFollow(wip.path);
       setActiveTab("changes");
     },
-    [openWorktree, setActiveTab],
+    [startFollow, setActiveTab],
   );
 
   return { selectCommit, selectWip };
+}
+
+/** 경로 → 그 WIP 행을 따라가는 중이면 그 상태(따라가는 중·멈춤), 아니면 null. */
+function useFollowModeOf(): (path: string) => FollowMode | null {
+  const target = useFollowStore((s) => s.target);
+  const mode = useFollowStore((s) => s.mode);
+  return useCallback(
+    (path: string) => (target !== null && normalizePath(target) === normalizePath(path) ? mode : null),
+    [target, mode],
+  );
 }
 
 interface WipRowsProps {
@@ -158,26 +150,32 @@ function WipRows({ wips, selection, graphWidth, headChain }: WipRowsProps) {
   const { t } = useTranslation();
   const activeTab = useUIStore((s) => s.activeTab);
   const colorSeed = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? "");
+  const followTarget = useFollowStore((s) => s.target);
+  const followModeOf = useFollowModeOf();
   return (
     <>
-      {wips.map((wip) => (
-        <GraphWipRow
-          key={wip.path}
-          wipLabel={
-            wip.isCurrent
-              ? t("shell.uncommittedCount", { count: wip.count ?? 0 })
-              : t("graph.wipWorktreeLabel", { name: worktreeName(wip), count: wip.count ?? 0 })
-          }
-          worktreeName={wip.isCurrent ? null : worktreeName(wip)}
-          count={wip.count}
-          changedAt={wip.changedAt}
-          color={wip.isCurrent ? laneColor(colorSeed, headChain ?? 0) : laneColor(wip.path, 0)}
-          graphWidth={graphWidth}
-          selected={wip.isCurrent && activeTab === "changes"}
-          connectDown={wip.isCurrent && headChain !== null}
-          onSelect={() => void selection.selectWip(wip)}
-        />
-      ))}
+      {wips.map((wip) => {
+        const followed = activeTab === "changes" ? followModeOf(wip.path) : null;
+        return (
+          <GraphWipRow
+            key={wip.path}
+            leading={followed ? <FollowBadge mode={followed} /> : undefined}
+            wipLabel={
+              wip.isCurrent
+                ? t("shell.uncommittedCount", { count: wip.count ?? 0 })
+                : t("graph.wipWorktreeLabel", { name: worktreeName(wip), count: wip.count ?? 0 })
+            }
+            worktreeName={wip.isCurrent ? null : worktreeName(wip)}
+            count={wip.count}
+            changedAt={wip.changedAt}
+            color={wip.isCurrent ? laneColor(colorSeed, headChain ?? 0) : laneColor(wip.path, 0)}
+            graphWidth={graphWidth}
+            selected={activeTab === "changes" && (followTarget !== null ? followed !== null : wip.isCurrent)}
+            connectDown={wip.isCurrent && headChain !== null}
+            onSelect={() => selection.selectWip(wip)}
+          />
+        );
+      })}
     </>
   );
 }
@@ -534,6 +532,8 @@ export function RepoLaneCommitGraph({
 }: RepoLaneCommitGraphProps) {
   const { t } = useTranslation();
   const accounts = useAccountStore((s) => s.accounts);
+  const startFollow = useFollowStore((s) => s.start);
+  const followModeOf = useFollowModeOf();
   const accountAvatarMap = useMemo(
     () => new Map(accounts.map((a) => [a.email.toLowerCase(), a.avatarUrl])),
     [accounts],
@@ -578,6 +578,7 @@ export function RepoLaneCommitGraph({
             switch (row.kind) {
               case "wip": {
                 const wt = row.wip.isMain ? null : worktreeName({ ...row.wip, isCurrent: false });
+                const followed = selectedKey === row.key ? followModeOf(row.wip.path) : null;
                 return (
                   <GraphWipRow
                     key={row.key}
@@ -591,8 +592,16 @@ export function RepoLaneCommitGraph({
                     connectDown={false}
                     layout={row.layout}
                     colorOf={colorOf}
-                    leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
-                    onSelect={() => onSelectWip(row.wip, row.key)}
+                    leading={
+                      <>
+                        <RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />
+                        {followed && <FollowBadge mode={followed} />}
+                      </>
+                    }
+                    onSelect={() => {
+                      startFollow(row.wip.path);
+                      onSelectWip(row.wip, row.key);
+                    }}
                   />
                 );
               }

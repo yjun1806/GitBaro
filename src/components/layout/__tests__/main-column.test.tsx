@@ -6,6 +6,7 @@ import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
+import { useFollowStore } from "@/stores/follow";
 import type { RepoInfo, StatusEntry } from "@/types";
 
 // Heavy children talk to Tauri; the shell only decides which one to show.
@@ -86,6 +87,14 @@ vi.mock("@/api/queries", () => ({
   useStatusMany: () => ({}),
   useNewCommitIdsMany: () => ({}),
   useWorkspaceRecentCommits: () => ({}),
+  // W6-T1 따라가기
+  useWipFiles: () => ({
+    data: [
+      { path: "a.ts", origPath: null, status: "modified", staged: false, unstaged: true, modifiedAt: 1, insertions: 1, deletions: 0 },
+    ],
+    isLoading: false,
+    isError: false,
+  }),
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
 
@@ -117,6 +126,7 @@ beforeEach(async () => {
   useUIStore.setState({ activeTab: "changes", repoListOpen: false });
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: repo.path });
+  useFollowStore.getState().stop();
 });
 
 afterEach(cleanup);
@@ -132,7 +142,7 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getByText("toolbar")).toBeTruthy();
   });
 
-  it("shows the staging list under the panel when the uncommitted-changes row is picked", () => {
+  it("follows the worktree when the uncommitted-changes row is picked, and opens the staging list from there", () => {
     useUIStore.setState({ activeTab: "history" });
     renderShell();
     expect(screen.queryByText("changes-view")).toBeNull();
@@ -142,6 +152,12 @@ describe("MainColumn (two-column shell)", () => {
 
     expect(useUIStore.getState().activeTab).toBe("changes");
     expect(row.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("follow-panel")).toBeTruthy();
+    expect(screen.getAllByText("Following").length).toBeGreaterThan(0);
+    expect(screen.queryByText("changes-view")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Stage & commit…" }));
+    expect(useFollowStore.getState().target).toBeNull();
     expect(screen.getByText("changes-view")).toBeTruthy();
   });
 
@@ -155,7 +171,7 @@ describe("MainColumn (two-column shell)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes (2)" }));
     expect(useSelectionStore.getState().selectedCommitId).toBeNull();
-    expect(screen.getByText("changes-view")).toBeTruthy();
+    expect(screen.getByTestId("follow-panel")).toBeTruthy();
 
     // Picking the same commit again still opens its detail.
     fireEvent.click(screen.getByText("history-list"));

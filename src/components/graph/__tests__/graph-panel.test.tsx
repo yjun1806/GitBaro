@@ -8,6 +8,7 @@ import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
 import { useReviewSeenStore } from "@/stores/review-seen";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
+import { useFollowStore } from "@/stores/follow";
 import { syncStatusPaths } from "@/components/sidebar/tree-model";
 import type { CommitInfo, NewCommitIds, RepoInfo, RepoReviewStatus, SeenRecordInput, StatusEntry } from "@/types";
 
@@ -159,6 +160,7 @@ beforeEach(async () => {
   useUIStore.setState({ activeTab: "history", compareBranch: null, repoListOpen: false });
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
+  useFollowStore.getState().stop();
   useReviewSeenStore.setState({
     entries: {
       [REPO]: { branch: "main", oid: "c3", seenAt: Date.now() - 60_000 },
@@ -220,42 +222,32 @@ describe("GraphPanel commit graph", () => {
     expect(openWorktree).not.toHaveBeenCalled();
   });
 
-  it("opens another worktree and its staging list from that worktree's WIP row", async () => {
+  it("follows another worktree in place from its WIP row, without opening it", () => {
     renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" }));
-    await waitFor(() => expect(useUIStore.getState().activeTab).toBe("changes"));
-    expect(openWorktree).toHaveBeenCalledWith(FEAT);
-    expect(useRepositoryStore.getState().activeRepoPath).toBe(FEAT);
+    const row = screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" });
+    fireEvent.click(row);
+    expect(useUIStore.getState().activeTab).toBe("changes");
+    expect(useFollowStore.getState()).toMatchObject({ target: FEAT, mode: "following" });
+    expect(openWorktree).not.toHaveBeenCalled();
+    expect(useRepositoryStore.getState().activeRepoPath).toBe(REPO);
+    // Only the followed row is picked, and it carries the "following" pill.
+    expect(row.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Uncommitted changes (1)" }).getAttribute("aria-pressed")).toBe("false");
+    expect(within(row).getByTestId("follow-badge").textContent).toBe("Following");
   });
 
-  it("stays put when the other worktree could not be opened", async () => {
-    // useOpenWorktree restores the previous path and shows a toast on failure.
-    openWorktree.mockImplementation(async () => {});
+  it("stops following when a commit is picked or another repository is opened", () => {
     renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" }));
-    await waitFor(() => expect(openWorktree).toHaveBeenCalledWith(FEAT));
-    await new Promise((r) => setTimeout(r, 0));
-    expect(useUIStore.getState().activeTab).toBe("history");
-  });
-
-  it("keeps a commit picked while another worktree is still opening", async () => {
-    // Like useOpenWorktree: the path switches at once, the branch/status load takes a while.
-    let finish = () => {};
-    openWorktree.mockImplementation((path: string) => {
-      useRepositoryStore.setState({ activeRepoPath: path });
-      return new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-    });
-    renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" }));
-    await waitFor(() => expect(useRepositoryStore.getState().activeRepoPath).toBe(FEAT));
+    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes (1)" }));
+    expect(useFollowStore.getState().target).toBe(REPO);
     fireEvent.click(document.querySelector('[data-commit-id="c2"]') as HTMLElement);
-    finish();
-    await waitFor(() => expect(openWorktree).toHaveBeenCalledTimes(1));
-    await new Promise((r) => setTimeout(r, 0));
     expect(useUIStore.getState().activeTab).toBe("history");
-    expect(useSelectionStore.getState().selectedCommitId).toBe("c2");
+    expect(useFollowStore.getState().target).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" }));
+    expect(useFollowStore.getState().target).toBe(FEAT);
+    useRepositoryStore.setState({ activeRepoPath: FEAT });
+    expect(useFollowStore.getState().target).toBeNull();
   });
 
   it("shows when another worktree's files last changed", () => {

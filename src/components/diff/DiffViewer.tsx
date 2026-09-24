@@ -52,9 +52,19 @@ interface DiffViewerProps {
   status?: FileStatus;
   /** Working-tree diffs: whether this is the staged side. Part of the view reset key. */
   staged?: boolean;
+  /** 줄 보기에서 「방금 바뀐 줄」로 강조할 새 쪽 줄 번호(따라가기). */
+  freshLines?: ReadonlySet<number>;
+  /** 줄 보기에서 이 새 쪽 줄 번호가 보이도록 스크롤한다(따라가기). */
+  revealLine?: number | null;
 }
 
-export function DiffViewer({ diff, status = "modified", staged = false }: DiffViewerProps) {
+export function DiffViewer({
+  diff,
+  status = "modified",
+  staged = false,
+  freshLines,
+  revealLine = null,
+}: DiffViewerProps) {
   const { t } = useTranslation();
   const lineMode = useUIStore((s) => s.diffLineMode);
   const setLineMode = useUIStore((s) => s.setDiffLineMode);
@@ -261,6 +271,8 @@ export function DiffViewer({ diff, status = "modified", staged = false }: DiffVi
           isDark={isDark}
           highlight={wantHighlight}
           fontSize={12}
+          freshLines={freshLines}
+          revealLine={revealLine}
         />
       ) : (
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">

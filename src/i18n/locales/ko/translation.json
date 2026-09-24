@@ -1062,5 +1062,25 @@
     "rangeSwap": "방향 바꾸기",
     "rangeClose": "범위 보기 끝내기",
     "rangeEmpty": "{{base}}에 없는 {{target}} 커밋이 없어요"
+  },
+  "live": {
+    "following": "따라가는 중",
+    "paused": "따라가기 멈춤",
+    "pause": "따라가기 멈춤",
+    "resume": "다시 따라가기",
+    "uncommitted": "커밋하지 않은 변경",
+    "fileCount_other": "파일 {{count}}",
+    "sortedByTime": "수정 시각 순",
+    "staged": "스테이지됨",
+    "secondsAgo_other": "{{count}}초 전",
+    "added": "방금 {{lines}}행이 추가됐어요",
+    "addedMore_other": "방금 {{lines}}행 외 {{count}}곳이 바뀌었어요",
+    "removed_other": "방금 {{count}}줄이 지워졌어요",
+    "noChanges": "커밋하지 않은 변경이 없어요. 다음 수정을 기다리는 중이에요.",
+    "loadFailed": "바뀐 파일을 읽지 못했어요.",
+    "waiting": "파일이 바뀌기를 기다리는 중",
+    "footerHint": "에이전트가 커밋할 때까지 기다리거나 직접 커밋할 수 있어요.",
+    "openStaging": "스테이징·커밋…",
+    "openWorktree": "이 워크트리 열기"
   }
 }

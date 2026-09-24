@@ -1071,5 +1071,29 @@
     "rangeSwap": "Swap direction",
     "rangeClose": "Leave range view",
     "rangeEmpty": "{{target}} has no commits that are not in {{base}}"
+  },
+  "live": {
+    "following": "Following",
+    "paused": "Following paused",
+    "pause": "Stop following",
+    "resume": "Follow again",
+    "uncommitted": "Uncommitted changes",
+    "fileCount_one": "{{count}} file",
+    "fileCount_other": "{{count}} files",
+    "sortedByTime": "By last modified",
+    "staged": "staged",
+    "secondsAgo_one": "{{count}} second ago",
+    "secondsAgo_other": "{{count}} seconds ago",
+    "added": "Just added at line {{lines}}",
+    "addedMore_one": "Just changed at line {{lines}} and {{count}} more place",
+    "addedMore_other": "Just changed at line {{lines}} and {{count}} more places",
+    "removed_one": "{{count}} line was just removed",
+    "removed_other": "{{count}} lines were just removed",
+    "noChanges": "No uncommitted changes. Waiting for the next edit.",
+    "loadFailed": "Could not read the changed files.",
+    "waiting": "Waiting for a file to change",
+    "footerHint": "Wait for the agent to commit, or stage and commit yourself.",
+    "openStaging": "Stage & commit…",
+    "openWorktree": "Open this worktree"
   }
 }

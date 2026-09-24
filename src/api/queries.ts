@@ -770,3 +770,19 @@ export function useBranchBases(
     },
   });
 }
+
+// W6-T1 — 따라가기(D4)
+import { getWipFiles } from "@/api/commands";
+
+/**
+ * 워크트리 하나의 커밋하지 않은 변경 파일. 수정 시각이 늦은 순서다(`get_wip_files`).
+ * 갱신 신호는 `repo:activity`이고, 감시 상한을 넘겨 이벤트가 오지 않는 경로만 `pollMs`로 다시 읽는다.
+ */
+export function useWipFiles(path: string | null, pollMs: number | false = false) {
+  return useQuery({
+    queryKey: ["wipFiles", path],
+    queryFn: () => getWipFiles(path!),
+    enabled: path !== null,
+    refetchInterval: pollMs,
+  });
+}
