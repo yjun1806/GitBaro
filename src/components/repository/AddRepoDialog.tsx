@@ -1,12 +1,11 @@
 import { useId } from "react";
 import type { ReactNode } from "react";
-import { Download, FolderOpen, Plus, X } from "lucide-react";
+import { Download, FolderOpen, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Dialog } from "@/components/ui/Dialog";
 
 interface AddRepoDialogProps {
   onClone: () => void;
-  onCreate: () => void;
   onAddExisting: () => void;
   onClose: () => void;
 }
@@ -37,7 +36,6 @@ function OptionCard({ icon, title, description, onClick }: OptionCardProps) {
 
 export function AddRepoDialog({
   onClone,
-  onCreate,
   onAddExisting,
   onClose,
 }: AddRepoDialogProps) {
@@ -69,12 +67,7 @@ export function AddRepoDialog({
             description={t("repo.cloneDescription")}
             onClick={onClone}
           />
-          <OptionCard
-            icon={<Plus className="w-5 h-5" />}
-            title={t("repo.create")}
-            description={t("repo.initDescription")}
-            onClick={onCreate}
-          />
+          {/* "Create new repository" (git init) is hidden until it is implemented. */}
           <OptionCard
             icon={<FolderOpen className="w-5 h-5" />}
             title={t("repo.add")}
