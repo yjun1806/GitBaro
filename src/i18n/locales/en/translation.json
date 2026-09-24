@@ -88,7 +88,9 @@
     "stageFailed": "Stage failed: {{error}}",
     "unstageFailed": "Unstage failed: {{error}}",
     "workingChanges": "Working changes {{count}}",
-    "target": "Commit to {{branch}} · {{worktree}}"
+    "target": "Commit to {{branch}} · {{worktree}}",
+    "addDescription": "Add description",
+    "author": "Author {{name}}"
   },
   "history": {
     "title": "History",

@@ -88,7 +88,9 @@
     "stageFailed": "Stage 실패: {{error}}",
     "unstageFailed": "Unstage 실패: {{error}}",
     "workingChanges": "작업 중인 변경 {{count}}",
-    "target": "{{branch}}에 커밋 · {{worktree}}"
+    "target": "{{branch}}에 커밋 · {{worktree}}",
+    "addDescription": "설명 추가",
+    "author": "작성자 {{name}}"
   },
   "history": {
     "title": "History",

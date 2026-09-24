@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistoryView, useSetHistoryView } from "@/components/graph/useHistoryView";
-import { CheckCircle2, ChevronDown, ChevronRight, GitBranch, Loader2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useSelectionStore } from "@/stores/selection";
@@ -39,6 +39,7 @@ import type { StatusEntry } from "@/types";
 import { isComposerCollapsed } from "./composer-state";
 import { isFreshWorkingFocus } from "./useOpenWorkingChanges";
 import { RepoWorkSwitcher } from "./WorkSwitcher";
+import { CommitComposer } from "./CommitComposer";
 import { useCommitTarget } from "./useCommitTarget";
 import { useUIStore } from "@/stores/ui";
 
@@ -549,85 +550,35 @@ function ChangesViewBody() {
         )}
       </div>
 
-      {/* Commit panel */}
-      <div className="border-t border-border p-3 flex flex-col gap-2">
-        {/* 어느 브랜치·워크트리에 커밋하는지 늘 밝힌다. */}
-        <p className="flex items-center gap-1 min-w-0 text-[11.5px] text-muted-foreground" data-testid="commit-target">
-          <GitBranch className="w-3 h-3 shrink-0" aria-hidden="true" />
-          <span className="truncate">
-            {t("commit.target", {
-              branch: target.branchText,
-              worktree: target.worktreeText,
-            })}
-          </span>
-        </p>
-        <input
-          type="text"
-          placeholder={t("commit.summary")}
-          value={commitSummary}
-          onChange={(e) => setCommitSummary(e.target.value)}
-          className={cn(
-            "w-full px-3 py-2 text-sm rounded-md border border-border",
-            "bg-card outline-none",
-            "focus:border-primary transition-colors",
-          )}
+      {/* Commit composer: 한 줄 요약 + 「설명 추가」 + 「<브랜치>에 커밋」. */}
+      <CommitComposer
+        summary={commitSummary}
+        description={commitDescription}
+        onSummaryChange={setCommitSummary}
+        onDescriptionChange={setCommitDescription}
+        branchLabel={currentBranch ?? "HEAD"}
+        targetTitle={[
+          t("commit.target", { branch: target.branchText, worktree: target.worktreeText }),
+          activeAccount
+            ? t("commit.author", {
+                name: activeAccount.email
+                  ? `${activeAccount.username} <${activeAccount.email}>`
+                  : activeAccount.username,
+              })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+        canCommit={stagedFiles.length > 0 && commitSummary.trim().length > 0}
+        isCommitting={isCommitting}
+        onCommit={() => void handleCommit()}
+      />
+      {commitError && (
+        <CommitErrorDialog
+          message={commitError}
+          onClose={() => setCommitError(null)}
         />
-        <textarea
-          placeholder={t("commit.description")}
-          rows={3}
-          value={commitDescription}
-          onChange={(e) => setCommitDescription(e.target.value)}
-          className={cn(
-            "w-full px-3 py-2 text-sm rounded-md border border-border",
-            "bg-card outline-none resize-none",
-            "focus:border-primary transition-colors",
-          )}
-        />
-        {activeAccount && (
-          <div className="flex items-center gap-1.5 px-1">
-            {activeAccount.avatarUrl ? (
-              <img
-                src={activeAccount.avatarUrl}
-                alt={activeAccount.username}
-                className="w-4 h-4 rounded-full shrink-0 object-cover"
-              />
-            ) : (
-              <div className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[8px] font-bold shrink-0">
-                {activeAccount.username[0]?.toUpperCase() ?? "?"}
-              </div>
-            )}
-            <span className="text-xs text-muted-foreground truncate">
-              {activeAccount.username}
-              {activeAccount.email ? ` <${activeAccount.email}>` : ""}
-            </span>
-          </div>
-        )}
-        <button
-          onClick={handleCommit}
-          className={cn(
-            "w-full py-2 rounded-md text-sm font-medium",
-            "bg-primary text-primary-foreground hover:bg-primary-hover transition-colors",
-            (stagedFiles.length === 0 || !commitSummary.trim() || isCommitting) &&
-              "opacity-50 cursor-not-allowed",
-          )}
-          disabled={stagedFiles.length === 0 || !commitSummary.trim() || isCommitting}
-        >
-          {isCommitting ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              {t("commit.committing")}
-            </span>
-          ) : (
-            t("commit.submit", { branch: currentBranch ?? "HEAD" })
-          )}
-        </button>
-        {commitError && (
-          <CommitErrorDialog
-            message={commitError}
-            onClose={() => setCommitError(null)}
-          />
-        )}
-      </div>
+      )}
       </>
       )}
 
