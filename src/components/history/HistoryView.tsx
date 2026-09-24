@@ -103,7 +103,9 @@ export function HistoryView() {
   };
 
   const handleRevert = async (commit: CommitInfo) => {
-    const ok = await ask(t("history.revertConfirm", { shortId: commit.shortId }), {
+    // 병합 커밋은 첫 번째 부모(병합받은 브랜치) 기준으로 되돌린다 (백엔드가 -m 1 사용).
+    const message = commit.parentIds.length > 1 ? "history.revertMergeConfirm" : "history.revertConfirm";
+    const ok = await ask(t(message, { shortId: commit.shortId }), {
       title: t("history.contextMenu.revert"),
       kind: "warning",
     });
@@ -273,6 +275,7 @@ export function HistoryView() {
           onReset={() => setResetTarget(menu.commit)}
           onRevert={() => handleRevert(menu.commit)}
           onCherryPick={() => handleCherryPick(menu.commit)}
+          isMergeCommit={menu.commit.parentIds.length > 1}
           onClose={() => setMenu(null)}
         />
       )}

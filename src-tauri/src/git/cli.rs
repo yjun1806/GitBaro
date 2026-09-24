@@ -381,16 +381,42 @@ impl GitCliEngine {
 
     /// Create a new commit that undoes `oid`. `--no-edit` keeps the default
     /// revert message. `oid` must be a validated hex commit id.
+    ///
+    /// git refuses to revert a merge commit without a mainline, so for merges
+    /// we pass `-m 1`: undo what the merge brought in relative to the branch
+    /// it was merged into (same as GitHub Desktop).
     pub async fn revert_commit(&self, oid: &str) -> Result<(), AppError> {
-        self.run_local_checked(&["revert", "--no-edit", oid]).await?;
+        let mut args = vec!["revert", "--no-edit"];
+        if self.is_merge_commit(oid).await? {
+            args.extend(["-m", "1"]);
+        }
+        args.push(oid);
+        self.run_local_checked(&args).await?;
         Ok(())
     }
 
     /// Apply the changes introduced by `oid` on top of the current branch.
-    /// `oid` must be a validated hex commit id.
+    /// `oid` must be a validated hex commit id. Merge commits are rejected:
+    /// replaying a whole merge as one commit is rarely what the user wants,
+    /// and git would fail anyway without a mainline.
     pub async fn cherry_pick_commit(&self, oid: &str) -> Result<(), AppError> {
+        if self.is_merge_commit(oid).await? {
+            return Err(AppError::GitCli {
+                message: "Cannot cherry-pick a merge commit".to_string(),
+                exit_code: None,
+            });
+        }
         self.run_local_checked(&["cherry-pick", oid]).await?;
         Ok(())
+    }
+
+    /// Whether `oid` has more than one parent.
+    async fn is_merge_commit(&self, oid: &str) -> Result<bool, AppError> {
+        let line = self
+            .run_local_checked(&["rev-list", "--parents", "-n", "1", oid])
+            .await?;
+        // "<oid> <parent1> <parent2> ..."
+        Ok(line.split_whitespace().count() > 2)
     }
 
     /// Stash working changes via git CLI.
@@ -1119,6 +1145,25 @@ mod operation_tests {
         engine.operation_abort(GitOperation::Squash).await.unwrap();
         assert_eq!(engine.operation_in_progress().await.unwrap(), None);
         assert_eq!(head(&repo.0), before);
+        assert_eq!(std::fs::read_to_string(repo.0.join("a.txt")).unwrap(), "main\n");
+    }
+
+    #[tokio::test]
+    async fn merge_commit_is_reverted_with_mainline_and_not_cherry_picked() {
+        let repo = conflicting_repo();
+        // 충돌 없는 병합 커밋을 만든다.
+        git(&repo.0, &["checkout", "-qb", "side", "main~1"]);
+        write(&repo.0, "c.txt", "c\n");
+        git(&repo.0, &["add", "c.txt"]);
+        git(&repo.0, &["commit", "-qm", "add c"]);
+        git(&repo.0, &["checkout", "-q", "main"]);
+        git(&repo.0, &["merge", "--no-ff", "--no-edit", "side"]);
+        let merge = head(&repo.0);
+        let engine = GitCliEngine::new(&repo.0);
+
+        assert!(engine.cherry_pick_commit(&merge).await.is_err());
+        engine.revert_commit(&merge).await.unwrap();
+        assert!(!repo.0.join("c.txt").exists());
         assert_eq!(std::fs::read_to_string(repo.0.join("a.txt")).unwrap(), "main\n");
     }
 

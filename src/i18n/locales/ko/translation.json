@@ -104,6 +104,7 @@
     "checkoutSuccess": "커밋을 체크아웃했습니다",
     "revertConfirm": "{{shortId}}을(를) 되돌리는 커밋을 만들까요?",
     "revertSuccess": "커밋을 되돌렸습니다",
+    "revertMergeConfirm": "병합 커밋 {{shortId}}을(를) 되돌리는 커밋을 만들까요? 병합으로 들어온 변경이 모두 빠집니다.",
     "cherryPickConfirm": "{{shortId}}을(를) 현재 브랜치에 체리픽할까요?",
     "cherryPickSuccess": "커밋을 체리픽했습니다",
     "resetSuccess": "브랜치를 리셋했습니다",
