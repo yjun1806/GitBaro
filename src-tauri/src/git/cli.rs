@@ -254,6 +254,25 @@ impl GitCliEngine {
         Ok(output)
     }
 
+    /// Run a read-only git query that the app makes for its own bookkeeping
+    /// (not something the user asked for). It emits no activity events, so an
+    /// expected non-zero exit — e.g. `rev-parse --verify` on a missing ref —
+    /// does not show up as a failed command in the activity log.
+    async fn run_local_probe(&self, args: &[&str]) -> Result<std::process::Output, AppError> {
+        tracing::debug!(
+            "[git] git {} (cwd: {})",
+            args.join(" "),
+            self.repo_path.display()
+        );
+        Command::new("git")
+            .args(args)
+            .current_dir(&self.repo_path)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .output()
+            .await
+            .map_err(map_io_err)
+    }
+
     /// Run a local git command and check for success. Returns stdout on success.
     async fn run_local_checked(&self, args: &[&str]) -> Result<String, AppError> {
         let output = self.run_local(args).await?;
@@ -397,7 +416,7 @@ impl GitCliEngine {
     /// stash list is empty.
     async fn stash_head_oid(&self) -> Result<Option<String>, AppError> {
         let output = self
-            .run_local(&["rev-parse", "-q", "--verify", "refs/stash"])
+            .run_local_probe(&["rev-parse", "-q", "--verify", "refs/stash"])
             .await?;
         let oid = String::from_utf8_lossy(&output.stdout).trim().to_string();
         Ok((output.status.success() && !oid.is_empty()).then_some(oid))
@@ -429,8 +448,14 @@ impl GitCliEngine {
     /// stash list. Fails without touching anything when no entry matches.
     pub async fn stash_pop_oid(&self, oid: &str) -> Result<(), AppError> {
         crate::git::commit::validate_commit_oid(oid)?;
-        let list = self.run_local_checked(&["stash", "list", "--format=%H"]).await?;
-        let index = list
+        let list = self.run_local_probe(&["stash", "list", "--format=%H"]).await?;
+        if !list.status.success() {
+            return Err(AppError::GitCli {
+                message: parse_git_error(&String::from_utf8_lossy(&list.stderr)),
+                exit_code: list.status.code(),
+            });
+        }
+        let index = String::from_utf8_lossy(&list.stdout)
             .lines()
             .position(|line| line.trim() == oid)
             .ok_or_else(|| AppError::GitCli {
