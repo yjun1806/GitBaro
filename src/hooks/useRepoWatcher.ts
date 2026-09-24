@@ -20,7 +20,8 @@ const GIT_DIR_DEBOUNCE_MS = 250;
  * Per-repo queries that depend on HEAD, the index, refs, merge/rebase state or
  * linked worktrees. recentBranches reads the reflog, which git writes together
  * with HEAD, so a HEAD change covers it. fileDiff is here because a staged diff
- * changes with the index.
+ * changes with the index. stashShow is keyed by stash position, so a stash
+ * pushed or dropped elsewhere changes which entry each index points at.
  */
 const GIT_DIR_QUERY_KEYS = [
   "status",
@@ -29,8 +30,8 @@ const GIT_DIR_QUERY_KEYS = [
   "commitHistory",
   "mergeState",
   "stashList",
+  "stashShow",
   "recentBranches",
-  "worktrees",
   "fileDiff",
 ] as const;
 
@@ -105,6 +106,9 @@ export function useRepoWatcher(repoPath: string | null) {
           for (const key of GIT_DIR_QUERY_KEYS) {
             queryClient.invalidateQueries({ queryKey: [key, changedPath] });
           }
+          // The worktree list is keyed by the owning repository, not by the
+          // linked worktree being watched, so refresh it for every path.
+          queryClient.invalidateQueries({ queryKey: ["worktrees"] });
           queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
         }, GIT_DIR_DEBOUNCE_MS);
       }),
