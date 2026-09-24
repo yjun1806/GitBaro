@@ -15,3 +15,5 @@ pub mod worktree;
 pub mod review;
 // W4-T2
 pub mod workspace_history;
+// W5-T4
+pub mod wip;
