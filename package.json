@@ -27,6 +27,7 @@
     "@codemirror/lang-python": "^6.0.0",
     "@codemirror/state": "^6.0.0",
     "@codemirror/view": "^6.0.0",
+    "@dnd-kit/core": "^6.3.1",
     "@git-diff-view/core": "^0.0.39",
     "@git-diff-view/lowlight": "^0.0.39",
     "@git-diff-view/react": "^0.0.39",

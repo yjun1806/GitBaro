@@ -10,7 +10,9 @@ import { AddRepoButton } from "./AddRepoButton";
 import { LiveNowSection } from "./LiveNowSection";
 import { QuietReposRow } from "./QuietReposRow";
 import { RepoRow, type LiveState } from "./RepoRow";
+import { DropAfterLine, TreeDndProvider } from "./TreeDnd";
 import { WorkspaceRow } from "./WorkspaceRow";
+import { WorkspaceSuggestion } from "./WorkspaceSuggestion";
 import {
   collapsibleKeys,
   expandedWorktreePaths,
@@ -36,6 +38,16 @@ interface RepoTreeProps {
   onRepoContextMenu: (repo: RepoInfo, e: MouseEvent) => void;
 }
 
+function workspaceMemberCounts(tree: AccountNode[]): Map<string, number> {
+  return new Map(
+    tree.flatMap((account) =>
+      account.children.flatMap((c) =>
+        c.kind === "workspace" ? [[c.workspace.id, c.repos.length] as const] : [],
+      ),
+    ),
+  );
+}
+
 function accountRepoCount(account: AccountNode): number {
   return (
     account.children.reduce((n, c) => n + (c.kind === "repo" ? 1 : c.repos.length), 0) +
@@ -46,13 +58,9 @@ function accountRepoCount(account: AccountNode): number {
 /**
  * 사이드바 트리(D2 시안): 검색 칸과 모두 접기, 「지금 바뀌는 곳」, 계정 → 워크스페이스 → 저장소 → 워크트리.
  * 접힘 상태는 워크스페이스 스토어(`collapsed`)에 저장한다. 검색하는 동안에는 맞는 것을 모두 펼쳐 보여 준다.
+ * 저장소·워크스페이스 행은 끌어서 순서를 바꾸고 워크스페이스에 넣을 수 있다(`TreeDnd`). 검색 중에는 끈다.
  */
-export function RepoTree({
-  data,
-  fetchingPath,
-  onSelectRepo,
-  onRepoContextMenu,
-}: RepoTreeProps) {
+export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }: RepoTreeProps) {
   const { t } = useTranslation();
   const repos = useRepositoryStore((s) => s.repos);
   const activePath = useRepositoryStore((s) => s.activeRepoPath);
@@ -73,6 +81,9 @@ export function RepoTree({
   const isOpen = (key: string) => searching || !closed.has(key);
 
   const visibleTree = useMemo(() => filterTree(tree, query, branchOf), [tree, query, branchOf]);
+  // 검색은 워크스페이스 안 저장소를 맞는 것만 남긴다. 삭제 확인은 실제로 옮겨질 수를 알려야
+  // 하므로 거르기 전 트리에서 센다.
+  const memberCounts = useMemo(() => workspaceMemberCounts(tree), [tree]);
   const live = useMemo(
     () => liveEntries(lastChangedAt, now, repos, worktreesByRepo, branchOf),
     [lastChangedAt, now, repos, worktreesByRepo, branchOf],
@@ -128,6 +139,7 @@ export function RepoTree({
       favorite={favoriteRepos.includes(node.repo.path)}
       expanded={isOpen(repoNodeKey(node.repo.path))}
       fetching={fetchingPath === node.repo.path}
+      draggable={!searching}
       onToggle={() => toggleCollapsed(repoNodeKey(node.repo.path))}
       onSelectRepo={selectRepo}
       onSelectWorktree={selectWorktree}
@@ -176,50 +188,66 @@ export function RepoTree({
           onSelect={selectLive}
         />
 
-        <div role="tree" aria-label={t("sidebarTree.tree")} className="flex flex-col">
-          {visibleTree.map((account) => {
-            const accountOpen = isOpen(account.key);
-            const quietOpen = openQuiet.includes(account.accountKey);
-            return (
-              <div key={account.key} role="none" className="flex flex-col">
-                <AccountHeader
-                  label={account.label}
-                  repoCount={accountRepoCount(account)}
-                  ownerType={ownerTypes[account.label]}
-                  expanded={accountOpen}
-                  onToggle={() => toggleCollapsed(account.key)}
-                />
-                {accountOpen &&
-                  account.children.map((child) => {
-                    if (child.kind === "repo") return renderRepo(child, 2, 0);
-                    const wsOpen = isOpen(workspaceNodeKey(child.workspace.id));
-                    return (
-                      <div key={child.key} role="none" className="flex flex-col">
-                        <WorkspaceRow
-                          name={child.workspace.name}
-                          repoCount={child.repos.length}
-                          totals={workspaceTotals(child, signals)}
-                          expanded={wsOpen}
-                          onToggle={() => toggleCollapsed(workspaceNodeKey(child.workspace.id))}
-                        />
-                        {wsOpen && child.repos.map((r) => renderRepo(r, 3, 1))}
-                      </div>
-                    );
-                  })}
-                {accountOpen && account.quietRepos.length > 0 && (
-                  <>
-                    <QuietReposRow
-                      names={account.quietRepos.map((r) => r.repo.name)}
-                      expanded={quietOpen}
-                      onToggle={() => toggleQuiet(account.accountKey)}
-                    />
-                    {quietOpen && account.quietRepos.map((r) => renderRepo(r, 3, 1))}
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {!searching && <WorkspaceSuggestion />}
+
+        {/* 끌어서 놓기는 검색으로 거르지 않은 전체 트리(`tree`)의 순서로 계산한다. */}
+        <TreeDndProvider tree={tree}>
+          <div role="tree" aria-label={t("sidebarTree.tree")} className="flex flex-col">
+            {visibleTree.map((account) => {
+              const accountOpen = isOpen(account.key);
+              const quietOpen = openQuiet.includes(account.accountKey);
+              return (
+                <div key={account.key} role="none" className="flex flex-col">
+                  <AccountHeader
+                    label={account.label}
+                    accountKey={account.accountKey}
+                    sortMode={account.sortMode}
+                    showActions={!account.pending}
+                    repoCount={accountRepoCount(account)}
+                    ownerType={ownerTypes[account.label]}
+                    expanded={accountOpen}
+                    onToggle={() => toggleCollapsed(account.key)}
+                  />
+                  {accountOpen &&
+                    account.children.map((child) => {
+                      if (child.kind === "repo") return renderRepo(child, 2, 0);
+                      const wsOpen = isOpen(workspaceNodeKey(child.workspace.id));
+                      return (
+                        <div key={child.key} role="none" className="flex flex-col">
+                          <WorkspaceRow
+                            nodeKey={child.key}
+                            workspaceId={child.workspace.id}
+                            name={child.workspace.name}
+                            accountLabel={account.label}
+                            repoCount={child.repos.length}
+                            memberCount={memberCounts.get(child.workspace.id) ?? child.repos.length}
+                            totals={workspaceTotals(child, signals)}
+                            expanded={wsOpen}
+                            draggable={!searching}
+                            onToggle={() => toggleCollapsed(workspaceNodeKey(child.workspace.id))}
+                          />
+                          {wsOpen && child.repos.map((r) => renderRepo(r, 3, 1))}
+                          {wsOpen && child.repos.length > 0 && (
+                            <DropAfterLine id={child.key} depth={0} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  {accountOpen && account.quietRepos.length > 0 && (
+                    <>
+                      <QuietReposRow
+                        names={account.quietRepos.map((r) => r.repo.name)}
+                        expanded={quietOpen}
+                        onToggle={() => toggleQuiet(account.accountKey)}
+                      />
+                      {quietOpen && account.quietRepos.map((r) => renderRepo(r, 3, 1))}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </TreeDndProvider>
 
         {repos.length === 0 && (
           <p className="px-2 py-3 text-xs text-muted-foreground">{t("sidebarTree.empty")}</p>

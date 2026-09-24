@@ -18,9 +18,11 @@ interface ContextMenuProps {
   sections: ContextMenuSection[];
   position: { x: number; y: number };
   onClose: () => void;
+  /** Accessible name for the menu. */
+  ariaLabel?: string;
 }
 
-export function ContextMenu({ sections, position, onClose }: ContextMenuProps) {
+export function ContextMenu({ sections, position, onClose, ariaLabel }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const { onKeyDown, restoreFocus } = useMenuKeyboard(ref, onClose);
 
@@ -54,6 +56,7 @@ export function ContextMenu({ sections, position, onClose }: ContextMenuProps) {
     <div
       ref={ref}
       role="menu"
+      aria-label={ariaLabel}
       tabIndex={-1}
       onKeyDown={onKeyDown}
       className="fixed outline-none bg-popover border border-border rounded-lg shadow-lg z-[100] py-1 min-w-[200px]"

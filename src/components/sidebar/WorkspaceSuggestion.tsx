@@ -1,0 +1,84 @@
+import { useMemo } from "react";
+import { FolderPlus, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { suggestWorkspace } from "@/lib/suggest-workspace";
+import { useAccountStore } from "@/stores/account";
+import { useRepositoryStore } from "@/stores/repository";
+import { useToastStore } from "@/stores/toast";
+import { useWorkspaceStore } from "@/stores/workspace";
+
+/**
+ * 워크스페이스 제안 배너(README: 이름 앞부분이 같은 저장소를 보면 한 번 제안한다).
+ *
+ * 한 번에 제안 하나만 보인다. 만들든 닫든 그 제안의 키를 `dismissedSuggestions`에 남기므로
+ * 같은 제안은 다시 나오지 않는다. 만든 워크스페이스를 나중에 지워도 다시 제안하지 않는다.
+ */
+export function WorkspaceSuggestion() {
+  const { t } = useTranslation();
+  const repos = useRepositoryStore((s) => s.repos);
+  const accounts = useAccountStore((s) => s.accounts);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const dismissed = useWorkspaceStore((s) => s.dismissedSuggestions);
+  const dismissSuggestion = useWorkspaceStore((s) => s.dismissSuggestion);
+  const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
+  const addToast = useToastStore((s) => s.addToast);
+
+  const suggestion = useMemo(
+    () => suggestWorkspace(repos, { accounts, workspaces, dismissed })[0] ?? null,
+    [repos, accounts, workspaces, dismissed],
+  );
+  if (!suggestion) return null;
+
+  const { key, name, accountKey, repoPaths } = suggestion;
+
+  const handleAccept = () => {
+    const result = createWorkspace(name, accountKey, repoPaths);
+    if (!result.ok) {
+      addToast(t(`workspace.error.${result.reason}`), "error");
+      return;
+    }
+    dismissSuggestion(key);
+    addToast(t("workspace.suggestion.created", { name }), "success");
+  };
+
+  return (
+    <section
+      aria-label={t("workspace.suggestion.title", { name, count: repoPaths.length })}
+      className="mb-2 p-2.5 rounded-[var(--radius-item)] bg-card shadow-[var(--shadow-sm)] flex flex-col gap-1.5"
+    >
+      <div className="flex items-start gap-1.5">
+        <FolderPlus className="w-3.5 h-3.5 mt-px shrink-0 text-primary" aria-hidden="true" />
+        <p className="flex-1 min-w-0 text-xs font-semibold text-foreground break-words">
+          {t("workspace.suggestion.title", { name, count: repoPaths.length })}
+        </p>
+        <button
+          type="button"
+          onClick={() => dismissSuggestion(key)}
+          aria-label={t("workspace.suggestion.dismissLabel")}
+          className="p-0.5 -m-0.5 shrink-0 rounded text-[var(--faint)] hover:text-foreground"
+        >
+          <X className="w-3 h-3" aria-hidden="true" />
+        </button>
+      </div>
+      <p className="text-[11px] leading-[16px] text-muted-foreground break-words">
+        {t("workspace.suggestion.body", { name })}
+      </p>
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          onClick={handleAccept}
+          className="h-6 px-2 rounded-md bg-primary text-primary-foreground text-[11px] font-medium hover:bg-primary-hover"
+        >
+          {t("workspace.suggestion.accept")}
+        </button>
+        <button
+          type="button"
+          onClick={() => dismissSuggestion(key)}
+          className="h-6 px-2 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted"
+        >
+          {t("workspace.suggestion.dismiss")}
+        </button>
+      </div>
+    </section>
+  );
+}

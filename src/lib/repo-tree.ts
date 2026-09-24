@@ -79,6 +79,11 @@ export interface AccountNode {
   /** 표시용 계정 이름(처음 나온 저장소의 origin 표기) */
   label: string;
   sortMode: SortMode;
+  /**
+   * 계정을 아직 모르는 저장소만 모인 임시 그룹(「Other」, `RepoAccount.pending`).
+   * 키가 임시값이라 워크스페이스를 만들거나 정렬을 저장하는 자리로 쓰면 안 된다.
+   */
+  pending: boolean;
   /** 워크스페이스와, 워크스페이스에 넣지 않은 저장소 */
   children: (WorkspaceNode | RepoNode)[];
   /** 계정 바로 아래 저장소 중 조용한 저장소. 「조용한 저장소 N개」 행으로 접는다. */
@@ -312,10 +317,13 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
   // 표시 이름은 그 계정에서 처음 나온 저장소의 표기를 쓴다.
   const accountKeys: string[] = [];
   const labels = new Map<string, string>();
+  // 계정을 아는 저장소나 워크스페이스가 하나라도 있는 계정은 임시 그룹이 아니다.
+  const settledKeys = new Set<string>(workspaceNodes.keys());
   for (const repo of repos) {
     const acc = accountByPath.get(repo.path);
     if (!acc) continue;
     const key = claimedBy.get(repo.path) ?? acc.key;
+    if (!acc.pending) settledKeys.add(key);
     if (!accountKeys.includes(key)) accountKeys.push(key);
     // 워크스페이스로 계정이 정해진 저장소의 임시 이름("Other")은 쓰지 않는다.
     if (acc.key === key && !labels.has(key)) labels.set(key, acc.label);
@@ -345,6 +353,7 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
       accountKey,
       label: labels.get(accountKey) ?? accountKey,
       sortMode,
+      pending: !settledKeys.has(accountKey),
       children: sortSiblings<WorkspaceNode | RepoNode>(
         [...wsNodes, ...activeRepos],
         sortMode,
