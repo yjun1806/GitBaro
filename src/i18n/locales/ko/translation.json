@@ -226,7 +226,14 @@
     "missingFallback": "Worktree {{path}}을(를) 찾을 수 없어 메인 Worktree로 돌아갑니다",
     "openFailed": "Worktree {{path}}을(를) 열 수 없습니다: {{error}}",
     "missing": "폴더 없음",
-    "missingHint": "폴더가 사라졌습니다. 삭제해 목록에서 정리하세요."
+    "missingHint": "폴더가 사라졌습니다. 삭제해 목록에서 정리하세요.",
+    "base": {
+      "from": "{{base}}에서 갈라짐",
+      "basedOn": "{{base}} 기반",
+      "inferred": "추정",
+      "inferredHint": "브랜치 기록이 없어 가장 가까운 분기점으로 추정했어요",
+      "counts": "{{base}}보다 커밋 {{ahead}}개 앞서고 {{behind}}개 뒤처짐"
+    }
   },
   "clone": {
     "account": "계정",

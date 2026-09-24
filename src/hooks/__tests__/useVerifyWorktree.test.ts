@@ -38,6 +38,7 @@ function makeWorktree(path: string, overrides: Partial<WorktreeInfo> = {}): Work
     lockReason: null,
     isDirty: false,
     isPrunable: false,
+    base: null,
     ...overrides,
   };
 }

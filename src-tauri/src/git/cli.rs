@@ -15,6 +15,7 @@ use crate::events::{
 };
 use crate::git::engine::GitRemoteEngine;
 use crate::git::output_parser;
+use crate::git::worktree_base::{base_config_key, WorktreeBase};
 
 // ── Worktree types ───────────────────────────────────────────────────────────
 
@@ -32,6 +33,8 @@ pub struct WorktreeEntry {
     /// 작업 디렉토리가 사라진 워크트리. git은 `git worktree prune` 전까지
     /// 관리 파일을 남겨두므로 목록에는 계속 나타난다. 실제로는 쓸 수 없다.
     pub is_prunable: bool,
+    /// 이 워크트리 브랜치가 갈라져 나온 브랜치. 메인·detached 워크트리는 `None`.
+    pub base: Option<WorktreeBase>,
 }
 
 pub struct GitCliEngine {
@@ -928,6 +931,16 @@ impl GitCliEngine {
             args.push(b);
         }
         self.run_local_checked(&args).await?;
+
+        // 새 브랜치를 특정 브랜치에서 만들었으면 그 이름을 기록해 둔다. reflog 는 만료되고
+        // 시작점을 해시로 남길 수도 있어서, 앱이 아는 값을 우선한다. 기록 실패는
+        // 워크트리 생성 자체를 실패로 만들 일이 아니므로 경고만 남긴다.
+        if let (Some(nb), Some(base)) = (new_branch, base_branch) {
+            let key = base_config_key(nb);
+            if let Err(e) = self.run_local_checked(&["config", &key, base]).await {
+                tracing::warn!("[git] failed to record base branch for {}: {}", nb, e);
+            }
+        }
         Ok(())
     }
 
@@ -1005,6 +1018,7 @@ fn parse_worktree_porcelain(output: &str) -> Vec<WorktreeEntry> {
                 lock_reason,
                 is_dirty: false,
                 is_prunable,
+                base: None,
             });
             is_first = false;
         }
