@@ -107,7 +107,7 @@ export function BranchPanelRowView({
             <span
               className="inline-flex items-center gap-1 shrink-0 max-w-[140px] px-[7px] py-px rounded-(--radius-chip) bg-card border text-[10.5px] font-bold text-(--fg2)"
               style={{ borderColor: laneColor(worktree.path, 0) }}
-              title={worktree.path}
+              title={worktree.isMain ? `${worktree.path}\n${t("worktree.primaryFolderHint")}` : worktree.path}
             >
               <WorktreeIcon className="w-2.5 h-2.5" />
               <span className="truncate">{worktreeLabel}</span>

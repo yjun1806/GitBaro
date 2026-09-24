@@ -70,7 +70,10 @@ export function WorktreeChips({ chips, visible, onToggle }: WorktreeChipsProps) 
             <span className={cn("font-mono text-foreground", chip.isCurrent ? "font-bold" : "font-medium")}>
               {name}
             </span>
-            <span className="text-[11px] text-(--faint)">
+            <span
+              className="text-[11px] text-(--faint)"
+              title={chip.isMain ? t("worktree.primaryFolderHint") : undefined}
+            >
               {chip.isMain
                 ? t("overlap.chipMain")
                 : chip.base

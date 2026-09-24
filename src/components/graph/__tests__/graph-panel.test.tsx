@@ -224,7 +224,7 @@ describe("GraphPanel commit graph", () => {
     await screen.findByRole("separator");
     expect(rowLabels()).toEqual([
       "Uncommitted changes · feat/x branch · app-feat · 4 files",
-      "Uncommitted changes · main branch · main working tree · 1 file",
+      "Uncommitted changes · main branch · primary folder · 1 file",
       "c1",
       "c2",
       "--seen--",
@@ -259,7 +259,7 @@ describe("GraphPanel commit graph", () => {
 
   it("opens the staging list for the open worktree's WIP row", () => {
     renderPanel();
-    const row = screen.getByRole("button", { name: "Uncommitted changes · main branch · main working tree · 1 file" });
+    const row = screen.getByRole("button", { name: "Uncommitted changes · main branch · primary folder · 1 file" });
     fireEvent.click(row);
     expect(useUIStore.getState().activeTab).toBe("changes");
     expect(row.getAttribute("aria-pressed")).toBe("true");
@@ -276,13 +276,13 @@ describe("GraphPanel commit graph", () => {
     expect(useRepositoryStore.getState().activeRepoPath).toBe(REPO);
     // Only the followed row is picked, and it carries the "following" pill.
     expect(row.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Uncommitted changes · main branch · main working tree · 1 file" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Uncommitted changes · main branch · primary folder · 1 file" }).getAttribute("aria-pressed")).toBe("false");
     expect(within(row).getByTestId("follow-badge").textContent).toBe("Following");
   });
 
   it("stops following when a commit is picked or another repository is opened", () => {
     renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes · main branch · main working tree · 1 file" }));
+    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes · main branch · primary folder · 1 file" }));
     expect(useFollowStore.getState().target).toBe(REPO);
     fireEvent.click(document.querySelector('[data-commit-id="c2"]') as HTMLElement);
     expect(useUIStore.getState().activeTab).toBe("history");
@@ -343,7 +343,7 @@ describe("GraphPanel commit graph", () => {
     useUIStore.setState({ compareBranch: "feat/x" });
     renderPanel();
     expect(screen.getByText("compare-view")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes · main branch · main working tree · 1 file" }));
+    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes · main branch · primary folder · 1 file" }));
     expect(useUIStore.getState().activeTab).toBe("changes");
   });
 
@@ -432,13 +432,13 @@ describe("GraphPanel worktree chips (D5)", () => {
     renderPanel();
     const chips = screen.getByRole("group", { name: "Worktrees shown in the graph" });
     const buttons = within(chips).getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["mainmain tree1", "feat/xfrom main4"]);
+    expect(buttons.map((b) => b.textContent)).toEqual(["mainprimary folder1", "feat/xfrom main4"]);
     expect(buttons[0].getAttribute("aria-pressed")).toBe("true");
     expect(within(chips).getByText("Showing 2 worktrees together in the graph")).toBeTruthy();
     await screen.findByRole("separator");
     expect(rowLabels()).toEqual([
       "Uncommitted changes · feat/x branch · app-feat · 4 files",
-      "Uncommitted changes · main branch · main working tree · 1 file",
+      "Uncommitted changes · main branch · primary folder · 1 file",
       "f1",
       "c1",
       "c2",
@@ -455,7 +455,7 @@ describe("GraphPanel worktree chips (D5)", () => {
     fireEvent.click(feat);
     expect(feat.getAttribute("aria-pressed")).toBe("false");
     await screen.findByRole("separator");
-    expect(rowLabels()).toEqual(["Uncommitted changes · main branch · main working tree · 1 file", "c1", "c2", "--seen--", "c3", "c4"]);
+    expect(rowLabels()).toEqual(["Uncommitted changes · main branch · primary folder · 1 file", "c1", "c2", "--seen--", "c3", "c4"]);
     expect(within(chips).getByText("Showing 1 worktree in the graph")).toBeTruthy();
 
     fireEvent.click(feat);
@@ -508,7 +508,7 @@ describe("GraphPanel worktree chips (D5)", () => {
     const main = within(chips).getByRole("button", { name: /^main/ });
     fireEvent.click(main);
     expect(main.getAttribute("aria-pressed")).toBe("true");
-    expect(rowLabels()).toContain("Uncommitted changes · main branch · main working tree · 1 file");
+    expect(rowLabels()).toContain("Uncommitted changes · main branch · primary folder · 1 file");
   });
 });
 
@@ -569,7 +569,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
   it("hides the open worktree's WIP row when nothing is uncommitted, and shows it again", () => {
     statusEntries.splice(0, statusEntries.length);
     const { rerender } = renderPanel();
-    expect(screen.queryByRole("button", { name: /· main working tree ·/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /· primary folder ·/ })).toBeNull();
     // 다른 워크트리(파일 4개)의 행은 남는다.
     expect(screen.getByRole("button", { name: /feat\/x branch · app-feat · 4 files/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Commit \(/ })).toBeNull();
@@ -580,7 +580,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
         <GraphPanel />
       </QueryClientProvider>,
     );
-    expect(screen.getByRole("button", { name: /main branch · main working tree · 1 file/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /main branch · primary folder · 1 file/ })).toBeTruthy();
   });
 
   it("names the branch and worktree on every WIP row", () => {
@@ -589,7 +589,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     expect(rows[0]).toContain("feat/x branch");
     expect(rows[0]).toContain("app-feat");
     expect(rows[1]).toContain("main branch");
-    expect(rows[1]).toContain("main working tree");
+    expect(rows[1]).toContain("primary folder");
   });
 
   it("offers Commit (N) on the open worktree's row and in the header, which open the composer", () => {

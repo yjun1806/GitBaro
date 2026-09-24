@@ -101,6 +101,8 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
         onClick={onToggle}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
+        // 「기본 폴더」는 브랜치 main과 헷갈리기 쉬워 뜻을 툴팁으로 덧붙인다.
+        title={isInWorktree ? undefined : t("worktree.primaryFolderHint")}
         className={cn(toolbarButtonClass({ open: isOpen }), "min-w-0 shrink overflow-hidden", isOpen && "relative z-50")}
       >
         <WorktreeIcon className={TOOLBAR_ICON} />
@@ -123,7 +125,7 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
         <button
           onClick={() => openWorktree(mainWorktree.path)}
           className={cn(toolbarButtonClass(), "ml-0.5")}
-          title={t("worktree.returnToMain")}
+          title={`${t("worktree.returnToMain")}\n${t("worktree.primaryFolderHint")}`}
           aria-label={t("worktree.returnToMain")}
         >
           <Undo2 className={TOOLBAR_ICON} />

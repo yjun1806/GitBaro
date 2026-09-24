@@ -78,7 +78,7 @@ describe("ChangesView composer", () => {
   it("says which branch and worktree the commit goes to", () => {
     state.status = [{ path: "a.ts", status: "modified", staged: false }];
     renderView();
-    expect(screen.getByTestId("commit-target").textContent).toBe("Commit to feat/x · main working tree");
+    expect(screen.getByTestId("commit-target").textContent).toBe("Commit to feat/x · primary folder");
   });
 
   it("names a linked worktree and a detached HEAD", () => {
@@ -93,7 +93,7 @@ describe("ChangesView composer", () => {
     state.status = [{ path: "a.ts", status: "modified", staged: false }];
     state.branches = undefined;
     renderView();
-    expect(screen.getByTestId("commit-target").textContent).toBe("Commit to … · main working tree");
+    expect(screen.getByTestId("commit-target").textContent).toBe("Commit to … · primary folder");
   });
 
   it("moves focus to the summary after 'Commit (N)'", () => {
