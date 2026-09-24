@@ -12,6 +12,7 @@ import { useReviewSeenStore } from "@/stores/review-seen";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useFollowStore } from "@/stores/follow";
 import { useBranchRangeStore } from "@/components/branch/branch-range";
+import { useHistoryViewStore } from "@/stores/history-view";
 import { syncStatusPaths } from "@/components/sidebar/tree-model";
 import { worktreeColor } from "../worktree-history";
 import type {
@@ -127,6 +128,9 @@ vi.mock("@/api/commands", async (importOriginal) => ({
   ),
 }));
 
+/** 그래프가 커밋 목록을 읽은 시작점(`useCommitHistoryInfinite`의 둘째 인자). */
+const historyTargets: unknown[] = [];
+
 /** `useBranches` 응답. 기본은 비어 있다. */
 const branchList: { name: string; isHead: boolean; isRemote: boolean }[] = [];
 
@@ -143,13 +147,16 @@ vi.mock("@/api/queries", async (importOriginal) => ({
   useStashList: () => ({ data: [] }),
   useWorkflowRuns: () => ({ data: [] }),
   useMergeState: () => ({ data: mergeMockStore((s) => s.value) }),
-  useCommitHistoryInfinite: () => ({
+  useCommitHistoryInfinite: (_path: string | null, target?: unknown) => {
+    historyTargets.push(target);
+    return {
     data: history,
     isLoading: false,
     hasNextPage: false,
     isFetchingNextPage: false,
     fetchNextPage: vi.fn(),
-  }),
+    };
+  },
   useBranches: () => ({ data: branchList }),
   useBranchComparison: () => ({ data: undefined, isLoading: true, error: null }),
   useRemoteTags: () => ({ data: undefined }),
@@ -180,7 +187,7 @@ function renderPanel() {
 /** 스크롤 영역 안의 행(버튼·구분선)을 화면 순서대로. */
 function rowLabels(): string[] {
   const rows = document.querySelectorAll(
-    "[role=tabpanel] button:not([data-commit-now]), [role=tabpanel] [role=separator]",
+    "[role=tabpanel] button:not([data-working-changes]), [role=tabpanel] [role=separator]",
   );
   return [...rows].map((el) =>
     el.getAttribute("role") === "separator"
@@ -205,6 +212,9 @@ beforeEach(async () => {
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
   useFollowStore.getState().stop();
+  useHistoryViewStore.getState().reset();
+  historyTargets.length = 0;
+  branchList.length = 0;
   useReviewSeenStore.setState({
     entries: {
       [REPO]: { branch: "main", oid: "c3", seenAt: Date.now() - 60_000 },
@@ -349,16 +359,16 @@ describe("GraphPanel commit graph", () => {
 
   it("opens changes by file as header-only view state and closes it when another tab is picked", () => {
     renderPanel();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
     expect(useFilesViewStore.getState().repoTabOpen).toBe(true);
-    expect(screen.getByRole("tab", { name: /^Changes by file/ }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: /^Changes vs / }).getAttribute("aria-selected")).toBe("true");
     // 목록과 diff는 아래 칸(MainColumn)이 그린다. 카드에는 탭 머리와 「저장소별 · 폴더별」만 남는다.
     expect(screen.queryByRole("tabpanel")).toBeNull();
     expect(screen.getByRole("combobox", { name: "Group files" })).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Stash" }));
     expect(useFilesViewStore.getState().repoTabOpen).toBe(false);
     expect(screen.getByText("stash-list")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
     // 툴바·merge 흐름이 저장된 탭을 바꾸면 닫힌다.
     act(() => useUIStore.getState().setActiveTab("changes"));
     expect(useFilesViewStore.getState().repoTabOpen).toBe(false);
@@ -368,7 +378,7 @@ describe("GraphPanel commit graph", () => {
     // activeTab이 이미 "changes"라 setActiveTab("changes")가 값을 바꾸지 않는 경우(W7 버그).
     useUIStore.setState({ activeTab: "changes" });
     renderPanel();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
     expect(useFilesViewStore.getState().repoTabOpen).toBe(true);
     // 충돌로 멈춘 pull·merge가 하는 일: mergeState 갱신(react-query 재조회) + setActiveTab("changes")(같은 값이라 그 자체로는 아무것도 안 바꾼다).
     act(() => {
@@ -381,7 +391,7 @@ describe("GraphPanel commit graph", () => {
   it("closes changes by file when a branch compare starts, even while already on the history tab", () => {
     useUIStore.setState({ activeTab: "history" });
     renderPanel();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
     expect(useFilesViewStore.getState().repoTabOpen).toBe(true);
     // BranchZone.handleCompare가 하는 일: range 설정 + setActiveTab("history")(이미 그 값).
     act(() => {
@@ -517,7 +527,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     for (const key of Object.keys(changesVsDefaultByPath)) delete changesVsDefaultByPath[key];
     branchList.splice(0, branchList.length);
     statusEntries.splice(0, statusEntries.length, { path: "a.ts", status: "modified", staged: false } as StatusEntry);
-    useUIStore.setState({ commitFocusAt: null, isDiffMaximized: false });
+    useUIStore.setState({ workingFocusAt: null, isDiffMaximized: false });
   });
 
   it("puts counts on the tabs: new commits and files changed since main", async () => {
@@ -532,7 +542,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     await screen.findByRole("button", { name: "Mark 2 new commits as seen" });
     expect(screen.getByRole("tab", { name: /^Commit graph/ }).textContent).toBe("Commit graph2");
     // x.ts·a.ts(커밋함) + a.ts(커밋 안 함) → 파일 2개.
-    expect(screen.getByRole("tab", { name: /^Changes by file/ }).textContent).toBe("Changes by file2");
+    expect(screen.getByRole("tab", { name: /^Changes vs / }).textContent).toBe("Changes vs main2");
     // 스태시·Actions가 0이면 배지가 없다.
     expect(screen.getByRole("tab", { name: "Stash" }).textContent).toBe("Stash");
   });
@@ -572,7 +582,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     expect(screen.queryByRole("button", { name: /· main working tree ·/ })).toBeNull();
     // 다른 워크트리(파일 4개)의 행은 남는다.
     expect(screen.getByRole("button", { name: /feat\/x branch · app-feat · 4 files/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /^Commit \(/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Working changes/ })).toBeNull();
 
     statusEntries.push({ path: "b.ts", status: "added", staged: false } as StatusEntry);
     rerender(
@@ -592,21 +602,24 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     expect(rows[1]).toContain("main working tree");
   });
 
-  it("offers Commit (N) on the open worktree's row and in the header, which open the composer", () => {
+  it("offers Working changes N on the open worktree's row and in the status line, which open the staging list", () => {
     useUIStore.setState({ activeTab: "history" });
+    useSelectionStore.getState().selectCommit("c2");
     renderPanel();
-    const buttons = screen.getAllByRole("button", { name: "Commit (1)" });
-    // 행에 하나, 패널 머리에 하나.
+    const buttons = screen.getAllByRole("button", { name: "Working changes 1" });
+    // 행에 하나, 상태 줄에 하나. 커밋하는 버튼처럼 보이는 이름은 없다.
     expect(buttons).toHaveLength(2);
-    // 다른 워크트리 행에는 없다(그 워크트리를 열어야 커밋할 수 있다).
+    expect(screen.queryByRole("button", { name: /^Commit/ })).toBeNull();
+    // 다른 워크트리 행에는 없다(그 워크트리를 열어야 스테이징할 수 있다).
     const featRow = screen.getAllByTestId("wip-row")[0];
-    expect(within(featRow).queryByRole("button", { name: /^Commit \(/ })).toBeNull();
+    expect(within(featRow).queryByRole("button", { name: /^Working changes/ })).toBeNull();
 
     useFollowStore.getState().start(FEAT);
     fireEvent.click(buttons[0]);
     expect(useUIStore.getState().activeTab).toBe("changes");
     expect(useFollowStore.getState().target).toBeNull();
-    expect(useUIStore.getState().commitFocusAt).not.toBeNull();
+    expect(useSelectionStore.getState().selectedCommitId).toBeNull();
+    expect(useUIStore.getState().workingFocusAt).not.toBeNull();
   });
 
   it("shows the active comparison as a chip that ends it", () => {
@@ -624,5 +637,68 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     renderPanel();
     expect(screen.queryByText("Select a branch to compare")).toBeNull();
     expect(screen.queryByTestId("compare-chip")).toBeNull();
+  });
+
+  it("views another branch without checking it out: no WIP rows, no new-commit marks, a strip with actions", async () => {
+    branchList.push({ name: "main", isHead: true, isRemote: false }, { name: "feat/x", isHead: false, isRemote: false });
+    renderPanel();
+    await screen.findByRole("separator");
+    expect(screen.getAllByTestId("wip-row")).toHaveLength(2);
+
+    act(() => useHistoryViewStore.getState().view(REPO, { kind: "ref", name: "feat/x", isRemote: false }));
+    // 커밋 목록은 그 브랜치에서 읽는다.
+    expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "ref", name: "feat/x" });
+    // 체크아웃한 작업 트리의 것(WIP 행, 새 커밋 점·확인함 선·버튼, 작업 중인 변경 버튼)은 감추고 안내를 둔다.
+    expect(screen.queryAllByTestId("wip-row")).toHaveLength(0);
+    expect(screen.getByText(i18n.t("historyView.wipHidden"))).toBeTruthy();
+    expect(screen.queryByRole("separator")).toBeNull();
+    expect(screen.queryAllByTitle("New commit")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /new commits? as seen/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Working changes/ })).toBeNull();
+    // 커밋 행은 그대로 눌러 상세를 연다.
+    fireEvent.click(document.querySelector<HTMLElement>('[data-commit-id="c2"]')!);
+    expect(useSelectionStore.getState().selectedCommitId).toBe("c2");
+
+    const strip = screen.getByRole("status");
+    expect(strip.textContent).toContain("Viewing feat/x · not checked out");
+    expect(within(strip).getByRole("button", { name: "Check out this branch" })).toBeTruthy();
+    fireEvent.click(within(strip).getByRole("button", { name: "Back to current branch" }));
+    expect(useHistoryViewStore.getState().target).toBeNull();
+    expect(screen.getAllByTestId("wip-row")).toHaveLength(2);
+    expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "head" });
+  });
+
+  it("picks what to view from the graph header: a branch, all branches, or the current checkout", () => {
+    branchList.push(
+      { name: "main", isHead: true, isRemote: false },
+      { name: "feat/x", isHead: false, isRemote: false },
+      { name: "origin/feat/y", isHead: false, isRemote: true },
+      { name: "origin/HEAD", isHead: false, isRemote: true },
+    );
+    renderPanel();
+    const picker = screen.getByRole("button", { name: /Viewing\s*Current checkout/ });
+    fireEvent.click(picker);
+    expect(screen.queryByRole("option", { name: /origin\/HEAD/ })).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: /origin\/feat\/y/ }));
+    expect(useHistoryViewStore.getState().target).toEqual({ kind: "ref", name: "origin/feat/y", isRemote: true });
+
+    fireEvent.click(screen.getByRole("button", { name: /Viewing\s*origin\/feat\/y/ }));
+    fireEvent.click(screen.getByRole("option", { name: "All branches" }));
+    expect(useHistoryViewStore.getState().target).toEqual({ kind: "all" });
+    expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "all" });
+    // 모든 브랜치는 체크아웃할 수 없다.
+    expect(within(screen.getByRole("status")).queryByRole("button", { name: "Check out this branch" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Viewing\s*All branches/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Current checkout/ }));
+    expect(useHistoryViewStore.getState().target).toBeNull();
+  });
+
+  it("ends viewing when another repository is opened", () => {
+    useHistoryViewStore.getState().view(REPO, { kind: "all" });
+    renderPanel();
+    expect(screen.getByRole("status").textContent).toContain("Viewing All branches");
+    act(() => useRepositoryStore.setState({ activeRepoPath: FEAT }));
+    expect(useHistoryViewStore.getState().target).toBeNull();
   });
 });

@@ -4,6 +4,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "@/i18n/config";
 import { useUIStore } from "@/stores/ui";
+import { useRepositoryStore } from "@/stores/repository";
+import { useHistoryViewStore } from "@/stores/history-view";
+import { useCompareBaseStore } from "../compare-base";
 import type { ActivityEvent, BranchChangedFile, BranchChanges, FileDiffVsDefault } from "@/types";
 
 const APP = "/work/xames-app";
@@ -91,15 +94,28 @@ DIFFS[`${WEB}:src/route.ts`] = diff("src/route.ts", ['const ROUTE = "/api/v1/sha
 CHANGES[ADMIN] = changes(ADMIN, "feat/shared-route", [file("src/route.ts", 1)]);
 DIFFS[`${ADMIN}:src/route.ts`] = diff("src/route.ts", ['const ROUTE = "/api/v1/shared/route";']);
 
-const getChangesVsDefault = vi.fn(async (path: string) => CHANGES[path]);
+const getChangesVsDefault = vi.fn(async (path: string, _scope?: unknown) => CHANGES[path]);
 const getFileDiffVsDefault = vi.fn(
-  async (path: string, filePath: string, _oldPath: string | null) => DIFFS[`${path}:${filePath}`],
+  async (path: string, filePath: string, _oldPath: string | null, _scope?: unknown) => DIFFS[`${path}:${filePath}`],
 );
+/** 기준 선택 목록에 쓰는 브랜치·워크트리. */
+const BRANCHES = [
+  { name: "feat/noti", isHead: true, isRemote: false },
+  { name: "main", isHead: false, isRemote: false, isDefault: true },
+  { name: "dev", isHead: false, isRemote: false },
+  { name: "origin/main", isHead: false, isRemote: true },
+  { name: "origin/HEAD", isHead: false, isRemote: true },
+];
+const WORKTREES = [{ path: APP, branch: "feat/noti", isMain: false, base: { name: "dev" } }];
 vi.mock("@/api/commands", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/commands")>()),
-  getChangesVsDefault: (path: string) => getChangesVsDefault(path),
-  getFileDiffVsDefault: (path: string, filePath: string, oldPath: string | null) =>
-    getFileDiffVsDefault(path, filePath, oldPath),
+  // 범위를 정했을 때만 둘째 인자를 넘긴다(예전 호출과 같은 모양을 유지).
+  getChangesVsDefault: (path: string, scope?: unknown) =>
+    scope ? getChangesVsDefault(path, scope) : getChangesVsDefault(path),
+  getFileDiffVsDefault: (path: string, filePath: string, oldPath: string | null, scope?: unknown) =>
+    scope ? getFileDiffVsDefault(path, filePath, oldPath, scope) : getFileDiffVsDefault(path, filePath, oldPath),
+  getBranches: async () => BRANCHES,
+  getWorktrees: async () => WORKTREES,
 }));
 const linkScans = vi.hoisted(() => ({ count: 0 }));
 vi.mock("@/lib/linked-changes", async (importOriginal) => {
@@ -153,6 +169,9 @@ beforeEach(async () => {
   getChangesVsDefault.mockClear();
   getFileDiffVsDefault.mockClear();
   useUIStore.setState({ isSwitchingBranch: false });
+  useCompareBaseStore.setState({ baseByPath: {} });
+  useHistoryViewStore.getState().reset();
+  useRepositoryStore.setState({ activeRepoPath: null });
 });
 
 afterEach(cleanup);
@@ -305,10 +324,84 @@ describe("FilesByRepo", () => {
     expect(document.querySelector(".animate-spin")).toBeTruthy();
   });
 
-  it("uses the single-repository subtitle in Korean too", async () => {
+  it("names the comparison base and explains what is compared, in Korean too", async () => {
     await i18n.changeLanguage("ko");
     renderFiles([{ path: APP, name: "xames-app" }]);
-    expect(await screen.findByText(/그 저장소의 main과 비교/)).toBeTruthy();
-    expect(screen.queryByText(/각 저장소의 main과 비교/)).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByTestId("files-summary").textContent).toBe(
+        "feat/noti이(가) main에서 갈라진 뒤 바꾼 파일 2개 · 커밋 2 + 커밋 안 함 0",
+      ),
+    );
+    expect(screen.getByText("main 대비 변경")).toBeTruthy();
+    // 저장소가 하나면 설명은 맨 위에만 있다.
+    expect(screen.queryByTestId("group-note")).toBeNull();
+  });
+
+  it("says unpushed changes when the branch is the default branch itself", async () => {
+    await i18n.changeLanguage("ko");
+    CHANGES[WEB] = {
+      ...changes(WEB, "main", [file("a.ts", 1)]),
+      baseRef: "origin/main",
+      uncommitted: [file("b.ts", 1, "modified"), file("b.ts", 1, "modified")],
+    };
+    renderFiles([{ path: WEB, name: "xames-web" }]);
+    await waitFor(() =>
+      expect(screen.getByTestId("files-summary").textContent).toBe(
+        "main에서 아직 push하지 않은 변경 (origin/main 대비) · 파일 1개 · 커밋 1 + 커밋 안 함 1",
+      ),
+    );
+    CHANGES[WEB] = changes(WEB, "feat/shared-route", [file("src/route.ts", 1)]);
+  });
+
+  it("explains each repository in its own group when several are shown", async () => {
+    renderFiles(BOTH);
+    const api = await screen.findByRole("region", { name: "xames-backend" });
+    await waitFor(() =>
+      expect(within(api).getByTestId("group-note").textContent).toBe(
+        "1 file changed on feat/notification-settings since it left main · 1 committed + 0 uncommitted",
+      ),
+    );
+    expect(screen.getByText("Changes vs main")).toBeTruthy();
+  });
+
+  it("compares with a picked base branch, including the worktree's base, and goes back to the default", async () => {
+    renderFiles([{ path: APP, name: "xames-app" }]);
+    const picker = (await screen.findByRole("combobox", { name: "Comparison base" })) as HTMLSelectElement;
+    await waitFor(() => expect(within(picker).getByRole("option", { name: "Worktree base (dev)" })).toBeTruthy());
+    const options = within(picker).getAllByRole("option").map((o) => o.textContent);
+    expect(options).toContain("Default branch (main)");
+    expect(options).toContain("origin/main");
+    // 비교 대상 자신과 origin/HEAD 같은 별칭은 뺀다.
+    expect(options).not.toContain("feat/noti");
+    expect(options).not.toContain("origin/HEAD");
+
+    fireEvent.change(picker, { target: { value: "dev" } });
+    await waitFor(() => expect(getChangesVsDefault).toHaveBeenCalledWith(APP, { base: "dev", target: null }));
+    expect(screen.getByText("Changes vs dev")).toBeTruthy();
+    fireEvent.click(await screen.findByText("notifications.ts"));
+    await waitFor(() =>
+      expect(getFileDiffVsDefault).toHaveBeenCalledWith(APP, "src/api/notifications.ts", null, {
+        base: "dev",
+        target: null,
+      }),
+    );
+
+    fireEvent.change(picker, { target: { value: "" } });
+    expect(useCompareBaseStore.getState().baseByPath).toEqual({});
+    expect(await screen.findByText("Changes vs main")).toBeTruthy();
+  });
+
+  it("shows the viewed branch against the base, without uncommitted changes, while another branch is viewed", async () => {
+    useRepositoryStore.setState({ activeRepoPath: APP });
+    useHistoryViewStore.getState().view(APP, { kind: "ref", name: "dev", isRemote: false });
+    CHANGES[APP] = { ...CHANGES[APP], branch: "dev" };
+    renderFiles([{ path: APP, name: "xames-app" }]);
+    await waitFor(() => expect(getChangesVsDefault).toHaveBeenCalledWith(APP, { base: null, target: "dev" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("files-summary").textContent).toBe(
+        "2 files changed on dev since it left main · 2 committed (viewing, so uncommitted changes are left out)",
+      ),
+    );
+    CHANGES[APP] = { ...CHANGES[APP], branch: "feat/noti" };
   });
 });

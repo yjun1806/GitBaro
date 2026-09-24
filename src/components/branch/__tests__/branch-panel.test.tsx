@@ -25,6 +25,8 @@ vi.mock("@/api/queries", () => ({
 vi.mock("@/hooks/use-avatar-resolver", () => ({ useAvatarResolver: () => () => undefined }));
 
 const { BranchPanel } = await import("../BranchPanel");
+const { useRepositoryStore } = await import("@/stores/repository");
+const { useHistoryViewStore } = await import("@/stores/history-view");
 
 function branch(name: string, extra: Partial<BranchInfo> = {}): BranchInfo {
   return {
@@ -109,7 +111,16 @@ beforeEach(async () => {
   baseCalls.length = 0;
   recentNames = [];
   Object.values(handlers).forEach((h) => h.mockReset());
+  useRepositoryStore.setState({ activeRepoPath: AUDIT });
+  useHistoryViewStore.getState().reset();
 });
+
+/** 행 본문(이름·둘째 줄) 버튼. 누르면 체크아웃하지 않고 본다. */
+function rowBody(name: string): HTMLElement {
+  const el = row(name).querySelector<HTMLElement>("button");
+  if (!el) throw new Error(`no row body ${name}`);
+  return el;
+}
 afterEach(cleanup);
 
 describe("BranchPanel", () => {
@@ -122,10 +133,10 @@ describe("BranchPanel", () => {
     expect(rows).toEqual(["fix/audit-bugs", "main", "feat/review-stream"]);
   });
 
-  it("offers 이동 instead of 전환 for a branch another worktree uses, and opens that worktree", () => {
+  it("offers 이동 instead of 체크아웃 for a branch another worktree uses, and opens that worktree", () => {
     renderPanel();
     const review = within(row("feat/review-stream"));
-    expect(review.queryByRole("button", { name: "전환" })).toBeNull();
+    expect(review.queryByRole("button", { name: "체크아웃" })).toBeNull();
     fireEvent.click(review.getByRole("button", { name: "이동" }));
     expect(handlers.onOpenWorktree).toHaveBeenCalledWith(REVIEW);
     expect(handlers.onSwitch).not.toHaveBeenCalled();
@@ -133,16 +144,16 @@ describe("BranchPanel", () => {
 
     // 메인 워크트리가 쓰는 main도 이동이다.
     expect(within(row("main")).getByRole("button", { name: "이동" })).toBeTruthy();
-    // 지금 브랜치에는 전환·이동이 없다.
+    // 지금 브랜치에는 체크아웃·이동이 없다.
     const current = within(row("fix/audit-bugs"));
-    expect(current.queryByRole("button", { name: "전환" })).toBeNull();
+    expect(current.queryByRole("button", { name: "체크아웃" })).toBeNull();
     expect(current.queryByRole("button", { name: "이동" })).toBeNull();
   });
 
-  it("switches a local branch and compares or merges from the row", () => {
+  it("checks out a local branch only from its button, and compares or merges from the row", () => {
     renderPanel();
     const docs = within(row("docs/readme"));
-    fireEvent.click(docs.getByRole("button", { name: "전환" }));
+    fireEvent.click(docs.getByRole("button", { name: "체크아웃" }));
     expect(handlers.onSwitch).toHaveBeenCalledWith("docs/readme");
     fireEvent.click(docs.getByRole("button", { name: "비교" }));
     expect(handlers.onCompare).toHaveBeenCalledWith("docs/readme");
@@ -150,6 +161,55 @@ describe("BranchPanel", () => {
     expect(handlers.onMerge).toHaveBeenCalledWith("docs/readme");
     // 지금 브랜치와는 비교할 수 없다.
     expect(within(row("fix/audit-bugs")).getByRole("button", { name: "비교" })).toHaveProperty("disabled", true);
+  });
+
+  it("views a branch when its row is clicked, without checking it out", () => {
+    renderPanel();
+    fireEvent.click(rowBody("docs/readme"));
+    expect(handlers.onSwitch).not.toHaveBeenCalled();
+    expect(handlers.onOpenWorktree).not.toHaveBeenCalled();
+    expect(handlers.onClose).toHaveBeenCalled();
+    expect(useHistoryViewStore.getState()).toMatchObject({
+      repoPath: AUDIT,
+      target: { kind: "ref", name: "docs/readme", isRemote: false },
+    });
+
+    // 원격 브랜치도 바로 본다.
+    fireEvent.click(rowBody("origin/feature/ai-commit"));
+    expect(useHistoryViewStore.getState().target).toEqual({
+      kind: "ref",
+      name: "origin/feature/ai-commit",
+      isRemote: true,
+    });
+    // 다른 워크트리가 쓰는 브랜치도 행을 누르면 이동하지 않고 본다.
+    fireEvent.click(rowBody("feat/review-stream"));
+    expect(handlers.onOpenWorktree).not.toHaveBeenCalled();
+    expect(useHistoryViewStore.getState().target).toMatchObject({ name: "feat/review-stream" });
+
+    // 지금 브랜치 행은 현재 체크아웃 보기로 돌아간다.
+    fireEvent.click(rowBody("fix/audit-bugs"));
+    expect(useHistoryViewStore.getState().target).toBeNull();
+    expect(handlers.onSwitch).not.toHaveBeenCalled();
+  });
+
+  it("marks the viewed row and ends viewing when checking out from the button", () => {
+    useHistoryViewStore.getState().view(AUDIT, { kind: "ref", name: "docs/readme", isRemote: false });
+    renderPanel();
+    expect(within(row("docs/readme")).getByLabelText("보는 중")).toBeTruthy();
+    fireEvent.click(within(row("fix/idle")).getByRole("button", { name: "체크아웃" }));
+    expect(handlers.onSwitch).toHaveBeenCalledWith("fix/idle");
+    expect(useHistoryViewStore.getState().target).toBeNull();
+  });
+
+  it("views the highlighted row on Enter", () => {
+    renderPanel();
+    const search = screen.getByRole("textbox");
+    fireEvent.keyDown(search, { key: "ArrowDown" });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(handlers.onSwitch).not.toHaveBeenCalled();
+    // 첫 행은 지금 브랜치라 현재 체크아웃 보기다.
+    expect(useHistoryViewStore.getState().target).toBeNull();
+    expect(handlers.onClose).toHaveBeenCalled();
   });
 
   it("shows the second line the mockup gives each section", () => {

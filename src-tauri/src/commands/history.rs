@@ -16,29 +16,102 @@ fn gravatar_url(email: &str) -> String {
     format!("https://www.gravatar.com/avatar/{:x}?s=64&d=retro", hash)
 }
 
-/// HEAD 브랜치에서 아직 리모트로 push되지 않은 커밋의 OID 집합을 구한다.
-/// GitHub Desktop의 `loadLocalCommits`와 동일한 판정:
-///   - upstream tracking 있음 → `upstream..HEAD` (upstream tip 이후의 커밋)
-///   - upstream 없음        → `HEAD --not --remotes` (모든 리모트에서 도달 불가능한 커밋)
-///
-/// 반환값 `None`은 "HEAD의 모든 커밋이 unpushed"를 뜻한다. 리모트 tracking
-/// 브랜치가 하나도 없으면(로컬 전용 저장소) hide 대상이 없어 전체 히스토리를
-/// 순회하게 되므로, 그 경우는 revwalk 없이 `None`으로 처리한다.
-fn compute_unpushed(repo: &git2::Repository) -> Option<std::collections::HashSet<git2::Oid>> {
-    use std::collections::HashSet;
+/// 커밋 목록을 어디서부터 읽을지. 프런트의 「보는 브랜치」 선택과 같다.
+/// 문자열 하나("all")로 받지 않는 이유: `all`이라는 이름의 브랜치와 구분할 수 없다.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum HistoryTarget {
+    /// 지금 체크아웃된 HEAD(기본값).
+    Head,
+    /// 로컬 브랜치(`feat/x`), 원격 브랜치(`origin/x`), 태그. 짧은 이름으로 찾는다.
+    Ref { name: String },
+    /// 모든 로컬·원격 브랜치 끝과 HEAD.
+    All,
+}
 
+/// revwalk의 시작점과, 아직 push하지 않은 커밋을 가려낼 기준.
+struct HistoryTips {
+    tips: Vec<git2::Oid>,
+    /// 시작점이 로컬 브랜치(또는 HEAD)일 때 그 upstream 끝.
+    upstream: Option<git2::Oid>,
+    /// 원격 브랜치를 볼 때: 이미 원격에 있으니 push할 커밋이 없다.
+    on_remote: bool,
+}
+
+fn upstream_tip(branch: &git2::Branch) -> Option<git2::Oid> {
+    branch.upstream().ok().and_then(|up| up.get().target())
+}
+
+fn head_tips(repo: &git2::Repository) -> HistoryTips {
+    let head = repo.head().ok();
+    let tips = head.as_ref().and_then(|h| h.target()).into_iter().collect();
     // HEAD가 가리키는 로컬 브랜치의 upstream tip OID (없으면 None)
-    let upstream_oid = repo
-        .head()
-        .ok()
+    let upstream = head
         .filter(|h| h.is_branch())
         .and_then(|h| h.shorthand().map(str::to_string))
         .and_then(|name| repo.find_branch(&name, git2::BranchType::Local).ok())
-        .and_then(|b| b.upstream().ok())
-        .and_then(|up| up.get().target());
+        .and_then(|b| upstream_tip(&b));
+    HistoryTips { tips, upstream, on_remote: false }
+}
 
+fn resolve_history_tips(
+    repo: &git2::Repository,
+    target: &HistoryTarget,
+) -> Result<HistoryTips, AppError> {
+    match target {
+        HistoryTarget::Head => Ok(head_tips(repo)),
+        HistoryTarget::Ref { name } => {
+            let name = name.trim();
+            // 브랜치·태그 이름은 `-`로 시작할 수 없다. 빈 이름과 함께 막는다.
+            if name.is_empty() || name.starts_with('-') {
+                return Err(AppError::Git(git2::Error::from_str(&format!(
+                    "invalid ref name: {name:?}"
+                ))));
+            }
+            let reference = repo.resolve_reference_from_short_name(name)?;
+            let oid = reference.peel_to_commit()?.id();
+            let on_remote = reference.is_remote();
+            let upstream = if reference.is_branch() {
+                upstream_tip(&git2::Branch::wrap(reference))
+            } else {
+                None
+            };
+            Ok(HistoryTips { tips: vec![oid], upstream, on_remote })
+        }
+        HistoryTarget::All => {
+            let mut tips: Vec<git2::Oid> = head_tips(repo).tips;
+            for branch in repo.branches(None)? {
+                let (branch, _) = branch?;
+                if let Ok(commit) = branch.get().peel_to_commit() {
+                    if !tips.contains(&commit.id()) {
+                        tips.push(commit.id());
+                    }
+                }
+            }
+            Ok(HistoryTips { tips, upstream: None, on_remote: false })
+        }
+    }
+}
+
+/// 시작점에서 아직 리모트로 push되지 않은 커밋의 OID 집합을 구한다.
+/// GitHub Desktop의 `loadLocalCommits`와 동일한 판정:
+///   - upstream tracking 있음 → `upstream..<tips>` (upstream tip 이후의 커밋)
+///   - upstream 없음        → `<tips> --not --remotes` (모든 리모트에서 도달 불가능한 커밋)
+///
+/// 반환값 `None`은 "시작점의 모든 커밋이 unpushed"를 뜻한다. 리모트 tracking
+/// 브랜치가 하나도 없으면(로컬 전용 저장소) hide 대상이 없어 전체 히스토리를
+/// 순회하게 되므로, 그 경우는 revwalk 없이 `None`으로 처리한다.
+fn unpushed_from(
+    repo: &git2::Repository,
+    tips: &HistoryTips,
+) -> Option<std::collections::HashSet<git2::Oid>> {
+    use std::collections::HashSet;
+
+    if tips.on_remote {
+        return Some(HashSet::new());
+    }
     // upstream도 없고 리모트 tracking 브랜치도 없으면 전부 unpushed
-    if upstream_oid.is_none() {
+    if tips.upstream.is_none() {
         let has_remote = repo
             .branches(Some(git2::BranchType::Remote))
             .map(|mut it| it.next().is_some())
@@ -51,37 +124,54 @@ fn compute_unpushed(repo: &git2::Repository) -> Option<std::collections::HashSet
     let Ok(mut walk) = repo.revwalk() else {
         return Some(HashSet::new()); // revwalk 생성 실패 시 안전하게 "unpushed 없음"
     };
-    if walk.push_head().is_err() {
+    if tips.tips.is_empty() {
         return Some(HashSet::new()); // unborn HEAD(빈 저장소) 등
     }
-    match upstream_oid {
+    for tip in &tips.tips {
+        if walk.push(*tip).is_err() {
+            return Some(HashSet::new());
+        }
+    }
+    match tips.upstream {
         Some(oid) => {
-            let _ = walk.hide(oid); // upstream..HEAD
+            let _ = walk.hide(oid); // upstream..tips
         }
         None => {
-            let _ = walk.hide_glob("refs/remotes/*"); // HEAD --not --remotes
+            let _ = walk.hide_glob("refs/remotes/*"); // tips --not --remotes
         }
     }
     Some(walk.flatten().collect())
 }
 
+/// HEAD 기준 unpushed 커밋 집합(`unpushed_from`의 HEAD 판).
+#[cfg(test)]
+fn compute_unpushed(repo: &git2::Repository) -> Option<std::collections::HashSet<git2::Oid>> {
+    unpushed_from(repo, &head_tips(repo))
+}
+
+/// 커밋 목록. `target`이 없으면 HEAD(지금 체크아웃)에서, 있으면 그 ref 또는 모든
+/// 브랜치 끝에서 revwalk한다. 체크아웃하지 않고 다른 브랜치의 이력을 볼 때 쓴다.
 #[tauri::command]
 pub async fn get_commit_history(
     repo_path: String,
     limit: Option<usize>,
     offset: Option<usize>,
+    target: Option<HistoryTarget>,
 ) -> Result<Vec<Value>, AppError> {
     let result = tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
         let ref_map = crate::git::commit::build_ref_map(&repo);
-        // HEAD 기준 unpushed 커밋 집합. None이면 "모든 커밋이 unpushed".
-        let unpushed = compute_unpushed(&repo);
+        let tips = resolve_history_tips(&repo, &target.unwrap_or(HistoryTarget::Head))?;
+        // 시작점 기준 unpushed 커밋 집합. None이면 "모든 커밋이 unpushed".
+        let unpushed = unpushed_from(&repo, &tips);
         let mut revwalk = repo.revwalk()?;
-        // 현재 체크아웃된 브랜치(HEAD)에서 도달 가능한 커밋만 시간순으로 조회한다.
+        // 기본은 현재 체크아웃된 브랜치(HEAD)에서 도달 가능한 커밋만 시간순으로 조회한다.
         // GitHub Desktop의 History 탭과 동일하게, 다른 브랜치·리모트의 커밋은
         // 타임라인에 섞이지 않는다. detached HEAD도 그대로 처리된다. unborn HEAD
-        // (빈 저장소)면 push_head가 실패하므로 빈 히스토리가 된다.
-        let _ = revwalk.push_head();
+        // (빈 저장소)면 시작점이 없어 빈 히스토리가 된다.
+        for tip in &tips.tips {
+            revwalk.push(*tip)?;
+        }
         revwalk.set_sorting(git2::Sort::TIME)?;
 
         let limit = limit.unwrap_or(100);
@@ -692,7 +782,7 @@ mod tests {
             (c1, c2, c3)
         };
 
-        let commits = get_commit_history(repo_path, Some(100), Some(0))
+        let commits = get_commit_history(repo_path, Some(100), Some(0), None)
             .await
             .unwrap();
         let oids: std::collections::HashSet<String> = commits
@@ -774,7 +864,7 @@ mod tests {
             (left, right, merge)
         };
 
-        let history = get_commit_history(repo_path.clone(), Some(10), Some(0)).await.unwrap();
+        let history = get_commit_history(repo_path.clone(), Some(10), Some(0), None).await.unwrap();
         let top = &history[0];
         assert_eq!(top["oid"], merge.to_string());
         assert_eq!(top["parentIds"], json!([left.to_string(), right.to_string()]));
@@ -793,5 +883,151 @@ mod tests {
         assert_eq!(detail["parents"], top["parentIds"]);
         assert_eq!(detail["coAuthors"], top["coAuthors"]);
         assert_eq!(detail["isAgentAuthored"], true);
+    }
+
+    /// 커밋 OID를 정렬해 돌려준다. 테스트 커밋은 같은 초에 만들어져 시간순이 흔들린다.
+    fn oids_of(commits: &[Value]) -> Vec<String> {
+        let mut out: Vec<String> = commits
+            .iter()
+            .map(|v| v["oid"].as_str().unwrap().to_string())
+            .collect();
+        out.sort();
+        out
+    }
+
+    fn sorted(oids: &[Oid]) -> Vec<String> {
+        let mut out: Vec<String> = oids.iter().map(Oid::to_string).collect();
+        out.sort();
+        out
+    }
+
+    /// main: c1 ← c2, feature: c2 ← c3(체크아웃 안 함), origin/remote-only: c1 ← r1, 태그 v1 → c1.
+    fn branchy_repo(tmp: &TempRepo) -> (Oid, Oid, Oid, Oid) {
+        let repo = tmp.open();
+        let c1 = commit(&repo, "a.txt", "1");
+        let c2 = commit(&repo, "a.txt", "2");
+        let main_branch = head_branch(&repo);
+        repo.branch("feature", &repo.find_commit(c2).unwrap(), false)
+            .unwrap();
+        repo.set_head("refs/heads/feature").unwrap();
+        let c3 = commit(&repo, "b.txt", "3");
+        repo.set_head(&format!("refs/heads/{main_branch}")).unwrap();
+        // 원격에만 있는 브랜치: c1에서 갈라진 커밋 r1
+        let sig = Signature::now("Test", "test@example.com").unwrap();
+        let base = repo.find_commit(c1).unwrap();
+        let r1 = repo
+            .commit(None, &sig, &sig, "remote only", &base.tree().unwrap(), &[&base])
+            .unwrap();
+        set_remote_ref(&repo, "origin/remote-only", r1);
+        repo.tag_lightweight("v1", base.as_object(), false).unwrap();
+        (c1, c2, c3, r1)
+    }
+
+    fn named(name: &str) -> Option<HistoryTarget> {
+        Some(HistoryTarget::Ref { name: name.to_string() })
+    }
+
+    #[tokio::test]
+    async fn history_of_other_local_branch_without_checkout() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        let (c1, c2, c3, _) = branchy_repo(&tmp);
+
+        let commits = get_commit_history(path.clone(), Some(100), Some(0), named("feature"))
+            .await
+            .unwrap();
+        assert_eq!(oids_of(&commits), sorted(&[c3, c2, c1]));
+        // 보기만 했으므로 HEAD는 그대로 원래 브랜치다.
+        assert_ne!(head_branch(&tmp.open()), "feature");
+    }
+
+    #[tokio::test]
+    async fn history_of_remote_branch_marks_nothing_unpushed() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        let (c1, _, _, r1) = branchy_repo(&tmp);
+
+        let commits = get_commit_history(path, Some(100), Some(0), named("origin/remote-only"))
+            .await
+            .unwrap();
+        assert_eq!(oids_of(&commits), sorted(&[r1, c1]));
+        assert!(commits.iter().all(|v| v["isUnpushed"] == false));
+    }
+
+    #[tokio::test]
+    async fn history_of_tag() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        let (c1, _, _, _) = branchy_repo(&tmp);
+
+        let commits = get_commit_history(path, Some(100), Some(0), named("v1"))
+            .await
+            .unwrap();
+        assert_eq!(oids_of(&commits), sorted(&[c1]));
+    }
+
+    #[tokio::test]
+    async fn history_of_all_branches_includes_every_tip() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        let (c1, c2, c3, r1) = branchy_repo(&tmp);
+
+        let commits = get_commit_history(path.clone(), Some(100), Some(0), Some(HistoryTarget::All))
+            .await
+            .unwrap();
+        assert_eq!(oids_of(&commits), sorted(&[c1, c2, c3, r1]));
+        // r1은 원격에 있으니 push할 것이 아니고, 로컬 커밋 c1은 origin/remote-only에서 닿는다.
+        let unpushed = |oid: Oid| {
+            commits.iter().find(|v| v["oid"] == oid.to_string()).unwrap()["isUnpushed"] == true
+        };
+        assert!(!unpushed(r1));
+        assert!(!unpushed(c1));
+        assert!(unpushed(c3));
+
+        // 기본값(None)과 Head는 체크아웃한 브랜치만.
+        let head = get_commit_history(path.clone(), Some(100), Some(0), Some(HistoryTarget::Head))
+            .await
+            .unwrap();
+        assert_eq!(oids_of(&head), sorted(&[c2, c1]));
+    }
+
+    #[tokio::test]
+    async fn history_paginates_from_ref() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        let (c1, c2, c3, _) = branchy_repo(&tmp);
+
+        let first = get_commit_history(path.clone(), Some(2), Some(0), named("feature"))
+            .await
+            .unwrap();
+        let second = get_commit_history(path, Some(2), Some(2), named("feature"))
+            .await
+            .unwrap();
+        assert_eq!(first.len(), 2);
+        assert_eq!(second.len(), 1);
+        let both: Vec<Value> = first.into_iter().chain(second).collect();
+        assert_eq!(oids_of(&both), sorted(&[c3, c2, c1]));
+    }
+
+    #[tokio::test]
+    async fn history_of_unknown_or_invalid_ref_fails() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        branchy_repo(&tmp);
+
+        assert!(get_commit_history(path.clone(), None, None, named("nope")).await.is_err());
+        assert!(get_commit_history(path.clone(), None, None, named("--all")).await.is_err());
+        assert!(get_commit_history(path, None, None, named("")).await.is_err());
+    }
+
+    #[test]
+    fn history_target_deserializes_from_frontend_shape() {
+        let head: HistoryTarget = serde_json::from_value(json!({ "kind": "head" })).unwrap();
+        let all: HistoryTarget = serde_json::from_value(json!({ "kind": "all" })).unwrap();
+        let named: HistoryTarget =
+            serde_json::from_value(json!({ "kind": "ref", "name": "origin/x" })).unwrap();
+        assert_eq!(head, HistoryTarget::Head);
+        assert_eq!(all, HistoryTarget::All);
+        assert_eq!(named, HistoryTarget::Ref { name: "origin/x".into() });
     }
 }

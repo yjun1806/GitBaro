@@ -68,9 +68,9 @@ const CONFLICT_ICONS: Record<ConflictType, typeof ArrowLeftRight> = {
 };
 
 const CONFLICT_COLORS: Record<ConflictType, string> = {
-  both_modified: "text-warning border-warning/30 bg-amber-50 dark:bg-amber-950",
-  ours_only: "text-red-600 dark:text-red-400 border-red-500/30 bg-red-50 dark:bg-red-950",
-  theirs_only: "text-green-600 dark:text-green-400 border-green-500/30 bg-green-50 dark:bg-green-950",
+  both_modified: "text-warning border-warning/30 bg-warning/10",
+  ours_only: "text-diff-del-fg border-diff-del-fg/30 bg-diff-del",
+  theirs_only: "text-diff-add-fg border-diff-add-fg/30 bg-diff-add",
 };
 
 const CONFLICT_I18N: Record<ConflictType, string> = {
@@ -132,8 +132,8 @@ function InlineConflictDiff({
                   key={lineIdx}
                   className={cn(
                     "flex",
-                    isDelete && "bg-red-500/10 dark:bg-red-400/8",
-                    isAdd && "bg-green-500/10 dark:bg-green-400/8",
+                    isDelete && "bg-diff-del",
+                    isAdd && "bg-diff-add",
                   )}
                 >
                   {/* Old line number */}
@@ -148,8 +148,8 @@ function InlineConflictDiff({
                   <span
                     className={cn(
                       "w-5 shrink-0 text-center select-none font-bold",
-                      isDelete && "text-red-600 dark:text-red-400",
-                      isAdd && "text-green-600 dark:text-green-400",
+                      isDelete && "text-diff-del-fg",
+                      isAdd && "text-diff-add-fg",
                       !isDelete && !isAdd && "text-muted-foreground/30",
                     )}
                   >
@@ -157,12 +157,12 @@ function InlineConflictDiff({
                   </span>
                   {/* Side label for changed lines */}
                   {isDelete && (
-                    <span className="w-14 shrink-0 text-[9px] font-semibold text-red-600/70 dark:text-red-400/60 flex items-center justify-center select-none">
+                    <span className="w-14 shrink-0 text-[9px] font-semibold text-diff-del-fg/70 flex items-center justify-center select-none">
                       {currentBranch.length > 8 ? "HEAD" : currentBranch}
                     </span>
                   )}
                   {isAdd && (
-                    <span className="w-14 shrink-0 text-[9px] font-semibold text-green-600/70 dark:text-green-400/60 flex items-center justify-center select-none">
+                    <span className="w-14 shrink-0 text-[9px] font-semibold text-diff-add-fg/70 flex items-center justify-center select-none">
                       {branch.length > 8 ? branch.slice(0, 8) + "…" : branch}
                     </span>
                   )}
@@ -274,12 +274,12 @@ export function ConflictPreviewModal({
         <div className="flex items-center justify-between px-4 py-1.5 bg-muted/30 border-b border-border shrink-0">
           {/* Branches */}
           <div className="flex items-center gap-2 text-[11px]">
-            <div className="flex items-center gap-1 text-red-600 dark:text-red-400">
+            <div className="flex items-center gap-1 text-diff-del-fg">
               <GitBranch className="w-3 h-3" />
               <span className="font-semibold">{currentBranch}</span>
             </div>
             <ArrowLeftRight className="w-3 h-3 text-muted-foreground" />
-            <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+            <div className="flex items-center gap-1 text-diff-add-fg">
               <GitBranch className="w-3 h-3" />
               <span className="font-semibold">{branch}</span>
             </div>
@@ -287,11 +287,11 @@ export function ConflictPreviewModal({
           {/* Legend */}
           <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
             <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-2.5 rounded-sm bg-red-500/25 border border-red-500/40" />
+              <span className="inline-block w-3 h-2.5 rounded-sm bg-diff-del border border-diff-del-fg/40" />
               {t("merge.preCheck.previewOurs")}
             </span>
             <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-2.5 rounded-sm bg-green-500/25 border border-green-500/40" />
+              <span className="inline-block w-3 h-2.5 rounded-sm bg-diff-add border border-diff-add-fg/40" />
               {t("merge.preCheck.previewTheirs", { branch })}
             </span>
           </div>
@@ -333,11 +333,11 @@ export function ConflictPreviewModal({
                   })}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 rounded-sm bg-red-500/60" />
+                  <span className="inline-block w-2 h-2 rounded-sm bg-diff-del-fg/60" />
                   −{stats.removed}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 rounded-sm bg-green-500/60" />
+                  <span className="inline-block w-2 h-2 rounded-sm bg-diff-add-fg/60" />
                   +{stats.added}
                 </span>
               </div>

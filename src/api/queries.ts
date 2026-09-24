@@ -34,7 +34,7 @@ import {
   abortMergeOrRebase,
   continueMergeOrRebase,
 } from "./commands";
-import type { RepoSyncStatus } from "@/types";
+import type { ChangesScope, HistoryTarget, RepoSyncStatus } from "@/types";
 import { useSelectionStore } from "@/stores/selection";
 import { selectionAfterStashPushed, selectionAfterStashRemoved } from "@/lib/stash-selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
@@ -141,15 +141,25 @@ export function useRepoSyncStatuses(repoPaths: string[]) {
 const COMMIT_HISTORY_PAGE_SIZE = 50;
 
 /**
+ * 커밋 히스토리 쿼리 키. HEAD(기본)는 예전 키 `["commitHistory", repoPath]`를 그대로 써서
+ * 캐시를 읽는 다른 화면(`useCachedCommitIsUnpushed`)과 맞춘다. 체크아웃하지 않고 보는
+ * 브랜치는 그 뒤에 붙여, 접두어 무효화(commit·fetch 등)가 함께 적용된다.
+ */
+export function commitHistoryKey(repoPath: string | null, target?: HistoryTarget): readonly unknown[] {
+  if (!target || target.kind === "head") return ["commitHistory", repoPath];
+  return ["commitHistory", repoPath, target.kind === "all" ? "all" : `ref:${target.name}`];
+}
+
+/**
  * 커밋 히스토리를 무한 스크롤로 조회한다. 백엔드 get_commit_history의 offset을
  * 활용해 스크롤 시 다음 페이지를 이어 붙인다. 마지막 페이지가 페이지 크기보다
  * 적으면 끝으로 판단한다. 키 접두어를 ["commitHistory"]로 유지해 기존 무효화
  * (commit·switch·fetch 등)가 그대로 적용된다.
  */
-export function useCommitHistoryInfinite(repoPath: string | null) {
+export function useCommitHistoryInfinite(repoPath: string | null, target?: HistoryTarget) {
   return useInfiniteQuery({
-    queryKey: ["commitHistory", repoPath],
-    queryFn: ({ pageParam }) => getCommitHistory(repoPath!, COMMIT_HISTORY_PAGE_SIZE, pageParam),
+    queryKey: commitHistoryKey(repoPath, target),
+    queryFn: ({ pageParam }) => getCommitHistory(repoPath!, COMMIT_HISTORY_PAGE_SIZE, pageParam, target),
     enabled: repoPath !== null,
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
@@ -866,12 +876,33 @@ import { getChangesVsDefault, getFileDiffVsDefault } from "@/api/commands";
 /** 「파일별 변경」 목록을 다시 읽는 주기. `repo:activity`를 받으면 그 저장소는 바로 다시 읽는다. */
 export const CHANGES_VS_DEFAULT_POLL_MS = 30_000;
 
-/** 저장소마다 main 대비 변경(`get_changes_vs_default`). 결과는 `paths` 순서다. */
-export function useChangesVsDefaultMany(paths: readonly string[]) {
+/**
+ * main 대비 변경 쿼리 키. 기본 범위는 예전 키 `["changesVsDefault", path]`를 그대로 써서 탭 배지·
+ * 갈라진 지점 행과 캐시를 함께 쓴다. 기준 브랜치나 보는 브랜치를 정하면 그 값을 뒤에 붙인다
+ * (접두어 무효화는 그대로 적용된다).
+ */
+export function changesVsDefaultKey(path: string, scope?: ChangesScope | null): readonly unknown[] {
+  if (!scope || (!scope.base && !scope.target)) return ["changesVsDefault", path];
+  return ["changesVsDefault", path, scope.base ?? "", scope.target ?? ""];
+}
+
+/** 파일 하나의 main 대비 diff 쿼리 키. 규칙은 `changesVsDefaultKey`와 같다. */
+export function fileDiffVsDefaultKey(
+  repoPath: string,
+  filePath: string,
+  oldPath: string | null,
+  scope?: ChangesScope | null,
+): readonly unknown[] {
+  const key = ["fileDiffVsDefault", repoPath, filePath, oldPath];
+  return !scope || (!scope.base && !scope.target) ? key : [...key, scope.base ?? "", scope.target ?? ""];
+}
+
+/** 저장소마다 main 대비 변경(`get_changes_vs_default`). 결과는 `paths` 순서다. `scopes`도 같은 순서다. */
+export function useChangesVsDefaultMany(paths: readonly string[], scopes?: readonly (ChangesScope | null)[]) {
   return useQueries({
-    queries: paths.map((path) => ({
-      queryKey: ["changesVsDefault", path],
-      queryFn: () => getChangesVsDefault(path),
+    queries: paths.map((path, i) => ({
+      queryKey: changesVsDefaultKey(path, scopes?.[i]),
+      queryFn: () => getChangesVsDefault(path, scopes?.[i] ?? undefined),
       refetchInterval: CHANGES_VS_DEFAULT_POLL_MS,
       refetchIntervalInBackground: false,
     })),
@@ -880,12 +911,12 @@ export function useChangesVsDefaultMany(paths: readonly string[]) {
 
 /** 파일 여러 개의 main 대비 diff. 연결된 변경을 찾을 때 추가된 줄을 읽는 데 쓴다. 결과는 `files` 순서다. */
 export function useFileDiffsVsDefault(
-  files: readonly { repoPath: string; filePath: string; oldPath: string | null }[],
+  files: readonly { repoPath: string; filePath: string; oldPath: string | null; scope?: ChangesScope | null }[],
 ) {
   return useQueries({
-    queries: files.map(({ repoPath, filePath, oldPath }) => ({
-      queryKey: ["fileDiffVsDefault", repoPath, filePath, oldPath],
-      queryFn: () => getFileDiffVsDefault(repoPath, filePath, oldPath),
+    queries: files.map(({ repoPath, filePath, oldPath, scope }) => ({
+      queryKey: fileDiffVsDefaultKey(repoPath, filePath, oldPath, scope),
+      queryFn: () => getFileDiffVsDefault(repoPath, filePath, oldPath, scope ?? undefined),
       staleTime: 30_000,
     })),
   });
@@ -898,7 +929,9 @@ export function useFileDiffsVsDefault(
  * pull·push·fetch 뒤에는 `invalidateAfterSync`가 다시 읽게 한다. 커밋하지 않은 변경은
  * 파일 감시로 바로 갱신되는 `status`에서 따로 센다.
  */
-export function useChangesVsDefaultOnHead(entries: readonly { path: string; headOid: string | null }[]) {
+export function useChangesVsDefaultOnHead(
+  entries: readonly { path: string; headOid: string | null; scope?: ChangesScope | null }[],
+) {
   const queryClient = useQueryClient();
   const headKey = entries.map((e) => `${e.path}\u0000${e.headOid ?? ""}`).join("\u0001");
   const lastHeads = useRef(new Map<string, string | null>());
@@ -915,9 +948,9 @@ export function useChangesVsDefaultOnHead(entries: readonly { path: string; head
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headKey, queryClient]);
   return useQueries({
-    queries: entries.map(({ path }) => ({
-      queryKey: ["changesVsDefault", path],
-      queryFn: () => getChangesVsDefault(path),
+    queries: entries.map(({ path, scope }) => ({
+      queryKey: changesVsDefaultKey(path, scope),
+      queryFn: () => getChangesVsDefault(path, scope ?? undefined),
       staleTime: Infinity,
       refetchInterval: false as const,
     })),

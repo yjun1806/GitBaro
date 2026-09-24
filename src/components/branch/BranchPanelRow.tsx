@@ -1,7 +1,7 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Check } from "lucide-react";
+import { Check, Eye } from "lucide-react";
 import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { laneColor } from "@/components/graph/graph-model";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -17,6 +17,11 @@ interface BranchPanelRowViewProps {
   /** 화살표 키로 고른 행. */
   isActive: boolean;
   canCompare: boolean;
+  /** 그래프가 체크아웃하지 않고 이 브랜치를 보는 중인지. */
+  isViewed?: boolean;
+  /** 행을 누르면: 체크아웃하지 않고 이 브랜치의 이력을 본다. */
+  onView: () => void;
+  /** 「체크아웃」(다른 워크트리가 쓰는 브랜치는 「이동」) 버튼. */
   onPrimary: () => void;
   onCompare: () => void;
   onMerge: () => void;
@@ -68,6 +73,8 @@ export function BranchPanelRowView({
   baseInfo,
   isActive,
   canCompare,
+  isViewed = false,
+  onView,
   onPrimary,
   onCompare,
   onMerge,
@@ -94,8 +101,19 @@ export function BranchPanelRowView({
         isActive ? "bg-(--acc-sel)" : "hover:bg-(--acc-sel)",
       )}
     >
+      {/* 행 본문을 누르면 체크아웃하지 않고 그 브랜치를 본다. 체크아웃은 오른쪽 버튼으로만 한다. */}
+      <button
+        type="button"
+        onClick={onView}
+        title={t(isCurrent ? "branchPanel.viewCurrentHint" : "branchPanel.viewHint", { name: branch.name })}
+        className="flex-1 min-w-0 flex items-center gap-2 self-stretch text-left"
+      >
       <span className="w-3.5 shrink-0 flex justify-center">
-        {isCurrent && <Check className="w-[13px] h-[13px] text-(--fg)" strokeWidth={2.5} aria-label={t("branchPanel.current")} />}
+        {isCurrent ? (
+          <Check className="w-[13px] h-[13px] text-(--fg)" strokeWidth={2.5} aria-label={t("branchPanel.current")} />
+        ) : isViewed ? (
+          <Eye className="w-[13px] h-[13px] text-info" strokeWidth={2.5} aria-label={t("branchPanel.viewing")} />
+        ) : null}
       </span>
       <span className="flex-1 min-w-0 flex flex-col gap-0.5">
         <span className="flex items-center gap-1.5 min-w-0">
@@ -118,6 +136,7 @@ export function BranchPanelRowView({
           {branchSubtitle(row, baseInfo, t)}
         </span>
       </span>
+      </button>
 
       {/* ↑ 수와 버튼은 한 자리에 겹쳐 두고, 행에 올리거나 초점이 오면 버튼을 보인다(시안 D6). */}
       <span className="grid shrink-0 items-center justify-items-end">
