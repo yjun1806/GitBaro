@@ -450,6 +450,7 @@
     "noRepoAccountDesc": "이 저장소에 지정된 GitHub 계정이 없습니다. 툴바의 계정 메뉴에서 계정을 고르세요.",
     "publishBranch": "Branch 게시",
     "publishBranchDesc": "이 Branch를 Remote에 Push하여 공유합니다",
+    "detachedHeadError": "HEAD가 브랜치가 아닌 커밋을 가리키고 있습니다(detached HEAD). 먼저 브랜치를 만들거나 브랜치로 전환하세요.",
     "noUpstreamError": "이 브랜치는 리모트에 게시되지 않았습니다. Publish Branch를 먼저 해주세요.",
     "forcePushWarning": "원격 히스토리를 덮어씁니다. 이 작업은 되돌릴 수 없습니다.",
     "forcePushConfirmTitle": "강제 푸시 확인"

@@ -11,7 +11,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useActivityStore } from "@/stores/activity";
 import { useSyncStore, type SyncAction } from "@/stores/sync";
-import { useBranches, useTokenValidation } from "@/api/queries";
+import { useBranches, useHeadDetached, useTokenValidation } from "@/api/queries";
 import { gitFetch, gitPush, gitPull, getPushTarget } from "@/api/commands";
 import type { PushTarget } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
@@ -40,6 +40,7 @@ function remoteErrorKey(message: string): string | null {
   if (message.startsWith("no_upstream:")) return "sync.noUpstreamError";
   if (message === "no_remote") return "sync.noRemoteError";
   if (message === "multiple_remotes") return "sync.multipleRemotesError";
+  if (message === "detached_head") return "sync.detachedHeadError";
   return null;
 }
 
@@ -51,6 +52,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   // 전역 활성 계정이 아니라 이 저장소에 지정된 계정으로 동기화한다.
   const accountId = useRepoAccountId();
   const { data: branches = [] } = useBranches(activeRepoPath);
+  const { data: isDetached = false } = useHeadDetached(activeRepoPath);
   const { data: tokenStatus, isLoading: isValidating } = useTokenValidation(accountId, activeRepoPath);
 
   const queryClient = useQueryClient();
@@ -77,6 +79,9 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const ahead = headBranch?.aheadBehind?.ahead ?? 0;
   const behind = headBranch?.aheadBehind?.behind ?? 0;
   const hasUpstream = headBranch?.upstream != null;
+  // A detached HEAD has no branch to publish (the backend refuses to push or
+  // pull it), so only fetch is offered there.
+  const needsPublish = !hasUpstream && !isDetached;
 
   const previewBranch = useUIStore((s) => s.previewBranch);
   // canPush is null for non-GitHub remotes: push access is unknown, so let git decide.
@@ -170,7 +175,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
       return;
     }
     if (!accountId) return;
-    const action: SyncAction = !hasUpstream ? "publish" : behind > 0 ? "pull" : ahead > 0 ? "push" : "fetch";
+    const action: SyncAction = needsPublish ? "publish" : behind > 0 ? "pull" : ahead > 0 ? "push" : "fetch";
     if (action === "pull") {
       await runSync(action, (path, account) => gitPull(path, account), t("sync.pullCompleted"));
     } else if (action === "push" || action === "publish") {
@@ -208,7 +213,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
       return;
     }
     await runSync(
-      hasUpstream ? "push" : "publish",
+      needsPublish ? "publish" : "push",
       (path, account) => gitPush(path, account, false),
       t("sync.pushCompleted"),
     );
@@ -232,7 +237,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
       accent: "text-danger",
       bg: "bg-danger/5 border-danger/20",
     };
-    if (!hasUpstream) return {
+    if (needsPublish) return {
       icon: <ArrowUp className="w-3.5 h-3.5" />,
       label: t("sync.publishBranch"),
       accent: "text-primary",
@@ -310,7 +315,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
         <SyncDropdown
           ahead={ahead}
           behind={behind}
-          hasUpstream={hasUpstream}
+          hasUpstream={!needsPublish}
           lastFetchedAt={lastFetchedAt}
           disabled={syncDisabled}
           onFetch={handleFetch}

@@ -422,7 +422,7 @@ fn remote_error(code: &str) -> AppError {
 /// Error for remote operations attempted while HEAD is detached. Without
 /// this, `HEAD` would be passed to git as if it were a branch name.
 fn detached_head_error() -> AppError {
-    remote_error("HEAD is detached (not on a branch). Create or switch to a branch first.")
+    remote_error("detached_head")
 }
 
 impl SyncTarget {
@@ -1269,7 +1269,7 @@ mod tests {
             code(target(Some("x"), None, &["origin"]).pull_target().unwrap_err()),
             "no_upstream:x"
         );
-        assert!(target(None, None, &["origin"]).push_target().is_err());
+        assert_eq!(code(target(None, None, &["origin"]).push_target().unwrap_err()), "detached_head");
     }
 
     #[test]

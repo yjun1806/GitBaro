@@ -450,6 +450,7 @@
     "noRepoAccountDesc": "No GitHub account is assigned to this repository. Choose one from the account menu in the toolbar.",
     "publishBranch": "Publish Branch",
     "publishBranchDesc": "Push this branch to remote to share with others",
+    "detachedHeadError": "HEAD is detached (not on a branch). Create or switch to a branch first.",
     "noUpstreamError": "This branch has no upstream. Please publish the branch first.",
     "forcePushWarning": "This will overwrite remote history. This action cannot be undone.",
     "forcePushConfirmTitle": "Confirm Force Push"
