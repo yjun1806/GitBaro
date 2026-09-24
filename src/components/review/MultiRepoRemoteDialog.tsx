@@ -13,6 +13,7 @@ import {
   type RemotePlanRow,
   type RemoteRowResult,
 } from "@/hooks/useMultiRepoRemote";
+import { useUnpushedCommitList } from "@/api/queries";
 import type { RemoteOp } from "@/types";
 
 export interface MultiRepoRemoteDialogProps {
@@ -237,12 +238,39 @@ function PlanRow({ row, op, checked, locked, result, onToggle }: PlanRowProps) {
           {result ? <ResultLabel result={result} /> : commitsLabel(row, op, t)}
         </span>
       </div>
+      {op === "push" && isRunnable(row) && !result && <UnpushedList path={plan.path} />}
       {result?.status === "failed" && (
         <p role="alert" className="mt-1 pl-[30px] text-[11.5px] text-danger break-words">
           {failureText(result.message, t)}
         </p>
       )}
     </div>
+  );
+}
+
+/** push 확인 창에서 한 저장소가 올릴 커밋: 원격에 없는 커밋을 최신 순으로 몇 개 보여 준다. */
+const UNPUSHED_PREVIEW = 5;
+
+function UnpushedList({ path }: { path: string }) {
+  const { t } = useTranslation();
+  const { data } = useUnpushedCommitList(path, true);
+  if (!data || data.count === 0) return null;
+  const shown = data.commits.slice(0, UNPUSHED_PREVIEW);
+  const rest = data.count - shown.length;
+  return (
+    <ul
+      aria-label={t("multiRepoRemote.unpushedList", { count: data.count })}
+      data-testid={`unpushed-${path}`}
+      className="mt-1.5 pl-[30px] flex flex-col gap-0.5 text-[11.5px]"
+    >
+      {shown.map((c) => (
+        <li key={c.id} className="flex items-baseline gap-2 min-w-0">
+          <code className="shrink-0 font-mono text-(--faint)">{c.shortId.slice(0, 7)}</code>
+          <span className="truncate text-foreground/80">{c.summary}</span>
+        </li>
+      ))}
+      {rest > 0 && <li className="text-muted-foreground">{t("multiRepoRemote.unpushedMore", { count: rest })}</li>}
+    </ul>
   );
 }
 

@@ -100,6 +100,7 @@ describe("ui store after the two-column shell", () => {
       "fileListWidth",
       "graphPanelRatio",
       "railMode",
+      "reviewBasis",
       "sidebarWidth",
     ]);
     expect(sanitizePersistedUI({ activeTab: "changes" })).toEqual({});
@@ -153,5 +154,19 @@ describe("migrateUI", () => {
     expect(useUIStore.getState().railMode).toBe("hover");
     expect(useUIStore.getState().sidebarWidth).toBe(320);
     localStorage.removeItem("gitbaro-ui");
+  });
+});
+
+describe("sanitizePersistedUI — review basis", () => {
+  it("keeps a saved review basis and drops an unknown one", () => {
+    expect(sanitizePersistedUI({ reviewBasis: "unseen" })).toEqual({ reviewBasis: "unseen" });
+    expect(sanitizePersistedUI({ reviewBasis: "later" })).toEqual({});
+  });
+
+  it("defaults to commits not on any remote without touching other saved fields", () => {
+    const saved = { railMode: "hover", sidebarWidth: 300, diffLineMode: "split" };
+    const merged = { ...useUIStore.getInitialState(), ...sanitizePersistedUI(saved) };
+    expect(merged.reviewBasis).toBe("unpushed");
+    expect(merged).toMatchObject(saved);
   });
 });

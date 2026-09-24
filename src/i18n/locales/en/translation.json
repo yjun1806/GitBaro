@@ -390,7 +390,12 @@
     "ai": "AI Assistant",
     "aiDescription": "Choose the AI CLI to use with repositories",
     "detectingAiClis": "Detecting installed AI CLIs",
-    "noAiClis": "No installed AI CLIs found"
+    "noAiClis": "No installed AI CLIs found",
+    "reviewBasis": "Review basis",
+    "reviewBasisUnpushed": "Commits not on any remote",
+    "reviewBasisUnseen": "Commits you haven't marked seen",
+    "reviewBasisUnpushedHint": "Commits that no remote has yet are the ones to review.",
+    "reviewBasisUnseenHint": "Commits after your “seen up to here” mark are the ones to review."
   },
   "diff": {
     "unified": "Unified",
@@ -902,7 +907,6 @@
     "wipWorktreeLabel": "Uncommitted changes in {{name}} ({{count}})",
     "seenHere": "Seen up to here",
     "seenHereAt": "Seen up to here · {{time}}",
-    "seenHint": "Commits above this line are new",
     "seenToday": "today {{time}}",
     "seenYesterday": "yesterday {{time}}",
     "modifiedAgo": "modified {{time}}",
@@ -914,7 +918,9 @@
     "wipBranch": "{{branch}} branch",
     "wipDetached": "No branch (HEAD {{sha}})",
     "wipDetachedUnknown": "No branch (detached HEAD)",
-    "wipMainWorktree": "primary folder"
+    "wipMainWorktree": "primary folder",
+    "remoteBoundary": "On a remote from here down",
+    "laneMerged": "merged"
   },
   "commitDetail2": {
     "repo": "Repository",
@@ -1072,7 +1078,11 @@
       "failed": "Failed"
     },
     "summary": "{{ok}} succeeded · {{failed}} failed",
-    "preparingFetch": "Checking what will run in each repository…"
+    "preparingFetch": "Checking what will run in each repository…",
+    "unpushedList_one": "{{count}} commit to push",
+    "unpushedList_other": "{{count}} commits to push",
+    "unpushedMore_one": "and {{count}} more",
+    "unpushedMore_other": "and {{count}} more"
   },
   "branchPanel": {
     "title": "Branches",
@@ -1146,14 +1156,12 @@
     "stash": "Stash"
   },
   "overlap": {
-    "chipsLabel": "Worktrees shown in the graph",
+    "chipsLabel": "Worktrees to show together in the graph",
     "chipCurrent": "Open worktree, always shown ({{path}})",
     "chipMain": "primary folder",
     "chipFrom": "from {{base}}",
     "chipDirty_one": "{{count}} uncommitted file",
     "chipDirty_other": "{{count}} uncommitted files",
-    "chipsShown_one": "Showing {{count}} worktree in the graph",
-    "chipsShown_other": "Showing {{count}} worktrees together in the graph",
     "markTitle": "Also being edited in another worktree: {{names}}",
     "sameFile": "Same file",
     "andMore_one": "and {{count}} more",
@@ -1168,7 +1176,11 @@
     "pickWorktree": "Worktree to compare",
     "thisWorktree": "This worktree",
     "otherWorktree": "Other worktree",
-    "close": "Close"
+    "close": "Close",
+    "legendLabel": "Worktrees shown together",
+    "showMore_one": "{{count}} more worktree · show together",
+    "showMore_other": "{{count}} more worktrees · show together",
+    "showCurrentOnly": "Only this worktree"
   },
   "filesByRepo": {
     "tab": "Changes vs {{base}}",
@@ -1231,7 +1243,6 @@
     "checkout": "Checked out ⎇ {{branch}}",
     "detached": "No branch · {{sha}}",
     "detachedUnknown": "No branch",
-    "upstream": "↑{{ahead}} ↓{{behind}} vs {{upstream}}",
     "noUpstream": "No remote branch",
     "clean": "No uncommitted changes",
     "uncommitted_one": "{{count}} uncommitted change",
@@ -1249,7 +1260,13 @@
       "cherryPick": "Cherry-pick",
       "revert": "Revert",
       "squash": "Squash"
-    }
+    },
+    "unpushed_one": "{{count}} commit not on any remote",
+    "unpushed_other": "{{count}} commits not on any remote",
+    "notPublished": "not published",
+    "behind_one": "{{count}} to pull",
+    "behind_other": "{{count}} to pull",
+    "inSync": "Up to date with remote"
   },
   "workSwitcher": {
     "label": "What the lower area shows",

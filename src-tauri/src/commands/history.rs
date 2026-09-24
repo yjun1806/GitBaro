@@ -94,9 +94,9 @@ fn resolve_history_tips(
 }
 
 /// 시작점에서 아직 리모트로 push되지 않은 커밋의 OID 집합을 구한다.
-/// GitHub Desktop의 `loadLocalCommits`와 동일한 판정:
-///   - upstream tracking 있음 → `upstream..<tips>` (upstream tip 이후의 커밋)
-///   - upstream 없음        → `<tips> --not --remotes` (모든 리모트에서 도달 불가능한 커밋)
+/// 검토 기준 「원격에 없는 커밋」(`git::unpushed`)과 같은 판정이다:
+/// `<tips> --not --remotes` — 어느 원격 추적 브랜치에서도 닿지 않는 커밋. 다른 원격 브랜치에
+/// 이미 올라간 커밋은 올린 것으로 본다. upstream이 로컬 브랜치여도 그 끝은 함께 숨긴다.
 ///
 /// 반환값 `None`은 "시작점의 모든 커밋이 unpushed"를 뜻한다. 리모트 tracking
 /// 브랜치가 하나도 없으면(로컬 전용 저장소) hide 대상이 없어 전체 히스토리를
@@ -132,14 +132,10 @@ fn unpushed_from(
             return Some(HashSet::new());
         }
     }
-    match tips.upstream {
-        Some(oid) => {
-            let _ = walk.hide(oid); // upstream..tips
-        }
-        None => {
-            let _ = walk.hide_glob("refs/remotes/*"); // tips --not --remotes
-        }
+    if let Some(oid) = tips.upstream {
+        let _ = walk.hide(oid);
     }
+    let _ = walk.hide_glob("refs/remotes/*"); // tips --not --remotes
     Some(walk.flatten().collect())
 }
 
@@ -760,6 +756,25 @@ mod tests {
         assert!(set.contains(&c3));
         assert!(!set.contains(&c1));
         assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn unpushed_treats_commits_on_another_remote_branch_as_pushed() {
+        // upstream(origin/<branch>)은 c1에 있지만 c2는 다른 원격 브랜치(origin/backup)에 있다.
+        let tmp = TempRepo::new();
+        let repo = tmp.open();
+        let c1 = commit(&repo, "a.txt", "1");
+        let c2 = commit(&repo, "a.txt", "2");
+        let c3 = commit(&repo, "a.txt", "3");
+        let branch = head_branch(&repo);
+        set_remote_ref(&repo, &format!("origin/{branch}"), c1);
+        set_remote_ref(&repo, "origin/backup", c2);
+        repo.remote("origin", "https://example.invalid/r.git").unwrap();
+        let mut b = repo.find_branch(&branch, BranchType::Local).unwrap();
+        b.set_upstream(Some(&format!("origin/{branch}"))).unwrap();
+
+        let set = compute_unpushed(&repo).expect("tracking → Some");
+        assert_eq!(set.into_iter().collect::<Vec<_>>(), vec![c3]);
     }
 
     #[tokio::test]

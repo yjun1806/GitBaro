@@ -92,6 +92,7 @@ const sync: RepoSyncStatus = {
   ahead: 2,
   behind: 0,
   hasUpstream: true,
+  unpushed: 2,
   isDirty: false,
   dirtyCount: 0,
   dirtyLatestMtime: null,

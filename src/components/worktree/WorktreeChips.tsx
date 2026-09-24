@@ -15,7 +15,7 @@ export interface WorktreeChip {
   base: WorktreeBase | null;
   /** 커밋하지 않은 파일 수. 모르면 null. */
   dirtyCount: number | null;
-  /** 아이콘 색(그래프의 그 워크트리 WIP 행과 같은 색). */
+  /** 견본 색(그래프에서 그 워크트리의 레인·WIP 행·브랜치 이름표와 같은 색). */
   color: string;
 }
 
@@ -24,6 +24,10 @@ export interface WorktreeChipsProps {
   /** 그래프에 보이는 워크트리 경로. */
   visible: ReadonlySet<string>;
   onToggle: (path: string) => void;
+  /** 꺼 둔 워크트리를 모두 켠다(「워크트리 N개 더 · 함께 보기」). */
+  onShowAll?: () => void;
+  /** 다른 워크트리를 모두 끈다(「지금 워크트리만」). */
+  onShowCurrentOnly?: () => void;
 }
 
 export function worktreeChipName(chip: Pick<WorktreeChip, "branch" | "path">): string {
@@ -31,18 +35,21 @@ export function worktreeChipName(chip: Pick<WorktreeChip, "branch" | "path">): s
 }
 
 /**
- * 그래프 패널 위의 워크트리 칩 줄(시안 D5). 칩을 눌러 그 워크트리의 WIP 행과 커밋을
- * 그래프에 함께 그릴지 고른다. 지금 연 워크트리는 강조 테두리로 표시하고 늘 보인다.
+ * 그래프 패널 위의 「함께 보는 워크트리」 줄(시안 D5). 범례이자 켜고 끄는 칩이다: 칩의 견본 색이
+ * 그래프에서 그 워크트리의 레인 색이다. 처음에는 지금 연 워크트리만 켜져 있고, 끝의 버튼으로
+ * 나머지를 한 번에 켠다. 지금 연 워크트리는 강조 테두리로 표시하고 늘 보인다.
  */
-export function WorktreeChips({ chips, visible, onToggle }: WorktreeChipsProps) {
+export function WorktreeChips({ chips, visible, onToggle, onShowAll, onShowCurrentOnly }: WorktreeChipsProps) {
   const { t } = useTranslation();
-  const shown = chips.filter((c) => c.isCurrent || visible.has(c.path)).length;
+  const hiddenCount = chips.filter((c) => !c.isCurrent && !visible.has(c.path)).length;
+  const othersShown = chips.some((c) => !c.isCurrent && visible.has(c.path));
   return (
     <div
       role="group"
       aria-label={t("overlap.chipsLabel")}
       className="flex items-center gap-2 px-3 py-2 shrink-0 overflow-x-auto border-b border-(--line) bg-(--acc-faint)"
     >
+      <span className="shrink-0 text-[11.5px] font-semibold text-muted-foreground">{t("overlap.legendLabel")}</span>
       {chips.map((chip) => {
         const on = chip.isCurrent || visible.has(chip.path);
         const name = worktreeChipName(chip);
@@ -66,7 +73,13 @@ export function WorktreeChips({ chips, visible, onToggle }: WorktreeChipsProps) 
                   : "border-dashed border-(--line2) bg-transparent opacity-60 hover:opacity-100",
             )}
           >
-            <Icon className="w-3 h-3 shrink-0" style={{ color: chip.color }} aria-hidden="true" />
+            <span
+              aria-hidden="true"
+              data-testid="chip-swatch"
+              className={cn("w-2.5 h-2.5 rounded-[3px] shrink-0", !on && "opacity-40")}
+              style={{ background: chip.color }}
+            />
+            <Icon className="w-3 h-3 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className={cn("font-mono text-foreground", chip.isCurrent ? "font-bold" : "font-medium")}>
               {name}
             </span>
@@ -93,9 +106,23 @@ export function WorktreeChips({ chips, visible, onToggle }: WorktreeChipsProps) 
         );
       })}
       <span className="flex-1" />
-      <span className="shrink-0 text-[11.5px] text-muted-foreground">
-        {t("overlap.chipsShown", { count: shown })}
-      </span>
+      {hiddenCount > 0 && onShowAll ? (
+        <button
+          type="button"
+          onClick={onShowAll}
+          className="shrink-0 h-6 px-2.5 rounded-(--radius-chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
+        >
+          {t("overlap.showMore", { count: hiddenCount })}
+        </button>
+      ) : othersShown && onShowCurrentOnly ? (
+        <button
+          type="button"
+          onClick={onShowCurrentOnly}
+          className="shrink-0 h-6 px-2.5 rounded-(--radius-chip) text-[11.5px] font-semibold text-muted-foreground hover:bg-accent transition-colors"
+        >
+          {t("overlap.showCurrentOnly")}
+        </button>
+      ) : null}
     </div>
   );
 }

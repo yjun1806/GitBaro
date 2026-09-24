@@ -12,6 +12,8 @@ export interface GitStatusInput {
   headSha: string | null;
   /** 체크아웃한 브랜치의 upstream. 원격 브랜치가 없으면 null. */
   upstream: { name: string; ahead: number; behind: number } | null;
+  /** 원격에 없는 커밋 수(`git rev-list HEAD --not --remotes`). 추적 브랜치가 없어도 센다. */
+  unpushed: number;
   /** 원격 저장소가 있는지. 없으면 upstream 칸을 그리지 않는다. */
   hasRemote: boolean;
   /** 커밋 안 한 변경(파일 단위, 스테이징 포함). */
@@ -33,8 +35,11 @@ export interface GitStatusLineModel {
   worktree: string;
   /** 체크아웃 칸. */
   checkout: string;
-  /** upstream 칸. 그리지 않으면 null. */
-  upstream: { text: string; ahead: number; behind: number; hasUpstream: boolean } | null;
+  /**
+   * 원격 칸. 「원격에 없는 커밋 N개」(검토 기준), 추적 브랜치가 없으면 「publish 전」, 받을 커밋.
+   * `ahead`는 원격에 없는 커밋 수다. `title`은 추적 브랜치 이름. 그리지 않으면 null.
+   */
+  upstream: { text: string; title: string; ahead: number; behind: number; hasUpstream: boolean } | null;
   /** 커밋 안 한 변경 칸. 변경이 없으면 「커밋 안 한 변경 없음」. */
   uncommitted: string;
   /** 「작업 중인 변경 N」 버튼을 보일지. 보는 중이거나 변경이 없으면 숨긴다. */
@@ -74,21 +79,7 @@ export function gitStatusLine(input: GitStatusInput, t: TFunction): GitStatusLin
       ? t("statusLine.detached", { sha: shortSha })
       : t("statusLine.detachedUnknown");
 
-  const upstream =
-    input.branch && input.hasRemote
-      ? input.upstream
-        ? {
-            text: t("statusLine.upstream", {
-              upstream: input.upstream.name,
-              ahead: input.upstream.ahead,
-              behind: input.upstream.behind,
-            }),
-            ahead: input.upstream.ahead,
-            behind: input.upstream.behind,
-            hasUpstream: true,
-          }
-        : { text: t("statusLine.noUpstream"), ahead: 0, behind: 0, hasUpstream: false }
-      : null;
+  const upstream = input.branch && input.hasRemote ? remoteCell(input, t) : null;
 
   const { total, staged, conflicts } = input.uncommitted;
   const uncommitted =
@@ -124,5 +115,23 @@ export function gitStatusLine(input: GitStatusInput, t: TFunction): GitStatusLin
     upstream: tone === "normal" ? upstream : null,
     uncommitted,
     canCommit: tone !== "viewing" && total > 0,
+  };
+}
+
+/** 원격 칸의 글: 원격에 없는 커밋 · publish 전 · 받을 커밋. 할 일이 없으면 「원격과 같음」. */
+function remoteCell(input: GitStatusInput, t: TFunction): NonNullable<GitStatusLineModel["upstream"]> {
+  const hasUpstream = input.upstream !== null;
+  const behind = input.upstream?.behind ?? 0;
+  const parts = [
+    input.unpushed > 0 ? t("statusLine.unpushed", { count: input.unpushed }) : null,
+    hasUpstream ? null : t("statusLine.notPublished"),
+    behind > 0 ? t("statusLine.behind", { count: behind }) : null,
+  ].filter((p): p is string => p !== null);
+  return {
+    text: parts.length > 0 ? parts.join(" · ") : t("statusLine.inSync"),
+    title: input.upstream?.name ?? t("statusLine.noUpstream"),
+    ahead: input.unpushed,
+    behind,
+    hasUpstream,
   };
 }

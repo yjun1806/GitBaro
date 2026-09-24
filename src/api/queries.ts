@@ -6,6 +6,7 @@ import {
   isHeadDetached,
   getBranchDivergence,
   getRepoSyncStatus,
+  getUnpushedCommits,
   getRecentBranches,
   getCommitHistory,
   getCommitDetail,
@@ -100,6 +101,7 @@ export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> 
     [
       "branches",
       "repoSyncStatus",
+      "unpushedCommits",
       "commitHistory",
       "status",
       "mergeState",
@@ -166,6 +168,39 @@ export function useCommitHistoryInfinite(repoPath: string | null, target?: Histo
       lastPage.length === COMMIT_HISTORY_PAGE_SIZE
         ? allPages.length * COMMIT_HISTORY_PAGE_SIZE
         : undefined,
+  });
+}
+
+/** push 확인 창과 툴바가 보여 줄 원격에 없는 커밋 목록의 길이. */
+const UNPUSHED_LIST_LIMIT = 50;
+
+/**
+ * 지금 연 작업 트리의 원격에 없는 커밋(검토 기준 「원격에 없는 커밋」). 그래프에 그린 HEAD가
+ * 바뀌면(커밋·체크아웃) 키가 바뀌어 바로 다시 읽고, push·fetch 뒤에는 `invalidateAfterSync`가,
+ * 원격 추적 브랜치 변화는 git 폴더 감시가 갱신한다.
+ */
+export function useUnpushedCommits(repoPath: string | null) {
+  const { data: history } = useCommitHistoryInfinite(repoPath);
+  const head = history?.pages[0]?.[0]?.id ?? null;
+  return useQuery({
+    queryKey: ["unpushedCommits", repoPath, head],
+    queryFn: () => getUnpushedCommits(repoPath!, UNPUSHED_LIST_LIMIT),
+    enabled: repoPath !== null,
+    staleTime: 15_000,
+    refetchInterval: 20_000,
+    refetchIntervalInBackground: false,
+    // HEAD가 바뀌어 다시 읽는 동안 같은 작업 트리의 이전 값을 둔다(숫자가 깜박이지 않게).
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[1] === repoPath ? prev : undefined),
+  });
+}
+
+/** push 확인 창의 저장소 한 줄에 보여 줄 원격에 없는 커밋. 창이 열려 있는 동안만 읽는다. */
+export function useUnpushedCommitList(repoPath: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["unpushedCommits", repoPath, "list"],
+    queryFn: () => getUnpushedCommits(repoPath, UNPUSHED_LIST_LIMIT),
+    enabled,
+    staleTime: 5_000,
   });
 }
 

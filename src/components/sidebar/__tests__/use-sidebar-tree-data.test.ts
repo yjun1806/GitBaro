@@ -31,6 +31,7 @@ vi.mock("@/api/queries", () => ({
         ahead: 0,
         behind: 0,
         hasUpstream: false,
+        unpushed: 0,
         isDirty: true,
         dirtyCount: 2,
         dirtyLatestMtime: null,

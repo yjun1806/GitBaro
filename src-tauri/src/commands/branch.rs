@@ -278,12 +278,18 @@ fn head_sync_status(path: &str) -> Option<Value> {
         None => (String::new(), 0, 0, false),
     };
 
+    // 검토 기준 「원격에 없는 커밋」: 추적 브랜치가 없어도(publish 전) 센다.
+    let unpushed = crate::git::unpushed::head_unpushed(&repo, crate::git::unpushed::UNPUSHED_LIMIT)
+        .map(|s| s.oids.len())
+        .unwrap_or(0);
+
     Some(json!({
         "path": path,
         "branch": branch_name,
         "ahead": ahead,
         "behind": behind,
         "hasUpstream": has_upstream,
+        "unpushed": unpushed,
         "isDirty": is_dirty,
         "dirtyCount": dirty.count,
         "dirtyLatestMtime": dirty.latest_mtime_ms,
@@ -983,12 +989,43 @@ mod tests {
         // 워크트리: 미푸시 2건 + 변경 있음
         assert_eq!(field(&wt_status, "branch").as_str(), Some("feature"));
         assert_eq!(field(&wt_status, "ahead").as_u64(), Some(2));
+        assert_eq!(field(&wt_status, "unpushed").as_u64(), Some(2));
         assert_eq!(field(&wt_status, "isDirty").as_bool(), Some(true));
 
         // 메인: 깨끗함 — 목록이 메인 경로로 계산하면 위 상태가 전부 사라진다
         assert_eq!(field(&main_status, "branch").as_str(), Some("main"));
         assert_eq!(field(&main_status, "ahead").as_u64(), Some(0));
+        assert_eq!(field(&main_status, "unpushed").as_u64(), Some(0));
         assert_eq!(field(&main_status, "isDirty").as_bool(), Some(false));
+    }
+
+    /// 추적 브랜치가 없는 브랜치(publish 전)도 원격에 없는 커밋을 센다. ahead는 0이다.
+    #[tokio::test]
+    async fn counts_unpushed_commits_on_a_branch_without_upstream() {
+        let tmp = std::env::temp_dir().join(format!("gitbaro-sync-nopub-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let origin = tmp.join("origin.git");
+        git(&tmp, &["init", "-q", "--bare", "-b", "main", origin.to_str().unwrap()]);
+        let main = tmp.join("main");
+        git(&tmp, &["clone", "-q", origin.to_str().unwrap(), main.to_str().unwrap()]);
+        std::fs::write(main.join("README.md"), "hello\n").unwrap();
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        git(&main, &["push", "-q", "-u", "origin", "main"]);
+        git(&main, &["checkout", "-q", "-b", "feat/new"]);
+        for i in 0..3 {
+            std::fs::write(main.join(format!("f{i}.txt")), "x\n").unwrap();
+            git(&main, &["add", "-A"]);
+            git(&main, &["commit", "-qm", &format!("c{i}")]);
+        }
+
+        let statuses = repo_sync_status(vec![main.to_string_lossy().to_string()]).await.unwrap();
+        let _ = std::fs::remove_dir_all(&tmp);
+        let s = &statuses[0];
+        assert_eq!(field(s, "hasUpstream").as_bool(), Some(false));
+        assert_eq!(field(s, "ahead").as_u64(), Some(0));
+        assert_eq!(field(s, "unpushed").as_u64(), Some(3));
     }
 
     /// 새 파일만 추가해도 dirty 다. Changes 탭은 untracked 를 세는데 목록이 세지

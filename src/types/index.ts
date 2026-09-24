@@ -206,12 +206,27 @@ export interface RepoSyncStatus {
   ahead: number;
   behind: number;
   hasUpstream: boolean;
+  /**
+   * 원격에 없는 커밋 수(`git rev-list HEAD --not --remotes`). 추적 브랜치가 없어도(publish 전) 센다.
+   * 원격이 하나도 없는 저장소는 0이다.
+   */
+  unpushed: number;
   /** working-tree에 커밋되지 않은 변경이 있는지 (RepoInfo.isDirty와 동일 기준, `dirtyCount > 0`). */
   isDirty: boolean;
   /** 커밋하지 않은 파일 수. 추적하지 않는 폴더 안의 파일까지 하나씩 센다. */
   dirtyCount: number;
   /** 커밋하지 않은 파일 중 가장 늦은 수정 시각(epoch ms). 없으면 null. */
   dirtyLatestMtime: number | null;
+}
+
+/** HEAD에서 닿지만 어느 원격에도 없는 커밋(`get_unpushed_commits`). */
+export interface UnpushedCommits {
+  /** 원격에 없는 커밋 수. */
+  count: number;
+  hasUpstream: boolean;
+  hasRemote: boolean;
+  /** 앞에서부터 많아야 요청한 개수(최신 순). */
+  commits: CommitInfo[];
 }
 
 /**

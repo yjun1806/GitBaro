@@ -29,6 +29,8 @@ export function useVerifyWorktree() {
         .fetchQuery({
           queryKey: ["worktrees", repoPath],
           queryFn: () => getWorktrees(repoPath),
+          // 캐시에 남은 목록은 방금 지운 워크트리를 아직 담고 있을 수 있다. 늘 새로 읽는다.
+          staleTime: 0,
         })
         .then((worktrees) => {
           const live = worktrees.find((w) => w.path === worktreePath);
@@ -37,6 +39,9 @@ export function useVerifyWorktree() {
           if (useRepositoryStore.getState().activeRepoPath !== worktreePath) return;
           setActiveRepo(repoPath);
           rememberWorktree(repoPath, null);
+          // 사이드바·그래프의 워크트리 목록에서도 지운 워크트리를 뺀다.
+          void queryClient.invalidateQueries({ queryKey: ["reviewStatus"] });
+          void queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
           addToast(
             t("worktree.missingFallback", {
               path: worktreePath.split("/").pop() || worktreePath,

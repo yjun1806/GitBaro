@@ -8,6 +8,7 @@ import type {
   BranchInfo,
   BranchDivergence,
   RepoSyncStatus,
+  UnpushedCommits,
   CommitInfo,
   CoAuthor,
   RefLabel,
@@ -307,6 +308,11 @@ export async function getBranchDivergence(repoPath: string): Promise<BranchDiver
 
 export async function getRepoSyncStatus(repoPaths: string[]): Promise<RepoSyncStatus[]> {
   return invoke("repo_sync_status", { repoPaths });
+}
+
+/** 원격에 없는 커밋(`git rev-list HEAD --not --remotes`). 목록은 앞에서 `limit`개까지. */
+export async function getUnpushedCommits(repoPath: string, limit?: number): Promise<UnpushedCommits> {
+  return invoke("get_unpushed_commits", { repoPath, limit });
 }
 
 export async function createBranch(

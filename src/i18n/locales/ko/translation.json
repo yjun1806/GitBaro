@@ -390,7 +390,12 @@
     "ai": "AI 어시스턴트",
     "aiDescription": "저장소에서 사용할 AI CLI를 선택하세요",
     "detectingAiClis": "설치된 AI CLI 감지 중",
-    "noAiClis": "설치된 AI CLI를 찾을 수 없습니다"
+    "noAiClis": "설치된 AI CLI를 찾을 수 없습니다",
+    "reviewBasis": "검토 기준",
+    "reviewBasisUnpushed": "원격에 없는 커밋",
+    "reviewBasisUnseen": "확인하지 않은 커밋",
+    "reviewBasisUnpushedHint": "원격에 올리지 않은 커밋을 검토할 커밋으로 봐요.",
+    "reviewBasisUnseenHint": "「여기까지 확인함」 뒤에 생긴 커밋을 검토할 커밋으로 봐요."
   },
   "diff": {
     "unified": "통합 보기",
@@ -901,7 +906,6 @@
     "wipWorktreeLabel": "{{name}}의 커밋 안 한 변경 ({{count}})",
     "seenHere": "여기까지 확인함",
     "seenHereAt": "여기까지 확인함 · {{time}}",
-    "seenHint": "이 선 위의 커밋이 「새 커밋」이에요",
     "seenToday": "오늘 {{time}}",
     "seenYesterday": "어제 {{time}}",
     "modifiedAgo": "{{time}} 수정",
@@ -912,7 +916,9 @@
     "wipBranch": "{{branch}} 브랜치",
     "wipDetached": "브랜치 없음 (HEAD {{sha}})",
     "wipDetachedUnknown": "브랜치 없음 (HEAD 분리)",
-    "wipMainWorktree": "기본 폴더"
+    "wipMainWorktree": "기본 폴더",
+    "remoteBoundary": "원격에 올라간 지점",
+    "laneMerged": "merge됨"
   },
   "commitDetail2": {
     "repo": "저장소",
@@ -1063,7 +1069,9 @@
       "failed": "실패"
     },
     "summary": "성공 {{ok}}곳 · 실패 {{failed}}곳",
-    "preparingFetch": "저장소마다 실행할 내용을 확인하는 중…"
+    "preparingFetch": "저장소마다 실행할 내용을 확인하는 중…",
+    "unpushedList_other": "올라갈 커밋 {{count}}개",
+    "unpushedMore_other": "외 {{count}}개"
   },
   "branchPanel": {
     "title": "브랜치",
@@ -1132,14 +1140,12 @@
     "stash": "Stash"
   },
   "overlap": {
-    "chipsLabel": "그래프에 표시할 워크트리",
+    "chipsLabel": "그래프에 함께 볼 워크트리",
     "chipCurrent": "지금 연 워크트리라 늘 표시해요 ({{path}})",
     "chipMain": "기본 폴더",
     "chipFrom": "{{base}}에서",
     "chipDirty_one": "커밋 안 한 파일 {{count}}개",
     "chipDirty_other": "커밋 안 한 파일 {{count}}개",
-    "chipsShown_one": "그래프에 워크트리 {{count}}개를 표시",
-    "chipsShown_other": "그래프에 워크트리 {{count}}개를 함께 표시",
     "markTitle": "다른 워크트리도 수정 중: {{names}}",
     "sameFile": "같은 파일",
     "andMore_one": "외 {{count}}곳",
@@ -1154,7 +1160,10 @@
     "pickWorktree": "견줄 워크트리",
     "thisWorktree": "이 워크트리",
     "otherWorktree": "다른 워크트리",
-    "close": "닫기"
+    "close": "닫기",
+    "legendLabel": "함께 보는 워크트리",
+    "showMore_other": "워크트리 {{count}}개 더 · 함께 보기",
+    "showCurrentOnly": "지금 워크트리만"
   },
   "filesByRepo": {
     "tab": "{{base}} 대비 변경",
@@ -1214,7 +1223,6 @@
     "checkout": "체크아웃 ⎇ {{branch}}",
     "detached": "브랜치 없음 · {{sha}}",
     "detachedUnknown": "브랜치 없음",
-    "upstream": "{{upstream}}보다 ↑{{ahead}} ↓{{behind}}",
     "noUpstream": "원격 브랜치 없음",
     "clean": "커밋 안 한 변경 없음",
     "uncommitted_other": "커밋 안 한 변경 {{count}}개",
@@ -1229,7 +1237,11 @@
       "cherryPick": "cherry-pick",
       "revert": "revert",
       "squash": "squash"
-    }
+    },
+    "unpushed_other": "원격에 없는 커밋 {{count}}개",
+    "notPublished": "publish 전",
+    "behind_other": "받을 커밋 {{count}}개",
+    "inSync": "원격과 같음"
   },
   "workSwitcher": {
     "label": "아래 칸에 보일 것",

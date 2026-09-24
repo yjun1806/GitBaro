@@ -34,6 +34,7 @@ const GIT_DIR_QUERY_KEYS = [
   "branches",
   "branchDivergence",
   "commitHistory",
+  "unpushedCommits",
   "mergeState",
   "stashList",
   "stashShow",

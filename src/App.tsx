@@ -22,6 +22,7 @@ import { useToastStore } from "@/stores/toast";
 import { useGitEvents } from "@/hooks/useGitEvents";
 import { useRepoWatcher } from "@/hooks/useRepoWatcher";
 import { useVerifyWorktree } from "@/hooks/useVerifyWorktree";
+import { useActiveWorktreeGuard } from "@/hooks/useActiveWorktreeGuard";
 import { useActiveScope, useWorkspaceWatchPaths } from "@/hooks/useActiveScope";
 
 function AppContent() {
@@ -132,6 +133,8 @@ function AppContent() {
     if (!activeRepo || !activeRepoPath || activeRepoPath === activeRepo.path) return;
     verifyWorktree(activeRepo.path, activeRepoPath);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // 켜 있는 동안 앱 밖에서 지워져도(`git worktree remove`) 기본 폴더로 돌아간다.
+  useActiveWorktreeGuard();
 
   // DEV: Cmd+Shift+W to preview welcome screen for testing (data preserved).
   // Dev builds only — in production it would hijack a real key combo.

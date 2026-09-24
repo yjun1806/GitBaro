@@ -11,6 +11,7 @@ const data = vi.hoisted(() => ({
   detached: false,
   branchesLoading: false,
   syncByPath: {} as Record<string, unknown>,
+  unpushed: undefined as unknown,
 }));
 const commands = vi.hoisted(() => ({
   gitFetch: vi.fn(() => Promise.resolve()),
@@ -26,6 +27,7 @@ vi.mock("@/api/commands", () => commands);
 vi.mock("@/api/queries", () => ({
   useBranches: () => ({ data: data.branches, isLoading: data.branchesLoading }),
   useRepoSyncStatuses: () => ({ data: data.syncByPath }),
+  useUnpushedCommits: () => ({ data: data.unpushed }),
   useHeadDetached: () => ({ data: data.detached }),
   useTokenValidation: () => ({ data: { valid: true, canPush: true }, isLoading: false }),
   useStatus: () => ({ data: [] }),
@@ -78,6 +80,7 @@ beforeEach(async () => {
   data.stashes = [];
   data.detached = false;
   data.branchesLoading = false;
+  data.unpushed = undefined;
   data.syncByPath = {};
   dropdown.toggle.mockClear();
   Object.values(commands).forEach((fn) => fn.mockClear());
@@ -90,8 +93,15 @@ describe("GitActionZone — repository mode", () => {
   it("shows the ahead count on Push and the stash count on Stash", () => {
     data.stashes = [{}, {}];
     renderZone(<GitActionZone mode="repo" />);
-    expect(screen.getByRole("button", { name: "Push — ↑19" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Push — 19" })).toHaveProperty("disabled", false);
     expect(screen.getByRole("button", { name: "Stash — 2" })).toBeTruthy();
+  });
+
+  it("counts commits on no remote and says Publish before the branch has an upstream", () => {
+    data.branches = [branch({ upstream: null, aheadBehind: null })];
+    data.unpushed = { count: 3, hasUpstream: false, hasRemote: true, commits: [] };
+    renderZone(<GitActionZone mode="repo" />);
+    expect(screen.getByRole("button", { name: "Publish — 3" })).toHaveProperty("disabled", false);
   });
 
   it("turns Push off when there is nothing to push", () => {
@@ -104,7 +114,7 @@ describe("GitActionZone — repository mode", () => {
     renderZone(<GitActionZone mode="repo" />);
     fireEvent.click(screen.getByRole("button", { name: /^Fetch —/ }));
     await waitFor(() => expect(commands.gitFetch).toHaveBeenCalledWith(repo.path, "acc-1"));
-    fireEvent.click(screen.getByRole("button", { name: "Push — ↑19" }));
+    fireEvent.click(screen.getByRole("button", { name: "Push — 19" }));
     await waitFor(() => expect(commands.gitPush).toHaveBeenCalledWith(repo.path, "acc-1", false));
   });
 
@@ -216,13 +226,14 @@ describe("GitActionZone — workspace mode", () => {
 
   it("sums the workspace repositories' ahead and behind counts into the Push and Pull badges", () => {
     data.syncByPath = {
-      "/repos/a": { path: "/repos/a", ahead: 12, behind: 0 },
-      "/repos/b": { path: "/repos/b", ahead: 7, behind: 2 },
+      "/repos/a": { path: "/repos/a", ahead: 12, unpushed: 12, behind: 0 },
+      // 추적 브랜치가 없어도 원격에 없는 커밋은 센다.
+      "/repos/b": { path: "/repos/b", ahead: 0, unpushed: 7, behind: 2 },
       // 워크스페이스 밖 저장소는 세지 않는다.
-      "/repos/other": { path: "/repos/other", ahead: 100, behind: 100 },
+      "/repos/other": { path: "/repos/other", ahead: 100, unpushed: 100, behind: 100 },
     };
     renderZone(<WorkspaceSyncGroup paths={paths} onMultiRepo={() => {}} />);
-    expect(screen.getByRole("button", { name: "Push — ↑19" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Push — 19" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Pull — ↓2" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Fetch" })).toBeTruthy();
   });

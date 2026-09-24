@@ -134,7 +134,7 @@ export function orderWipRows(rows: readonly GraphWip[]): GraphWip[] {
 
 /**
  * 한 행의 아래 가장자리에서 다음 행으로 이어지는 선(레인과 줄기). 커밋 행 사이에 끼는 행
- * (「여기까지 확인함」 구분선)이 선을 끊지 않고 그리는 데 쓴다.
+ * (「main에서 갈라진 지점」)이 선을 끊지 않고 그리는 데 쓴다.
  */
 export function edgesThroughBottom(
   edges: readonly { kind: "pass" | "in" | "out"; toLane: number; chain: number }[],

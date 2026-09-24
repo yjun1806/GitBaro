@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Archive, Files, GitCommitVertical, Play } from "lucide-react";
-import { useUIStore } from "@/stores/ui";
+import { useSeenMarkerMode, useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
@@ -9,6 +9,7 @@ import {
   useCommitHistoryInfinite,
   useMergeState,
   useStashList,
+  useUnpushedCommits,
   useWorkflowRuns,
   useWorktrees,
 } from "@/api/queries";
@@ -16,6 +17,7 @@ import { CommitGraph, type WorktreeHead } from "./CommitGraph";
 import { useGraphReview } from "./useGraphReview";
 import { normalizePath, type GraphWip } from "./graph-model";
 import { worktreeColor } from "./worktree-history";
+import { useGraphWorktreesStore } from "./graph-worktrees";
 import { activeRange, useBranchRangeStore } from "@/components/branch/branch-range";
 import { WorktreeChips, type WorktreeChip } from "@/components/worktree/WorktreeChips";
 import type { WorktreeInfo } from "@/types";
@@ -78,7 +80,11 @@ export function GraphPanel() {
   // 표시, 다른 워크트리 칩)을 감춘다. 그 표시는 체크아웃한 브랜치에만 맞는 말이다.
   const { target: viewTarget, historyTarget } = useHistoryView();
   const viewing = viewTarget !== null;
-  const newCommits = viewing ? null : review.newCommits;
+  // 검토 기준이 「원격에 없는 커밋」(기본)이면 확인함 표시(새 커밋 점·구분선·버튼)를 모두 감춘다.
+  const seenMode = useSeenMarkerMode();
+  const newCommits = viewing || !seenMode ? null : review.newCommits;
+  const { data: unpushed } = useUnpushedCommits(activeRepoPath);
+  const graphBadge = seenMode ? newCommits?.newCount : unpushed?.count;
   // 「main 대비 변경」 배지: 지금 연 워크트리의 main 대비 파일 수(그 탭이 보여 줄 목록과 같은 범위).
   const { data: history } = useCommitHistoryInfinite(activeRepoPath);
   const headOid = history?.pages[0]?.[0]?.id ?? null;
@@ -152,7 +158,7 @@ export function GraphPanel() {
             active={tab === "graph"}
             onClick={openGraphTab}
             icon={<GitCommitVertical className="w-3.5 h-3.5" />}
-            count={badgeCount(newCommits?.newCount)}
+            count={badgeCount(graphBadge)}
           >
             {t("shell.graphTab")}
           </Tab>
@@ -204,6 +210,8 @@ export function GraphPanel() {
           chips={worktreeFilter.chips}
           visible={worktreeFilter.visible}
           onToggle={worktreeFilter.toggle}
+          onShowAll={worktreeFilter.showAll}
+          onShowCurrentOnly={worktreeFilter.showCurrentOnly}
         />
       )}
       {/* 「main 대비 변경」의 목록과 diff는 이 카드 아래 칸에 그린다(MainColumn). */}
@@ -213,7 +221,7 @@ export function GraphPanel() {
             <CommitGraph
               wips={viewing ? NO_WIPS : worktreeFilter.wips}
               newCommits={newCommits}
-              seenAt={viewing ? null : review.seenAt}
+              seenAt={viewing || !seenMode ? null : review.seenAt}
               worktreeHeads={viewing ? NO_HEADS : worktreeFilter.heads}
               historyTarget={historyTarget}
             />
@@ -238,18 +246,21 @@ function chipOrder(a: GraphWip, b: GraphWip): number {
 }
 
 /**
- * 칩 줄에서 그래프에 보일 워크트리를 고른다(D5). 처음에는 모두 보이고, 끈 워크트리는
- * 저장소마다 기억한다(화면 상태라 저장하지 않는다). 지금 연 워크트리는 늘 보인다.
+ * 「함께 보는 워크트리」 칩 줄에서 그래프에 그릴 워크트리를 고른다(D5). 처음에는 지금 연 워크트리만
+ * 그리고, 켠 워크트리는 저장소마다 앱을 켜는 동안 기억한다(`useGraphWorktreesStore`). 지금 연
+ * 워크트리는 늘 보인다.
  * - `wips`: 보이는 워크트리의 WIP 행만.
  * - `heads`: 보이는 다른 워크트리의 HEAD. 그래프가 그 이력을 함께 그린다.
  */
 function useWorktreeFilter(allWips: GraphWip[]) {
   const ownerPath = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? null);
   const { data: worktreeList } = useWorktrees(ownerPath);
-  const [hiddenByRepo, setHiddenByRepo] = useState<Readonly<Record<string, readonly string[]>>>({});
-  const hidden = useMemo(
-    () => new Set(ownerPath ? (hiddenByRepo[ownerPath] ?? []) : []),
-    [hiddenByRepo, ownerPath],
+  const shownByRepo = useGraphWorktreesStore((s) => s.shownByRepo);
+  const toggleShown = useGraphWorktreesStore((s) => s.toggle);
+  const setShown = useGraphWorktreesStore((s) => s.setShown);
+  const shown = useMemo(
+    () => new Set(ownerPath ? (shownByRepo[ownerPath] ?? []) : []),
+    [shownByRepo, ownerPath],
   );
 
   const infoByPath = useMemo(() => {
@@ -276,8 +287,8 @@ function useWorktreeFilter(allWips: GraphWip[]) {
   );
 
   const visible = useMemo(
-    () => new Set(allWips.filter((w) => w.isCurrent || !hidden.has(w.path)).map((w) => w.path)),
-    [allWips, hidden],
+    () => new Set(allWips.filter((w) => w.isCurrent || shown.has(w.path)).map((w) => w.path)),
+    [allWips, shown],
   );
   const wips = useMemo(() => allWips.filter((w) => visible.has(w.path)), [allWips, visible]);
   const heads = useMemo(() => {
@@ -290,15 +301,16 @@ function useWorktreeFilter(allWips: GraphWip[]) {
 
   const toggle = useCallback(
     (path: string) => {
-      if (!ownerPath) return;
-      setHiddenByRepo((prev) => {
-        const current = prev[ownerPath] ?? [];
-        const next = current.includes(path) ? current.filter((p) => p !== path) : [...current, path];
-        return { ...prev, [ownerPath]: next };
-      });
+      if (ownerPath) toggleShown(ownerPath, path);
     },
-    [ownerPath],
+    [ownerPath, toggleShown],
   );
+  const showAll = useCallback(() => {
+    if (ownerPath) setShown(ownerPath, allWips.filter((w) => !w.isCurrent).map((w) => w.path));
+  }, [ownerPath, allWips, setShown]);
+  const showCurrentOnly = useCallback(() => {
+    if (ownerPath) setShown(ownerPath, []);
+  }, [ownerPath, setShown]);
 
-  return { chips, visible, wips, heads, toggle };
+  return { chips, visible, wips, heads, toggle, showAll, showCurrentOnly };
 }

@@ -328,6 +328,7 @@ describe("RepoTree — hover card", () => {
       ahead: 0,
       behind: 2,
       hasUpstream: false,
+      unpushed: 0,
       isDirty: false,
       dirtyCount: 0,
       dirtyLatestMtime: null,

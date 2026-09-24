@@ -6,6 +6,7 @@ import { AlertTriangle, Files, Folder, GitCommitVertical } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { useSeenMarkerMode } from "@/stores/ui";
 import { repoAccountsByPath } from "@/lib/repo-tree";
 import { baseName } from "./review-model";
 import { Card, EmptyState } from "@/components/layout/ContentArea";
@@ -55,6 +56,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const setGroupBy = useFilesViewStore((s) => s.setGroupBy);
 
   const data = useWorkspaceReview(paths, showAll);
+  const seenMode = useSeenMarkerMode();
   useReviewActivityRefresh(data.repoPaths);
 
   const accountLabel = useMemo(() => {
@@ -127,7 +129,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                   active={tab === "graph"}
                   onClick={() => setTab("graph")}
                   icon={<GitCommitVertical className="w-3.5 h-3.5" />}
-                  count={badgeCount(data.newCount)}
+                  count={badgeCount(seenMode ? data.newCount : data.unpushedCount)}
                 >
                   {t("shell.graphTab")}
                 </Tab>
@@ -154,7 +156,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                   {showAll ? t("review.hideQuiet") : t("review.showAll", { count: data.hiddenCount })}
                 </button>
               ) : null}
-              {tab === "graph" && data.newCount > 0 && (
+              {tab === "graph" && seenMode && data.newCount > 0 && (
                 <>
                   <span className="w-px h-[18px] bg-(--line) mx-1 shrink-0" aria-hidden="true" />
                   <button
