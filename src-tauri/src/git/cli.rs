@@ -310,6 +310,16 @@ impl GitCliEngine {
             .map_err(map_io_err)
     }
 
+    /// `run_local_probe` that requires success and returns the trimmed stdout.
+    async fn run_local_probe_checked(&self, args: &[&str]) -> Result<String, AppError> {
+        let output = self.run_local_probe(args).await?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            Err(git_failure(&output))
+        }
+    }
+
     /// Run a checkout that should leave HEAD on `refs/heads/<branch>`.
     ///
     /// git runs the post-checkout hook after HEAD has already moved, and a
@@ -405,14 +415,18 @@ impl GitCliEngine {
     /// Restore both the index and the working tree of `paths` to HEAD
     /// (`git checkout HEAD -- <paths>`). Used to discard staged changes.
     pub async fn restore_paths_from_head(&self, paths: &[String]) -> Result<(), AppError> {
-        self.run_with_pathspecs(&["checkout", "HEAD", "--"], paths).await
+        self.run_with_pathspecs(&["checkout", "HEAD", "--"], paths).await?;
+        self.clear_stale_squash_msg().await;
+        Ok(())
     }
 
     /// Drop `paths` from the index, leaving the working-tree files alone
     /// (`git rm --cached`). Used for files that only exist in the index.
     pub async fn remove_paths_from_index(&self, paths: &[String]) -> Result<(), AppError> {
         self.run_with_pathspecs(&["rm", "--cached", "-q", "-r", "--ignore-unmatch", "--"], paths)
-            .await
+            .await?;
+        self.clear_stale_squash_msg().await;
+        Ok(())
     }
 
     /// Stage `paths` exactly like `git add -A -- <paths>`: new and modified
@@ -420,6 +434,9 @@ impl GitCliEngine {
     /// through git (not libgit2) applies clean/LFS filters, handles
     /// submodules and symlinks, and respects sparse checkout.
     pub async fn stage_paths(&self, paths: &[String]) -> Result<(), AppError> {
+        // Clear a leftover SQUASH_MSG first: once this adds to the index, a
+        // stale one would pass for a squash in progress (see `operation_in`).
+        self.clear_stale_squash_msg().await;
         self.run_with_pathspecs(&["add", "-A", "--"], paths).await
     }
 
@@ -427,7 +444,35 @@ impl GitCliEngine {
     /// commit, git resets against HEAD, or against an empty tree when HEAD is
     /// unborn, so this also works before the first commit.
     pub async fn unstage_paths(&self, paths: &[String]) -> Result<(), AppError> {
-        self.run_with_pathspecs(&["reset", "-q", "--"], paths).await
+        self.run_with_pathspecs(&["reset", "-q", "--"], paths).await?;
+        self.clear_stale_squash_msg().await;
+        Ok(())
+    }
+
+    /// Remove SQUASH_MSG when nothing is staged. git leaves the file behind
+    /// when a squash is undone path by path (`reset -- <paths>`,
+    /// `restore --staged`), and once something unrelated is staged again the
+    /// leftover would be reported as a squash in progress, whose Abort
+    /// (`reset --merge`) throws that staged work away. With the index equal
+    /// to HEAD there is no squash left, so the file only carries a stale
+    /// message. Best effort: a failure here must not fail the caller.
+    async fn clear_stale_squash_msg(&self) {
+        let result = async {
+            let git_dir = self.git_dir().await?;
+            if detect_operation(&git_dir) == Some(GitOperation::Squash)
+                && self.index_matches_head().await?
+            {
+                match std::fs::remove_file(git_dir.join("SQUASH_MSG")) {
+                    Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+                    _ => {}
+                }
+            }
+            Ok::<(), AppError>(())
+        }
+        .await;
+        if let Err(e) = result {
+            tracing::warn!("[git] could not clear a stale SQUASH_MSG: {}", e);
+        }
     }
 
     /// Run `git <prefix> <paths...>` with literal pathspecs (so `*`, `[`, `:`
@@ -535,7 +580,7 @@ impl GitCliEngine {
     /// Whether `oid` has more than one parent.
     async fn is_merge_commit(&self, oid: &str) -> Result<bool, AppError> {
         let line = self
-            .run_local_checked(&["rev-list", "--parents", "-n", "1", oid])
+            .run_local_probe_checked(&["rev-list", "--parents", "-n", "1", oid])
             .await?;
         // "<oid> <parent1> <parent2> ..."
         Ok(line.split_whitespace().count() > 2)
@@ -562,13 +607,17 @@ impl GitCliEngine {
             args.push("-m");
             args.push(msg);
         }
-        self.run_stash_push(&args).await
+        self.run_stash_push(&args, &[]).await
     }
 
     /// Run a `git stash push` and report the stash it created, if any.
-    async fn run_stash_push(&self, args: &[&str]) -> Result<Option<String>, AppError> {
+    async fn run_stash_push(
+        &self,
+        args: &[&str],
+        envs: &[(&str, String)],
+    ) -> Result<Option<String>, AppError> {
         let before = self.stash_head_oid().await?;
-        self.run_local_checked(args).await?;
+        check_output(self.run_local_with_env(args, envs).await?)?;
         let after = self.stash_head_oid().await?;
         Ok(if after != before { after } else { None })
     }
@@ -638,7 +687,8 @@ impl GitCliEngine {
         }
         args.push("--");
         args.extend(paths.iter().map(|s| s.as_str()));
-        self.run_stash_push(&args).await
+        self.run_stash_push(&args, &[("GIT_LITERAL_PATHSPECS", "1".to_string())])
+            .await
     }
 
     /// Merge a branch into the current branch via git CLI so that hooks run.
@@ -709,7 +759,7 @@ impl GitCliEngine {
     /// Whether the index has nothing staged relative to HEAD. Unmerged
     /// (conflicted) entries count as staged changes.
     async fn index_matches_head(&self) -> Result<bool, AppError> {
-        let output = self.run_local(&["diff", "--cached", "--quiet"]).await?;
+        let output = self.run_local_probe(&["diff", "--cached", "--quiet"]).await?;
         match output.status.code() {
             Some(0) => Ok(true),
             Some(1) => Ok(false),
@@ -736,7 +786,7 @@ impl GitCliEngine {
 
     /// Absolute path of this worktree's git dir (where MERGE_HEAD etc. live).
     async fn git_dir(&self) -> Result<PathBuf, AppError> {
-        let git_dir = self.run_local_checked(&["rev-parse", "--git-dir"]).await?;
+        let git_dir = self.run_local_probe_checked(&["rev-parse", "--git-dir"]).await?;
         let p = PathBuf::from(&git_dir);
         Ok(if p.is_absolute() { p } else { self.repo_path.join(p) })
     }
@@ -1350,6 +1400,42 @@ mod operation_tests {
         assert_eq!(engine.operation_in_progress().await.unwrap(), None);
         std::fs::remove_file(repo.0.join("b.txt")).unwrap();
         assert!(engine.start_preview("clean").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn squash_undone_in_the_app_does_not_turn_later_staging_into_a_squash() {
+        let repo = conflicting_repo();
+        git_may_fail(&repo.0, &["merge", "--squash", "feature"]);
+        let engine = GitCliEngine::new(&repo.0);
+        let a = vec!["a.txt".to_string()];
+        // The user unstages and discards the conflicted file in the app.
+        engine.unstage_paths(&a).await.unwrap();
+        engine.discard_paths(&a).await.unwrap();
+        assert!(!repo.0.join(".git/SQUASH_MSG").exists(), "stale SQUASH_MSG left behind");
+
+        // Unrelated work staged afterwards is not a squash in progress.
+        write(&repo.0, "a.txt", "edit\n");
+        write(&repo.0, "g.txt", "g\n");
+        engine
+            .stage_paths(&["a.txt".to_string(), "g.txt".to_string()])
+            .await
+            .unwrap();
+        assert_eq!(engine.operation_in_progress().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn staging_after_an_outside_undo_clears_the_stale_squash() {
+        let repo = conflicting_repo();
+        git_may_fail(&repo.0, &["merge", "--squash", "feature"]);
+        // Undone outside the app: SQUASH_MSG stays.
+        git(&repo.0, &["reset", "-q", "--", "a.txt"]);
+        git(&repo.0, &["checkout", "--", "a.txt"]);
+        assert!(repo.0.join(".git/SQUASH_MSG").exists());
+
+        let engine = GitCliEngine::new(&repo.0);
+        write(&repo.0, "g.txt", "g\n");
+        engine.stage_paths(&["g.txt".to_string()]).await.unwrap();
+        assert_eq!(engine.operation_in_progress().await.unwrap(), None);
     }
 
     #[tokio::test]
@@ -2553,6 +2639,32 @@ fatal: Authentication failed for 'https://github.com/owner/repo.git/'
         engine.stash_pop_oid(&oid).await.unwrap();
         assert!(dir.join("new.txt").exists());
         assert_eq!(stash_count(&dir), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 경로는 글롭이 아니라 글자 그대로 다룬다. `[id]`가 `i`, `d`와 맞으면 안 된다.
+    #[tokio::test]
+    async fn stash_push_paths_treats_paths_literally() {
+        let dir = temp_repo("literal");
+        let files = ["app/[id]/p.tsx", "app/i/p.tsx", "app/d/p.tsx"];
+        for f in files {
+            std::fs::create_dir_all(dir.join(f).parent().unwrap()).unwrap();
+            std::fs::write(dir.join(f), "a\n").unwrap();
+        }
+        git(&dir, &["add", "-A"]);
+        git(&dir, &["commit", "-qm", "routes"]);
+        for f in files {
+            std::fs::write(dir.join(f), "b\n").unwrap();
+        }
+
+        GitCliEngine::new(&dir)
+            .stash_push_paths(None, &["app/[id]/p.tsx".to_string()])
+            .await
+            .unwrap();
+
+        assert_eq!(git(&dir, &["stash", "show", "--name-only"]), "app/[id]/p.tsx");
+        assert_eq!(std::fs::read_to_string(dir.join("app/i/p.tsx")).unwrap(), "b\n");
+        assert_eq!(std::fs::read_to_string(dir.join("app/d/p.tsx")).unwrap(), "b\n");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
