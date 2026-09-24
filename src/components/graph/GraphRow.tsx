@@ -188,7 +188,7 @@ export function GraphRow({
           {commit.isUnpushed && (
             <ArrowUp
               strokeWidth={3}
-              className="w-3 h-3 text-primary"
+              className="w-3 h-3 text-(--faint)"
               aria-label={t("graph.unpushed")}
             />
           )}

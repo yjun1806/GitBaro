@@ -396,7 +396,7 @@ export function CommitDetail({
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors",
                     isSelected
-                      ? "bg-primary/10"
+                      ? "bg-(--acc-sel)"
                       : !isSelected && isHighlighted
                         ? "bg-accent ring-1 ring-primary/30"
                         : "hover:bg-accent",
@@ -406,7 +406,7 @@ export function CommitDetail({
                   <span className="flex-1 min-w-0 flex flex-col">
                     <span className={cn(
                       "text-xs font-medium truncate",
-                      isSelected ? "text-primary" : "text-foreground",
+                      "text-foreground",
                     )}>
                       {filename}
                     </span>
