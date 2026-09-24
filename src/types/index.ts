@@ -16,7 +16,8 @@ export interface AppError {
     | "GhCli"
     | "GhVersionTooOld"
     | "Channel"
-    | "RepoNotFound";
+    | "RepoNotFound"
+    | "BareRepository";
   message: string;
 }
 

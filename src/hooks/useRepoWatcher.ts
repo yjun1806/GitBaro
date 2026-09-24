@@ -14,9 +14,29 @@ interface FsChangePayload {
  */
 let watchGeneration = 0;
 
+const GIT_DIR_DEBOUNCE_MS = 250;
+
 /**
- * Watches the active repository's working tree via the backend FS watcher and
- * invalidates the status query when files change. Replaces tight status polling
+ * Per-repo queries that depend on HEAD, the index, refs, merge/rebase state or
+ * linked worktrees. recentBranches reads the reflog, which git writes together
+ * with HEAD, so a HEAD change covers it.
+ */
+const GIT_DIR_QUERY_KEYS = [
+  "status",
+  "branches",
+  "branchDivergence",
+  "commitHistory",
+  "mergeState",
+  "stashList",
+  "recentBranches",
+  "worktrees",
+] as const;
+
+/**
+ * Watches the active repository via the backend FS watcher. Working-tree
+ * changes invalidate the status query; git-dir changes (commit, checkout,
+ * stage, merge/rebase, worktree add/remove made anywhere) also refresh
+ * branches, recent branches, history, merge state, stashes and worktrees. Replaces tight status polling
  * with event-driven refresh; the query keeps a slow poll as a safety net.
  */
 export function useRepoWatcher(repoPath: string | null) {
@@ -41,26 +61,52 @@ export function useRepoWatcher(repoPath: string | null) {
   // Listen for debounced FS change events and refresh the affected repo's status.
   useEffect(() => {
     let mounted = true;
-    let unlisten: (() => void) | undefined;
+    const unlisteners: (() => void)[] = [];
+    // A commit or rebase touches the git dir many times; refetch history and
+    // branches once the burst settles instead of on every step.
+    let gitDirTimer: ReturnType<typeof setTimeout> | undefined;
 
-    listen<FsChangePayload>("fs:change", (event) => {
-      if (!mounted) return;
-      queryClient.invalidateQueries({
-        queryKey: ["status", event.payload.repoPath],
+    const track = (promise: Promise<() => void>) => {
+      promise.then((fn) => {
+        if (mounted) {
+          unlisteners.push(fn);
+        } else {
+          fn();
+        }
       });
-      // rail/목록의 dirty·ahead/behind 인디케이터도 함께 갱신 (오프라인 계산)
-      queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
-    }).then((fn) => {
-      if (mounted) {
-        unlisten = fn;
-      } else {
-        fn();
-      }
-    });
+    };
+
+    track(
+      listen<FsChangePayload>("fs:change", (event) => {
+        if (!mounted) return;
+        queryClient.invalidateQueries({
+          queryKey: ["status", event.payload.repoPath],
+        });
+        // rail/목록의 dirty·ahead/behind 인디케이터도 함께 갱신 (오프라인 계산)
+        queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
+      }),
+    );
+
+    // HEAD, index, refs, or merge/rebase state changed — e.g. a commit, `git add`
+    // or checkout made in a terminal.
+    track(
+      listen<FsChangePayload>("fs:git-dir-change", (event) => {
+        if (!mounted) return;
+        const { repoPath: changedPath } = event.payload;
+        clearTimeout(gitDirTimer);
+        gitDirTimer = setTimeout(() => {
+          for (const key of GIT_DIR_QUERY_KEYS) {
+            queryClient.invalidateQueries({ queryKey: [key, changedPath] });
+          }
+          queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
+        }, GIT_DIR_DEBOUNCE_MS);
+      }),
+    );
 
     return () => {
       mounted = false;
-      unlisten?.();
+      clearTimeout(gitDirTimer);
+      unlisteners.forEach((fn) => fn());
     };
   }, [queryClient]);
 }

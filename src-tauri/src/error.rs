@@ -53,6 +53,9 @@ pub enum AppError {
 
     #[error("Repository not found: {0}")]
     RepoNotFound(String),
+
+    #[error("Bare repositories are not supported: {0}")]
+    BareRepository(String),
 }
 
 impl From<reqwest::Error> for AppError {
@@ -91,6 +94,7 @@ impl serde::Serialize for AppError {
             AppError::GhVersionTooOld(msg) => ("GhVersionTooOld", msg.clone()),
             AppError::Channel(msg) => ("Channel", msg.clone()),
             AppError::RepoNotFound(path) => ("RepoNotFound", path.clone()),
+            AppError::BareRepository(_) => ("BareRepository", self.to_string()),
         };
 
         let mut s = serializer.serialize_struct("AppError", 2)?;

@@ -493,6 +493,17 @@ fn terminal_binary_path(shell_id: &str) -> Option<&'static str> {
     }
 }
 
+/// [`terminal_binary_path`] for a terminal that must be launched by binary;
+/// an unknown ID is an error rather than a panic.
+fn require_terminal_binary(shell_id: &str) -> Result<&'static str, AppError> {
+    terminal_binary_path(shell_id).ok_or_else(|| {
+        AppError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("No launcher binary known for terminal '{}'", shell_id),
+        ))
+    })
+}
+
 /// Build a unique temp file path in the per-user temp dir (not the shared,
 /// world-writable `/tmp`) to avoid predictable-path symlink races.
 fn unique_temp_path(prefix: &str, ext: &str) -> std::path::PathBuf {
@@ -587,7 +598,7 @@ end tell"#,
         }
         "ghostty" | "alacritty" | "rio" => {
             // 바이너리 직접 실행 + -e 플래그
-            let binary = terminal_binary_path(shell_id).unwrap();
+            let binary = require_terminal_binary(shell_id)?;
             tokio::process::Command::new(binary)
                 .args(["-e", "/bin/zsh", "-l", "-i", "-c", &script_cmd])
                 .spawn()
@@ -595,7 +606,7 @@ end tell"#,
         }
         "kitty" => {
             // kitty는 위치 인수로 명령 전달
-            let binary = terminal_binary_path("kitty").unwrap();
+            let binary = require_terminal_binary("kitty")?;
             tokio::process::Command::new(binary)
                 .args(["/bin/zsh", "-l", "-i", "-c", &script_cmd])
                 .spawn()
@@ -649,6 +660,15 @@ mod tests {
         let settings = parse_settings("{\"theme\": \"dark\"}");
         assert_eq!(settings.theme, "dark");
         assert_eq!(settings.language, AppSettings::default().language);
+    }
+
+    #[test]
+    fn unknown_terminal_binary_is_an_error_not_a_panic() {
+        assert!(require_terminal_binary("kitty").is_ok());
+        assert!(matches!(
+            require_terminal_binary("no-such-terminal"),
+            Err(AppError::Io(_))
+        ));
     }
 
     #[test]

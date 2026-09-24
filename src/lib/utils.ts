@@ -1,5 +1,6 @@
 import { clsx } from "clsx";
 import i18n from "@/i18n/config";
+import type { AppError } from "@/types";
 
 export function cn(...classes: (string | undefined | false | null)[]): string {
   return clsx(classes);
@@ -76,6 +77,25 @@ export function getFileExtension(path: string): string {
 export function getFileName(path: string): string {
   const parts = path.replace(/\\/g, "/").split("/");
   return parts[parts.length - 1] ?? path;
+}
+
+/**
+ * Whether two folder paths name the same folder, ignoring trailing slashes.
+ * Used to tell when adding a folder found a repository above it.
+ */
+export function isSameFolder(a: string, b: string): boolean {
+  const trim = (p: string) => p.replace(/\/+$/, "") || "/";
+  return trim(a) === trim(b);
+}
+
+/** Whether `error` is a backend `AppError` of the given `type`. */
+export function isAppErrorType(error: unknown, type: AppError["type"]): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "type" in error &&
+    (error as { type: unknown }).type === type
+  );
 }
 
 export function getErrorMessage(error: unknown): string {

@@ -5,9 +5,13 @@ pub const GIT_COMMAND_START: &str = "git:command-start";
 pub const GIT_COMMAND_COMPLETE: &str = "git:command-complete";
 pub const GIT_COMMAND_PROGRESS: &str = "git:command-progress";
 pub const FS_CHANGE: &str = "fs:change";
+/// Emitted when git metadata of a watched repository changes (HEAD, index,
+/// refs, merge/rebase state, linked worktrees) — e.g. after a commit or checkout made outside
+/// the app. Carries the same payload as `fs:change`.
+pub const GIT_DIR_CHANGE: &str = "fs:git-dir-change";
 
-/// Emitted when the working tree of a watched repository changes (debounced).
-/// The frontend uses this to invalidate the status query instead of polling.
+/// Payload of `fs:change` and `fs:git-dir-change` (debounced). The frontend
+/// uses it to invalidate the affected queries instead of polling.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FsChangeEvent {

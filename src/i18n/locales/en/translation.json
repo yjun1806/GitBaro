@@ -300,6 +300,9 @@
     "setAccount": "Set account",
     "default": "Default",
     "failedToAdd": "Failed to add repository: {{error}}",
+    "addEnclosingTitle": "Add the enclosing repository?",
+    "addEnclosingConfirm": "The folder you picked is not a repository on its own:\n{{picked}}\n\nIt is inside the repository at:\n{{root}}\n\nAdd that repository instead?",
+    "bareNotSupported": "This folder is a bare repository (no working tree), which GitBaro cannot open. Choose a folder with checked-out files.",
     "accountNoAccess": "This account cannot access the repository",
     "accountReadOnly": "Read-only — no push permission for this account",
     "contextMenu": {
