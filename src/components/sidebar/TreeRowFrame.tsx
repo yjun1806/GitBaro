@@ -20,6 +20,8 @@ interface TreeRowFrameProps {
   onContextMenu?: (e: MouseEvent) => void;
   /** 두 줄짜리 워크스페이스 행처럼 36px 높이가 필요한 행 */
   tall?: boolean;
+  /** 저장소·워크트리 경로. 있으면 `data-tree-path`로 심어서 「지금 바뀌는 곳」 카드가 트리를 펼친 뒤 이 행을 찾아 스크롤할 수 있게 한다. */
+  treePath?: string;
   className?: string;
   children: ReactNode;
 }
@@ -38,6 +40,7 @@ export function TreeRowFrame({
   onToggle,
   onContextMenu,
   tall = false,
+  treePath,
   className,
   children,
 }: TreeRowFrameProps) {
@@ -68,6 +71,7 @@ export function TreeRowFrame({
       aria-label={label}
       aria-expanded={expanded}
       aria-selected={selected}
+      data-tree-path={treePath}
       tabIndex={0}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
