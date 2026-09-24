@@ -24,6 +24,8 @@ import type {
   StashEntry,
   StashShowResult,
   PushTarget,
+  AutoSyncSnapshot,
+  AutoFastForwardResult,
 } from "@/types";
 
 // Git operations — backend returns indexStatus/worktreeStatus separately,
@@ -199,6 +201,19 @@ export async function gitPull(
   rebase?: boolean,
 ): Promise<void> {
   return invoke("git_pull", { repoPath, accountId, rebase });
+}
+
+/** 자동 fast-forward 판단용 저장소 상태. fetch가 끝난 뒤 호출한다. */
+export async function getAutoSyncSnapshot(repoPath: string): Promise<AutoSyncSnapshot> {
+  return invoke("get_auto_sync_snapshot", { repoPath });
+}
+
+/**
+ * 현재 브랜치를 upstream으로 fast-forward한다(`git merge --ff-only`, 훅 실행).
+ * 백엔드가 조건을 한 번 더 확인하고, 맞지 않으면 commits 0으로 건너뛴다.
+ */
+export async function autoFastForward(repoPath: string): Promise<AutoFastForwardResult> {
+  return invoke("auto_fast_forward", { repoPath });
 }
 
 /** Tag names that exist on origin — used to flag local-only tags in history. */

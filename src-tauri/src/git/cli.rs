@@ -370,6 +370,15 @@ impl GitCliEngine {
         Ok(())
     }
 
+    /// Fast-forward the checked-out branch to its upstream (`git merge --ff-only`).
+    /// git refuses rather than creating a merge commit when the branches have
+    /// diverged, and refuses when the move would overwrite local changes, so a
+    /// race with an editor or agent cannot lose work. Runs the post-merge hook.
+    pub async fn fast_forward_to_upstream(&self) -> Result<(), AppError> {
+        self.run_local_checked(&["merge", "--ff-only", "@{upstream}"]).await?;
+        Ok(())
+    }
+
     /// Create a commit via git CLI so that hooks (pre-commit, commit-msg, post-commit) run.
     ///
     /// When an `author` is provided (per-repository GitHub account), both the

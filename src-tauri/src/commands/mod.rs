@@ -1,4 +1,5 @@
 pub mod actions;
+pub mod auto_sync;
 pub mod auth;
 pub mod branch;
 pub mod diff;
