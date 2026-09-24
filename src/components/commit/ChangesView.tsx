@@ -1,10 +1,10 @@
-import { useState, useCallback, useMemo, useEffect, useId } from "react";
+import { useState, useCallback, useMemo, useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, GitBranch, Loader2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useSelectionStore } from "@/stores/selection";
-import { useStatus } from "@/api/queries";
+import { useMergeState, useStatus } from "@/api/queries";
 import { useCurrentBranch } from "@/hooks/useCurrentBranch";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import {
@@ -35,6 +35,10 @@ import {
   stageableEntries,
 } from "@/lib/file-selection";
 import type { StatusEntry } from "@/types";
+import { isComposerCollapsed } from "./composer-state";
+import { isFreshCommitFocus } from "./useStartCommit";
+import { useCommitTarget } from "./useCommitTarget";
+import { useUIStore } from "@/stores/ui";
 
 /** Confirmation text for discarding `entry`, matching what the backend will do. */
 function discardMessageKey(entry: StatusEntry): string {
@@ -62,6 +66,15 @@ export function ChangesView() {
   const activeAccount = accounts.find((a) => a.id === activeAccountId);
   const { data: statusData } = useStatus(activeRepoPath);
   const statusEntries = useMemo(() => statusData ?? [], [statusData]);
+  const { data: mergeState } = useMergeState(activeRepoPath);
+  const target = useCommitTarget();
+  const summaryRef = useRef<HTMLInputElement | null>(null);
+  const commitFocusAt = useUIStore((s) => s.commitFocusAt);
+  const setCommitFocusAt = useUIStore((s) => s.setCommitFocusAt);
+  const collapsed = isComposerCollapsed(
+    statusData ? statusData.length : null,
+    mergeState !== undefined && mergeState !== null,
+  );
   const queryClient = useQueryClient();
 
   const selectedFile = useSelectionStore((s) => s.selectedFile);
@@ -333,12 +346,31 @@ export function ChangesView() {
     }
   };
 
+  // 「커밋하기」를 누르고 왔으면 요약 칸으로 포커스를 옮긴다(입력이 보일 때만).
+  useEffect(() => {
+    if (collapsed || !isFreshCommitFocus(commitFocusAt, Date.now())) return;
+    summaryRef.current?.focus();
+    setCommitFocusAt(null);
+  }, [commitFocusAt, collapsed, setCommitFocusAt]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Merge/rebase recovery banner (abort / continue) */}
       <MergeConflictBanner repoPath={activeRepoPath} conflictCount={conflictCount} />
+      {collapsed ? (
+        // 변경이 없으면 목록과 커밋 입력 대신 짧은 「변경 없음」만 둔다. 파일이 바뀌면 다시 나타난다.
+        <div
+          className="flex-1 flex flex-col items-center justify-center gap-1.5 px-4 text-center text-muted-foreground"
+          data-testid="changes-empty"
+        >
+          <CheckCircle2 className="w-5 h-5 text-(--faint)" aria-hidden="true" />
+          <p className="text-[12.5px] font-semibold text-(--fg2)">{t("changes.noChangesShort")}</p>
+          <p className="text-[11.5px]">{t("changes.noChangesHint")}</p>
+        </div>
+      ) : (
+      <>
       {/* File list */}
-      <div className="flex-1 overflow-y-auto bg-background" {...containerProps}>
+      <div className="flex-1 overflow-y-auto" {...containerProps}>
         {statusEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
             <p className="text-sm">{t("changes.noChanges")}</p>
@@ -484,7 +516,18 @@ export function ChangesView() {
 
       {/* Commit panel */}
       <div className="border-t border-border p-3 flex flex-col gap-2">
+        {/* 어느 브랜치·워크트리에 커밋하는지 늘 밝힌다. */}
+        <p className="flex items-center gap-1 min-w-0 text-[11.5px] text-muted-foreground" data-testid="commit-target">
+          <GitBranch className="w-3 h-3 shrink-0" aria-hidden="true" />
+          <span className="truncate">
+            {t("commit.target", {
+              branch: target.branchText,
+              worktree: target.worktreeText,
+            })}
+          </span>
+        </p>
         <input
+          ref={summaryRef}
           type="text"
           placeholder={t("commit.summary")}
           value={commitSummary}
@@ -551,6 +594,8 @@ export function ChangesView() {
           />
         )}
       </div>
+      </>
+      )}
 
       {discardTarget && (
         <Dialog

@@ -9,6 +9,7 @@ import { useWorkspaceStore } from "@/stores/workspace";
 import { repoAccountsByPath } from "@/lib/repo-tree";
 import { baseName } from "./review-model";
 import { Card, EmptyState } from "@/components/layout/ContentArea";
+import { GraphSplit } from "@/components/layout/GraphSplit";
 import { RepoLaneCommitGraph } from "@/components/graph/CommitGraph";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
 import type { WorkspaceRepoHistory } from "@/types";
@@ -19,6 +20,8 @@ import { useReviewActivityRefresh } from "./useReviewActivityRefresh";
 import { FilesByRepo } from "./FilesByRepo";
 import { FilesGroupByPicker } from "./FilesGroupByPicker";
 import { useFilesViewStore } from "./files-view";
+import { badgeCount } from "./tab-counts";
+import { useChangedFileCount } from "./useChangedFileCount";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { cn } from "@/lib/utils";
 
@@ -71,6 +74,13 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
     [data.visible],
   );
 
+  // 「파일별 변경」 배지: 그 탭이 보여 줄 워크트리마다 main 대비 파일 수의 합.
+  const fileCountEntries = useMemo(
+    () => data.visible.flatMap((r) => r.worktrees.map((w) => ({ path: w.path, headOid: w.headOid }))),
+    [data.visible],
+  );
+  const changedFiles = useChangedFileCount(fileCountEntries);
+
   if (!workspace) return null;
 
   const title = (
@@ -94,12 +104,14 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
           <EmptyState icon={Folder} title={t("review.emptyTitle")} description={t("review.emptyHint")} />
         </Card>
       ) : (
-        <>
+        <GraphSplit
+          topCollapsed={tab !== "graph"}
+          top={
           <section
             aria-label={t("shell.panelTabs")}
             className={cn(
               "relative flex flex-col shrink-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden",
-              tab === "graph" && "h-[46%] min-h-[180px]",
+              tab === "graph" && "flex-1 min-h-0",
             )}
           >
             <div className="flex items-center gap-2 min-h-8 pl-3 pr-3 shrink-0 border-b border-(--line)">
@@ -109,6 +121,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                   active={tab === "graph"}
                   onClick={() => setTab("graph")}
                   icon={<GitCommitVertical className="w-3.5 h-3.5" />}
+                  count={badgeCount(data.newCount)}
                 >
                   {t("shell.graphTab")}
                 </Tab>
@@ -117,6 +130,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                   active={tab === "files"}
                   onClick={() => setTab("files")}
                   icon={<Files className="w-3.5 h-3.5" />}
+                  count={badgeCount(changedFiles)}
                 >
                   {t("filesByRepo.tab")}
                 </Tab>
@@ -174,14 +188,17 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
               />
             )}
           </section>
-          {tab === "graph" ? (
-            <Card className="flex-1">
-              <ReviewFilesPanel selection={selection} repoLabel={repoLabel} />
-            </Card>
-          ) : (
-            <FilesByRepo repos={filesRepos} groupBy={groupBy} />
-          )}
-        </>
+          }
+          bottom={
+            tab === "graph" ? (
+              <Card className="flex-1">
+                <ReviewFilesPanel selection={selection} repoLabel={repoLabel} />
+              </Card>
+            ) : (
+              <FilesByRepo repos={filesRepos} groupBy={groupBy} />
+            )
+          }
+        />
       )}
     </div>
   );

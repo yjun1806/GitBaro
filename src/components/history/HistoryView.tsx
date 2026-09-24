@@ -12,7 +12,6 @@ import { createBranch, type ResetMode } from "@/api/commands";
 import { useCommitActions } from "@/hooks/useCommitActions";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useToastStore } from "@/stores/toast";
-import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
 import { BranchCompareView } from "@/components/history/BranchCompareView";
 import { isStaleCompareBranch } from "@/components/history/compare-branch";
 import { MergeActionPanel } from "@/components/history/MergeActionPanel";
@@ -186,19 +185,6 @@ export function HistoryView() {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden bg-background">
-      {/* Branch compare selector */}
-      {branches.length > 1 && (
-        <div className="px-3 py-2 border-b border-border shrink-0">
-          <BranchCompareSelector
-            branches={branches}
-            activeRepoPath={activeRepoPath}
-            currentBranch={currentBranchName}
-            compareBranch={compareBranch}
-            onSelect={setCompareBranch}
-          />
-        </div>
-      )}
-
       {/* Compare view or normal commit list */}
       {compareBranch && activeRepoPath && currentBranchName ? (
         <>
