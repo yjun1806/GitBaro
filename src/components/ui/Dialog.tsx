@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
+import { useRef } from "react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 
 interface DialogProps {
   /** Called on Escape (when `dismissible`) and, if `closeOnBackdrop`, on a backdrop click. Omit for a dialog the user must answer. */
@@ -20,48 +21,12 @@ interface DialogProps {
   children: ReactNode;
 }
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-/** Open dialogs, innermost last. Only the top one reacts to keys that reach the document. */
-const dialogStack: symbol[] = [];
-
-function focusableIn(panel: HTMLElement): HTMLElement[] {
-  return Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => !el.closest("[inert]") && el.getAttribute("aria-hidden") !== "true",
-  );
-}
-
-/** Keeps Tab / Shift+Tab inside the panel. Returns true when it moved focus itself. */
-function trapTab(panel: HTMLElement, shiftKey: boolean): boolean {
-  const items = focusableIn(panel);
-  if (items.length === 0) {
-    panel.focus();
-    return true;
-  }
-  const first = items[0];
-  const last = items[items.length - 1];
-  const active = document.activeElement;
-  if (!panel.contains(active)) {
-    (shiftKey ? last : first).focus();
-    return true;
-  }
-  if (shiftKey && (active === first || active === panel)) {
-    last.focus();
-    return true;
-  }
-  if (!shiftKey && active === last) {
-    first.focus();
-    return true;
-  }
-  return false;
-}
-
 /**
  * Modal dialog shell: backdrop + panel with role="dialog", aria-modal and
  * aria-labelledby. Escape closes it, focus moves into it on open and returns
- * to the opener on close, and Tab cycles inside it. Visuals come entirely
- * from `className` / `overlayClassName`.
+ * to the opener on close, and Tab cycles inside it (all via `useDialogA11y`,
+ * shared with the anchored popover panel `AnchoredPanel`). Visuals come
+ * entirely from `className` / `overlayClassName`.
  */
 export function Dialog({
   onClose,
@@ -74,69 +39,7 @@ export function Dialog({
   children,
 }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  // Captured during the first render, before any autoFocus child steals focus.
-  const [opener] = useState(() =>
-    typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null),
-  );
-  const onCloseRef = useRef(onClose);
-  const dismissibleRef = useRef(dismissible);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-    dismissibleRef.current = dismissible;
-  });
-
-  useEffect(() => {
-    const token = Symbol("dialog");
-    dialogStack.push(token);
-
-    const panel = panelRef.current;
-    if (panel && !panel.contains(document.activeElement)) {
-      panel.focus();
-    }
-
-    // Fallback for keys pressed while focus is outside every dialog (e.g. on
-    // <body> after a backdrop click). Keys from inside the panel are handled
-    // by handleKeyDown and never reach the document.
-    const handleDocumentKeyDown = (e: KeyboardEvent) => {
-      if (dialogStack[dialogStack.length - 1] !== token || e.defaultPrevented) return;
-      const p = panelRef.current;
-      if (!p || p.contains(e.target as Node)) return;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        if (dismissibleRef.current) onCloseRef.current?.();
-      } else if (e.key === "Tab") {
-        e.preventDefault();
-        trapTab(p, e.shiftKey);
-      }
-    };
-    document.addEventListener("keydown", handleDocumentKeyDown);
-
-    return () => {
-      document.removeEventListener("keydown", handleDocumentKeyDown);
-      const idx = dialogStack.indexOf(token);
-      if (idx >= 0) dialogStack.splice(idx, 1);
-      // Under StrictMode the effect is re-run on a still-mounted panel; only
-      // hand focus back once the dialog has really left the DOM.
-      if (panel?.isConnected) return;
-      if (opener && opener.isConnected && opener !== document.body) {
-        opener.focus();
-      }
-    };
-  }, [opener]);
-
-  const handleKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    // A modal owns its keys: keep them from reaching list navigation or
-    // global shortcuts behind it (and from closing an outer dialog).
-    e.stopPropagation();
-    if (e.nativeEvent.isComposing) return;
-    if (e.key === "Escape") {
-      if (e.defaultPrevented) return;
-      e.preventDefault();
-      if (dismissible) onClose?.();
-    } else if (e.key === "Tab" && panelRef.current) {
-      if (trapTab(panelRef.current, e.shiftKey)) e.preventDefault();
-    }
-  };
+  const { handleKeyDown } = useDialogA11y(panelRef, { onClose, dismissible });
 
   return (
     <div
