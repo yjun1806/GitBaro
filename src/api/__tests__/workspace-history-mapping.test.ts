@@ -26,7 +26,21 @@ describe("getWorkspaceHistory mapping", () => {
         headOid: HEAD,
         defaultBranch: "main",
         baseRef: "main",
+        baseStatus: "found",
         mergeBaseOid: BASE,
+        mergeBaseCommit: {
+          id: BASE,
+          shortId: BASE.slice(0, 8),
+          message: "base",
+          summary: "base",
+          author: sig,
+          committer: sig,
+          timestamp: 1_699_000_000,
+          parentIds: [],
+          refs: [{ name: "main", kind: "localBranch", isHead: false }],
+          coAuthors: [],
+          isAgentAuthored: false,
+        },
         commits: [
           {
             id: HEAD,
@@ -51,7 +65,9 @@ describe("getWorkspaceHistory mapping", () => {
         headOid: null,
         defaultBranch: null,
         baseRef: null,
+        baseStatus: null,
         mergeBaseOid: null,
+        mergeBaseCommit: null,
         commits: [],
         truncated: false,
         error: "could not find repository",
@@ -74,6 +90,15 @@ describe("getWorkspaceHistory mapping", () => {
     });
     expect(out[0].commits[0].author).not.toHaveProperty("timestamp");
     expect(out[0].mergeBaseOid).toBe(BASE);
+    expect(out[0].baseStatus).toBe("found");
+    expect(out[0].mergeBaseCommit).toMatchObject({
+      id: BASE,
+      shortId: BASE.slice(0, 7),
+      timestamp: 1_699_000_000,
+      author: { name: "Dev", email: "dev@x.io" },
+    });
+    expect(out[0].mergeBaseCommit?.author).not.toHaveProperty("timestamp");
+    expect(out[1].mergeBaseCommit).toBeNull();
     expect(out[1].error).toBe("could not find repository");
     expect(out[1].commits).toEqual([]);
   });

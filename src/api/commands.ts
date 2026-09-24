@@ -898,8 +898,24 @@ export async function listNewCommitIds(entry: SeenRecordInput): Promise<NewCommi
 
 import type { WorkspaceRepoHistory } from "@/types";
 
-interface RawWorkspaceRepoHistory extends Omit<WorkspaceRepoHistory, "commits"> {
-  commits: (Omit<CommitInfo, "author" | "committer"> & { author: RawAuthor; committer: RawAuthor })[];
+type RawWorkspaceCommit = Omit<CommitInfo, "author" | "committer"> & {
+  author: RawAuthor;
+  committer: RawAuthor;
+};
+
+interface RawWorkspaceRepoHistory
+  extends Omit<WorkspaceRepoHistory, "commits" | "mergeBaseCommit"> {
+  commits: RawWorkspaceCommit[];
+  mergeBaseCommit: RawWorkspaceCommit | null;
+}
+
+function workspaceCommitFromRaw(c: RawWorkspaceCommit): CommitInfo {
+  return {
+    ...c,
+    shortId: c.id.slice(0, 7),
+    author: { name: c.author.name, email: c.author.email },
+    committer: { name: c.committer.name, email: c.committer.email },
+  };
 }
 
 /**
@@ -916,11 +932,7 @@ export async function getWorkspaceHistory(
   });
   return raw.map((repo) => ({
     ...repo,
-    commits: repo.commits.map((c) => ({
-      ...c,
-      shortId: c.id.slice(0, 7),
-      author: { name: c.author.name, email: c.author.email },
-      committer: { name: c.committer.name, email: c.committer.email },
-    })),
+    commits: repo.commits.map(workspaceCommitFromRaw),
+    mergeBaseCommit: repo.mergeBaseCommit && workspaceCommitFromRaw(repo.mergeBaseCommit),
   }));
 }

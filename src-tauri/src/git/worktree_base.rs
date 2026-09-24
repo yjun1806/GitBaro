@@ -68,6 +68,18 @@ pub fn default_branch_name(repo: &Repository) -> Option<String> {
         .and_then(|s| s.strip_prefix("refs/remotes/origin/").map(|n| n.to_string()))
 }
 
+/// 이 저장소의 기본 브랜치. origin/HEAD 가 가리키는 브랜치, 없으면 로컬 `main`·`master` 중 있는 것.
+///
+/// 워크트리 기반 추정, 새 커밋 세기, 워크스페이스 타임라인이 모두 이 규칙을 쓴다.
+pub fn default_branch_with_fallback(repo: &Repository) -> Option<String> {
+    default_branch_name(repo).or_else(|| {
+        ["main", "master"]
+            .into_iter()
+            .find(|n| repo.find_branch(n, BranchType::Local).is_ok())
+            .map(str::to_string)
+    })
+}
+
 /// 캐시를 거쳐 기반 브랜치를 판별한다. 참조·reflog·기록값이 그대로면 이전 결과를 쓴다.
 pub fn resolve_worktree_base_cached(repo: &Repository, branch: &str) -> Option<WorktreeBase> {
     static CACHE: OnceLock<Mutex<BaseCache>> = OnceLock::new();
@@ -192,12 +204,7 @@ fn infer_base(repo: &Repository, branch: &str, tip: Oid) -> Option<WorktreeBase>
 }
 
 fn inference_candidates(repo: &Repository, branch: &str) -> Vec<Candidate> {
-    let default = default_branch_name(repo).or_else(|| {
-        ["main", "master"]
-            .into_iter()
-            .find(|n| repo.find_branch(n, BranchType::Local).is_ok())
-            .map(str::to_string)
-    });
+    let default = default_branch_with_fallback(repo);
 
     let locals: Vec<(String, Oid)> = repo
         .branches(Some(BranchType::Local))

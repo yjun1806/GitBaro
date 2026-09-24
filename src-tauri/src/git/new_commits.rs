@@ -19,7 +19,7 @@ use std::path::Path;
 use git2::{BranchType, Oid, Repository};
 use serde::{Deserialize, Serialize};
 
-use crate::git::worktree_base::{default_branch_name, resolve_worktree_base_cached};
+use crate::git::worktree_base::{default_branch_with_fallback, resolve_worktree_base_cached};
 
 /// 한 번에 걷는 커밋 수의 상한. 오래 방치된 워크트리에서도 응답이 늦어지지 않게 한다.
 pub const MAX_WALK: usize = 5_000;
@@ -275,12 +275,7 @@ fn base_branch(repo: &Repository, branch: Option<&str>) -> Option<BaseBranch> {
 
 /// origin/HEAD 가 가리키는 기본 브랜치. 없으면 로컬 `main`·`master` 중 있는 것.
 fn local_default_branch(repo: &Repository) -> Option<String> {
-    default_branch_name(repo).or_else(|| {
-        ["main", "master"]
-            .into_iter()
-            .find(|n| repo.find_branch(n, BranchType::Local).is_ok())
-            .map(str::to_string)
-    })
+    default_branch_with_fallback(repo)
 }
 
 fn upstream_name(repo: &Repository, branch: &str) -> Option<String> {

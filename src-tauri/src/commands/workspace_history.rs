@@ -3,13 +3,16 @@
 //! 저장소마다 따로 계산한다. 한 저장소가 실패해도 그 저장소의 `error` 만 채우고 나머지 결과는
 //! 그대로 돌려준다. 브랜치 이름이 같아도 저장소를 합치지 않는다(요청한 경로마다 결과 하나).
 
+use std::collections::HashMap;
+
 use git2::{Oid, Repository, Sort};
 use serde::Serialize;
 
 use crate::error::AppError;
 use crate::git::commit::{build_ref_map, commit_to_info};
-use crate::git::merge_base::divergence_point;
-use crate::git::CommitInfo;
+use crate::git::merge_base::{divergence_point, BaseStatus};
+use crate::git::worktree_base::default_branch_with_fallback;
+use crate::git::engine::{CommitInfo, RefLabel};
 
 /// `limit_per_repo` 를 주지 않았을 때 저장소마다 돌려줄 커밋 수.
 pub const DEFAULT_LIMIT_PER_REPO: usize = 100;
@@ -21,17 +24,22 @@ pub const MAX_LIMIT_PER_REPO: usize = 1_000;
 pub struct RepoHistory {
     /// 요청에 넘긴 저장소 경로 그대로.
     pub path: String,
-    /// 체크아웃한 로컬 브랜치. detached HEAD 이거나 열지 못하면 `None`.
+    /// 체크아웃한 로컬 브랜치. 커밋이 없는 저장소도 HEAD 가 가리키는 이름을 준다.
+    /// detached HEAD 이거나 열지 못하면 `None`.
     pub branch: Option<String>,
     /// HEAD 커밋. 커밋이 없는(unborn) 저장소이거나 열지 못하면 `None`.
     pub head_oid: Option<String>,
     /// 기본 브랜치 이름(`main`). 찾지 못하면 `None`.
     pub default_branch: Option<String>,
-    /// 실제로 비교한 참조(`main`, `origin/main`). `git::merge_base::divergence_point` 참고.
+    /// 갈라진 지점을 준 참조(`main`, `origin/main`). `git::merge_base::divergence_point` 참고.
     pub base_ref: Option<String>,
-    /// main 과 갈라진 지점. 없으면(기본 브랜치 없음, 이력 공유 안 함) `commits` 는 HEAD 의
-    /// 이력을 `limit` 까지 담는다.
+    /// 갈라진 지점을 찾았는가. `found` 가 아니면 `commits` 는 갈라진 뒤의 커밋이 아니라
+    /// HEAD 의 이력을 `limit` 까지 담은 것이다. 저장소를 열지 못했거나 커밋이 없으면 `None`.
+    pub base_status: Option<BaseStatus>,
+    /// main 과 갈라진 지점. `base_status` 가 `found` 일 때만 있다.
     pub merge_base_oid: Option<String>,
+    /// 갈라진 지점 커밋(요약·시각·참조 표시). 그래프 맨 아래 행에 쓴다. `merge_base_oid` 와 함께 있다.
+    pub merge_base_commit: Option<CommitInfo>,
     /// HEAD 부터 갈라진 지점 바로 위까지, 최신 순. 갈라진 지점 커밋은 넣지 않는다.
     pub commits: Vec<CommitInfo>,
     /// 커밋이 `limit` 보다 많아 잘렸는가.
@@ -48,7 +56,9 @@ impl RepoHistory {
             head_oid: None,
             default_branch: None,
             base_ref: None,
+            base_status: None,
             merge_base_oid: None,
+            merge_base_commit: None,
             commits: Vec::new(),
             truncated: false,
             error: Some(error),
@@ -70,15 +80,25 @@ fn read_repo_history(path: &str, limit: usize) -> Result<RepoHistory, git2::Erro
         Ok(head) => head,
         // 커밋이 하나도 없는 저장소: 보여 줄 커밋이 없을 뿐 실패는 아니다.
         Err(e) if e.code() == git2::ErrorCode::UnbornBranch => {
-            return Ok(RepoHistory { error: None, ..RepoHistory::failed(path, String::new()) });
+            return Ok(RepoHistory {
+                branch: unborn_branch(&repo),
+                default_branch: default_branch_with_fallback(&repo),
+                error: None,
+                ..RepoHistory::failed(path, String::new())
+            });
         }
         Err(e) => return Err(e),
     };
     let head = head_ref.peel_to_commit()?.id();
     let branch = head_ref.is_branch().then(|| head_ref.shorthand().map(str::to_string)).flatten();
 
-    let point = divergence_point(&repo, head, branch.as_deref());
-    let (commits, truncated) = commits_since(&repo, head, point.merge_base, limit)?;
+    let point = divergence_point(&repo, head, branch.as_deref())?;
+    let ref_map = build_ref_map(&repo);
+    let (commits, truncated) = commits_since(&repo, &ref_map, head, point.merge_base, limit)?;
+    let merge_base_commit = point
+        .merge_base
+        .map(|oid| repo.find_commit(oid).map(|c| with_refs(&ref_map, &c)))
+        .transpose()?;
 
     Ok(RepoHistory {
         path: path.to_string(),
@@ -86,16 +106,30 @@ fn read_repo_history(path: &str, limit: usize) -> Result<RepoHistory, git2::Erro
         head_oid: Some(head.to_string()),
         default_branch: point.default_branch,
         base_ref: point.base_ref,
+        base_status: Some(point.status),
         merge_base_oid: point.merge_base.map(|o| o.to_string()),
+        merge_base_commit,
         commits,
         truncated,
         error: None,
     })
 }
 
+/// 커밋이 없는 저장소에서 HEAD 가 가리키는 브랜치 이름(`refs/heads/main` → `main`).
+fn unborn_branch(repo: &Repository) -> Option<String> {
+    let head = repo.find_reference("HEAD").ok()?;
+    head.symbolic_target()?.strip_prefix("refs/heads/").map(str::to_string)
+}
+
+fn with_refs(ref_map: &HashMap<Oid, Vec<RefLabel>>, commit: &git2::Commit) -> CommitInfo {
+    let refs = ref_map.get(&commit.id()).cloned().unwrap_or_default();
+    CommitInfo { refs, ..commit_to_info(commit) }
+}
+
 /// `head` 에서 닿되 `stop` 에서 닿지 않는 커밋(`stop..head`)을 최신 순으로 `limit` 개까지.
 fn commits_since(
     repo: &Repository,
+    ref_map: &HashMap<Oid, Vec<RefLabel>>,
     head: Oid,
     stop: Option<Oid>,
     limit: usize,
@@ -107,7 +141,6 @@ fn commits_since(
         walk.hide(stop)?;
     }
 
-    let ref_map = build_ref_map(repo);
     let mut commits = Vec::new();
     let mut truncated = false;
     for oid in walk {
@@ -116,9 +149,7 @@ fn commits_since(
             truncated = true;
             break;
         }
-        let commit = repo.find_commit(oid)?;
-        let refs = ref_map.get(&oid).cloned().unwrap_or_default();
-        commits.push(CommitInfo { refs, ..commit_to_info(&commit) });
+        commits.push(with_refs(ref_map, &repo.find_commit(oid)?));
     }
     Ok((commits, truncated))
 }
@@ -346,6 +377,11 @@ mod tests {
         assert!(h.error.is_none());
         assert!(h.head_oid.is_none());
         assert!(h.commits.is_empty());
+        // 커밋이 없어도 HEAD 가 가리키는 브랜치 이름은 준다.
+        assert_eq!(h.branch.as_deref(), Some("main"));
+        // main 참조가 아직 없으므로 기본 브랜치 규칙(worktree_base)으로는 찾지 못한다.
+        assert!(h.default_branch.is_none());
+        assert!(h.base_status.is_none());
     }
 
     #[test]
@@ -360,7 +396,101 @@ mod tests {
 
         let h = repo_history(dir.to_str().unwrap(), 100);
         assert!(h.merge_base_oid.is_none());
+        assert!(h.merge_base_commit.is_none());
+        assert_eq!(h.base_status, Some(BaseStatus::NoSharedHistory));
         assert_eq!(summaries(&h), vec!["island 1", "island 0"]);
+    }
+
+    /// `up` 저장소(main 에 커밋 하나)와 그 클론. 클론의 origin/HEAD 는 main.
+    fn clone_of_main(root: &Path) -> (PathBuf, PathBuf) {
+        let upstream = root.join("up");
+        init(&upstream, "main");
+        commit(&upstream, "A");
+        let clone = root.join("clone");
+        git(root, &["clone", "-q", upstream.to_str().unwrap(), clone.to_str().unwrap()]);
+        git(&clone, &["config", "user.email", "t@t"]);
+        git(&clone, &["config", "user.name", "t"]);
+        (upstream, clone)
+    }
+
+    #[test]
+    fn a_branch_cut_from_a_newer_origin_main_ignores_a_stale_local_main() {
+        let root = tmp_dir("stale-main");
+        let (upstream, clone) = clone_of_main(&root);
+        for m in ["B", "C", "D", "E"] {
+            commit(&upstream, m);
+        }
+        // fetch 는 origin/main 만 옮긴다. 로컬 main 은 A 에 남는다.
+        git(&clone, &["fetch", "-q"]);
+        git(&clone, &["checkout", "-q", "-b", "feat", "origin/main"]);
+        commit(&clone, "F");
+
+        let h = repo_history(clone.to_str().unwrap(), 100);
+        assert_eq!(h.base_status, Some(BaseStatus::Found));
+        assert_eq!(h.base_ref.as_deref(), Some("origin/main"));
+        assert_eq!(h.merge_base_oid.as_deref(), Some(head_of(&clone, "origin/main").as_str()));
+        assert_eq!(summaries(&h), vec!["F"]);
+    }
+
+    #[test]
+    fn a_branch_cut_from_unpushed_local_main_uses_local_main() {
+        let root = tmp_dir("ahead-main");
+        let (_upstream, clone) = clone_of_main(&root);
+        commit(&clone, "local B");
+        git(&clone, &["checkout", "-q", "-b", "feat"]);
+        commit(&clone, "F");
+
+        let h = repo_history(clone.to_str().unwrap(), 100);
+        assert_eq!(h.base_ref.as_deref(), Some("main"));
+        assert_eq!(summaries(&h), vec!["F"]);
+    }
+
+    #[test]
+    fn the_merge_base_commit_is_returned_for_the_bottom_row() {
+        let root = tmp_dir("mb-commit");
+        let dir = root.join("r");
+        repo_with_branch(&dir, 2, 1);
+
+        let h = repo_history(dir.to_str().unwrap(), 100);
+        let base = h.merge_base_commit.as_ref().expect("갈라진 지점 커밋");
+        assert_eq!(Some(base.id.as_str()), h.merge_base_oid.as_deref());
+        assert_eq!(base.summary, "main 1");
+        assert!(base.timestamp > 0);
+        assert!(base.refs.iter().any(|r| r.name == "main"));
+    }
+
+    #[test]
+    fn without_a_default_branch_the_status_says_so() {
+        let root = tmp_dir("no-default");
+        let dir = root.join("r");
+        init(&dir, "develop");
+        commit(&dir, "d 0");
+        git(&dir, &["checkout", "-q", "-b", "feat"]);
+        commit(&dir, "f 0");
+
+        let h = repo_history(dir.to_str().unwrap(), 100);
+        assert!(h.error.is_none());
+        assert!(h.default_branch.is_none());
+        assert_eq!(h.base_status, Some(BaseStatus::NoDefaultBranch));
+        assert!(h.merge_base_oid.is_none());
+        assert_eq!(summaries(&h), vec!["f 0", "d 0"]);
+    }
+
+    #[test]
+    fn the_default_branch_rule_matches_worktree_base_inference() {
+        // origin/HEAD 가 없고 로컬 main 도 지운 클론: 다른 화면과 같이 기본 브랜치를 찾지 않는다.
+        let root = tmp_dir("same-rule");
+        let (_upstream, clone) = clone_of_main(&root);
+        git(&clone, &["remote", "set-head", "origin", "-d"]);
+        git(&clone, &["checkout", "-q", "-b", "feat"]);
+        commit(&clone, "F");
+        git(&clone, &["branch", "-q", "-D", "main"]);
+
+        let h = repo_history(clone.to_str().unwrap(), 100);
+        let repo = Repository::open(&clone).unwrap();
+        assert_eq!(h.default_branch, default_branch_with_fallback(&repo));
+        assert!(h.default_branch.is_none());
+        assert_eq!(h.base_status, Some(BaseStatus::NoDefaultBranch));
     }
 
     #[tokio::test]
