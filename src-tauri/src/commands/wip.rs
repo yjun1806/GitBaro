@@ -1,23 +1,30 @@
 //! 커밋하지 않은 변경(WIP) 파일 목록. 「따라가기」 화면이 가장 최근에 고친 파일을 고를 때 쓴다.
 //!
-//! 상태는 libgit2 status 로, 수정 시각은 `fs::metadata().modified()` 로 읽는다.
-//! 줄 수는 HEAD → 작업 트리(인덱스 포함) 순 변경량이다. 스테이징 여부와 상관없이
-//! 「지금 작업 트리가 HEAD 와 얼마나 다른가」를 센다.
+//! 상태는 `get_status` 와 같은 git CLI(`git status --porcelain=v2`)로 읽는다. libgit2 status 는
+//! sparse checkout·skip-worktree 를 무시해 범위 밖 파일을 삭제로 보고하므로 쓰지 않는다
+//! (`git/status.rs` 머리말 참고). 수정 시각은 `fs::symlink_metadata().modified()` 로 읽는다.
+//! 줄 수는 `git diff HEAD --numstat` 기준 HEAD → 작업 트리 변경량이다. 스테이징 여부와
+//! 상관없이 「지금 작업 트리가 HEAD 와 얼마나 다른가」를 센다.
 
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::path::Path;
+use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use git2::{Delta, Diff, DiffFindOptions, DiffOptions, Repository, Status, StatusOptions};
 use serde::Serialize;
 
 use crate::error::AppError;
+use crate::git::cli::parse_git_error;
+use crate::git::status::{read_status, PorcelainEntry};
 
-/// 파일 수가 이보다 많으면 줄 수를 세지 않는다(`get_status` 와 같은 기준).
-const DIFF_STATS_THRESHOLD: usize = 300;
+/// 새(추적 안 된) 파일은 이 크기까지만 읽어 줄 수를 센다. 넘으면 줄 수는 `None`.
+const UNTRACKED_COUNT_LIMIT: u64 = 1024 * 1024;
+/// 이 앞부분에 NUL 바이트가 있으면 바이너리로 본다(git 과 같은 기준).
+const BINARY_SNIFF_LEN: usize = 8000;
 
-/// HEAD 와 비교한 작업 트리 파일의 상태. 스테이징 여부는 나누지 않는다.
+/// HEAD 와 비교한 작업 트리 파일의 상태.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WipFileStatus {
@@ -37,13 +44,20 @@ pub struct WipFile {
     /// 이름을 바꾼 파일의 옛 경로.
     pub orig_path: Option<String>,
     pub status: WipFileStatus,
+    /// 스테이징한 변경이 있는지(`StatusEntry.staged` 와 같은 뜻).
+    pub staged: bool,
+    /// 스테이징하지 않은 변경이 있는지. 새 파일도 포함(`StatusEntry.unstaged` 와 같은 뜻).
+    pub unstaged: bool,
     /// 마지막 수정 시각(유닉스 초, `get_status` 와 같은 단위). 삭제된 파일은 `None`.
     pub modified_at: Option<u64>,
-    /// 추가된 줄 수. 파일이 많아 세지 않았으면 `None`.
+    /// HEAD 대비 추가된 줄 수. 바이너리이거나 1 MiB 넘는 새 파일이라 세지 않았으면 `None`.
     pub insertions: Option<usize>,
-    /// 지운 줄 수. 파일이 많아 세지 않았으면 `None`.
+    /// HEAD 대비 지운 줄 수. `insertions` 와 같은 경우에 `None`.
     pub deletions: Option<usize>,
 }
+
+/// 줄 수. `None` 은 셀 수 없음(바이너리 등).
+type LineCounts = Option<(usize, usize)>;
 
 /// 파일 하나를 정렬하려고 잠시 들고 있는 값. `modified` 는 초보다 정밀하다.
 struct WipEntry {
@@ -60,58 +74,55 @@ pub async fn get_wip_files(path: String) -> Result<Vec<WipFile>, AppError> {
 }
 
 pub fn read_wip_files(path: &Path) -> Result<Vec<WipFile>, AppError> {
-    let repo = Repository::open(path)?;
-    let Some(workdir) = repo.workdir().map(Path::to_path_buf) else {
-        return Err(AppError::BareRepository(path.display().to_string()));
-    };
+    let workdir = worktree_root(path)?;
+    let porcelain = read_status(&workdir)?;
+    if porcelain.is_empty() {
+        return Ok(Vec::new());
+    }
+    let tracked_stats = tracked_line_stats(&workdir)?;
+    let listed: HashSet<&str> = porcelain.iter().map(|e| e.path.as_str()).collect();
 
-    let mut opts = StatusOptions::new();
-    opts.include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .include_ignored(false)
-        .renames_head_to_index(true);
-    let statuses = repo.statuses(Some(&mut opts))?;
-
-    let stats = if statuses.len() <= DIFF_STATS_THRESHOLD {
-        Some(line_stats(&repo)?)
-    } else {
-        None
-    };
-
-    let mut entries: Vec<WipEntry> = statuses
+    let mut entries: Vec<WipEntry> = porcelain
         .iter()
-        .filter_map(|entry| {
-            let flags = entry.status();
-            let status = status_from_flags(flags)?;
-            let (path, orig_path) = entry_paths(&entry)?;
+        .map(|entry| {
+            let status = status_from_entry(entry);
+            let full_path = workdir.join(&entry.path);
             let modified = if status == WipFileStatus::Deleted {
                 None
             } else {
-                modified_time(&workdir.join(&path))
+                modified_time(&full_path)
             };
-            let (insertions, deletions) = match &stats {
-                Some(map) => {
-                    let (ins, del) = map.get(&path).copied().unwrap_or((0, 0));
-                    (Some(ins), Some(del))
-                }
-                None => (None, None),
+            let counts = if entry.untracked {
+                untracked_line_stats(&full_path)
+            } else {
+                line_counts_for(entry, &tracked_stats, &listed)
             };
-            Some(WipEntry {
+            WipEntry {
                 file: WipFile {
-                    path,
-                    orig_path,
+                    path: entry.path.clone(),
+                    orig_path: entry.orig_path.clone(),
                     status,
+                    staged: entry.is_staged(),
+                    unstaged: entry.is_unstaged(),
                     modified_at: modified.and_then(to_unix_secs),
-                    insertions,
-                    deletions,
+                    insertions: counts.map(|c| c.0),
+                    deletions: counts.map(|c| c.1),
                 },
                 modified,
-            })
+            }
         })
         .collect();
 
     entries.sort_by(compare_entries);
     Ok(entries.into_iter().map(|e| e.file).collect())
+}
+
+/// 작업 트리 루트. 저장소가 아니거나 bare 면 에러.
+fn worktree_root(path: &Path) -> Result<std::path::PathBuf, AppError> {
+    let repo = git2::Repository::open(path)?;
+    repo.workdir()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| AppError::BareRepository(path.display().to_string()))
 }
 
 /// 수정 시각이 늦은 것 먼저. 시각이 없는 파일(삭제)은 뒤로, 같으면 경로 순.
@@ -125,51 +136,42 @@ fn compare_entries(a: &WipEntry, b: &WipEntry) -> Ordering {
     .then_with(|| a.file.path.cmp(&b.file.path))
 }
 
-/// status 플래그를 HEAD 대비 상태 하나로 줄인다. 변경이 없거나 무시된 파일은 `None`.
-fn status_from_flags(flags: Status) -> Option<WipFileStatus> {
-    if flags.is_conflicted() {
-        return Some(WipFileStatus::Conflicted);
+/// porcelain 항목 하나를 HEAD 대비 상태 하나로 줄인다.
+/// 우선순위: 충돌 > 새 파일(추적 안 됨) > 삭제 > 이름 바꿈 > 추가 > 수정.
+fn status_from_entry(entry: &PorcelainEntry) -> WipFileStatus {
+    if entry.conflicted {
+        WipFileStatus::Conflicted
+    } else if entry.untracked {
+        WipFileStatus::Untracked
+    } else if entry.index == 'D' || entry.worktree == 'D' {
+        WipFileStatus::Deleted
+    } else if entry.index == 'R' {
+        WipFileStatus::Renamed
+    } else if entry.index == 'A' {
+        WipFileStatus::Added
+    } else {
+        WipFileStatus::Modified
     }
-    if flags.intersects(Status::WT_DELETED | Status::INDEX_DELETED) {
-        return Some(WipFileStatus::Deleted);
-    }
-    if flags.intersects(Status::INDEX_RENAMED | Status::WT_RENAMED) {
-        return Some(WipFileStatus::Renamed);
-    }
-    if flags.contains(Status::INDEX_NEW) {
-        return Some(WipFileStatus::Added);
-    }
-    if flags.contains(Status::WT_NEW) {
-        return Some(WipFileStatus::Untracked);
-    }
-    if flags.intersects(
-        Status::INDEX_MODIFIED
-            | Status::INDEX_TYPECHANGE
-            | Status::WT_MODIFIED
-            | Status::WT_TYPECHANGE,
-    ) {
-        return Some(WipFileStatus::Modified);
-    }
-    None
 }
 
-/// 지금 경로와(이름을 바꿨으면) 옛 경로. 작업 트리 쪽 새 경로를 먼저 본다.
-fn entry_paths(entry: &git2::StatusEntry<'_>) -> Option<(String, Option<String>)> {
-    let to_string = |p: &Path| p.to_string_lossy().into_owned();
-    let head_to_index = entry.head_to_index();
-    let index_to_workdir = entry.index_to_workdir();
-    let path = index_to_workdir
-        .as_ref()
-        .and_then(|d| d.new_file().path())
-        .or_else(|| head_to_index.as_ref().and_then(|d| d.new_file().path()))
-        .map(to_string)
-        .or_else(|| entry.path().map(str::to_string))?;
-    let orig_path = head_to_index
-        .filter(|d| d.status() == Delta::Renamed)
-        .and_then(|d| d.old_file().path())
-        .map(to_string)
-        .filter(|old| *old != path);
-    Some((path, orig_path))
+/// 추적 중인 파일의 줄 수. `git diff` 가 이름 바꿈을 못 찾아 옛 경로를 따로 삭제로 셌다면
+/// 옛 경로의 삭제 줄 수도 더한다. 옛 경로가 목록에 따로 있으면 거기서 세므로 더하지 않는다.
+fn line_counts_for(
+    entry: &PorcelainEntry,
+    stats: &HashMap<String, LineCounts>,
+    listed: &HashSet<&str>,
+) -> LineCounts {
+    let own = stats.get(&entry.path).copied().unwrap_or(Some((0, 0)));
+    let orig = entry
+        .orig_path
+        .as_deref()
+        .filter(|orig| !listed.contains(orig))
+        .and_then(|orig| stats.get(orig).copied())
+        .unwrap_or(Some((0, 0)));
+    match (own, orig) {
+        (Some((ai, ad)), Some((bi, bd))) => Some((ai + bi, ad + bd)),
+        _ => None,
+    }
 }
 
 fn modified_time(full_path: &Path) -> Option<SystemTime> {
@@ -180,31 +182,117 @@ fn to_unix_secs(t: SystemTime) -> Option<u64> {
     t.duration_since(UNIX_EPOCH).ok().map(|d| d.as_secs())
 }
 
-/// HEAD → 작업 트리(인덱스 포함) diff 의 파일별 (추가, 삭제) 줄 수. 새 경로 기준.
-fn line_stats(repo: &Repository) -> Result<HashMap<String, (usize, usize)>, AppError> {
-    let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
-    let mut diff_opts = DiffOptions::new();
-    diff_opts
-        .include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .show_untracked_content(true);
-    let mut diff = repo.diff_tree_to_workdir_with_index(head_tree.as_ref(), Some(&mut diff_opts))?;
-    let mut find = DiffFindOptions::new();
-    find.renames(true);
-    diff.find_similar(Some(&mut find))?;
-    Ok(stats_by_path(&diff))
+/// git CLI 를 읽기 전용으로 실행해 stdout 을 돌려준다. status 처럼 자주 불리므로 잠금을 잡지 않는다.
+fn run_git(workdir: &Path, args: &[&str], stdin_empty: bool) -> Result<Vec<u8>, AppError> {
+    tracing::debug!("[git] git {}", args.join(" "));
+    let mut cmd = Command::new("git");
+    cmd.arg("--no-optional-locks")
+        .args(args)
+        .current_dir(workdir)
+        .env("GIT_TERMINAL_PROMPT", "0");
+    if stdin_empty {
+        cmd.stdin(Stdio::null());
+    }
+    let output = cmd.output().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            AppError::GitCliNotFound
+        } else {
+            AppError::Io(e)
+        }
+    })?;
+    if !output.status.success() {
+        return Err(AppError::GitCli {
+            message: parse_git_error(&String::from_utf8_lossy(&output.stderr)),
+            exit_code: output.status.code(),
+        });
+    }
+    Ok(output.stdout)
 }
 
-fn stats_by_path(diff: &Diff<'_>) -> HashMap<String, (usize, usize)> {
-    (0..diff.deltas().len())
-        .filter_map(|idx| {
-            let patch = git2::Patch::from_diff(diff, idx).ok()??;
-            let delta = patch.delta();
-            let path = delta.new_file().path().or_else(|| delta.old_file().path())?;
-            let (_, ins, del) = patch.line_stats().ok()?;
-            Some((path.to_string_lossy().into_owned(), (ins, del)))
-        })
-        .collect()
+/// 비교 기준 트리. 커밋이 없는 저장소는 빈 트리(해시 형식에 맞게 git 이 계산).
+fn base_revision(workdir: &Path) -> Result<String, AppError> {
+    if run_git(workdir, &["rev-parse", "--verify", "-q", "HEAD^{tree}"], true).is_ok() {
+        return Ok("HEAD".to_string());
+    }
+    let out = run_git(workdir, &["hash-object", "-t", "tree", "--stdin"], true)?;
+    Ok(String::from_utf8_lossy(&out).trim().to_string())
+}
+
+/// HEAD → 작업 트리(인덱스 포함) 의 파일별 줄 수. 이름 바꿈으로 찾은 파일은 새 경로에 둔다.
+/// sparse checkout 범위 밖 파일(skip-worktree)은 git 이 비교하지 않는다.
+fn tracked_line_stats(workdir: &Path) -> Result<HashMap<String, LineCounts>, AppError> {
+    let base = base_revision(workdir)?;
+    let out = run_git(
+        workdir,
+        &[
+            "diff",
+            "--numstat",
+            "-z",
+            "--find-renames",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--ignore-submodules=none",
+            &base,
+            "--",
+        ],
+        true,
+    )?;
+    Ok(parse_numstat_z(&out))
+}
+
+/// `git diff --numstat -z` 출력 해석. 레코드는 `<ins>\t<del>\t<path>\0` 이고,
+/// 이름 바꿈이면 `<ins>\t<del>\t\0<old>\0<new>\0` 이다. 바이너리는 `-` 로 나온다.
+fn parse_numstat_z(output: &[u8]) -> HashMap<String, LineCounts> {
+    let mut fields = output
+        .split(|b| *b == 0)
+        .map(|r| String::from_utf8_lossy(r).into_owned());
+    let mut stats = HashMap::new();
+    while let Some(record) = fields.next() {
+        let mut parts = record.splitn(3, '\t');
+        let (Some(ins), Some(del), Some(path)) = (parts.next(), parts.next(), parts.next()) else {
+            continue;
+        };
+        let path = if path.is_empty() {
+            let _old = fields.next();
+            match fields.next() {
+                Some(new) => new,
+                None => break,
+            }
+        } else {
+            path.to_string()
+        };
+        let counts = match (ins.parse::<usize>(), del.parse::<usize>()) {
+            (Ok(i), Ok(d)) => Some((i, d)),
+            _ => None,
+        };
+        stats.insert(path, counts);
+    }
+    stats
+}
+
+/// 새(추적 안 된) 파일의 줄 수. 전부 추가된 줄로 센다. 바이너리·너무 큰 파일·읽기 실패는 `None`.
+fn untracked_line_stats(full_path: &Path) -> LineCounts {
+    let meta = std::fs::symlink_metadata(full_path).ok()?;
+    if meta.file_type().is_symlink() {
+        // git 은 링크 대상 경로 한 줄을 내용으로 본다.
+        return Some((1, 0));
+    }
+    if !meta.is_file() || meta.len() > UNTRACKED_COUNT_LIMIT {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(meta.len() as usize);
+    std::fs::File::open(full_path).ok()?.read_to_end(&mut bytes).ok()?;
+    count_added_lines(&bytes).map(|n| (n, 0))
+}
+
+/// 바이트열의 줄 수. 마지막 줄에 줄바꿈이 없어도 한 줄로 센다. 바이너리면 `None`.
+fn count_added_lines(bytes: &[u8]) -> Option<usize> {
+    if bytes[..bytes.len().min(BINARY_SNIFF_LEN)].contains(&0) {
+        return None;
+    }
+    let newlines = bytes.iter().filter(|b| **b == b'\n').count();
+    let trailing = usize::from(bytes.last().is_some_and(|b| *b != b'\n'));
+    Some(newlines + trailing)
 }
 
 #[cfg(test)]
@@ -419,6 +507,8 @@ mod tests {
             path: "a.txt".into(),
             orig_path: None,
             status: WipFileStatus::Untracked,
+            staged: false,
+            unstaged: true,
             modified_at: None,
             insertions: Some(1),
             deletions: Some(0),
@@ -430,19 +520,150 @@ mod tests {
         assert_eq!(json["insertions"], 1);
     }
 
+    fn entry(xy: &str) -> PorcelainEntry {
+        let mut chars = xy.chars();
+        PorcelainEntry {
+            path: "f".into(),
+            orig_path: None,
+            index: chars.next().unwrap(),
+            worktree: chars.next().unwrap(),
+            conflicted: false,
+            untracked: false,
+        }
+    }
+
     #[test]
-    fn status_flags_map_to_one_state() {
-        assert_eq!(status_from_flags(Status::CURRENT), None);
-        assert_eq!(status_from_flags(Status::IGNORED), None);
-        assert_eq!(
-            status_from_flags(Status::INDEX_MODIFIED | Status::WT_MODIFIED),
-            Some(WipFileStatus::Modified)
-        );
-        assert_eq!(
-            status_from_flags(Status::INDEX_NEW | Status::WT_DELETED),
-            Some(WipFileStatus::Deleted)
-        );
-        assert_eq!(status_from_flags(Status::INDEX_NEW | Status::WT_MODIFIED), Some(WipFileStatus::Added));
-        assert_eq!(status_from_flags(Status::CONFLICTED), Some(WipFileStatus::Conflicted));
+    fn porcelain_entries_map_to_one_state() {
+        assert_eq!(status_from_entry(&entry(".M")), WipFileStatus::Modified);
+        assert_eq!(status_from_entry(&entry("MM")), WipFileStatus::Modified);
+        assert_eq!(status_from_entry(&entry(".T")), WipFileStatus::Modified);
+        assert_eq!(status_from_entry(&entry("AD")), WipFileStatus::Deleted);
+        assert_eq!(status_from_entry(&entry("D.")), WipFileStatus::Deleted);
+        assert_eq!(status_from_entry(&entry("RD")), WipFileStatus::Deleted);
+        assert_eq!(status_from_entry(&entry("RM")), WipFileStatus::Renamed);
+        assert_eq!(status_from_entry(&entry("AM")), WipFileStatus::Added);
+        let untracked = PorcelainEntry { untracked: true, ..entry(".?") };
+        assert_eq!(status_from_entry(&untracked), WipFileStatus::Untracked);
+        let conflicted = PorcelainEntry { conflicted: true, ..entry("..") };
+        assert_eq!(status_from_entry(&conflicted), WipFileStatus::Conflicted);
+    }
+
+    #[test]
+    fn parses_numstat_records_renames_and_binaries() {
+        let out = b"2\t1\ta.txt\x000\t3\t\x00old.txt\x00new name.txt\x00-\t-\timg.png\x00";
+        let stats = parse_numstat_z(out);
+        assert_eq!(stats.get("a.txt"), Some(&Some((2, 1))));
+        assert_eq!(stats.get("new name.txt"), Some(&Some((0, 3))));
+        assert_eq!(stats.get("old.txt"), None);
+        assert_eq!(stats.get("img.png"), Some(&None));
+    }
+
+    #[test]
+    fn counts_lines_of_new_content() {
+        assert_eq!(count_added_lines(b""), Some(0));
+        assert_eq!(count_added_lines(b"a\nb\n"), Some(2));
+        assert_eq!(count_added_lines(b"a\nb"), Some(2));
+        assert_eq!(count_added_lines(b"a\0b"), None);
+    }
+
+    #[test]
+    fn sparse_checkout_hides_files_outside_the_cone() {
+        let dir = TempDir::new();
+        let p = dir.path();
+        git(p, &["init", "-q", "-b", "main"]);
+        fs::create_dir_all(p.join("inside")).unwrap();
+        fs::create_dir_all(p.join("outside")).unwrap();
+        fs::write(p.join("inside/i.txt"), "i\n").unwrap();
+        fs::write(p.join("outside/o.txt"), "o\n").unwrap();
+        git(p, &["add", "."]);
+        git(p, &["-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-q", "-m", "init"]);
+        git(p, &["sparse-checkout", "set", "inside"]);
+        assert!(!p.join("outside/o.txt").exists());
+        assert!(read_wip_files(p).unwrap().is_empty());
+
+        fs::write(p.join("inside/i.txt"), "i\nmore\n").unwrap();
+        let files = read_wip_files(p).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].path, "inside/i.txt");
+        assert_eq!((files[0].insertions, files[0].deletions), (Some(1), Some(0)));
+    }
+
+    #[test]
+    fn conflicted_file_counts_lines_against_head() {
+        let dir = init_repo();
+        let p = dir.path();
+        git(p, &["checkout", "-q", "-b", "other"]);
+        fs::write(p.join("a.txt"), "one\nOTHER\nthree\n").unwrap();
+        git(p, &["commit", "-q", "-am", "other"]);
+        git(p, &["checkout", "-q", "main"]);
+        fs::write(p.join("a.txt"), "one\nMAIN\nthree\n").unwrap();
+        git(p, &["commit", "-q", "-am", "main"]);
+        let merge = Command::new("git")
+            .args(["merge", "other"])
+            .current_dir(p)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .output()
+            .unwrap();
+        assert!(!merge.status.success(), "충돌이 나야 한다");
+
+        let files = read_wip_files(p).unwrap();
+        let a = find(&files, "a.txt");
+        assert_eq!(a.status, WipFileStatus::Conflicted);
+        let (ins, del) = (a.insertions.unwrap(), a.deletions.unwrap());
+        assert!(ins + del > 0, "충돌 표시 줄이 세져야 한다: +{ins} -{del}");
+        assert!(!a.staged && !a.unstaged);
+    }
+
+    #[test]
+    fn rewritten_rename_counts_old_path_deletions() {
+        let dir = init_repo();
+        let p = dir.path();
+        git(p, &["mv", "old.txt", "renamed.txt"]);
+        fs::write(p.join("renamed.txt"), "w\nx\ny\nz\n").unwrap();
+        let files = read_wip_files(p).unwrap();
+        let r = find(&files, "renamed.txt");
+        assert_eq!(r.status, WipFileStatus::Renamed);
+        assert_eq!(r.orig_path.as_deref(), Some("old.txt"));
+        assert_eq!((r.insertions, r.deletions), (Some(4), Some(3)));
+    }
+
+    #[test]
+    fn renamed_then_removed_counts_old_lines_as_deleted() {
+        let dir = init_repo();
+        let p = dir.path();
+        git(p, &["mv", "old.txt", "renamed.txt"]);
+        fs::remove_file(p.join("renamed.txt")).unwrap();
+        let files = read_wip_files(p).unwrap();
+        let r = find(&files, "renamed.txt");
+        assert_eq!(r.status, WipFileStatus::Deleted);
+        assert_eq!(r.modified_at, None);
+        assert_eq!((r.insertions, r.deletions), (Some(0), Some(3)));
+    }
+
+    #[test]
+    fn reports_staged_and_unstaged_sides() {
+        let dir = init_repo();
+        let p = dir.path();
+        fs::write(p.join("a.txt"), "one\nTWO\nthree\n").unwrap();
+        git(p, &["add", "a.txt"]);
+        fs::write(p.join("b.txt"), "b changed\n").unwrap();
+        fs::write(p.join("new.txt"), "n\n").unwrap();
+        let files = read_wip_files(p).unwrap();
+        let a = find(&files, "a.txt");
+        assert!(a.staged && !a.unstaged);
+        let b = find(&files, "b.txt");
+        assert!(!b.staged && b.unstaged);
+        let n = find(&files, "new.txt");
+        assert!(!n.staged && n.unstaged);
+    }
+
+    #[test]
+    fn binary_new_file_has_no_line_counts() {
+        let dir = init_repo();
+        fs::write(dir.path().join("blob.bin"), [0u8, 1, 2, 0, 3]).unwrap();
+        let files = read_wip_files(dir.path()).unwrap();
+        let b = find(&files, "blob.bin");
+        assert_eq!((b.insertions, b.deletions), (None, None));
     }
 }
