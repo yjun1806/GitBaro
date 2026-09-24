@@ -12,7 +12,6 @@ import { StatusBar } from "./StatusBar";
 import { ActivityLogPanel } from "./ActivityLogPanel";
 import { AutoSyncSettingsDialogHost } from "@/components/repository/AutoSyncSettingsDialog";
 import { clampSidebarWidth } from "@/lib/sidebar-width";
-import { cn } from "@/lib/utils";
 
 /**
  * Two-column shell from the design (`gen_d.py` `frame(side, main)`):
@@ -68,18 +67,8 @@ export function MainLayout() {
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar. When pinned open it takes the user-sized width: the rail's
-            own fixed widths are stretched to fill this slot. */}
-        <div
-          data-testid="sidebar-slot"
-          style={isResizable ? { width: sidebarWidth } : undefined}
-          className={cn(
-            "relative shrink-0 h-full",
-            isResizable && "[&>div]:w-full! [&>div>div:first-child]:w-full!",
-          )}
-        >
-          <RepoRail />
-        </div>
+        {/* Sidebar. When pinned open it takes the user-sized width. */}
+        <RepoRail expandedWidth={isResizable ? sidebarWidth : undefined} />
 
         {/* 시안에는 사이드바와 메인 사이에 선이 없다. 손잡이는 투명한 잡는 영역이고
             올리면 색이 드러난다. */}
