@@ -55,6 +55,8 @@ interface RepositoryState {
   rememberWorktree: (repoPath: string, worktreePath: string | null) => void;
   /** 저장소를 활성화하되, 기억된 워크트리가 있으면 그 워크트리로 복원한다. */
   activateRepo: (repoPath: string) => void;
+  /** 저장소 선택을 푼다. 워크스페이스를 고를 때 쓴다(선택은 둘 중 하나만 잡힌다). */
+  clearActiveRepo: () => void;
   addRepo: (repo: RepoInfo) => void;
   removeRepo: (path: string) => void;
   setRepos: (repos: RepoInfo[]) => void;
@@ -103,6 +105,68 @@ export function useRepoViewPath(): (repoPath: string) => string {
   );
 }
 
+export const REPOS_STORAGE_KEY = "gitbaro-repos";
+/**
+ * v0: `version` 없이 저장하던 값(zustand 기본값 0).
+ * v1: 워크스페이스 선택(W4-T1)과 함께 버전을 매기기 시작했다. 모양은 v0과 같고,
+ *     `activeRepoPath`가 null이면 「워크스페이스를 고른 상태」일 수 있다는 뜻이 더해졌다.
+ */
+export const REPOS_STORAGE_VERSION = 1;
+
+/** 저장하는 필드. `partialize`와 변환 함수가 같은 목록을 쓴다. */
+export type RepositoryPersistedState = Pick<
+  RepositoryState,
+  | "repos"
+  | "activeRepoPath"
+  | "repoVisibility"
+  | "ownerTypes"
+  | "collapsedGroups"
+  | "favoriteRepos"
+  | "activeWorktrees"
+  | "autoSyncByRepo"
+>;
+
+const isPlainRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+const isStrings = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every((x) => typeof x === "string");
+
+/**
+ * 저장값을 v1로 옮긴다. 모양이 맞는 필드는 그대로 두고, 깨진 필드만 기본값으로 바꾼다.
+ * v0과 v1은 모양이 같으므로 옮기면서 값이 사라지지 않는다. 모르는 필드는 버린다.
+ */
+export function migrateRepositoryState(
+  persisted: unknown,
+  _fromVersion: number,
+): Partial<RepositoryPersistedState> {
+  const src = isPlainRecord(persisted) ? persisted : {};
+  const out: Partial<RepositoryPersistedState> = {};
+  if (Array.isArray(src.repos)) out.repos = src.repos as RepoInfo[];
+  if (typeof src.activeRepoPath === "string" || src.activeRepoPath === null) {
+    out.activeRepoPath = src.activeRepoPath;
+  }
+  if (isPlainRecord(src.repoVisibility)) {
+    out.repoVisibility = src.repoVisibility as Record<string, RepoVisibility>;
+  }
+  if (isPlainRecord(src.ownerTypes)) {
+    out.ownerTypes = src.ownerTypes as Record<string, "User" | "Organization">;
+  }
+  if (isStrings(src.collapsedGroups)) out.collapsedGroups = src.collapsedGroups;
+  if (isStrings(src.favoriteRepos)) out.favoriteRepos = src.favoriteRepos;
+  if (isPlainRecord(src.activeWorktrees)) {
+    out.activeWorktrees = Object.fromEntries(
+      Object.entries(src.activeWorktrees).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    );
+  }
+  if (isPlainRecord(src.autoSyncByRepo)) {
+    out.autoSyncByRepo = src.autoSyncByRepo as Record<string, AutoSyncSetting>;
+  }
+  return out;
+}
+
 export const useRepositoryStore = create<RepositoryState>()(
   persist(
     (set, get) => ({
@@ -141,6 +205,11 @@ export const useRepositoryStore = create<RepositoryState>()(
       activateRepo: (repoPath) => {
         const remembered = get().activeWorktrees[repoPath];
         get().setActiveRepo(remembered ?? repoPath, repoPath);
+      },
+
+      clearActiveRepo: () => {
+        if (get().activeRepoPath === null && get().activeRepo === null) return;
+        set({ activeRepoPath: null, activeRepo: null });
       },
 
       addRepo: (repo) =>
@@ -238,9 +307,12 @@ export const useRepositoryStore = create<RepositoryState>()(
       setLoading: (loading) => set({ isLoading: loading }),
     }),
     {
-      name: "gitbaro-repos",
+      name: REPOS_STORAGE_KEY,
+      version: REPOS_STORAGE_VERSION,
       storage: createJSONStorage(() => createSafeStorage()),
-      partialize: (state) => ({
+      migrate: (persisted, version) =>
+        migrateRepositoryState(persisted, version) as RepositoryState,
+      partialize: (state): RepositoryPersistedState => ({
         repos: state.repos,
         activeRepoPath: state.activeRepoPath,
         repoVisibility: state.repoVisibility,

@@ -3,6 +3,7 @@ import { Folder, Pencil, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { RowBadges } from "./RowBadges";
 import { DraggableRow } from "./TreeDnd";
 import { TreeRowFrame } from "./TreeRowFrame";
@@ -29,7 +30,8 @@ interface WorkspaceRowProps {
 
 /**
  * 워크스페이스 행: 폴더 아이콘, 이름, 「워크스페이스 · 저장소 N」, 안에 든 저장소의 합계 표시.
- * 워크스페이스를 고르는 동작(여러 저장소 리뷰 화면)은 W4에서 붙는다. 지금은 누르면 접고 편다.
+ * 행을 누르면 워크스페이스를 고른다(메인 칸이 워크스페이스 화면으로 바뀌고 저장소 선택은 풀린다).
+ * 접고 펴기는 ▾/▸ 표시를 누르거나 ←/→ 키로 한다.
  * 끌어서 계정 안 순서를 바꿀 수 있고, 저장소를 이 행 위에 놓으면 이 워크스페이스에 들어간다.
  * 우클릭 메뉴로 이름을 바꾸거나 삭제한다. 삭제해도 저장소는 계정 바로 아래로 돌아갈 뿐 지우지 않는다.
  */
@@ -63,6 +65,8 @@ export function WorkspaceRow({
   const { t } = useTranslation();
   const renameWorkspace = useWorkspaceStore((s) => s.renameWorkspace);
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace);
+  const selected = useWorkspaceStore((s) => s.activeWorkspaceId === workspaceId);
+  const { selectWorkspace } = useSelectRepo();
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const [dialog, setDialog] = useState<OpenDialog>(null);
   // 메뉴를 연 행. 삭제하면 이 행이 사라지므로, 그 전에 초점을 옮길 이웃 행을 여기서 찾는다.
@@ -97,6 +101,8 @@ export function WorkspaceRow({
           depth={0}
           label={name}
           expanded={expanded}
+          selected={selected}
+          onSelect={() => selectWorkspace(workspaceId)}
           onToggle={onToggle}
           onContextMenu={handleContextMenu}
           tall

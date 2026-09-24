@@ -29,7 +29,11 @@ import { useRepositoryStore } from "@/stores/repository";
  */
 
 export const WORKSPACES_STORAGE_KEY = "gitbaro-workspaces";
-export const WORKSPACES_STORAGE_VERSION = 1;
+/**
+ * v1: 워크스페이스·순서·정렬·접힘·닫은 제안(W3).
+ * v2: 고른 워크스페이스(`activeWorkspaceId`, W4-T1)를 더했다. v1 값은 선택 없음(null)으로 옮긴다.
+ */
+export const WORKSPACES_STORAGE_VERSION = 2;
 /** 접힘 상태를 처음 한 번 가져오는 옛 저장 키(`src/stores/repository.ts`). */
 export const LEGACY_REPOS_STORAGE_KEY = "gitbaro-repos";
 
@@ -52,6 +56,11 @@ export interface WorkspacePersistedState {
   sortModeByAccount: Record<string, SortMode>;
   collapsed: string[];
   dismissedSuggestions: string[];
+  /**
+   * 메인 칸에 띄운 워크스페이스. 저장소 선택(`activeRepoPath`)과 둘 중 하나만 잡힌다.
+   * 앱을 다시 켜도 복원한다.
+   */
+  activeWorkspaceId: string | null;
 }
 
 interface WorkspaceActions {
@@ -74,6 +83,11 @@ interface WorkspaceActions {
   /** 접힌 노드 목록을 통째로 바꾼다(모두 접기·모두 펼치기). */
   setCollapsed: (keys: string[]) => void;
   dismissSuggestion: (key: string) => void;
+  /**
+   * 워크스페이스를 고른다. 저장소 선택은 풀린다. null이면 워크스페이스 선택만 푼다.
+   * 계정 전환은 여기서 하지 않는다(`useSelectRepo().selectWorkspace`가 한다).
+   */
+  setActiveWorkspace: (id: string | null) => WorkspaceResult;
   /** 저장소 목록에서 지운 저장소를 워크스페이스·순서·접힘에서 뺀다. */
   forgetRepos: (repoPaths: string[]) => void;
 }
@@ -86,6 +100,7 @@ const EMPTY_STATE: WorkspacePersistedState = {
   sortModeByAccount: {},
   collapsed: [],
   dismissedSuggestions: [],
+  activeWorkspaceId: null,
 };
 
 // ───────────────────────── 저장값 검증
@@ -154,18 +169,31 @@ const FIELD_SANITIZERS: {
   sortModeByAccount: sanitizeSortModes,
   collapsed: sanitizeKeyList,
   dismissedSuggestions: (v) => (isStringArray(v) ? [...new Set(v)] : []),
+  // 가리키는 워크스페이스가 있는지는 `sanitizeWorkspaceState`가 워크스페이스 목록과 맞춰 본다.
+  activeWorkspaceId: (v) => (typeof v === "string" ? v : null),
 };
 
 /** 저장소에서 읽은 값을 믿지 않고 모양을 확인해 옳은 부분만 남긴다. */
 export function sanitizeWorkspaceState(v: unknown): WorkspacePersistedState {
   const source = isRecord(v) ? v : {};
+  const workspaces = FIELD_SANITIZERS.workspaces(source.workspaces);
+  const activeId = FIELD_SANITIZERS.activeWorkspaceId(source.activeWorkspaceId);
   return {
-    workspaces: FIELD_SANITIZERS.workspaces(source.workspaces),
+    workspaces,
     orderByParent: FIELD_SANITIZERS.orderByParent(source.orderByParent),
     sortModeByAccount: FIELD_SANITIZERS.sortModeByAccount(source.sortModeByAccount),
     collapsed: FIELD_SANITIZERS.collapsed(source.collapsed),
     dismissedSuggestions: FIELD_SANITIZERS.dismissedSuggestions(source.dismissedSuggestions),
+    activeWorkspaceId: workspaces.some((w) => w.id === activeId) ? activeId : null,
   };
+}
+
+/**
+ * 저장값을 지금 버전으로 옮긴다. v1에는 `activeWorkspaceId`가 없으므로 선택 없음이 된다.
+ * 모르는 버전(예: 더 새 앱이 쓴 값)은 모양만 확인해 살린다.
+ */
+export function migrateWorkspaceState(persisted: unknown, _fromVersion: number): WorkspacePersistedState {
+  return sanitizeWorkspaceState(persisted);
 }
 
 // ───────────────────────── 옛 접힘 상태 가져오기
@@ -357,6 +385,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
               ? { ...orderByParent, [acctKey]: nextAcctOrder }
               : orderByParent,
             collapsed: without(state.collapsed, wsKey),
+            activeWorkspaceId: state.activeWorkspaceId === id ? null : state.activeWorkspaceId,
           };
         });
         return { ok: true };
@@ -434,6 +463,17 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             : { dismissedSuggestions: [...state.dismissedSuggestions, key] },
         ),
 
+      setActiveWorkspace: (id) => {
+        if (id !== null && !get().workspaces.some((w) => w.id === id)) {
+          return { ok: false, reason: "unknown-workspace" };
+        }
+        if (get().activeWorkspaceId !== id) set({ activeWorkspaceId: id });
+        // 워크스페이스 id를 먼저 잡고 저장소 선택을 푼다. 저장소 쪽 구독은 「저장소가 잡힐 때」만
+        // 워크스페이스 선택을 풀므로, 이 순서면 서로 되돌리지 않는다.
+        if (id !== null) useRepositoryStore.getState().clearActiveRepo();
+        return { ok: true };
+      },
+
       forgetRepos: (repoPaths) =>
         set((state) => {
           if (repoPaths.length === 0) return state;
@@ -465,9 +505,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         sortModeByAccount: state.sortModeByAccount,
         collapsed: state.collapsed,
         dismissedSuggestions: state.dismissedSuggestions,
+        activeWorkspaceId: state.activeWorkspaceId,
       }),
-      // v1이 첫 버전이다. 모르는 버전(예: 더 새 앱이 쓴 값)은 모양만 확인해 살린다.
-      migrate: (persisted) => sanitizeWorkspaceState(persisted),
+      migrate: (persisted, version) => migrateWorkspaceState(persisted, version),
       merge: (persisted, current) => ({ ...current, ...sanitizeWorkspaceState(persisted) }),
     },
   ),
@@ -498,4 +538,15 @@ useRepositoryStore.subscribe((next, prev) => {
   const nextPaths = new Set(next.repos.map((r) => r.path));
   const removed = prev.repos.map((r) => r.path).filter((p) => !nextPaths.has(p));
   if (removed.length > 0) useWorkspaceStore.getState().forgetRepos(removed);
+});
+
+/**
+ * 저장소를 고르면(워크트리 포함, 어느 화면에서 고르든) 워크스페이스 선택을 푼다.
+ * 선택은 저장소와 워크스페이스 중 하나만 잡힌다. 반대 방향은 `setActiveWorkspace`가 맡는다.
+ */
+useRepositoryStore.subscribe((next, prev) => {
+  if (next.activeRepoPath === prev.activeRepoPath || next.activeRepoPath === null) return;
+  if (useWorkspaceStore.getState().activeWorkspaceId !== null) {
+    useWorkspaceStore.getState().setActiveWorkspace(null);
+  }
 });

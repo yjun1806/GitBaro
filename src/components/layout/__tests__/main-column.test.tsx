@@ -214,3 +214,29 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getByRole("tablist")).toBeTruthy();
   });
 });
+
+describe("MainColumn — workspace scope (W4-T1)", () => {
+  it("mounts no repository-only screen while a workspace is picked, and back again", async () => {
+    const { useWorkspaceStore } = await import("@/stores/workspace");
+    useWorkspaceStore.setState({
+      // 원격도 계정도 없는 저장소는 사이드바에서 "Local" 아래에 있다. 워크스페이스도 그 계정 안에 둔다.
+      workspaces: [{ id: "w1", name: "xames", accountKey: "local", repoPaths: [repo.path] }],
+      activeWorkspaceId: null,
+    });
+    act(() => {
+      useWorkspaceStore.getState().setActiveWorkspace("w1");
+    });
+    expect(useRepositoryStore.getState().activeRepoPath).toBeNull();
+
+    renderShell();
+    expect(screen.getByText("xames")).toBeTruthy();
+    expect(screen.getByText(/^1 repository\./)).toBeTruthy();
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByText("changes-view")).toBeNull();
+    expect(screen.queryByText("No repository selected")).toBeNull();
+
+    act(() => useRepositoryStore.getState().setActiveRepo(repo.path));
+    expect(useWorkspaceStore.getState().activeWorkspaceId).toBeNull();
+    expect(screen.getByRole("tablist")).toBeTruthy();
+  });
+});
