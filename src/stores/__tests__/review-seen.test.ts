@@ -1,0 +1,189 @@
+// @vitest-environment jsdom
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  REVIEW_SEEN_STORAGE_KEY,
+  REVIEW_SEEN_VERSION,
+  baselinesFromScan,
+  buildCountInputs,
+  migrateReviewSeen,
+  useReviewSeenStore,
+} from "@/stores/review-seen";
+import { mergeReviewStatus } from "@/hooks/useReviewStatus";
+import type { RepoReviewStatus, ReviewWorktree } from "@/types";
+
+const ALPHA = "/repos/alpha";
+const ALPHA_WT = "/repos/alpha-wt/feature";
+const BETA = "/repos/beta";
+const BETA_WT = "/repos/beta-wt/agent";
+
+function wt(path: string, isMain: boolean, headOid: string | null, branch: string | null = "main"): ReviewWorktree {
+  return { path, isMain, headOid, branch };
+}
+
+function repo(repoPath: string, worktrees: ReviewWorktree[]): RepoReviewStatus {
+  return { repoPath, worktrees };
+}
+
+function state() {
+  return useReviewSeenStore.getState();
+}
+
+describe("useReviewSeenStore", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useReviewSeenStore.setState({ entries: {}, initialScanDone: false });
+  });
+
+  it("첫 실행 스캔은 그때 있는 모든 워크트리의 HEAD를 기준선으로 잡는다", () => {
+    state().applyScan(
+      [repo(ALPHA, [wt(ALPHA, true, "a1"), wt(ALPHA_WT, false, "f1", "feature")])],
+      1000,
+    );
+
+    expect(state().initialScanDone).toBe(true);
+    expect(state().entries).toEqual({
+      [ALPHA]: { branch: "main", oid: "a1", seenAt: 1000 },
+      [ALPHA_WT]: { branch: "feature", oid: "f1", seenAt: 1000 },
+    });
+  });
+
+  it("워크트리가 하나도 없는 스캔은 첫 실행으로 치지 않는다", () => {
+    state().applyScan([], 1000);
+    expect(state().initialScanDone).toBe(false);
+  });
+
+  it("첫 실행 뒤 새로 생긴 링크된 워크트리는 기준선 없이 남는다", () => {
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1")])], 1000);
+    state().applyScan(
+      [repo(ALPHA, [wt(ALPHA, true, "a2"), wt(ALPHA_WT, false, "f1", "feature")])],
+      2000,
+    );
+
+    expect(state().entries[ALPHA_WT]).toBeUndefined();
+    // 이미 있던 기준선은 스캔이 옮기지 않는다.
+    expect(state().entries[ALPHA]).toEqual({ branch: "main", oid: "a1", seenAt: 1000 });
+  });
+
+  it("첫 실행 뒤 추가된 저장소는 메인 작업 트리만 현재 HEAD를 기준선으로 잡는다", () => {
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1")])], 1000);
+    state().applyScan(
+      [
+        repo(ALPHA, [wt(ALPHA, true, "a1")]),
+        repo(BETA, [wt(BETA, true, "b1"), wt(BETA_WT, false, "x1", "agent")]),
+      ],
+      2000,
+    );
+
+    expect(state().entries[BETA]).toEqual({ branch: "main", oid: "b1", seenAt: 2000 });
+    expect(state().entries[BETA_WT]).toBeUndefined();
+  });
+
+  it("HEAD가 없는 워크트리(커밋 없는 저장소)는 기준선을 잡지 않는다", () => {
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, null)])], 1000);
+    expect(state().entries).toEqual({});
+    expect(state().initialScanDone).toBe(true);
+  });
+
+  it("바뀐 게 없는 스캔은 상태 객체를 새로 만들지 않는다", () => {
+    const scan = [repo(ALPHA, [wt(ALPHA, true, "a1"), wt(ALPHA_WT, false, "f1")])];
+    state().applyScan(scan, 1000);
+    useReviewSeenStore.setState({ entries: { [ALPHA]: state().entries[ALPHA] } });
+    const before = state().entries;
+    state().applyScan(scan, 2000);
+    expect(state().entries).toBe(before);
+    expect(baselinesFromScan({ entries: before, initialScanDone: true }, scan, 3000)).toBeNull();
+  });
+
+  it("markSeen은 기준선을 지금 HEAD와 브랜치로 옮긴다", () => {
+    state().markSeen(ALPHA_WT, "f9", "feature");
+    const entry = state().entries[ALPHA_WT];
+    expect(entry.oid).toBe("f9");
+    expect(entry.branch).toBe("feature");
+    expect(entry.seenAt).toBeGreaterThan(0);
+  });
+
+  it("v1 저장값을 그대로 복원한다", async () => {
+    localStorage.setItem(
+      REVIEW_SEEN_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          entries: { [ALPHA]: { branch: "main", oid: "a1", seenAt: 1000 } },
+          initialScanDone: true,
+        },
+        version: 1,
+      }),
+    );
+
+    await useReviewSeenStore.persist.rehydrate();
+
+    expect(state().initialScanDone).toBe(true);
+    expect(state().entries).toEqual({ [ALPHA]: { branch: "main", oid: "a1", seenAt: 1000 } });
+  });
+
+  it("저장할 때 v1 형식으로 쓴다", () => {
+    state().markSeen(ALPHA, "a1", null);
+    const saved = JSON.parse(localStorage.getItem(REVIEW_SEEN_STORAGE_KEY) ?? "{}");
+    expect(saved.version).toBe(REVIEW_SEEN_VERSION);
+    expect(Object.keys(saved.state).sort()).toEqual(["entries", "initialScanDone"]);
+    expect(saved.state.entries[ALPHA]).toMatchObject({ branch: null, oid: "a1" });
+  });
+
+  it("깨진 항목은 복원하지 않는다", async () => {
+    localStorage.setItem(
+      REVIEW_SEEN_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          entries: {
+            [ALPHA]: { branch: "main", oid: "a1", seenAt: 1000 },
+            [BETA]: { branch: 3, oid: "b1", seenAt: 1000 },
+            [BETA_WT]: { branch: "x", oid: "", seenAt: 1000 },
+          },
+          initialScanDone: "yes",
+        },
+        version: 1,
+      }),
+    );
+
+    await useReviewSeenStore.persist.rehydrate();
+
+    expect(Object.keys(state().entries)).toEqual([ALPHA]);
+    expect(state().initialScanDone).toBe(false);
+  });
+});
+
+describe("migrateReviewSeen", () => {
+  it("알 수 없는 버전의 값에서 알아볼 수 있는 항목만 남긴다", () => {
+    expect(
+      migrateReviewSeen(
+        { entries: { [ALPHA]: { branch: null, oid: "a1", seenAt: 5 } }, initialScanDone: true },
+        0,
+      ),
+    ).toEqual({ entries: { [ALPHA]: { branch: null, oid: "a1", seenAt: 5 } }, initialScanDone: true });
+    expect(migrateReviewSeen(null, 0)).toEqual({ entries: {}, initialScanDone: false });
+  });
+});
+
+describe("buildCountInputs", () => {
+  it("기준선이 있으면 함께 넘기고, 없으면 경로만 넘긴다", () => {
+    const repos = [
+      repo(ALPHA, [wt(ALPHA, true, "a2"), wt(ALPHA_WT, false, "f1", "feature"), wt("/empty", false, null)]),
+    ];
+    expect(
+      buildCountInputs(repos, { [ALPHA]: { branch: "main", oid: "a1", seenAt: 1000 } }),
+    ).toEqual([
+      { path: ALPHA, oid: "a1", seenAt: 1000, branch: "main" },
+      { path: ALPHA_WT },
+    ]);
+  });
+});
+
+describe("mergeReviewStatus", () => {
+  it("스캔과 개수를 경로별로 합치고, 못 센 워크트리는 null로 둔다", () => {
+    const repos = [repo(ALPHA, [wt(ALPHA, true, "a2"), wt(ALPHA_WT, false, "f1", "feature")])];
+    const merged = mergeReviewStatus(repos, [
+      { path: ALPHA, headOid: "a2", newCount: 3, basis: "oid" },
+    ]);
+    expect(merged[ALPHA]).toMatchObject({ repoPath: ALPHA, newCount: 3, basis: "oid", isMain: true });
+    expect(merged[ALPHA_WT]).toMatchObject({ repoPath: ALPHA, newCount: null, basis: null });
+  });
+});

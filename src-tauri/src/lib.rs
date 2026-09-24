@@ -112,6 +112,9 @@ pub fn run() {
             commands::actions::get_workflow_run_jobs,
             commands::watch::start_repo_watch,
             commands::watch::stop_repo_watch,
+            // W1-T4
+            commands::review::review_status,
+            commands::review::count_new_commits,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");

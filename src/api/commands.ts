@@ -854,3 +854,17 @@ export async function startRepoWatch(repoPath: string, token: number): Promise<v
 export async function stopRepoWatch(token: number): Promise<void> {
   return invoke("stop_repo_watch", { token });
 }
+
+// ── W1-T4 새 커밋 기준선 ──
+
+import type { RepoReviewStatus, SeenRecordInput, NewCommitCount } from "@/types";
+
+/** 저장소마다 워크트리 목록(메인 포함)과 각 워크트리의 브랜치·HEAD. */
+export async function reviewStatus(repoPaths: string[]): Promise<RepoReviewStatus[]> {
+  return invoke("review_status", { repoPaths });
+}
+
+/** 워크트리마다 기준선 뒤의 새 커밋 수. */
+export async function countNewCommits(entries: SeenRecordInput[]): Promise<NewCommitCount[]> {
+  return invoke("count_new_commits", { entries });
+}

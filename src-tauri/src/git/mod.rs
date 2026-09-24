@@ -18,3 +18,5 @@ pub use engine::{
     DiffOutput, DiffSpec, FileDiff, FileStatus, GitEngine, GitRemoteEngine, LogOptions,
     MergeResult, RemoteInfo, StashEntry, StatusEntry,
 };
+// W1-T4
+pub mod new_commits;
