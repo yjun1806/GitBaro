@@ -425,6 +425,12 @@ struct SyncTarget {
     upstream: Option<(String, String)>,
     /// 저장소에 등록된 원격 이름.
     remotes: Vec<String>,
+    /// `push.default` 값. `upstream`(또는 옛 이름 `tracking`)일 때만 이름이 다른
+    /// 추적 브랜치로 push한다.
+    push_default: Option<String>,
+    /// `branch.<name>.rebase`나 `pull.rebase`가 설정되어 있는지.
+    /// 설정되어 있으면 기본 pull은 방식 플래그를 넘기지 않고 설정을 따른다.
+    pull_mode_configured: bool,
 }
 
 fn remote_error(code: &str) -> AppError {
@@ -469,21 +475,49 @@ impl SyncTarget {
         }
     }
 
-    /// push 대상 `(원격, refspec)`. 추적 브랜치가 있으면 그 이름으로 올린다
-    /// (`local:upstream`). 없으면 기본 원격에 같은 이름으로 게시한다.
+    /// fetch할 원격 목록: 현재 브랜치의 추적 원격과 기본 원격(`origin`).
+    /// fork에서 `main`이 `upstream/main`을 추적해도 `origin`을 추적하는 다른
+    /// 브랜치들의 앞섬·뒤처짐과 fast-forward가 멈추지 않게 둘 다 받는다.
+    /// 기본 원격을 고를 수 없으면(원격 여러 개, origin 없음) 추적 원격만 받는다.
+    fn fetch_remotes(&self) -> Result<Vec<String>, AppError> {
+        let upstream = self.upstream_remote().map(str::to_string);
+        let default = self.default_remote();
+        match (upstream, default) {
+            (Some(up), Ok(def)) if up != def => Ok(vec![up, def]),
+            (Some(up), _) => Ok(vec![up]),
+            (None, default) => default.map(|def| vec![def]),
+        }
+    }
+
+    /// push 대상 `(원격, refspec)`.
+    ///
+    /// 추적 브랜치 이름이 로컬 이름과 같으면 그 원격에 올린다. 이름이 다르면
+    /// (`git checkout -b feature origin/main`) git 기본값(`push.default=simple`)처럼
+    /// 추적 브랜치에 올리지 않고, 기본 원격에 같은 이름으로 게시한다. 그러지 않으면
+    /// feature 커밋이 확인 없이 원격 main에 올라간다. `push.default=upstream`을
+    /// 직접 설정한 경우에만 `local:upstream`으로 올린다.
     fn push_target(&self) -> Result<(String, String), AppError> {
         let branch = self.branch.as_ref().ok_or_else(detached_head_error)?;
-        match (&self.upstream, self.upstream_remote()) {
-            (Some((_, merge)), Some(remote)) => {
-                let upstream_name = merge.strip_prefix("refs/heads/").unwrap_or(merge);
-                let refspec = if upstream_name == branch {
-                    branch.clone()
-                } else {
-                    format!("{}:{}", branch, merge)
-                };
-                Ok((remote.to_string(), refspec))
+        if let (Some((_, merge)), Some(remote)) = (&self.upstream, self.upstream_remote()) {
+            let upstream_name = merge.strip_prefix("refs/heads/").unwrap_or(merge);
+            if upstream_name == branch {
+                return Ok((remote.to_string(), branch.clone()));
             }
-            _ => Ok((self.default_remote()?, branch.clone())),
+            if matches!(self.push_default.as_deref(), Some("upstream" | "tracking")) {
+                return Ok((remote.to_string(), format!("{}:{}", branch, merge)));
+            }
+        }
+        Ok((self.default_remote()?, branch.clone()))
+    }
+
+    /// pull 방식. 화면에서 고른 방식이 있으면 그대로 쓴다. 없으면 사용자의
+    /// `pull.rebase` 설정을 따르고(플래그 없음), 설정이 없을 때만 `--no-rebase`를
+    /// 넘겨 "Need to specify how to reconcile divergent branches" 실패를 막는다.
+    fn pull_rebase(&self, requested: Option<bool>) -> Option<bool> {
+        match requested {
+            Some(rebase) => Some(rebase),
+            None if self.pull_mode_configured => None,
+            None => Some(false),
         }
     }
 
@@ -517,10 +551,18 @@ async fn resolve_sync_target(repo_path: &str) -> Result<SyncTarget, AppError> {
             .flatten()
             .map(|r| r.to_string())
             .collect();
+        let push_default = config.get_string("push.default").ok();
+        let is_set = |key: &str| config.get_entry(key).is_ok();
+        let pull_mode_configured = is_set("pull.rebase")
+            || branch
+                .as_ref()
+                .is_some_and(|name| is_set(&format!("branch.{}.rebase", name)));
         Ok::<_, AppError>(SyncTarget {
             branch,
             upstream,
             remotes,
+            push_default,
+            pull_mode_configured,
         })
     })
     .await
@@ -536,21 +578,26 @@ pub async fn git_fetch(
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
-    let remote = resolve_sync_target(&repo_path).await?.fetch_remote()?;
+    let remotes = resolve_sync_target(&repo_path).await?.fetch_remotes()?;
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
         .with_automatic(automatic.unwrap_or(false));
 
-    match engine.fetch(&remote, &token).await {
-        Ok(()) => {
-            tracing::info!("Fetched {} for {}", remote, repo_path);
+    let mut token = token;
+    let mut refreshed = false;
+    for remote in &remotes {
+        match engine.fetch(remote, &token).await {
+            Ok(()) => {
+                tracing::info!("Fetched {} for {}", remote, repo_path);
+            }
+            Err(e) if is_auth_error(&e) && !refreshed => {
+                tracing::warn!("Fetch auth failed, refreshing token for {}", account_id);
+                token = token_store.refresh_token(&account_id).await?;
+                refreshed = true;
+                engine.fetch(remote, &token).await?;
+                tracing::info!("Fetched {} for {} (after token refresh)", remote, repo_path);
+            }
+            Err(e) => return Err(e),
         }
-        Err(e) if is_auth_error(&e) => {
-            tracing::warn!("Fetch auth failed, refreshing token for {}", account_id);
-            let new_token = token_store.refresh_token(&account_id).await?;
-            engine.fetch(&remote, &new_token).await?;
-            tracing::info!("Fetched {} for {} (after token refresh)", remote, repo_path);
-        }
-        Err(e) => return Err(e),
     }
 
     // GitHub Desktop parity: advance eligible non-current local branches so a
@@ -660,6 +707,20 @@ pub async fn git_push(
     }
 }
 
+/// push가 실제로 올릴 곳. force push 확인 창이 실행될 명령을 그대로 보여주는 데 쓴다.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PushTarget {
+    pub remote: String,
+    pub refspec: String,
+}
+
+#[tauri::command]
+pub async fn get_push_target(repo_path: String) -> Result<PushTarget, AppError> {
+    let (remote, refspec) = resolve_sync_target(&repo_path).await?.push_target()?;
+    Ok(PushTarget { remote, refspec })
+}
+
 /// Tag names present on the branch's remote, used to mark local-only tags in
 /// the history timeline. Read-only network call; retries once on auth failure.
 #[tauri::command]
@@ -693,12 +754,13 @@ pub async fn git_pull(
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
-    let (remote, merge_ref) = resolve_sync_target(&repo_path).await?.pull_target()?;
+    let target = resolve_sync_target(&repo_path).await?;
+    let (remote, merge_ref) = target.pull_target()?;
+    let rebase_flag = target.pull_rebase(rebase);
     let identity = resolve_commit_identity(Some(&account_id)).await;
 
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
         .with_identity(identity);
-    let rebase_flag = rebase.unwrap_or(false);
 
     match engine.pull(&remote, &merge_ref, &token, rebase_flag).await {
         Ok(()) => {
@@ -912,6 +974,8 @@ mod tests {
             branch: branch.map(String::from),
             upstream: upstream.map(|(r, m)| (r.to_string(), m.to_string())),
             remotes: remotes.iter().map(|r| r.to_string()).collect(),
+            push_default: None,
+            pull_mode_configured: false,
         }
     }
 
@@ -923,14 +987,43 @@ mod tests {
     }
 
     #[test]
-    fn push_uses_the_tracked_remote_and_branch_name() {
-        let t = target(Some("feature"), Some(("upstream", "refs/heads/main")), &["origin", "upstream"]);
+    fn push_uses_the_tracked_remote_when_the_names_match() {
+        let same = target(Some("main"), Some(("upstream", "refs/heads/main")), &["origin", "upstream"]);
+        assert_eq!(same.push_target().unwrap(), ("upstream".to_string(), "main".to_string()));
+    }
+
+    /// `git checkout -b feature origin/main`으로 만든 브랜치는 main을 추적한다.
+    /// git 기본값(push.default=simple)처럼 main에 올리지 않고 feature로 게시해야 한다.
+    #[test]
+    fn push_never_lands_on_a_differently_named_upstream_by_default() {
+        let t = target(Some("feature"), Some(("origin", "refs/heads/main")), &["origin"]);
+        assert_eq!(t.push_target().unwrap(), ("origin".to_string(), "feature".to_string()));
+        let fork = target(Some("feature"), Some(("upstream", "refs/heads/main")), &["origin", "upstream"]);
+        assert_eq!(fork.push_target().unwrap(), ("origin".to_string(), "feature".to_string()));
+        let simple = SyncTarget { push_default: Some("simple".into()), ..t.clone() };
+        assert_eq!(simple.push_target().unwrap(), ("origin".to_string(), "feature".to_string()));
+    }
+
+    #[test]
+    fn push_default_upstream_pushes_to_the_tracked_name() {
+        let t = SyncTarget {
+            push_default: Some("upstream".into()),
+            ..target(Some("feature"), Some(("upstream", "refs/heads/main")), &["origin", "upstream"])
+        };
         assert_eq!(
             t.push_target().unwrap(),
             ("upstream".to_string(), "feature:refs/heads/main".to_string())
         );
-        let same = target(Some("main"), Some(("origin", "refs/heads/main")), &["origin"]);
-        assert_eq!(same.push_target().unwrap(), ("origin".to_string(), "main".to_string()));
+    }
+
+    #[test]
+    fn default_pull_follows_the_users_rebase_setting() {
+        let unset = target(Some("main"), Some(("origin", "refs/heads/main")), &["origin"]);
+        assert_eq!(unset.pull_rebase(None), Some(false));
+        assert_eq!(unset.pull_rebase(Some(true)), Some(true));
+        let configured = SyncTarget { pull_mode_configured: true, ..unset };
+        assert_eq!(configured.pull_rebase(None), None);
+        assert_eq!(configured.pull_rebase(Some(false)), Some(false));
     }
 
     #[test]
@@ -970,6 +1063,20 @@ mod tests {
         assert_eq!(detached.fetch_remote().unwrap(), "github");
     }
 
+    /// fork에서 main이 upstream/main을 추적해도 origin을 계속 받아야 한다.
+    #[test]
+    fn fetch_covers_the_upstream_remote_and_origin() {
+        let fork = target(Some("main"), Some(("upstream", "refs/heads/main")), &["origin", "upstream"]);
+        assert_eq!(fork.fetch_remotes().unwrap(), vec!["upstream", "origin"]);
+        let plain = target(Some("main"), Some(("origin", "refs/heads/main")), &["origin"]);
+        assert_eq!(plain.fetch_remotes().unwrap(), vec!["origin"]);
+        let no_default = target(Some("main"), Some(("a", "refs/heads/main")), &["a", "b"]);
+        assert_eq!(no_default.fetch_remotes().unwrap(), vec!["a"]);
+        let untracked = target(Some("x"), None, &["origin"]);
+        assert_eq!(untracked.fetch_remotes().unwrap(), vec!["origin"]);
+        assert!(target(Some("x"), None, &["a", "b"]).fetch_remotes().is_err());
+    }
+
     /// origin이 없고, 로컬 브랜치 이름과 추적 브랜치 이름이 다른 저장소에서
     /// 브랜치 설정을 그대로 읽어야 한다.
     #[tokio::test]
@@ -989,15 +1096,27 @@ mod tests {
         git(&repo, &["remote", "add", "upstream", tmp.join("remote.git").to_str().unwrap()]);
         git(&repo, &["push", "-q", "upstream", "work:main"]);
         git(&repo, &["branch", "-q", "--set-upstream-to=upstream/main"]);
+        // 개발자 전역 설정과 무관하게 git 기본값으로 고정한다.
+        git(&repo, &["config", "push.default", "simple"]);
 
         let t = resolve_sync_target(repo.to_str().unwrap()).await;
+        git(&repo, &["config", "push.default", "upstream"]);
+        git(&repo, &["config", "branch.work.rebase", "true"]);
+        let configured = resolve_sync_target(repo.to_str().unwrap()).await;
         let _ = std::fs::remove_dir_all(&tmp);
         let t = t.expect("sync target 조회 실패");
+        let configured = configured.expect("sync target 조회 실패");
 
         assert_eq!(t.branch.as_deref(), Some("work"));
         assert_eq!(t.upstream, Some(("upstream".to_string(), "refs/heads/main".to_string())));
-        assert_eq!(t.push_target().unwrap(), ("upstream".to_string(), "work:refs/heads/main".to_string()));
+        assert_eq!(t.push_target().unwrap(), ("upstream".to_string(), "work".to_string()));
         assert_eq!(t.fetch_remote().unwrap(), "upstream");
+        assert_eq!(
+            configured.push_target().unwrap(),
+            ("upstream".to_string(), "work:refs/heads/main".to_string())
+        );
+        assert!(configured.pull_mode_configured);
+        assert_eq!(configured.pull_rebase(None), None);
     }
 
     #[test]

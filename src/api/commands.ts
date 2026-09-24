@@ -23,6 +23,7 @@ import type {
   WorktreeInfo,
   StashEntry,
   StashShowResult,
+  PushTarget,
 } from "@/types";
 
 // Git operations — backend returns indexStatus/worktreeStatus separately,
@@ -164,10 +165,16 @@ export async function gitPush(
   return invoke("git_push", { repoPath, accountId, force });
 }
 
+/** `rebase`를 생략하면 사용자의 `pull.rebase` 설정을 따른다(없으면 merge). */
+/** push가 실제로 올릴 원격과 refspec. force push 확인 창에 보여준다. */
+export async function getPushTarget(repoPath: string): Promise<PushTarget> {
+  return invoke("get_push_target", { repoPath });
+}
+
 export async function gitPull(
   repoPath: string,
   accountId: string,
-  rebase = false,
+  rebase?: boolean,
 ): Promise<void> {
   return invoke("git_pull", { repoPath, accountId, rebase });
 }

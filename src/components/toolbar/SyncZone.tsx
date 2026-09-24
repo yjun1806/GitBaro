@@ -12,7 +12,8 @@ import { useUIStore } from "@/stores/ui";
 import { useActivityStore } from "@/stores/activity";
 import { useSyncStore, type SyncAction } from "@/stores/sync";
 import { useBranches, useTokenValidation } from "@/api/queries";
-import { gitFetch, gitPush, gitPull } from "@/api/commands";
+import { gitFetch, gitPush, gitPull, getPushTarget } from "@/api/commands";
+import type { PushTarget } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
@@ -67,7 +68,8 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const startSync = useSyncStore((s) => s.startSync);
   const finishSync = useSyncStore((s) => s.finishSync);
   const markFetched = useSyncStore((s) => s.markFetched);
-  const [showForcePushConfirm, setShowForcePushConfirm] = useState(false);
+  // force push 확인 창에 보여줄 실제 push 대상. null이면 창이 닫혀 있다.
+  const [forcePushTarget, setForcePushTarget] = useState<PushTarget | null>(null);
 
   const isSyncing = syncingAction !== null;
 
@@ -75,9 +77,6 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const ahead = headBranch?.aheadBehind?.ahead ?? 0;
   const behind = headBranch?.aheadBehind?.behind ?? 0;
   const hasUpstream = headBranch?.upstream != null;
-  const headBranchName = headBranch?.name ?? "";
-  // 확인 창에 보여줄 원격. 추적 브랜치("upstream/main")의 원격을 따르고, 없으면 origin으로 게시한다.
-  const pushRemote = headBranch?.upstream?.split("/")[0] ?? "origin";
 
   const previewBranch = useUIStore((s) => s.previewBranch);
   const canSync = tokenStatus?.valid === true && tokenStatus?.canPush === true;
@@ -182,7 +181,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
     await runSync("fetch", (path, account) => gitFetch(path, account), t("sync.fetchCompleted"));
   };
 
-  const handlePull = async (rebase = false) => {
+  const handlePull = async (rebase?: boolean) => {
     if (isSyncing) return;
     await runSync(
       "pull",
@@ -194,7 +193,14 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const handlePush = async (force = false) => {
     if (!activeRepoPath || !accountId || isSyncing) return;
     if (force) {
-      setShowForcePushConfirm(true);
+      // 확인 창에는 백엔드가 실제로 실행할 원격과 refspec을 보여준다.
+      try {
+        setForcePushTarget(await getPushTarget(activeRepoPath));
+      } catch (err) {
+        const msg = getErrorMessage(err);
+        const remoteKey = remoteErrorKey(msg);
+        addToast(remoteKey ? t(remoteKey) : t(FAILURE_KEYS.push, { error: msg }), "error");
+      }
       return;
     }
     await runSync(
@@ -310,14 +316,14 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
         />
       )}
 
-      {showForcePushConfirm && (
+      {forcePushTarget && (
         <ConfirmCommandDialog
           title={t("sync.forcePushConfirmTitle")}
-          command={`git push --force-with-lease ${pushRemote} ${headBranchName}`}
+          command={`git push --force-with-lease ${forcePushTarget.remote} ${forcePushTarget.refspec}`}
           warnings={[t("sync.forcePushWarning")]}
           confirmVariant="destructive"
           onConfirm={handleForcePushConfirmed}
-          onClose={() => setShowForcePushConfirm(false)}
+          onClose={() => setForcePushTarget(null)}
         />
       )}
     </div>

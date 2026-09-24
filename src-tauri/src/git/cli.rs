@@ -1069,20 +1069,24 @@ impl GitRemoteEngine for GitCliEngine {
         remote: &str,
         branch: &str,
         token: &str,
-        rebase: bool,
+        rebase: Option<bool>,
     ) -> Result<(), AppError> {
         let askpass = AskpassScript::create(token).await?;
 
-        // 방식을 늘 명시한다. 아무것도 넘기지 않으면 `pull.rebase`를 설정하지 않은
-        // 사용자(git 기본값)는 갈라진 브랜치에서 "Need to specify how to reconcile
-        // divergent branches"로 실패한다. GitHub Desktop도 같은 이유로 명시한다.
-        let mode = pull_mode_flag(rebase);
-        let args = ["-c", "credential.helper=", "pull", mode, remote, branch];
+        // 방식은 호출부가 정한다(`SyncTarget::pull_rebase`). `pull.rebase`를 설정하지
+        // 않은 사용자에게는 `--no-rebase`가 넘어와 "Need to specify how to reconcile
+        // divergent branches" 실패를 막고, 설정한 사용자에게는 `None`이 넘어와
+        // 명령줄 플래그가 설정을 덮어쓰지 않는다(GitHub Desktop과 같은 방식).
+        let mut pull_args: Vec<&str> = vec!["pull"];
+        pull_args.extend(pull_mode_flag(rebase));
+        pull_args.extend([remote, branch]);
+        let mut args = vec!["-c", "credential.helper="];
+        args.extend(&pull_args);
 
         let id = Uuid::new_v4().to_string();
         let start = Instant::now();
         let started_at = chrono::Utc::now().timestamp_millis();
-        let display_args = ["pull", mode, remote, branch];
+        let display_args = pull_args;
 
         tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
         self.emit_command_start(&id, &display_args, "pull", started_at);
@@ -1323,13 +1327,9 @@ fn check_output(output: std::process::Output) -> Result<(), AppError> {
     }
 }
 
-/// `git pull`에 넘길 병합 방식 플래그.
-fn pull_mode_flag(rebase: bool) -> &'static str {
-    if rebase {
-        "--rebase"
-    } else {
-        "--no-rebase"
-    }
+/// `git pull`에 넘길 병합 방식 플래그. `None`이면 넘기지 않고 git 설정을 따른다.
+fn pull_mode_flag(rebase: Option<bool>) -> Option<&'static str> {
+    rebase.map(|rebase| if rebase { "--rebase" } else { "--no-rebase" })
 }
 
 /// 실패한 git 명령의 출력을 `AppError`로 바꾼다. stderr와 stdout을 함께 본다.
@@ -1698,9 +1698,10 @@ fatal: Authentication failed for 'https://github.com/owner/repo.git/'
     }
 
     #[test]
-    fn pull_always_names_a_reconcile_mode() {
-        assert_eq!(pull_mode_flag(false), "--no-rebase");
-        assert_eq!(pull_mode_flag(true), "--rebase");
+    fn pull_mode_flag_is_omitted_only_when_unrequested() {
+        assert_eq!(pull_mode_flag(Some(false)), Some("--no-rebase"));
+        assert_eq!(pull_mode_flag(Some(true)), Some("--rebase"));
+        assert_eq!(pull_mode_flag(None), None);
     }
 
     #[test]
@@ -1803,7 +1804,7 @@ fatal: Authentication failed for 'https://github.com/owner/repo.git/'
         let engine = GitCliEngine::new(&a)
             .with_identity(Some(("octo".into(), "octo@example.com".into())));
 
-        let result = engine.pull("origin", "refs/heads/main", "unused-token", false).await;
+        let result = engine.pull("origin", "refs/heads/main", "unused-token", Some(false)).await;
         let author = git(&a, &["log", "-1", "--format=%an <%ae>|%cn <%ce>|%P"]);
         let _ = std::fs::remove_dir_all(&tmp);
 
@@ -1814,12 +1815,27 @@ fatal: Authentication failed for 'https://github.com/owner/repo.git/'
         assert_eq!(parts[2].split(' ').count(), 2, "merge 커밋이 아님");
     }
 
+    /// 방식을 넘기지 않으면 사용자의 `pull.rebase=true`를 따라 rebase해야 한다.
+    #[tokio::test]
+    async fn pull_without_a_mode_follows_pull_rebase_config() {
+        let (tmp, a) = diverged_clone("pull-config", false);
+        git(&a, &["config", "pull.rebase", "true"]);
+        let engine = GitCliEngine::new(&a);
+
+        let result = engine.pull("origin", "refs/heads/main", "unused-token", None).await;
+        let parents = git(&a, &["log", "-1", "--format=%P"]);
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        result.expect("pull.rebase=true pull이 실패함");
+        assert_eq!(parents.split(' ').count(), 1, "rebase 대신 merge 커밋이 생김");
+    }
+
     #[tokio::test]
     async fn pull_conflict_surfaces_as_merge_conflict() {
         let (tmp, a) = diverged_clone("pull-conflict", true);
         let engine = GitCliEngine::new(&a);
 
-        let result = engine.pull("origin", "refs/heads/main", "unused-token", false).await;
+        let result = engine.pull("origin", "refs/heads/main", "unused-token", Some(false)).await;
         let merging = a.join(".git/MERGE_HEAD").exists();
         let _ = std::fs::remove_dir_all(&tmp);
 

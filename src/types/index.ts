@@ -20,6 +20,12 @@ export interface AppError {
   message: string;
 }
 
+/** push가 실제로 올릴 곳 (`git push <remote> <refspec>`). */
+export interface PushTarget {
+  remote: string;
+  refspec: string;
+}
+
 export interface GitHubAccount {
   id: string;
   username: string;
