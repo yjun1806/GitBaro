@@ -1,3 +1,3 @@
 pub mod fs_events;
 
-pub use fs_events::RepoWatcher;
+pub use fs_events::{ChangeKind, RepoWatcher, WatchTargets};

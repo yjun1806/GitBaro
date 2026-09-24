@@ -1,10 +1,11 @@
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use tauri::Emitter;
 
 use crate::error::AppError;
-use crate::events::{FsChangeEvent, FS_CHANGE};
-use crate::watcher::RepoWatcher;
+use crate::events::{FsChangeEvent, FS_CHANGE, GIT_DIR_CHANGE};
+use crate::watcher::{ChangeKind, RepoWatcher, WatchTargets};
 
 /// 활성 저장소 감시자 하나를 들고 있다. 저장소를 전환하면 이전 감시자를 버리고
 /// (drop 하면 FSEvents 핸들러가 해제된다) 새로 시작한다.
@@ -44,8 +45,35 @@ impl WatcherState {
     }
 }
 
-/// Start watching `repo_path` for working-tree changes. Emits `fs:change` events
-/// (debounced) that the frontend uses to refresh status without tight polling.
+/// Resolve the working tree and git dir(s) of `repo_path`. A linked worktree
+/// keeps HEAD/index in its own git dir and refs in the main repo's common dir,
+/// neither of which lives inside the working tree.
+fn watch_targets(repo_path: &Path) -> WatchTargets {
+    match git2::Repository::open(repo_path) {
+        Ok(repo) => {
+            let workdir = repo.workdir().unwrap_or(repo_path);
+            WatchTargets::new(workdir, repo.path(), &common_dir(repo.path()))
+        }
+        Err(e) => {
+            tracing::warn!("Watcher could not open {:?} as a repository: {}", repo_path, e);
+            let git_dir = repo_path.join(".git");
+            WatchTargets::new(repo_path, &git_dir, &git_dir)
+        }
+    }
+}
+
+/// The common dir of a linked worktree is named by the `commondir` file in its
+/// git dir (relative to it). A regular repo has none; its git dir is the common
+/// dir. (git2 0.19 does not expose `git_repository_commondir`.)
+fn common_dir(git_dir: &Path) -> PathBuf {
+    std::fs::read_to_string(git_dir.join("commondir"))
+        .map(|rel| git_dir.join(rel.trim()))
+        .unwrap_or_else(|_| git_dir.to_path_buf())
+}
+
+/// Start watching `repo_path`. Emits `fs:change` for working-tree changes and
+/// `fs:git-dir-change` for git metadata changes (commit, checkout, stage,
+/// merge/rebase state — including ones made outside the app), both debounced.
 ///
 /// `token` 은 프론트엔드가 매기는 단조 증가 세대 번호다.
 #[tauri::command]
@@ -55,12 +83,20 @@ pub async fn start_repo_watch(
     app_handle: tauri::AppHandle,
     state: tauri::State<'_, WatcherState>,
 ) -> Result<(), AppError> {
-    let emit_path = repo_path.clone();
-    let watcher = RepoWatcher::new(std::path::PathBuf::from(&repo_path), move |_event| {
+    let path = PathBuf::from(&repo_path);
+    let targets = tokio::task::spawn_blocking(move || watch_targets(&path))
+        .await
+        .map_err(|e| AppError::Channel(e.to_string()))?;
+
+    let watcher = RepoWatcher::new(targets, move |kind| {
+        let event = match kind {
+            ChangeKind::WorkTree => FS_CHANGE,
+            ChangeKind::GitDir => GIT_DIR_CHANGE,
+        };
         let _ = app_handle.emit(
-            FS_CHANGE,
+            event,
             FsChangeEvent {
-                repo_path: emit_path.clone(),
+                repo_path: repo_path.clone(),
             },
         );
     })?;
@@ -83,7 +119,8 @@ mod tests {
 
     fn watcher() -> RepoWatcher {
         let dir = std::env::temp_dir();
-        RepoWatcher::new(dir, |_| {}).expect("감시자 생성 실패")
+        let targets = WatchTargets::new(&dir, &dir.join(".git"), &dir.join(".git"));
+        RepoWatcher::new(targets, |_| {}).expect("감시자 생성 실패")
     }
 
     fn current(state: &WatcherState) -> Option<u64> {
@@ -145,5 +182,79 @@ mod tests {
         let empty = WatcherState::new();
         empty.stop(1).unwrap();
         assert_eq!(current(&empty), None);
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .output()
+            .expect("git 실행 실패");
+        assert!(out.status.success(), "git {:?}: {}", args, String::from_utf8_lossy(&out.stderr));
+    }
+
+    fn init_repo(name: &str) -> PathBuf {
+        let tmp = std::env::temp_dir().join(format!("gitbaro-watch-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        git(&main, &["init", "-q", "-b", "main"]);
+        git(&main, &["config", "user.email", "t@t"]);
+        git(&main, &["config", "user.name", "t"]);
+        std::fs::write(main.join("README.md"), "hello\n").unwrap();
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        main
+    }
+
+    /// Wait until the watcher reports `kind`, up to a few seconds.
+    fn wait_for(rx: &std::sync::mpsc::Receiver<ChangeKind>, kind: ChangeKind) -> bool {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
+            match rx.recv_timeout(left) {
+                Ok(k) if k == kind => return true,
+                Ok(_) => continue,
+                Err(_) => return false,
+            }
+        }
+        false
+    }
+
+    /// 앱 밖에서 한 커밋이 git 메타데이터 변경으로 보고되어야 한다 (C4).
+    #[test]
+    fn a_commit_made_outside_the_app_is_reported_as_a_git_dir_change() {
+        let main = init_repo("commit");
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _watcher = RepoWatcher::new(watch_targets(&main), move |kind| {
+            let _ = tx.send(kind);
+        })
+        .unwrap();
+        // FSEvents 가 등록을 마칠 시간을 준다.
+        std::thread::sleep(std::time::Duration::from_millis(300));
+
+        git(&main, &["commit", "-q", "--allow-empty", "-m", "outside"]);
+
+        assert!(wait_for(&rx, ChangeKind::GitDir));
+    }
+
+    /// 링크된 워크트리는 git dir 이 작업 트리 밖에 있다. 그래도 커밋이 보고되어야 한다.
+    #[test]
+    fn a_commit_in_a_linked_worktree_is_reported_as_a_git_dir_change() {
+        let main = init_repo("worktree");
+        let wt = main.parent().unwrap().join("feature");
+        git(&main, &["worktree", "add", "-q", "-b", "feature", wt.to_str().unwrap()]);
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _watcher = RepoWatcher::new(watch_targets(&wt), move |kind| {
+            let _ = tx.send(kind);
+        })
+        .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(300));
+
+        git(&wt, &["commit", "-q", "--allow-empty", "-m", "in worktree"]);
+
+        assert!(wait_for(&rx, ChangeKind::GitDir));
     }
 }
