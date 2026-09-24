@@ -26,6 +26,7 @@ import {
   type WorktreeOverlap,
 } from "@/components/worktree/OverlapBadge";
 import { SideBySideDiff } from "@/components/worktree/SideBySideDiff";
+import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import type { ActivityEvent, DiffOutput, WipFile } from "@/types";
 
 /** `registerWatchPaths`에 쓰는 이 화면의 key. 감시 대상 목록에서 맨 앞에 온다. */
@@ -531,6 +532,7 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
             status={shown.status}
             staged={staged}
             freshLines={freshLines}
+            maximizable
             revealLine={following && fresh ? (fresh.delta.ranges[0]?.start ?? null) : null}
             headerExtra={
               <>
@@ -583,25 +585,22 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
 
   if (variant === "cards") {
     return (
-      <div className="flex flex-1 min-h-0 gap-(--g)" data-testid="follow-panel">
+      <ListDiffSplit
+        variant="cards"
+        data-testid="follow-panel"
+        list={listPane}
+        listOverlay={<SwitchingOverlay />}
+        detail={diffPane}
+        detailOverlay={<SwitchingOverlay />}
+      >
         {sideBySide}
-        <section className="relative flex flex-col w-[320px] shrink-0 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden">
-          {listPane}
-          <SwitchingOverlay />
-        </section>
-        <section className="relative flex flex-col flex-1 min-w-0 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden">
-          {diffPane}
-          <SwitchingOverlay />
-        </section>
-      </div>
+      </ListDiffSplit>
     );
   }
   return (
-    <div className="flex h-full min-h-0" data-testid="follow-panel">
+    <ListDiffSplit variant="inline" data-testid="follow-panel" list={listPane} detail={diffPane}>
       {sideBySide}
-      <div className="w-[300px] shrink-0 flex flex-col min-h-0 border-r border-(--line)">{listPane}</div>
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">{diffPane}</div>
-    </div>
+    </ListDiffSplit>
   );
 }
 

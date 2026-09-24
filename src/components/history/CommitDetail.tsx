@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Clock, Copy, Check, ChevronDown } from "lucide-react";
 import { cn, formatDate, formatRelativeTime } from "@/lib/utils";
@@ -15,6 +15,7 @@ import {
   useWorkflowRuns,
 } from "@/api/queries";
 import type { CommitInfo, DiffOutput, FileStatus, RepoSyncStatus, WorkflowRun } from "@/types";
+import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 
 function AuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
@@ -173,11 +174,6 @@ export function CommitDetail({
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [bodyExpanded, setBodyExpanded] = useState(false);
-  const [fileListWidth, setFileListWidth] = useState(320);
-
-  const isDragging = useRef(false);
-  const dragStartX = useRef(0);
-  const dragStartWidth = useRef(320);
 
   // Repository context: name, remotes and account for the meta lines.
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
@@ -213,31 +209,6 @@ export function CommitDetail({
   const needRuns = ciEnabled && (runsMissing || ci?.state === "running");
   useWorkflowRuns(needRuns ? repoPath : null, accountId, { polling: true });
   const showCi = ciEnabled && runs !== undefined;
-
-  const onResizeMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      isDragging.current = true;
-      dragStartX.current = e.clientX;
-      dragStartWidth.current = fileListWidth;
-
-      const onMouseMove = (ev: MouseEvent) => {
-        if (!isDragging.current) return;
-        const delta = ev.clientX - dragStartX.current;
-        const next = Math.min(480, Math.max(140, dragStartWidth.current + delta));
-        setFileListWidth(next);
-      };
-
-      const onMouseUp = () => {
-        isDragging.current = false;
-        window.removeEventListener("mousemove", onMouseMove);
-        window.removeEventListener("mouseup", onMouseUp);
-      };
-
-      window.addEventListener("mousemove", onMouseMove);
-      window.addEventListener("mouseup", onMouseUp);
-    },
-    [fileListWidth],
-  );
 
   // Auto-select first file when commit changes
   useEffect(() => {
@@ -391,14 +362,10 @@ export function CommitDetail({
   );
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* File list + Diff viewer */}
-      <div className="flex h-0 flex-1">
-        {/* File list */}
-        <div
-          style={{ width: fileListWidth }}
-          className="shrink-0 border-r border-border flex flex-col min-h-0"
-        >
+    <ListDiffSplit
+      variant="inline"
+      list={
+        <>
           {commitInfo}
           <div className="px-3 pt-2 pb-1 text-[11px] font-semibold text-(--faint) shrink-0">
             {t("commitDetail2.changedFiles", { count: changedFiles.length })}
@@ -445,24 +412,15 @@ export function CommitDetail({
               );
             })}
           </div>
-        </div>
-
-        {/* Resize handle */}
-        <div
-          onMouseDown={onResizeMouseDown}
-          className="w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/40 transition-colors"
+        </>
+      }
+      detail={
+        <DiffViewer
+          maximizable
+          diff={selectedFileDiff ?? null}
+          status={changedFiles.find((f) => f.path === selectedPath)?.status ?? "modified"}
         />
-
-        {/* Diff viewer */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          <DiffViewer
-            diff={selectedFileDiff ?? null}
-            status={
-              changedFiles.find((f) => f.path === selectedPath)?.status ?? "modified"
-            }
-          />
-        </div>
-      </div>
-    </div>
+      }
+    />
   );
 }

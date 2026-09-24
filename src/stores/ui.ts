@@ -2,6 +2,12 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createSafeStorage } from "@/lib/safe-storage";
 import { MIN_SIDEBAR_WIDTH } from "@/lib/sidebar-width";
+import {
+  clampFileListWidth,
+  clampGraphRatio,
+  DEFAULT_FILE_LIST_WIDTH,
+  DEFAULT_GRAPH_RATIO,
+} from "@/lib/split-size";
 import type { Theme } from "@/types";
 
 /** Repo rail display mode (Supabase-style sidebar control) */
@@ -23,6 +29,17 @@ interface UIState {
   /** 브랜치 전환(checkout + 재조회) 진행 중 여부. 로딩 피드백 표시에 사용. */
   isSwitchingBranch: boolean;
   diffLineMode: DiffLineMode;
+  /** 그래프 패널이 메인 칸 높이에서 차지하는 비율(손잡이로 조절, 저장). */
+  graphPanelRatio: number;
+  /** 파일 목록 ↔ diff 사이의 목록 폭(px, 손잡이로 조절, 저장). */
+  fileListWidth: number;
+  /** diff를 메인 칸 전체로 키웠는가. 저장하지 않는다. */
+  isDiffMaximized: boolean;
+  /**
+   * 「커밋하기」를 누른 시각(epoch ms). 커밋 입력(`ChangesView`)이 마운트되거나 이 값이 바뀌면
+   * 요약 칸에 포커스를 옮기고 지운다. 저장하지 않는다.
+   */
+  commitFocusAt: number | null;
   setTheme: (theme: Theme) => void;
   setActiveTab: (tab: "changes" | "history" | "stash" | "actions") => void;
   setSidebarWidth: (width: number) => void;
@@ -34,6 +51,10 @@ interface UIState {
   setActivityLogOpen: (open: boolean) => void;
   setSwitchingBranch: (switching: boolean) => void;
   setDiffLineMode: (mode: DiffLineMode) => void;
+  setGraphPanelRatio: (ratio: number) => void;
+  setFileListWidth: (width: number) => void;
+  setDiffMaximized: (maximized: boolean) => void;
+  setCommitFocusAt: (at: number | null) => void;
 }
 
 /** Sidebar width in the two-column shell's design (`gen_d.py` sidebar, 276px). */
@@ -43,7 +64,10 @@ const RAIL_MODES: readonly RailMode[] = ["expanded", "collapsed", "hover"];
 const DIFF_LINE_MODES: readonly DiffLineMode[] = ["unified", "split"];
 
 /** Fields of the UI store written to `gitbaro-ui` (see `partialize`). */
-type PersistedUI = Pick<UIState, "railMode" | "sidebarWidth" | "diffLineMode">;
+type PersistedUI = Pick<
+  UIState,
+  "railMode" | "sidebarWidth" | "diffLineMode" | "graphPanelRatio" | "fileListWidth"
+>;
 
 /**
  * Storage version of `gitbaro-ui`. `activeTab` is not persisted (see
@@ -57,6 +81,8 @@ type PersistedUI = Pick<UIState, "railMode" | "sidebarWidth" | "diffLineMode">;
  * must survive as-is: W2-T2 requires keeping the rail's collapsed/hover
  * modes, so a v0 user's deliberate choice is never silently reset to
  * "expanded".
+ * `graphPanelRatio`·`fileListWidth`는 나중에 더한 선택 필드다. 없으면 기본값을 쓰므로
+ * (`sanitizePersistedUI`) 버전을 올리지 않는다.
  */
 export const UI_STORE_VERSION = 0;
 
@@ -81,6 +107,13 @@ export function sanitizePersistedUI(persisted: unknown): Partial<UIState> {
   if (DIFF_LINE_MODES.includes(p.diffLineMode as DiffLineMode)) {
     out.diffLineMode = p.diffLineMode as DiffLineMode;
   }
+  // 범위를 벗어난 숫자는 버리지 않고 범위 안으로 맞춘다(사용자가 끌어 둔 방향은 살린다).
+  if (typeof p.graphPanelRatio === "number" && Number.isFinite(p.graphPanelRatio)) {
+    out.graphPanelRatio = clampGraphRatio(p.graphPanelRatio);
+  }
+  if (typeof p.fileListWidth === "number" && Number.isFinite(p.fileListWidth)) {
+    out.fileListWidth = clampFileListWidth(p.fileListWidth);
+  }
   return out;
 }
 
@@ -102,6 +135,10 @@ export const useUIStore = create<UIState>()(
       isActivityLogOpen: false,
       isSwitchingBranch: false,
       diffLineMode: "unified",
+      graphPanelRatio: DEFAULT_GRAPH_RATIO,
+      fileListWidth: DEFAULT_FILE_LIST_WIDTH,
+      isDiffMaximized: false,
+      commitFocusAt: null,
 
       setTheme: (theme) => set({ theme }),
 
@@ -121,6 +158,10 @@ export const useUIStore = create<UIState>()(
       setActivityLogOpen: (open) => set({ isActivityLogOpen: open }),
       setSwitchingBranch: (switching) => set({ isSwitchingBranch: switching }),
       setDiffLineMode: (mode) => set({ diffLineMode: mode }),
+      setGraphPanelRatio: (ratio) => set({ graphPanelRatio: clampGraphRatio(ratio) }),
+      setFileListWidth: (width) => set({ fileListWidth: clampFileListWidth(width) }),
+      setDiffMaximized: (maximized) => set({ isDiffMaximized: maximized }),
+      setCommitFocusAt: (at) => set({ commitFocusAt: at }),
     }),
     {
       name: "gitbaro-ui",
@@ -137,6 +178,8 @@ export const useUIStore = create<UIState>()(
         railMode: state.railMode,
         sidebarWidth: state.sidebarWidth,
         diffLineMode: state.diffLineMode,
+        graphPanelRatio: state.graphPanelRatio,
+        fileListWidth: state.fileListWidth,
       }),
       merge: (persisted, current) => ({ ...current, ...sanitizePersistedUI(persisted) }),
     },

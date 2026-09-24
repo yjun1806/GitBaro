@@ -7,6 +7,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, FileText, Folder, GitBranch, 
 import { useChangesVsDefaultMany, useFileDiffsVsDefault } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { EmptyState } from "@/components/layout/ContentArea";
+import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import { RepoLaneTag } from "@/components/graph/CommitGraph";
 import { normalizePath } from "@/components/graph/graph-model";
@@ -276,17 +277,11 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
   );
 
   return (
-    <div className="relative flex flex-1 min-h-0 gap-(--g)">
-      <div className="w-[400px] max-w-[45%] shrink-0 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden">
-        {list}
-      </div>
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden">
-        {detail}
-      </div>
+    <ListDiffSplit variant="cards" list={list} detail={detail}>
       {/* 다른 화면(ContentArea, FollowPanel)과 달리 이 탭에는 전환 덮개가 없었다(W7 리뷰) —
           브랜치 전환 중에도 목록·diff를 그대로 누를 수 있었다. */}
       <SwitchingOverlay />
-    </div>
+    </ListDiffSplit>
   );
 }
 
@@ -474,7 +469,7 @@ function SelectedFileDiff({ file }: { file: SelectedFile }) {
       </div>
     );
   }
-  return <DiffViewer diff={result.data} status={file.status} />;
+  return <DiffViewer diff={result.data} status={file.status} maximizable />;
 }
 
 /** 연결된 변경: 두 저장소 파일에서 같은 문자열이 추가된 부분을 나란히 보여 준다. */

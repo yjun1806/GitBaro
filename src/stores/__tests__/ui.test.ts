@@ -7,6 +7,60 @@ import {
   sanitizePersistedUI,
   useUIStore,
 } from "@/stores/ui";
+import {
+  DEFAULT_FILE_LIST_WIDTH,
+  DEFAULT_GRAPH_RATIO,
+  MAX_FILE_LIST_WIDTH,
+  MAX_GRAPH_RATIO,
+  MIN_FILE_LIST_WIDTH,
+  MIN_GRAPH_RATIO,
+} from "@/lib/split-size";
+
+describe("sanitizePersistedUI — split sizes", () => {
+  it("keeps saved split sizes", () => {
+    expect(sanitizePersistedUI({ graphPanelRatio: 0.3, fileListWidth: 360 })).toEqual({
+      graphPanelRatio: 0.3,
+      fileListWidth: 360,
+    });
+  });
+
+  it("clamps out-of-range sizes instead of dropping them", () => {
+    expect(sanitizePersistedUI({ graphPanelRatio: 5, fileListWidth: 10 })).toEqual({
+      graphPanelRatio: MAX_GRAPH_RATIO,
+      fileListWidth: MIN_FILE_LIST_WIDTH,
+    });
+  });
+
+  it("ignores malformed sizes, so the defaults apply", () => {
+    expect(sanitizePersistedUI({ graphPanelRatio: "0.3", fileListWidth: null })).toEqual({});
+    expect(sanitizePersistedUI({ graphPanelRatio: Number.NaN })).toEqual({});
+  });
+
+  it("keeps an existing v0 user's values when the new fields are missing", () => {
+    // 이 필드가 생기기 전에 저장된 값: 사이드바 모드·폭은 그대로 살고, 새 필드는 기본값을 쓴다.
+    const v0 = { railMode: "hover", sidebarWidth: 380, diffLineMode: "split" };
+    expect(sanitizePersistedUI(migrateUI(v0, 0))).toEqual(v0);
+    const merge = useUIStore.persist.getOptions().merge!;
+    const merged = merge(v0, useUIStore.getInitialState());
+    expect(merged.railMode).toBe("hover");
+    expect(merged.sidebarWidth).toBe(380);
+    expect(merged.graphPanelRatio).toBe(DEFAULT_GRAPH_RATIO);
+    expect(merged.fileListWidth).toBe(DEFAULT_FILE_LIST_WIDTH);
+  });
+
+  it("does not persist the maximized diff", () => {
+    const partialize = useUIStore.persist.getOptions().partialize!;
+    expect(partialize({ ...useUIStore.getState(), isDiffMaximized: true })).not.toHaveProperty("isDiffMaximized");
+  });
+
+  it("clamps sizes set through the store", () => {
+    useUIStore.getState().setFileListWidth(9999);
+    expect(useUIStore.getState().fileListWidth).toBe(MAX_FILE_LIST_WIDTH);
+    useUIStore.getState().setGraphPanelRatio(0);
+    expect(useUIStore.getState().graphPanelRatio).toBe(MIN_GRAPH_RATIO);
+    useUIStore.setState({ fileListWidth: DEFAULT_FILE_LIST_WIDTH, graphPanelRatio: DEFAULT_GRAPH_RATIO });
+  });
+});
 
 describe("sanitizePersistedUI", () => {
   it("keeps well-formed layout preferences", () => {
@@ -43,6 +97,8 @@ describe("ui store after the two-column shell", () => {
     expect(partialize).toBeDefined();
     expect(Object.keys(partialize!(useUIStore.getState()) as object).sort()).toEqual([
       "diffLineMode",
+      "fileListWidth",
+      "graphPanelRatio",
       "railMode",
       "sidebarWidth",
     ]);

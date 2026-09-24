@@ -22,6 +22,7 @@ import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import { FollowPanel, FollowRepoFooter } from "@/components/live/FollowPanel";
 import { useFollowStore } from "@/stores/follow";
 import { normalizePath } from "@/components/graph/graph-model";
+import { ListDiffSplit } from "./ListDiffSplit";
 import type { FileStatus } from "@/types";
 
 /* --- Empty / Placeholder States --- */
@@ -74,7 +75,7 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
     );
   }
 
-  return <DiffViewer diff={diff ?? null} status={fileStatus} staged={staged} />;
+  return <DiffViewer diff={diff ?? null} status={fileStatus} staged={staged} maximizable />;
 }
 
 function CommitDetailView({ commitId }: { commitId: string }) {
@@ -179,13 +180,12 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
 
   if (activeTab === "changes") {
     return (
-      <div className="flex flex-1 min-h-0 gap-(--g)">
-        <Card className="w-[320px] shrink-0">
-          <ChangesView />
-          <SwitchingOverlay />
-        </Card>
-        <Card className="flex-1">
-          {selectedFile ? (
+      <ListDiffSplit
+        variant="cards"
+        list={<ChangesView />}
+        listOverlay={<SwitchingOverlay />}
+        detail={
+          selectedFile ? (
             <DiffContent filePath={selectedFile} staged={selectedFileStaged} />
           ) : (
             <EmptyState
@@ -193,10 +193,10 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
               title={t("diff.noFileSelected")}
               description={t("diff.selectFile")}
             />
-          )}
-          <SwitchingOverlay />
-        </Card>
-      </div>
+          )
+        }
+        detailOverlay={<SwitchingOverlay />}
+      />
     );
   }
 

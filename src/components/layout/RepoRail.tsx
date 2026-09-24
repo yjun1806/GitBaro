@@ -269,8 +269,9 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
         onMouseLeave={() => setHovered(false)}
         style={{ width: panelWidth }}
         className={cn(
-          "absolute inset-y-0 left-0 flex flex-col bg-background border-r border-border transition-[width] duration-150 z-30",
-          isOverlay && "shadow-xl",
+          // 시안의 사이드바는 바탕(canvas) 위에 선 없이 놓인다. 선은 메인 칸 위에 떠서 펼쳐질 때만 긋는다.
+          "absolute inset-y-0 left-0 flex flex-col bg-background transition-[width] duration-150 z-30",
+          isOverlay && "border-r border-border shadow-xl",
         )}
       >
         {/* 모든 저장소 목록 열기/닫기 */}

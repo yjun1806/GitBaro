@@ -58,6 +58,8 @@ interface DiffViewerProps {
   revealLine?: number | null;
   /** diff 머리의 줄 수 앞에 둘 것(따라가기의 「4초 전 수정」, 스테이지 쪽 고르기). */
   headerExtra?: ReactNode;
+  /** diff 머리에 「크게 보기」 버튼을 둘지. 목록 + diff 화면에서만 켠다. */
+  maximizable?: boolean;
 }
 
 export function DiffViewer({
@@ -67,10 +69,13 @@ export function DiffViewer({
   freshLines,
   revealLine = null,
   headerExtra,
+  maximizable = false,
 }: DiffViewerProps) {
   const { t } = useTranslation();
   const lineMode = useUIStore((s) => s.diffLineMode);
   const setLineMode = useUIStore((s) => s.setDiffLineMode);
+  const isMaximized = useUIStore((s) => s.isDiffMaximized);
+  const setMaximized = useUIStore((s) => s.setDiffMaximized);
   const [viewMode, setViewMode] = useState<DiffViewMode>(() =>
     defaultMode(diff?.filePath, diff?.binary ?? false, lineMode),
   );
@@ -194,8 +199,18 @@ export function DiffViewer({
 
   if (!diff) {
     return (
-      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+      <div className="flex-1 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
         {t("diff.noSelection")}
+        {/* 크게 보는 중에 diff가 비면 머리의 버튼이 없으므로 여기서 되돌린다. */}
+        {maximizable && isMaximized && (
+          <button
+            type="button"
+            onClick={() => setMaximized(false)}
+            className="h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
+          >
+            {t("diff.restoreSize")}
+          </button>
+        )}
       </div>
     );
   }
@@ -212,6 +227,7 @@ export function DiffViewer({
           modes={modes}
           onSelectMode={handleSelectMode}
           extra={headerExtra}
+          maximizable={maximizable}
         />
         <div className="flex-1 min-h-0 overflow-auto">
           {diff.binaryPreview ? (
@@ -241,6 +257,7 @@ export function DiffViewer({
         modes={modes}
         onSelectMode={handleSelectMode}
         extra={headerExtra}
+        maximizable={maximizable}
       />
 
       {viewMode !== "document" && !wantHighlight && (
