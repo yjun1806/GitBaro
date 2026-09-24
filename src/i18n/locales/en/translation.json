@@ -949,5 +949,28 @@
     "allQuiet_other": "All {{count}} repositories are quiet and hidden: they are on their default branch with no new commits and no uncommitted changes. Use Show all to see them.",
     "worktreeNew_one": "{{count}} new commit in another worktree. Open the repository to review it.",
     "worktreeNew_other": "{{count}} new commits in other worktrees. Open the repository to review them."
+  },
+  "gitActions": {
+    "syncGroup": "Sync",
+    "branchGroup": "Branch actions",
+    "fetch": "Fetch",
+    "pull": "Pull",
+    "push": "Push",
+    "publish": "Publish",
+    "pullOptions": "Pull options",
+    "pushOptions": "Push options",
+    "pullRebase": "Pull with rebase",
+    "pullRebaseDesc": "Replay your local commits on top of the remote branch",
+    "forcePush": "Force push…",
+    "forcePushDesc": "Overwrite the remote branch after you confirm the command",
+    "branch": "Branch",
+    "merge": "Merge",
+    "stash": "Stash",
+    "terminal": "Open in Terminal",
+    "terminalFailed": "Couldn't open Terminal: {{error}}",
+    "mergeTitle": "Merge into {{branch}}",
+    "mergePick": "Pick the branch to bring into the current branch.",
+    "mergePickPlaceholder": "Choose a branch",
+    "close": "Close"
   }
 }

@@ -7,10 +7,17 @@ import i18n from "@/i18n/config";
 // 저장소 전용 영역은 Tauri를 부른다. 이 테스트는 툴바가 어느 영역을 띄우는지만 본다.
 vi.mock("@/components/toolbar/BranchZone", () => ({ BranchZone: () => <div>branch-zone</div> }));
 vi.mock("@/components/toolbar/WorktreeZone", () => ({ WorktreeZone: () => <div>worktree-zone</div> }));
-vi.mock("@/components/toolbar/SyncZone", () => ({ SyncZone: () => <div>sync-zone</div> }));
 vi.mock("@/components/toolbar/AccountZone", () => ({ AccountZone: () => <div>account-zone</div> }));
+vi.mock("@/components/toolbar/AutoSyncHint", () => ({ AutoSyncHint: () => null }));
 vi.mock("@/api/queries", () => ({
   useReviewStatusQuery: () => ({ data: undefined }),
+  useBranches: () => ({ data: [] }),
+  useHeadDetached: () => ({ data: false }),
+  useTokenValidation: () => ({ data: undefined, isLoading: false }),
+  useStatus: () => ({ data: [] }),
+  useStashList: () => ({ data: [] }),
+  useStashMutations: () => ({ push: {}, pushPartial: {} }),
+  invalidateAfterSync: () => Promise.resolve(),
 }));
 
 import { useRepositoryStore } from "@/stores/repository";
@@ -20,12 +27,19 @@ import { makeRepo } from "@/lib/__tests__/repo-tree-fixtures";
 const { ToolbarRoot } = await import("@/components/toolbar/ToolbarRoot");
 
 const xames = makeRepo("xames", "mos");
+const ALL_ACTIONS = ["fetch", "pull", "push", "branch", "merge", "stash", "terminal"];
 
 function renderToolbar() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <ToolbarRoot />
     </QueryClientProvider>,
+  );
+}
+
+function actionOrder(): string[] {
+  return Array.from(document.querySelectorAll("[data-action]")).map(
+    (el) => el.getAttribute("data-action") ?? "",
   );
 }
 
@@ -40,15 +54,16 @@ beforeEach(async () => {
 
 afterEach(cleanup);
 
-describe("ToolbarRoot — workspace mode", () => {
-  it("shows the repository zones while a repository is picked", () => {
+describe("ToolbarRoot — scope", () => {
+  it("shows the repository zones and the git actions in the mockup order while a repository is picked", () => {
     renderToolbar();
     expect(screen.getByText("branch-zone")).toBeTruthy();
-    expect(screen.getByText("sync-zone")).toBeTruthy();
+    expect(screen.getByText("worktree-zone")).toBeTruthy();
     expect(screen.queryByText("xames-ws")).toBeNull();
+    expect(actionOrder()).toEqual(ALL_ACTIONS);
   });
 
-  it("turns off Fetch, Pull, Push, branch, Merge and Stash with a pick-a-repository hint", () => {
+  it("keeps the git actions in workspace mode but turns them off until they are wired", () => {
     act(() => {
       useWorkspaceStore.getState().setActiveWorkspace("w1");
     });
@@ -56,11 +71,11 @@ describe("ToolbarRoot — workspace mode", () => {
 
     expect(screen.queryByText("branch-zone")).toBeNull();
     expect(screen.queryByText("worktree-zone")).toBeNull();
-    expect(screen.queryByText("sync-zone")).toBeNull();
-    // 워크스페이스 이름은 메인 칸 제목(W4-T3)이 맡는다. 툴바는 끄기만 한다.
+    // 워크스페이스 이름은 메인 칸 제목(W4-T3)이 맡는다.
     expect(screen.queryByText("xames-ws")).toBeNull();
+    expect(actionOrder()).toEqual(ALL_ACTIONS);
 
-    for (const label of ["Fetch", "Pull", "Push", "Branch", "Merge", "Stash"]) {
+    for (const label of ["Fetch", "Pull", "Push", "Branch", "Merge", "Stash", "Open in Terminal"]) {
       const button = screen.getByRole("button", { name: `${label} — Pick a repository` });
       expect(button).toHaveProperty("disabled", true);
       expect(button.parentElement?.getAttribute("title")).toBe("Pick a repository");
@@ -76,6 +91,6 @@ describe("ToolbarRoot — workspace mode", () => {
       useWorkspaceStore.getState().setActiveWorkspace("w1");
     });
     renderToolbar();
-    expect(screen.getAllByTitle("저장소를 고르세요")).toHaveLength(6);
+    expect(screen.getAllByTitle("저장소를 고르세요")).toHaveLength(7);
   });
 });

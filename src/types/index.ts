@@ -574,3 +574,7 @@ export interface WorkspaceRepoHistory {
   truncated: boolean;
   error: string | null;
 }
+
+// W5-T1
+/** 원격 작업 종류. 워크스페이스 툴바가 여러 저장소 확인 창(W5-T2)에 넘긴다. */
+export type RemoteOp = "fetch" | "pull" | "push";
