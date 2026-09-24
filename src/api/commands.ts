@@ -884,3 +884,12 @@ export async function reviewStatus(repoPaths: string[]): Promise<RepoReviewStatu
 export async function countNewCommits(entries: SeenRecordInput[]): Promise<NewCommitCount[]> {
   return invoke("count_new_commits", { entries });
 }
+
+// W3-T3 — 커밋 그래프의 새 커밋 점
+
+import type { NewCommitIds } from "@/types";
+
+/** 한 워크트리의 새 커밋 수와 새 커밋으로 센 커밋의 SHA. */
+export async function listNewCommitIds(entry: SeenRecordInput): Promise<NewCommitIds> {
+  return invoke("list_new_commit_ids", { entry });
+}

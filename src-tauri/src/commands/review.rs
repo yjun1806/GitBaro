@@ -2,8 +2,8 @@
 
 use crate::error::AppError;
 use crate::git::new_commits::{
-    count_new_commits as count_one, list_review_worktrees, NewCommitCount, RepoReviewStatus,
-    SeenRecord,
+    count_new_commits as count_one, list_new_commit_ids as list_ids, list_review_worktrees,
+    NewCommitCount, NewCommitIds, RepoReviewStatus, SeenRecord,
 };
 
 /// 저장소마다 워크트리 목록(메인 작업 트리 포함)과 각 워크트리의 브랜치·HEAD 를 한 번에 돌려준다.
@@ -43,4 +43,14 @@ pub async fn count_new_commits(entries: Vec<SeenRecord>) -> Result<Vec<NewCommit
     })
     .await
     .map_err(|e| AppError::Channel(e.to_string()))
+}
+
+// W3-T3
+/// 한 워크트리의 새 커밋 수와 새 커밋으로 센 커밋의 SHA. 커밋 그래프가 새 커밋 점과
+/// 「여기까지 확인함」 구분선을 `count_new_commits` 와 같은 커밋에 그리는 데 쓴다.
+#[tauri::command]
+pub async fn list_new_commit_ids(entry: SeenRecord) -> Result<NewCommitIds, AppError> {
+    tokio::task::spawn_blocking(move || list_ids(&entry).map_err(AppError::from))
+        .await
+        .map_err(|e| AppError::Channel(e.to_string()))?
 }

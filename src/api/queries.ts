@@ -472,3 +472,22 @@ export function useNewCommitCountsQuery(inputs: SeenRecordInput[] | null, headsK
     placeholderData: keepPreviousData,
   });
 }
+
+// W3-T3
+
+import { listNewCommitIds } from "./commands";
+
+/**
+ * 커밋 그래프가 새 커밋 점을 찍을 커밋 목록. `entry`가 null이면 멈춘다(첫 기준선을 잡기 전).
+ * 기준선이나 `headOid`가 바뀌면 키가 바뀌어 바로 다시 센다. 앞 결과를 이어서 보여 주지 않는다:
+ * 「확인함으로 표시」를 누른 뒤 옛 개수와 점이 남아 있지 않게 한다.
+ */
+export function useNewCommitIdsQuery(entry: SeenRecordInput | null, headOid: string | null) {
+  return useQuery({
+    queryKey: ["newCommitIds", entry, headOid],
+    queryFn: () => listNewCommitIds(entry as SeenRecordInput),
+    enabled: entry !== null,
+    refetchInterval: REVIEW_POLL_MS,
+    refetchIntervalInBackground: false,
+  });
+}

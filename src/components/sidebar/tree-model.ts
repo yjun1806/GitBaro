@@ -51,6 +51,15 @@ export function worktreesByRepoFrom(repos: RepoReviewStatus[]): Record<string, W
   );
 }
 
+/**
+ * 동기화 상태(`repo_sync_status`)를 물을 경로: 등록된 저장소와 그 링크된 워크트리.
+ * 사이드바와 커밋 그래프가 같은 목록으로 물어 같은 조회(20초 폴링)를 함께 쓴다.
+ */
+export function syncStatusPaths(repoPaths: string[], repos: RepoReviewStatus[]): string[] {
+  const worktrees = worktreesByRepoFrom(repos);
+  return [...repoPaths, ...Object.values(worktrees).flatMap((wts) => wts.map((w) => w.path))];
+}
+
 export interface Totals {
   dirty: number;
   newCommits: number;

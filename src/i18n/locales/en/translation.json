@@ -856,5 +856,27 @@
       "account-mismatch": "A workspace can only hold repositories from one account",
       "account-pending": "Repository accounts are still loading. Try again in a moment."
     }
+  },
+  "graph": {
+    "colDescription": "Description",
+    "colAuthor": "Author",
+    "colTime": "Time",
+    "colCommit": "Commit",
+    "newCommit": "New commit",
+    "agent": "a coding agent",
+    "agentGuess": "Probably written with {{name}} (guessed from the Co-Authored-By trailer)",
+    "unpushed": "Not pushed yet",
+    "worktree": "Worktree",
+    "fileCount_one": "{{count}} file",
+    "fileCount_other": "{{count}} files",
+    "wipWorktreeLabel": "Uncommitted changes in {{name}} ({{count}})",
+    "seenHere": "Seen up to here",
+    "seenHereAt": "Seen up to here · {{time}}",
+    "seenHint": "Commits above this line are new",
+    "seenToday": "today {{time}}",
+    "seenYesterday": "yesterday {{time}}",
+    "modifiedAgo": "modified {{time}}",
+    "markSeen_one": "Mark {{count}} new commit as seen",
+    "markSeen_other": "Mark {{count}} new commits as seen"
   }
 }

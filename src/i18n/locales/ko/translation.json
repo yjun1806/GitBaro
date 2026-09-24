@@ -856,5 +856,25 @@
       "account-mismatch": "워크스페이스에는 한 계정의 저장소만 넣을 수 있습니다",
       "account-pending": "저장소 계정을 아직 불러오는 중입니다. 잠시 뒤 다시 해 주세요."
     }
+  },
+  "graph": {
+    "colDescription": "설명",
+    "colAuthor": "작성자",
+    "colTime": "시각",
+    "colCommit": "커밋",
+    "newCommit": "새 커밋",
+    "agent": "코딩 에이전트",
+    "agentGuess": "{{name}}와 함께 쓴 커밋으로 추정 (Co-Authored-By 트레일러 기준)",
+    "unpushed": "아직 push 안 함",
+    "worktree": "워크트리",
+    "fileCount_other": "파일 {{count}}",
+    "wipWorktreeLabel": "{{name}}의 커밋하지 않은 변경 ({{count}})",
+    "seenHere": "여기까지 확인함",
+    "seenHereAt": "여기까지 확인함 · {{time}}",
+    "seenHint": "이 선 위의 커밋이 「새 커밋」이에요",
+    "seenToday": "오늘 {{time}}",
+    "seenYesterday": "어제 {{time}}",
+    "modifiedAgo": "{{time}} 수정",
+    "markSeen_other": "새 커밋 {{count}}개 확인함으로 표시"
   }
 }
