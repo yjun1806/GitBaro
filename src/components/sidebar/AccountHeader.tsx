@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Building2, FolderPlus, Globe, HardDrive, User } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SortMode } from "@/lib/repo-tree";
+import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { SortMenu } from "./SortMenu";
 import { TreeRowFrame } from "./TreeRowFrame";
@@ -50,6 +51,7 @@ export function AccountHeader({
   const setSortMode = useWorkspaceStore((s) => s.setSortMode);
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
   const [creating, setCreating] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
   const Icon = accountIcon(label, ownerType);
   return (
     <>
@@ -59,30 +61,41 @@ export function AccountHeader({
         label={label}
         expanded={expanded}
         onToggle={onToggle}
-        className="mt-2 gap-1.5"
+        className="mt-2 gap-1.5 group"
       >
         <Icon className="w-3 h-3 shrink-0 text-[var(--faint)]" aria-hidden="true" />
-        <span className="text-[10.5px] font-bold tracking-[0.06em] uppercase text-muted-foreground truncate">
+        {/* 계정 이름 + 저장소 수가 너비를 먼저 갖는다 — 정렬·워크스페이스 버튼은 hover/focus/열림 때만
+            나타나 이름을 밀어내지 않는다(W-Top-T4: 「MONDAY…」로 잘리던 문제). */}
+        <span
+          title={label}
+          className="text-[10.5px] font-bold tracking-[0.06em] uppercase text-muted-foreground truncate min-w-0"
+        >
           {label}
         </span>
-        <span className="text-[10.5px] text-[var(--faint)] tabular-nums">{repoCount}</span>
+        <span className="text-[10.5px] text-[var(--faint)] tabular-nums shrink-0">{repoCount}</span>
+        <span className="flex-1" />
         {showActions && (
-          <SortMenu mode={sortMode} onChange={(mode) => setSortMode(accountKey, mode)} />
-        )}
-        {showActions && (
-          <button
-            type="button"
-            title={t("workspace.create")}
-            aria-label={t("workspace.create")}
-            onClick={(e) => {
-              e.stopPropagation();
-              setCreating(true);
-            }}
-            onKeyDown={(e) => e.stopPropagation()}
-            className="w-5 h-5 shrink-0 flex items-center justify-center rounded-[var(--radius-chip)] text-[var(--faint)] hover:text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          <span
+            className={cn(
+              "flex items-center gap-1 shrink-0 transition-opacity",
+              sortOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+            )}
           >
-            <FolderPlus className="w-3 h-3" aria-hidden="true" />
-          </button>
+            <SortMenu mode={sortMode} onChange={(mode) => setSortMode(accountKey, mode)} onOpenChange={setSortOpen} />
+            <button
+              type="button"
+              title={t("workspace.create")}
+              aria-label={t("workspace.create")}
+              onClick={(e) => {
+                e.stopPropagation();
+                setCreating(true);
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+              className="w-5 h-5 shrink-0 flex items-center justify-center rounded-[var(--radius-chip)] text-[var(--faint)] hover:text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <FolderPlus className="w-3 h-3" aria-hidden="true" />
+            </button>
+          </span>
         )}
       </TreeRowFrame>
       {/* 창은 행 밖에 둔다. 행 안에 두면 창 안의 누르기가 React 트리를 따라 행의 접기로 올라간다. */}

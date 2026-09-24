@@ -16,7 +16,7 @@ vi.mock("@/api/commands", () => ({
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), ask: vi.fn() }));
 
 import { getWorktrees } from "@/api/commands";
-import { RepoTree } from "../RepoTree";
+import { LIVE_SECTION_KEY, RepoTree } from "../RepoTree";
 import { SIDEBAR_WATCH_KEY, type SidebarTreeData } from "../useSidebarTreeData";
 
 const NOW = 2_000_000_000_000;
@@ -156,6 +156,29 @@ describe("RepoTree — indentation levels", () => {
     await waitFor(() => expect(within(item("feat/login")).getByText(/main/)).toBeInTheDocument());
   });
 
+  it("indents each visual depth by one INDENT_PX step, so the hierarchy doesn't look flat", async () => {
+    renderTree(makeData(baseSignals));
+    await waitFor(() => expect(within(item("feat/login")).getByText(/main/)).toBeInTheDocument());
+
+    // paddingLeft = 6 + depth * 14 (TreeRowFrame). account:0, workspace:1,
+    // repo directly under the account:1, repo inside a workspace:2, worktree = its repo's depth + 1.
+    const paddingLeft = (name: string) => Number(item(name).style.paddingLeft.replace("px", ""));
+
+    expect(paddingLeft("acme")).toBe(6);
+    expect(paddingLeft("product")).toBe(20); // workspace, depth 1
+    expect(paddingLeft("solo")).toBe(20); // repo directly under the account, depth 1
+    expect(paddingLeft("api")).toBe(34); // repo inside "product", depth 2
+    expect(paddingLeft("web")).toBe(34);
+    expect(paddingLeft("feat/login")).toBe(48); // worktree of "api" (depth 2 + 1)
+
+    // A workspace member repo must sit strictly deeper than a loose repo at the
+    // account level, and the worktree strictly deeper than its own repo — this
+    // is the actual "flat hierarchy" bug: it isn't enough that they differ, the
+    // parent/child nesting has to increase monotonically.
+    expect(paddingLeft("api")).toBeGreaterThan(paddingLeft("solo"));
+    expect(paddingLeft("feat/login")).toBeGreaterThan(paddingLeft("api"));
+  });
+
   it("reads worktree bases once per expanded repository, not on every toolbar worktree refresh", async () => {
     const { client } = renderTree(makeData(baseSignals));
     await waitFor(() => expect(within(item("feat/login")).getByText(/main/)).toBeInTheDocument());
@@ -246,7 +269,8 @@ describe("RepoTree — badges", () => {
   });
 
   it("fades the dot of a path that is no longer watched, such as a folded repository's worktree", () => {
-    useWorkspaceStore.setState({ collapsed: [`repo:${API}`] });
+    // 「지금 바뀌는 곳」 카드는 기본이 접힘이라(W-Top-T4), collapsed 목록에 그 키를 두면 거꾸로 펼쳐진다.
+    useWorkspaceStore.setState({ collapsed: [`repo:${API}`, LIVE_SECTION_KEY] });
     renderTree(
       makeData(baseSignals, {
         lastChangedAt: { [WT]: NOW - 5_000 },
@@ -270,6 +294,7 @@ describe("RepoTree — badges", () => {
 
 describe("RepoTree — live section, search and selection", () => {
   it("lists places changing now and opens a worktree from there", () => {
+    useWorkspaceStore.setState({ collapsed: [LIVE_SECTION_KEY] }); // 카드를 펼친 상태로
     const { onSelectRepo } = renderTree(makeData(baseSignals, { lastChangedAt: { [WT]: NOW - 12_000 } }));
     const section = screen.getByRole("region", { name: "Files changing now" });
     const entry = within(section).getByRole("button", { name: /api/ });
@@ -277,6 +302,21 @@ describe("RepoTree — live section, search and selection", () => {
     fireEvent.click(entry);
     expect(useRepositoryStore.getState().activeWorktrees[API]).toBe(WT);
     expect(onSelectRepo).toHaveBeenCalledWith(API);
+  });
+
+  it("reveals the entry's repository in the tree — expanding its account and workspace — when clicked", () => {
+    useWorkspaceStore.setState({ collapsed: [LIVE_SECTION_KEY, "acct:acme", "ws:w1"] });
+    renderTree(makeData(baseSignals, { lastChangedAt: { [WT]: NOW - 12_000 } }));
+    expect(screen.queryByRole("treeitem", { name: "api" })).toBeNull();
+
+    const section = screen.getByRole("region", { name: "Files changing now" });
+    fireEvent.click(within(section).getByRole("button", { name: /api/ }));
+
+    expect(item("acme")).toHaveAttribute("aria-expanded", "true");
+    expect(item("product")).toHaveAttribute("aria-expanded", "true");
+    expect(item("api")).toBeInTheDocument();
+    // WT is a worktree, so api's own row must open too, not just its ancestors.
+    expect(item("api")).toHaveAttribute("aria-expanded", "true");
   });
 
   it("opens the main working tree when a repository row is clicked", () => {
@@ -297,15 +337,28 @@ describe("RepoTree — live section, search and selection", () => {
     expect(screen.queryByRole("treeitem", { name: "solo" })).toBeNull();
   });
 
-  it("collapses and expands everything, including accounts and the live section", () => {
+  it("collapses and expands everything, including accounts", () => {
     renderTree(makeData(baseSignals));
     fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
     expect(screen.queryByRole("treeitem", { name: "api" })).toBeNull();
     expect(item("acme")).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByRole("button", { name: /Files changing now/ })).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     expect(item("feat/login")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Files changing now/ })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("keeps its own collapsed-by-default state, separate from the tree's collapse all/expand all", () => {
+    renderTree(makeData(baseSignals, { lastChangedAt: { [WT]: NOW - 12_000 } }));
+    // The live card is not a tree level, so "collapse/expand all" must not touch it.
+    const liveToggle = screen.getByRole("button", { name: /changing now/i });
+    expect(liveToggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(liveToggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(liveToggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(liveToggle);
+    expect(liveToggle).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(liveToggle).toHaveAttribute("aria-expanded", "true");
   });
 
   it("keeps the owning repository selected while its open worktree row is hidden", () => {

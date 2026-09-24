@@ -156,6 +156,59 @@ export function collapsibleKeys(tree: AccountNode[]): string[] {
   return keys;
 }
 
+export interface RevealTarget {
+  /** 이 저장소를 보이려면 펼쳐야 하는 계정 머리글 키. */
+  accountKey: string;
+  /** 워크스페이스 안 저장소면 그 워크스페이스 키. 계정 바로 아래 저장소면 null. */
+  workspaceKey: string | null;
+  /** 계정 바로 아래 조용한 저장소면 true — 「조용한 저장소 N개」 줄도 열어야 보인다. */
+  isQuiet: boolean;
+  /** 워크트리 행 자체를 보이려면 펼쳐야 하는 저장소 키(그 저장소에 워크트리가 있을 때만). */
+  repoNodeKey: string | null;
+}
+
+/**
+ * 저장소(`repoPath`)가 트리 어디에 있는지 찾아, 화면에 보이려면 펼쳐야 할 조상 키들을 돌려준다.
+ * 「지금 바뀌는 곳」 카드에서 행을 눌렀을 때 트리를 펼치고 스크롤해 보여주는 데 쓴다(순수 함수).
+ * 찾지 못하면(트리에서 빠진 저장소 등) null.
+ */
+export function ancestorsToReveal(tree: AccountNode[], repoPath: string): RevealTarget | null {
+  for (const account of tree) {
+    for (const child of account.children) {
+      if (child.kind === "repo") {
+        if (child.repo.path === repoPath) {
+          return {
+            accountKey: account.key,
+            workspaceKey: null,
+            isQuiet: false,
+            repoNodeKey: child.worktrees.length > 0 ? repoNodeKey(child.repo.path) : null,
+          };
+        }
+      } else {
+        const repo = child.repos.find((r) => r.repo.path === repoPath);
+        if (repo) {
+          return {
+            accountKey: account.key,
+            workspaceKey: workspaceNodeKey(child.workspace.id),
+            isQuiet: false,
+            repoNodeKey: repo.worktrees.length > 0 ? repoNodeKey(repo.repo.path) : null,
+          };
+        }
+      }
+    }
+    const quiet = account.quietRepos.find((r) => r.repo.path === repoPath);
+    if (quiet) {
+      return {
+        accountKey: account.key,
+        workspaceKey: null,
+        isQuiet: true,
+        repoNodeKey: quiet.worktrees.length > 0 ? repoNodeKey(quiet.repo.path) : null,
+      };
+    }
+  }
+  return null;
+}
+
 export interface LiveEntry {
   path: string;
   repo: RepoInfo;
@@ -163,6 +216,28 @@ export interface LiveEntry {
   isWorktree: boolean;
   branch: string | null;
   at: number;
+}
+
+export interface LiveAvatarStack {
+  /** 겹쳐 보일 저장소(최신순, 최대 `max`개). 같은 저장소가 여러 워크트리에서 바뀌어도 한 번만. */
+  shown: RepoInfo[];
+  /** `shown`에 못 들어간 나머지 저장소 수(「+k」로 표시). */
+  overflow: number;
+}
+
+/**
+ * 「지금 바뀌는 곳」 카드가 접혔을 때 보이는 아바타 무더기. `entries`는 이미 최신순으로 정렬돼
+ * 있다고 본다(`liveEntries`). 같은 저장소의 워크트리 여러 개가 함께 바뀌어도 아바타는 하나만 센다.
+ */
+export function liveAvatarStack(entries: LiveEntry[], max: number): LiveAvatarStack {
+  const seen = new Set<string>();
+  const repos: RepoInfo[] = [];
+  for (const entry of entries) {
+    if (seen.has(entry.repo.path)) continue;
+    seen.add(entry.repo.path);
+    repos.push(entry.repo);
+  }
+  return { shown: repos.slice(0, max), overflow: Math.max(0, repos.length - max) };
 }
 
 /**

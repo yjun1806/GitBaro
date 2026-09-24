@@ -120,6 +120,7 @@ export function RepoRow({
         <TreeRowFrame
           level={level}
           depth={depth}
+          treePath={repo.path}
           label={repo.name}
           expanded={hasWorktrees ? expanded : undefined}
           selected={selected}

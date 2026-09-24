@@ -3,11 +3,13 @@ import { buildRepoTree, type Workspace } from "@/lib/repo-tree";
 import type { RepoInfo, RepoSyncStatus } from "@/types";
 import type { WorktreeReviewStatus } from "@/hooks/useReviewStatus";
 import {
+  ancestorsToReveal,
   buildSignals,
   collapsibleKeys,
   expandedWorktreePaths,
   filterTree,
   isWatchedPath,
+  liveAvatarStack,
   liveEntries,
   repoTotals,
   workspaceTotals,
@@ -228,5 +230,81 @@ describe("liveEntries", () => {
 
   it("drops paths that belong to no registered repository", () => {
     expect(liveEntries({ "/gone": NOW }, NOW, repos, worktrees, branchOf)).toEqual([]);
+  });
+});
+
+describe("ancestorsToReveal", () => {
+  it("finds a repository inside a workspace and lists the workspace and account keys to open", () => {
+    const target = ancestorsToReveal(tree(), API);
+    expect(target).toEqual({
+      accountKey: "acct:acme",
+      workspaceKey: "ws:w1",
+      isQuiet: false,
+      repoNodeKey: `repo:${API}`, // API has a worktree (WT), so its own row must open too
+    });
+  });
+
+  it("finds a repository directly under the account, with no workspace to open", () => {
+    const target = ancestorsToReveal(tree(), TOOL);
+    expect(target).toEqual({
+      accountKey: "acct:acme",
+      workspaceKey: null,
+      isQuiet: false,
+      repoNodeKey: null, // TOOL has no worktrees
+    });
+  });
+
+  it("marks a quiet repository so its account's quiet row is opened too", () => {
+    const quietTree = buildRepoTree({
+      repos,
+      accounts: [],
+      workspaces: [],
+      orderByParent: {},
+      sortModeByAccount: {},
+      signals: { [API]: { dirtyCount: 0 }, [WT]: { dirtyCount: 0 } },
+      worktreesByRepo: { [API]: [{ path: WT, branch: "feat/login" }] },
+      now: NOW,
+    });
+    const target = ancestorsToReveal(quietTree, API);
+    expect(target).toMatchObject({ isQuiet: true, repoNodeKey: `repo:${API}` });
+  });
+
+  it("returns null for a path that isn't in the tree", () => {
+    expect(ancestorsToReveal(tree(), "/gone")).toBeNull();
+  });
+});
+
+describe("liveAvatarStack", () => {
+  const branchOf = (p: string) => (p === WT ? "feat/login" : "main");
+  const worktrees = { [API]: [{ path: WT, branch: "feat/login" }] };
+
+  it("counts each repository once even if a worktree and its repo both changed", () => {
+    const entries = liveEntries(
+      { [WT]: NOW - 1_000, [API]: NOW - 2_000, [WEB]: NOW - 3_000 },
+      NOW,
+      repos,
+      worktrees,
+      branchOf,
+    );
+    const stack = liveAvatarStack(entries, 3);
+    expect(stack.shown.map((r) => r.path)).toEqual([API, WEB]);
+    expect(stack.overflow).toBe(0);
+  });
+
+  it("caps the shown avatars and reports the rest as overflow", () => {
+    const entries = liveEntries(
+      { [API]: NOW - 1_000, [WEB]: NOW - 2_000, [TOOL]: NOW - 3_000 },
+      NOW,
+      repos,
+      worktrees,
+      branchOf,
+    );
+    const stack = liveAvatarStack(entries, 2);
+    expect(stack.shown.map((r) => r.path)).toEqual([API, WEB]);
+    expect(stack.overflow).toBe(1);
+  });
+
+  it("is empty when nothing changed recently", () => {
+    expect(liveAvatarStack([], 3)).toEqual({ shown: [], overflow: 0 });
   });
 });

@@ -1,10 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDownUp, ChevronDown, ChevronRight, Search, X } from "lucide-react";
+import { ArrowDownUp, ChevronDown, ChevronRight } from "lucide-react";
 import { useBranchBases, useRecentBranches } from "@/api/queries";
 import { isImeComposing } from "@/lib/keyboard";
 import type { BranchInfo, WorktreeInfo } from "@/types";
+import { AnchoredPanel } from "@/components/ui/AnchoredPanel";
+import { PanelEmptyState, PanelHeader, PanelSearch } from "@/components/ui/PanelHeader";
 import { BranchContextMenu } from "./BranchContextMenu";
 import { BranchPanelRowView } from "./BranchPanelRow";
 import {
@@ -21,6 +23,8 @@ import { nextActiveName } from "./visible-branches";
 const FALLBACK_VISIBLE_ROWS = 30;
 
 export interface BranchPanelProps {
+  /** 이 패널이 뜨는 자리를 정하는 트리거 버튼(시안 D6이 아니라 W-Top-T1: 트리거 바로 아래에 연다). */
+  anchorRef: RefObject<HTMLElement | null>;
   /** 머리글에 붙일 저장소 이름. */
   repoName: string;
   activeRepoPath: string | null;
@@ -46,6 +50,7 @@ export interface BranchPanelProps {
  * 기반 브랜치는 추정값이 섞여 있고 비용이 들어서 화면에 보이는 행만 계산한다.
  */
 export function BranchPanel({
+  anchorRef,
   repoName,
   activeRepoPath,
   branches,
@@ -123,9 +128,14 @@ export function BranchPanel({
         break;
       }
       case "Escape":
-        e.preventDefault();
-        if (menu) setMenu(null);
-        else onClose();
+        // A context menu closes first; a plain Escape is left to bubble up
+        // to `AnchoredPanel`'s own Escape handler, which closes the panel
+        // and returns focus to its trigger (`useDialogA11y`, shared with `Dialog`).
+        if (menu) {
+          e.preventDefault();
+          e.stopPropagation();
+          setMenu(null);
+        }
         break;
     }
   };
@@ -207,71 +217,51 @@ export function BranchPanel({
   };
 
   return (
-    <aside
-      role="dialog"
-      aria-labelledby={titleId}
-      onKeyDown={handleKeyDown}
-      className="fixed z-50 right-3 top-[60px] bottom-3 w-[420px] max-w-[calc(100vw-24px)] flex flex-col overflow-hidden bg-card rounded-(--radius-panel) shadow-[0_24px_60px_rgba(0,0,0,0.18)] ring-1 ring-(--line)"
+    <AnchoredPanel
+      anchorRef={anchorRef}
+      onClose={onClose}
+      labelledBy={titleId}
+      className="w-[420px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] flex flex-col overflow-hidden bg-card rounded-(--radius-panel) shadow-[0_24px_60px_rgba(0,0,0,0.18)] ring-1 ring-(--line)"
     >
-      <div className="flex items-center gap-2 px-3.5 py-3 border-b border-(--line) shrink-0">
-        <strong id={titleId} className="text-sm text-(--fg)">
-          {t("branchPanel.title")}
-        </strong>
-        <span className="text-xs text-(--faint) truncate min-w-0">{repoName}</span>
-        <span className="flex-1" />
-        <button
-          type="button"
-          onClick={() => {
+      <div onKeyDown={handleKeyDown} className="flex flex-col min-h-0 flex-1">
+        <PanelHeader
+          titleId={titleId}
+          title={t("branchPanel.title")}
+          subtitle={repoName}
+          primaryLabel={t("branchPanel.newBranch")}
+          onPrimary={() => {
             onCreateBranch();
             onClose();
           }}
-          className="h-[26px] px-2.5 rounded-[7px] bg-primary text-primary-foreground text-xs font-bold hover:bg-primary-hover transition-colors shrink-0"
-        >
-          {t("branchPanel.newBranch")}
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={t("branchPanel.close")}
-          className="w-[26px] h-[26px] flex items-center justify-center rounded-[7px] text-(--muted) hover:bg-accent transition-colors shrink-0"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
+          closeLabel={t("branchPanel.close")}
+          onClose={onClose}
+        />
 
-      <label className="mx-3.5 my-2.5 flex items-center gap-2 h-[30px] px-2.5 rounded-(--radius-item) bg-(--chip) shrink-0">
-        <Search className="w-[13px] h-[13px] text-(--faint) shrink-0" aria-hidden="true" />
-        <input
-          autoFocus
-          type="text"
+        <PanelSearch
           value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
+          onChange={(v) => {
+            setQuery(v);
             setActiveName(null);
           }}
           placeholder={t("branchPanel.search")}
-          aria-label={t("branchPanel.search")}
-          className="flex-1 min-w-0 bg-transparent outline-none text-[12.5px] placeholder:text-(--faint)"
         />
-      </label>
 
-      <div ref={rootRef} className="flex-1 min-h-0 overflow-y-auto border-t border-(--line)">
-        {flattenSections(sections).length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-            {query ? t("branchPanel.noMatch") : t("branch.noBranches")}
-          </p>
-        ) : (
-          <>
-            {renderSection("inWorktree", t("branchPanel.inWorktree"))}
-            {renderSection("local", t("branchPanel.local"))}
-            {renderSection("remote", remoteTitle)}
-          </>
-        )}
+        <div ref={rootRef} className="flex-1 min-h-0 overflow-y-auto border-t border-(--line)">
+          {flattenSections(sections).length === 0 ? (
+            <PanelEmptyState message={query ? t("branchPanel.noMatch") : t("branch.noBranches")} />
+          ) : (
+            <>
+              {renderSection("inWorktree", t("branchPanel.inWorktree"))}
+              {renderSection("local", t("branchPanel.local"))}
+              {renderSection("remote", remoteTitle)}
+            </>
+          )}
+        </div>
+
+        <p className="px-3.5 py-2.5 border-t border-(--line) text-[11.5px] leading-[18px] text-(--muted) shrink-0">
+          {t("branchPanel.hint")}
+        </p>
       </div>
-
-      <p className="px-3.5 py-2.5 border-t border-(--line) text-[11.5px] leading-[18px] text-(--muted) shrink-0">
-        {t("branchPanel.hint")}
-      </p>
 
       {menu && (
         <BranchContextMenu
@@ -312,7 +302,7 @@ export function BranchPanel({
           onClose={() => setMenu(null)}
         />
       )}
-    </aside>
+    </AnchoredPanel>
   );
 }
 

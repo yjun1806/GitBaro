@@ -91,14 +91,14 @@ export function WorkspaceRow({
         id={nodeKey}
         kind="workspace"
         label={name}
-        depth={0}
+        depth={1}
         groupBelow={expanded && repoCount > 0}
         badges={badges}
         disabled={!draggable}
       >
         <TreeRowFrame
           level={2}
-          depth={0}
+          depth={1}
           label={name}
           expanded={expanded}
           selected={selected}

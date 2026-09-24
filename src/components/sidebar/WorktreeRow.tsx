@@ -42,6 +42,7 @@ export function WorktreeRow({
     <TreeRowFrame
       level={level}
       depth={depth}
+      treePath={path}
       label={name}
       selected={selected}
       onSelect={onSelect}
@@ -52,7 +53,7 @@ export function WorktreeRow({
       </span>
       <span className="flex-1 min-w-0 flex flex-col gap-px" title={path}>
         <span className="font-mono text-[11.5px] text-[var(--fg2)] truncate">{name}</span>
-        {base && <WorktreeBaseLabel base={base} />}
+        {base && <WorktreeBaseLabel base={base} maxBaseNameLength={16} />}
       </span>
       <RowBadges dirty={signals?.dirtyCount} newCommits={signals?.newCommits} />
     </TreeRowFrame>

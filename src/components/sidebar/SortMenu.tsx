@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { ArrowDownUp, Check } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useMenuKeyboard } from "@/hooks/useMenuKeyboard";
@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 interface SortMenuProps {
   mode: SortMode;
   onChange: (mode: SortMode) => void;
+  /** 메뉴가 열리고 닫힐 때 알린다 — 부모(`AccountHeader`)가 열려 있는 동안 버튼을 계속 보이게 쓴다. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** 메뉴 항목 이름(번역 키). 「사용자 지정」은 메뉴에서 끌어서 정한다는 설명을 붙인다. */
@@ -29,34 +31,42 @@ const BUTTON_LABEL_KEY: Record<SortMode, string> = {
  * 트리 행 안에 있으므로 누르기·키 입력이 행의 접기로 새지 않게 막는다. 메뉴는 사이드바의
  * 스크롤 영역에 잘리지 않도록 body에 띄운다(React 이벤트는 그래도 행으로 올라가므로 막는다).
  */
-export function SortMenu({ mode, onChange }: SortMenuProps) {
+export function SortMenu({ mode, onChange, onOpenChange }: SortMenuProps) {
   const { t } = useTranslation();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+  const label = `${t("workspace.sort.label")}: ${t(BUTTON_LABEL_KEY[mode])}`;
+
+  const setOpen = (next: { x: number; y: number } | null) => {
+    setAnchor(next);
+    onOpenChange?.(next !== null);
+  };
 
   const open = () => {
     const rect = buttonRef.current?.getBoundingClientRect();
-    setAnchor({ x: rect?.left ?? 0, y: rect ? rect.bottom + 4 : 0 });
+    setOpen({ x: rect?.left ?? 0, y: rect ? rect.bottom + 4 : 0 });
   };
 
   return (
     <>
+      {/* 이름 자리를 지키려고 글자 없는 아이콘 버튼으로 뒀다(W-Top-T4). 지금 정렬 모드는
+          aria-label/title로만 알린다 — AccountHeader가 이 버튼을 hover/focus-within/열림일 때만 보인다. */}
       <button
         ref={buttonRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={anchor !== null}
-        aria-label={`${t("workspace.sort.label")}: ${t(BUTTON_LABEL_KEY[mode])}`}
+        aria-label={label}
+        title={label}
         onClick={(e) => {
           e.stopPropagation();
-          if (anchor) setAnchor(null);
+          if (anchor) setOpen(null);
           else open();
         }}
         onKeyDown={(e) => e.stopPropagation()}
-        className="ml-auto h-5 px-1.5 shrink-0 flex items-center gap-0.5 rounded-[var(--radius-chip)] bg-muted text-[10.5px] text-muted-foreground hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="ml-auto w-5 h-5 shrink-0 flex items-center justify-center rounded-[var(--radius-chip)] text-[var(--faint)] hover:text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       >
-        <span className="truncate max-w-[110px]">{t(BUTTON_LABEL_KEY[mode])}</span>
-        <ChevronDown className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+        <ArrowDownUp className="w-3 h-3" aria-hidden="true" />
       </button>
       {anchor &&
         createPortal(
@@ -64,10 +74,10 @@ export function SortMenu({ mode, onChange }: SortMenuProps) {
             mode={mode}
             position={anchor}
             onPick={(next) => {
-              setAnchor(null);
+              setOpen(null);
               if (next !== mode) onChange(next);
             }}
-            onClose={() => setAnchor(null)}
+            onClose={() => setOpen(null)}
             ignore={buttonRef}
           />,
           document.body,

@@ -22,7 +22,7 @@ export function QuietReposRow({ names, expanded, onToggle }: QuietReposRowProps)
     names: names.length > NAMES_SHOWN ? `${shown}, …` : shown,
   });
   return (
-    <TreeRowFrame level={2} depth={0} label={label} expanded={expanded} onToggle={onToggle}>
+    <TreeRowFrame level={2} depth={1} label={label} expanded={expanded} onToggle={onToggle}>
       <span className="flex-1 min-w-0 truncate text-[11.5px] text-[var(--faint)]">{label}</span>
     </TreeRowFrame>
   );
