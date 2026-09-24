@@ -810,9 +810,11 @@
     },
     "live": {
       "title": "Files changing now",
+      "collapsedTitle": "{{count}} changing now",
       "empty": "No files changed in the last 10 minutes",
       "seconds": "{{count}}s",
-      "minutes": "{{count}}m"
+      "minutes": "{{count}}m",
+      "overflow": "+{{count}}"
     }
   },
   "sidebarDnd": {

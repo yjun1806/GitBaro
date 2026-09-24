@@ -810,9 +810,11 @@
     },
     "live": {
       "title": "지금 파일이 바뀌는 곳",
+      "collapsedTitle": "지금 바뀌는 중 {{count}}",
       "empty": "최근 10분 안에 바뀐 파일이 없습니다",
       "seconds": "{{count}}초",
-      "minutes": "{{count}}분"
+      "minutes": "{{count}}분",
+      "overflow": "+{{count}}"
     }
   },
   "sidebarDnd": {

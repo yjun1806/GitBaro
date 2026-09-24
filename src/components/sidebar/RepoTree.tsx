@@ -1,4 +1,4 @@
-import { useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { ChevronsDownUp, ChevronsUpDown, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { repoNodeKey, workspaceNodeKey, type AccountNode, type RepoNode } from "@/lib/repo-tree";
@@ -14,6 +14,7 @@ import { DropAfterLine, TreeDndProvider } from "./TreeDnd";
 import { WorkspaceRow } from "./WorkspaceRow";
 import { WorkspaceSuggestion } from "./WorkspaceSuggestion";
 import {
+  ancestorsToReveal,
   collapsibleKeys,
   expandedWorktreePaths,
   filterTree,
@@ -97,8 +98,10 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
   );
   useSidebarWatchPaths(watchPaths);
 
-  // 모두 접기: 계정·워크스페이스·워크트리가 있는 저장소와 「지금 바뀌는 곳」 칸.
-  const foldable = useMemo(() => [LIVE_SECTION_KEY, ...collapsibleKeys(tree)], [tree]);
+  // 모두 접기: 계정·워크스페이스·워크트리가 있는 저장소. 「지금 바뀌는 곳」 카드는 트리 단계가
+  // 아니라 알림이라 여기서 뺀다(W-Top-T4) — 기본 접힘도 반대라(closed.has == 펼침) 같은 목록에
+  // 섞으면 「모두 접기」가 이 카드를 거꾸로 펼쳐 버린다.
+  const foldable = useMemo(() => collapsibleKeys(tree), [tree]);
   const allFolded = foldable.length > 0 && foldable.every((k) => closed.has(k));
   const handleToggleAll = () => {
     if (allFolded) setCollapsed(collapsed.filter((k) => !foldable.includes(k)));
@@ -120,10 +123,35 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
   const selectLive = (entry: LiveEntry) =>
     entry.isWorktree ? selectWorktree(entry.repo, entry.path) : selectRepo(entry.repo);
 
-  const toggleQuiet = (accountKey: string) =>
+  /** `force`가 있으면 이미 열려 있어도 닫지 않는다(「지금 바뀌는 곳」의 조용한 저장소 펼치기용). */
+  const toggleQuiet = (accountKey: string, force?: true) =>
     setOpenQuiet((prev) =>
-      prev.includes(accountKey) ? prev.filter((k) => k !== accountKey) : [...prev, accountKey],
+      prev.includes(accountKey) ? (force ? prev : prev.filter((k) => k !== accountKey)) : [...prev, accountKey],
     );
+
+  // 「지금 바뀌는 곳」에서 행을 고르면 고르는 데서 그치지 않고, 트리에서 그 저장소가 보이도록
+  // 조상(계정·워크스페이스·조용한 저장소 줄·워크트리가 있는 저장소 자신)을 펼친 뒤 스크롤해 보여준다.
+  const [revealTarget, setRevealTarget] = useState<string | null>(null);
+  const treeScrollRef = useRef<HTMLDivElement>(null);
+  const revealLive = (entry: LiveEntry) => {
+    selectLive(entry);
+    const target = ancestorsToReveal(tree, entry.repo.path);
+    if (target) {
+      const toOpen = [target.accountKey, target.workspaceKey, target.repoNodeKey].filter(
+        (k): k is string => k != null,
+      );
+      if (toOpen.length > 0) setCollapsed(collapsed.filter((k) => !toOpen.includes(k)));
+      if (target.isQuiet) toggleQuiet(target.accountKey, true);
+    }
+    setRevealTarget(entry.path);
+  };
+  useEffect(() => {
+    if (!revealTarget) return;
+    const el = treeScrollRef.current?.querySelector<HTMLElement>(`[data-tree-path="${CSS.escape(revealTarget)}"]`);
+    // jsdom(테스트)에는 scrollIntoView가 없다.
+    el?.scrollIntoView?.({ block: "nearest" });
+    setRevealTarget(null);
+  }, [revealTarget, closed, openQuiet]);
 
   const renderRepo = (node: RepoNode, level: number, depth: number) => (
     <RepoRow
@@ -177,17 +205,20 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1">
-        <LiveNowSection
-          entries={live}
-          isWatched={(path) => isWatchedPath(path, watched, overflow)}
-          now={now}
-          activePath={activePath}
-          expanded={!closed.has(LIVE_SECTION_KEY)}
-          onToggle={() => toggleCollapsed(LIVE_SECTION_KEY)}
-          onSelect={selectLive}
-        />
+      {/* 「지금 바뀌는 곳」은 트리 단계가 아니라 알림 카드라서 스크롤 영역 밖, 검색 줄 바로 아래에
+          고정한다(W-Top-T4). 접었다 펼치는 상태는 트리의 다른 접힘과 같은 저장소(`collapsed`)를
+          쓰되, 기본값이 반대다 — 이 카드는 기본이 접힘이라 `closed.has(...)`를 그대로 「펼침」으로 쓴다. */}
+      <LiveNowSection
+        entries={live}
+        isWatched={(path) => isWatchedPath(path, watched, overflow)}
+        now={now}
+        activePath={activePath}
+        expanded={closed.has(LIVE_SECTION_KEY)}
+        onToggle={() => toggleCollapsed(LIVE_SECTION_KEY)}
+        onSelect={revealLive}
+      />
 
+      <div ref={treeScrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1">
         {!searching && <WorkspaceSuggestion />}
 
         {/* 끌어서 놓기는 검색으로 거르지 않은 전체 트리(`tree`)의 순서로 계산한다. */}
@@ -210,7 +241,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
                   />
                   {accountOpen &&
                     account.children.map((child) => {
-                      if (child.kind === "repo") return renderRepo(child, 2, 0);
+                      if (child.kind === "repo") return renderRepo(child, 2, 1);
                       const wsOpen = isOpen(workspaceNodeKey(child.workspace.id));
                       return (
                         <div key={child.key} role="none" className="flex flex-col">
@@ -226,9 +257,9 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
                             draggable={!searching}
                             onToggle={() => toggleCollapsed(workspaceNodeKey(child.workspace.id))}
                           />
-                          {wsOpen && child.repos.map((r) => renderRepo(r, 3, 1))}
+                          {wsOpen && child.repos.map((r) => renderRepo(r, 3, 2))}
                           {wsOpen && child.repos.length > 0 && (
-                            <DropAfterLine id={child.key} depth={0} />
+                            <DropAfterLine id={child.key} depth={1} />
                           )}
                         </div>
                       );
