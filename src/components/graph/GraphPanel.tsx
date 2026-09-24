@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Archive, GitCommitVertical, Play } from "lucide-react";
+import { Archive, Files, GitCommitVertical, Play } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
@@ -17,9 +17,12 @@ import { StashView } from "@/components/stash/StashView";
 import { ActionsView } from "@/components/actions/ActionsView";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
+import { FilesByRepo } from "@/components/review/FilesByRepo";
 
 /** Which graph-panel tab a `ui.activeTab` value belongs to. */
 export type GraphPanelTab = "graph" | "stash" | "actions";
+/** Tabs the panel shows: the stored ones plus "changes by file" (D7), which is local view state. */
+type ShownTab = GraphPanelTab | "files";
 
 /**
  * The graph tab covers both "changes" (the uncommitted row is selected) and
@@ -34,8 +37,8 @@ export function graphPanelTabOf(activeTab: "changes" | "history" | "stash" | "ac
 /**
  * Full-width card above the file list and diff. Tabs: commit graph (lane
  * graph with a WIP row per worktree on top, new-commit dots and the "seen up
- * to here" divider), stash, Actions. The "changes per file" tab slot is
- * filled in W7. On the graph tab the header carries the "mark N new commits
+ * to here" divider), changes by file (D7, this repository against its main),
+ * stash, Actions. On the graph tab the header carries the "mark N new commits
  * as seen" button.
  */
 export function GraphPanel() {
@@ -59,7 +62,15 @@ export function GraphPanel() {
     (r) => r.status === "in_progress" || r.status === "queued",
   ).length;
 
-  const tab = graphPanelTabOf(activeTab);
+  // 「파일별 변경」은 저장하지 않는 화면 상태다. 다른 탭으로 옮기거나(툴바·merge 흐름 포함)
+  // 저장된 탭이 바뀌면 닫는다.
+  const [filesOpen, setFilesOpen] = useState(false);
+  useEffect(() => setFilesOpen(false), [activeTab]);
+  const tab: ShownTab = filesOpen ? "files" : graphPanelTabOf(activeTab);
+  const filesRepos = useMemo(
+    () => (activeRepoPath ? [{ path: activeRepoPath, name: activeRepo?.name ?? activeRepoPath }] : []),
+    [activeRepoPath, activeRepo?.name],
+  );
   const worktreeFilter = useWorktreeFilter(review.wips);
   // 범위·비교 화면은 지금 연 워크트리의 커밋만 그린다 — 칩으로 고를 것이 없으니 칩 줄을 감춘다.
   const compareBranch = useUIStore((s) => s.compareBranch);
@@ -83,7 +94,14 @@ export function GraphPanel() {
     prevTab.current = activeTab;
   }, [activeTab, clearCommitSelection]);
 
-  const openGraphTab = () => setActiveTab(selectedCommitId ? "history" : "changes");
+  const openGraphTab = () => {
+    setFilesOpen(false);
+    setActiveTab(selectedCommitId ? "history" : "changes");
+  };
+  const openStoredTab = (next: "stash" | "actions") => {
+    setFilesOpen(false);
+    setActiveTab(next);
+  };
 
   return (
     <section
@@ -102,8 +120,16 @@ export function GraphPanel() {
           </Tab>
           <Tab
             variant="inline"
+            active={tab === "files"}
+            onClick={() => setFilesOpen(true)}
+            icon={<Files className="w-3.5 h-3.5" />}
+          >
+            {t("filesByRepo.tab")}
+          </Tab>
+          <Tab
+            variant="inline"
             active={tab === "stash"}
-            onClick={() => setActiveTab("stash")}
+            onClick={() => openStoredTab("stash")}
             icon={<Archive className="w-3.5 h-3.5" />}
             count={stashes.length > 0 ? stashes.length : undefined}
           >
@@ -112,7 +138,7 @@ export function GraphPanel() {
           <Tab
             variant="inline"
             active={tab === "actions"}
-            onClick={() => setActiveTab("actions")}
+            onClick={() => openStoredTab("actions")}
             icon={<Play className="w-3.5 h-3.5" />}
             count={activeRunCount > 0 ? activeRunCount : undefined}
           >
@@ -145,6 +171,8 @@ export function GraphPanel() {
             seenAt={review.seenAt}
             worktreeHeads={worktreeFilter.heads}
           />
+        ) : tab === "files" ? (
+          <FilesByRepo repos={filesRepos} variant="inline" />
         ) : tab === "stash" ? (
           <StashView />
         ) : (

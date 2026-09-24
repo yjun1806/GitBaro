@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
@@ -24,6 +24,11 @@ import type {
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/components/stash/StashView", () => ({ StashView: () => <div>stash-list</div> }));
 vi.mock("@/components/actions/ActionsView", () => ({ ActionsView: () => <div>actions-list</div> }));
+vi.mock("@/components/review/FilesByRepo", () => ({
+  FilesByRepo: ({ repos }: { repos: { path: string }[] }) => (
+    <div>files-by-repo {repos.map((r) => r.path).join(",")}</div>
+  ),
+}));
 vi.mock("@/components/history/HistoryView", () => ({ HistoryView: () => <div>compare-view</div> }));
 
 const switchTo = async (path: string) => {
@@ -320,6 +325,20 @@ describe("GraphPanel commit graph", () => {
     expect(screen.getByText("compare-view")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes (1)" }));
     expect(useUIStore.getState().activeTab).toBe("changes");
+  });
+
+  it("opens changes by file for the open worktree and closes it when another tab is picked", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("tab", { name: "Changes by file" }));
+    expect(screen.getByText(`files-by-repo ${REPO}`)).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Changes by file" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("tab", { name: "Stash" }));
+    expect(screen.queryByText(`files-by-repo ${REPO}`)).toBeNull();
+    expect(screen.getByText("stash-list")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Changes by file" }));
+    // 툴바·merge 흐름이 저장된 탭을 바꾸면 닫힌다.
+    act(() => useUIStore.getState().setActiveTab("changes"));
+    expect(screen.queryByText(`files-by-repo ${REPO}`)).toBeNull();
   });
 
   it("uses Korean labels for the divider and the button", async () => {

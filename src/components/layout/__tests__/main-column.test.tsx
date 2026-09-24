@@ -16,6 +16,7 @@ vi.mock("@/components/toolbar", () => ({ ToolbarRoot: () => <div>toolbar</div> }
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/components/stash/StashView", () => ({ StashView: () => <div>stash-list</div> }));
 vi.mock("@/components/actions/ActionsView", () => ({ ActionsView: () => <div>actions-list</div> }));
+vi.mock("@/components/review/FilesByRepo", () => ({ FilesByRepo: () => <div>files-by-repo</div> }));
 vi.mock("@/components/commit/ChangesView", () => ({ ChangesView: () => <div>changes-view</div> }));
 vi.mock("@/components/repository/RepoListView", () => ({ RepoListView: () => <div>repo-list</div> }));
 vi.mock("@/components/diff/DiffViewer", () => ({ DiffViewer: () => <div>diff-viewer</div> }));
@@ -213,19 +214,23 @@ describe("MainColumn (two-column shell)", () => {
     expect(useUIStore.getState().activeTab).toBe("history");
   });
 
-  it("has three panel tabs that switch the list and the area below", () => {
+  it("has four panel tabs that switch the list and the area below", () => {
     renderShell();
     const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual(["Commit graph", "Stash", "Actions"]);
+    expect(tabs.map((t) => t.textContent)).toEqual(["Commit graph", "Changes by file", "Stash", "Actions"]);
     expect(tabs[0].getAttribute("aria-selected")).toBe("true");
     expect(screen.getByText("history-list")).toBeTruthy();
 
     fireEvent.click(tabs[1]);
+    expect(screen.getByText("files-by-repo")).toBeTruthy();
+    expect(screen.queryByText("history-list")).toBeNull();
+
+    fireEvent.click(tabs[2]);
     expect(screen.getByText("stash-list")).toBeTruthy();
     expect(screen.queryByText("history-list")).toBeNull();
     expect(screen.getByText("No stash selected")).toBeTruthy();
 
-    fireEvent.click(screen.getAllByRole("tab")[2]);
+    fireEvent.click(screen.getAllByRole("tab")[3]);
     expect(screen.getByText("actions-list")).toBeTruthy();
     act(() => useSelectionStore.getState().selectRun(7));
     expect(screen.getByText("actions-detail")).toBeTruthy();
@@ -253,7 +258,7 @@ describe("MainColumn (two-column shell)", () => {
   it("keeps the stash tab when the panel remounts with an old commit selection", () => {
     const { unmount } = renderShell();
     fireEvent.click(screen.getByText("history-list"));
-    fireEvent.click(screen.getAllByRole("tab")[1]);
+    fireEvent.click(screen.getByRole("tab", { name: "Stash" }));
     expect(useUIStore.getState().activeTab).toBe("stash");
     expect(useSelectionStore.getState().selectedCommitId).toBe("c1");
     unmount();
@@ -269,6 +274,7 @@ describe("MainColumn (two-column shell)", () => {
     renderShell();
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
       "커밋 그래프",
+      "파일별 변경",
       "스태시",
       "Actions",
     ]);
@@ -306,12 +312,13 @@ describe("MainColumn — workspace scope (W4-T1)", () => {
     expect(screen.getByRole("button", { name: "Show all (1 hidden)" })).toBeTruthy();
     // 모두 숨겼을 때는 「커밋 없음」이 아니라 숨긴 저장소가 있다고 알린다.
     expect(screen.getByText(/1 quiet repository is hidden/)).toBeTruthy();
-    expect(screen.queryByRole("tablist")).toBeNull();
+    // 워크스페이스 화면에도 탭(커밋 그래프·파일별 변경)이 있지만, 저장소 전용 탭(스태시)은 없다.
+    expect(screen.queryByRole("tab", { name: "Stash" })).toBeNull();
     expect(screen.queryByText("changes-view")).toBeNull();
     expect(screen.queryByText("No repository selected")).toBeNull();
 
     act(() => useRepositoryStore.getState().setActiveRepo(repo.path));
     expect(useWorkspaceStore.getState().activeWorkspaceId).toBeNull();
-    expect(screen.getByRole("tablist")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Stash" })).toBeTruthy();
   });
 });

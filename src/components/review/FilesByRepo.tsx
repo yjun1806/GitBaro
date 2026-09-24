@@ -1,0 +1,564 @@
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+import { listen } from "@tauri-apps/api/event";
+import { useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, ChevronDown, ChevronRight, FileText, GitBranch, Link2, X } from "lucide-react";
+import { useChangesVsDefaultMany, useFileDiffsVsDefault } from "@/api/queries";
+import { DiffViewer } from "@/components/diff/DiffViewer";
+import { EmptyState } from "@/components/layout/ContentArea";
+import { RepoLaneTag } from "@/components/graph/CommitGraph";
+import { normalizePath } from "@/components/graph/graph-model";
+import { repoLaneColor } from "@/components/graph/repo-lanes";
+import {
+  fileKey,
+  findLinkedChanges,
+  isLinkableFile,
+  splitByToken,
+  type FileLink,
+  type FileRef,
+  type LinkSource,
+} from "@/lib/linked-changes";
+import { statusTextColors } from "@/lib/file-status";
+import { cn, getErrorMessage } from "@/lib/utils";
+import type { ActivityEvent, BranchChangedFile, BranchChanges, DiffOutput, FileStatus } from "@/types";
+
+/** 연결된 변경을 찾으려고 diff를 읽는 파일 수의 상한(저장소를 모두 합쳐). */
+export const LINK_SCAN_FILE_LIMIT = 80;
+/** 이보다 많이 추가한 파일은 연결을 찾지 않는다(생성 파일일 가능성이 크다). */
+const LINK_SCAN_MAX_ADDITIONS = 3000;
+
+export interface FilesByRepoRepo {
+  /** 비교할 저장소(또는 지금 연 워크트리) 경로. */
+  path: string;
+  name: string;
+}
+
+export interface FilesByRepoProps {
+  repos: readonly FilesByRepoRepo[];
+  /**
+   * `panels`: 파일 목록과 오른쪽 칸을 따로 떠 있는 패널 두 개로 그린다(워크스페이스 화면).
+   * `inline`: 이미 있는 패널 안을 둘로 나눈다(저장소 화면의 그래프 패널 탭).
+   */
+  variant?: "panels" | "inline";
+}
+
+interface OpenLink {
+  from: FileRef;
+  link: FileLink;
+}
+
+const STATUS_LETTER: Record<FileStatus, string> = {
+  modified: "M",
+  added: "A",
+  deleted: "D",
+  renamed: "R",
+  copied: "C",
+  untracked: "A",
+  ignored: "I",
+  conflicted: "U",
+};
+
+function sameFile(a: FileRef | null, b: FileRef | null): boolean {
+  return a !== null && b !== null && a.repoPath === b.repoPath && a.filePath === b.filePath;
+}
+
+function splitPath(path: string): { name: string; dir: string } {
+  const at = path.lastIndexOf("/");
+  return at === -1 ? { name: path, dir: "" } : { name: path.slice(at + 1), dir: path.slice(0, at) };
+}
+
+function addedLinesOf(diff: DiffOutput): string[] {
+  return diff.hunks.flatMap((h) => h.lines.filter((l) => l.lineType === "add").map((l) => l.content));
+}
+
+/**
+ * 파일별 변경(D7). 저장소마다 그 저장소의 main과 갈라진 지점 이후로 바뀐 파일(커밋하지 않은 변경 포함)을
+ * 묶어 보여 주고, 묶음 머리에 그 저장소의 브랜치를 단다. 서로 다른 저장소가 같은 문자열을 새로 추가했으면
+ * 「연결된 변경」으로 표시하고 나란히 보여 준다. 연결은 문자열 일치로 찾은 추정이다.
+ */
+export function FilesByRepo({ repos, variant = "panels" }: FilesByRepoProps) {
+  const { t } = useTranslation();
+  const paths = useMemo(() => repos.map((r) => r.path), [repos]);
+  const results = useChangesVsDefaultMany(paths);
+  useChangesActivityRefresh(paths);
+
+  const [selected, setSelected] = useState<(FileRef & { oldPath: string | null; status: FileStatus }) | null>(null);
+  const [openLink, setOpenLink] = useState<OpenLink | null>(null);
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+
+  const changesByPath = useMemo(() => {
+    const out = new Map<string, BranchChanges>();
+    results.forEach((r, i) => {
+      if (r.data) out.set(paths[i], r.data);
+    });
+    return out;
+  }, [results, paths]);
+
+  // 연결은 다른 저장소와만 맺으므로 저장소가 둘 이상일 때만 diff를 읽는다.
+  const scanTargets = useMemo(() => {
+    if (repos.length < 2) return [];
+    return repos
+      .flatMap((r) =>
+        (changesByPath.get(r.path)?.files ?? [])
+          .filter(
+            (f) =>
+              !f.isBinary &&
+              f.status !== "deleted" &&
+              f.additions > 0 &&
+              f.additions <= LINK_SCAN_MAX_ADDITIONS &&
+              isLinkableFile(f.path),
+          )
+          .map((f) => ({ repoPath: r.path, filePath: f.path, oldPath: f.oldPath })),
+      )
+      .slice(0, LINK_SCAN_FILE_LIMIT);
+  }, [repos, changesByPath]);
+  const scanResults = useFileDiffsVsDefault(scanTargets);
+
+  // `useQueries` 결과는 렌더마다 새 배열이다. 받은 시각이 바뀔 때만 다시 계산한다.
+  const scanKey = scanResults.map((r) => r.dataUpdatedAt).join(",");
+  const links = useMemo(() => {
+    const sources: LinkSource[] = [];
+    scanTargets.forEach((target, i) => {
+      const diff = scanResults[i]?.data;
+      if (diff && !diff.binary) sources.push({ ...target, addedLines: addedLinesOf(diff) });
+    });
+    return findLinkedChanges(sources);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanTargets, scanKey]);
+
+  const toggleCollapsed = (path: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+
+  const handleSelect = (repoPath: string, file: BranchChangedFile) => {
+    setOpenLink(null);
+    setSelected({ repoPath, filePath: file.path, oldPath: file.oldPath, status: file.status });
+  };
+
+  const handleOpenLink = (repoPath: string, file: BranchChangedFile, link: FileLink) => {
+    setSelected({ repoPath, filePath: file.path, oldPath: file.oldPath, status: file.status });
+    setOpenLink({ from: { repoPath, filePath: file.path }, link });
+  };
+
+  const nameOf = (path: string) => repos.find((r) => r.path === path)?.name ?? path;
+  const linksScanned = scanTargets.length > 0;
+  const linksTruncated = repos.length >= 2 && scanTargets.length >= LINK_SCAN_FILE_LIMIT;
+
+  const list = (
+    <div className="flex flex-col min-h-0 h-full" data-testid="files-by-repo">
+      <div className="flex flex-col gap-1 px-3 py-2.5 border-b border-(--line) shrink-0">
+        <strong className="text-[12.5px] text-foreground">{t("filesByRepo.title")}</strong>
+        <span className="text-[11.5px] text-muted-foreground">
+          {t("filesByRepo.subtitle", { count: repos.length })}
+          {linksTruncated && ` · ${t("filesByRepo.linksTruncated", { count: LINK_SCAN_FILE_LIMIT })}`}
+        </span>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {repos.map((repo, i) => {
+          const result = results[i];
+          const changes = result?.data;
+          const isCollapsed = collapsed.has(repo.path);
+          return (
+            <section key={repo.path} aria-label={repo.name} data-repo={repo.path}>
+              <RepoGroupHeader
+                repo={repo}
+                changes={changes}
+                collapsed={isCollapsed}
+                onToggle={() => toggleCollapsed(repo.path)}
+              />
+              {isCollapsed ? null : result?.isError ? (
+                <div className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] text-danger">
+                  <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />
+                  {t("filesByRepo.loadFailed", { error: getErrorMessage(result.error) })}
+                </div>
+              ) : !changes ? (
+                <div className="px-3 py-2 text-[11.5px] text-muted-foreground">{t("filesByRepo.loading")}</div>
+              ) : (
+                <>
+                  <GroupNote t={t} changes={changes} />
+                  {changes.files.length === 0 ? (
+                    <div className="px-3 py-2 text-[11.5px] text-muted-foreground">{t("filesByRepo.noChanges")}</div>
+                  ) : (
+                    changes.files.map((file) => (
+                      <FileRow
+                        key={`${file.status}:${file.path}`}
+                        file={file}
+                        links={links.get(fileKey(repo.path, file.path)) ?? []}
+                        selected={sameFile(selected, { repoPath: repo.path, filePath: file.path })}
+                        onSelect={() => handleSelect(repo.path, file)}
+                        onOpenLink={(link) => handleOpenLink(repo.path, file, link)}
+                      />
+                    ))
+                  )}
+                </>
+              )}
+            </section>
+          );
+        })}
+      </div>
+      {linksScanned && (
+        <div className="px-3 py-2 border-t border-(--line) text-[11px] text-(--faint) shrink-0">
+          {t("filesByRepo.linkHint")}
+        </div>
+      )}
+    </div>
+  );
+
+  const detail = openLink ? (
+    <LinkedCompare
+      key={`${fileKey(openLink.from.repoPath, openLink.from.filePath)}:${openLink.link.token}`}
+      openLink={openLink}
+      nameOf={nameOf}
+      onClose={() => setOpenLink(null)}
+    />
+  ) : selected ? (
+    <SelectedFileDiff key={fileKey(selected.repoPath, selected.filePath)} file={selected} />
+  ) : (
+    <EmptyState icon={FileText} title={t("filesByRepo.selectTitle")} description={t("filesByRepo.selectHint")} />
+  );
+
+  if (variant === "inline") {
+    return (
+      <div className="flex flex-1 min-h-0">
+        <div className="w-[340px] max-w-[45%] shrink-0 border-r border-(--line) min-h-0">{list}</div>
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">{detail}</div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-1 min-h-0 gap-(--g)">
+      <div className="w-[400px] max-w-[45%] shrink-0 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden">
+        {list}
+      </div>
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden">
+        {detail}
+      </div>
+    </div>
+  );
+}
+
+/** 저장소 묶음 머리: 접기, 저장소 색·이름, 그 저장소의 지금 브랜치, 파일 수. */
+function RepoGroupHeader({
+  repo,
+  changes,
+  collapsed,
+  onToggle,
+}: {
+  repo: FilesByRepoRepo;
+  changes: BranchChanges | undefined;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = useTranslation();
+  const color = repoLaneColor(repo.path);
+  const Chevron = collapsed ? ChevronRight : ChevronDown;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      title={repo.path}
+      className="flex items-center gap-2 w-full px-3 py-2 bg-(--acc-faint) border-b border-(--line) text-left hover:bg-accent transition-colors"
+    >
+      <Chevron className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span
+        className="flex items-center justify-center w-4 h-4 shrink-0 rounded-[4px] text-[9px] font-bold"
+        style={{ background: `color-mix(in srgb, ${color} 18%, transparent)`, color }}
+        aria-hidden="true"
+      >
+        {repo.name.slice(0, 1).toUpperCase()}
+      </span>
+      <strong className="text-[12px] text-foreground truncate">{repo.name}</strong>
+      {changes && (
+        <span
+          className="inline-flex items-center gap-1 min-w-0 font-mono text-[10.5px] text-muted-foreground"
+          data-testid="group-branch"
+        >
+          <GitBranch className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">{changes.branch ?? t("filesByRepo.detached")}</span>
+        </span>
+      )}
+      <span className="flex-1" />
+      {changes && (
+        <span className="shrink-0 text-[11px] text-(--faint)">
+          {t("filesByRepo.fileCount", { count: changes.files.length })}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** 비교 기준이 평소(main과 갈라진 지점)와 다를 때 한 줄로 알린다. */
+function GroupNote({ t, changes }: { t: TFunction; changes: BranchChanges }) {
+  let note: string | null = null;
+  if (changes.baseStatus === "noDefaultBranch" || changes.baseStatus === "noSharedHistory") {
+    note = t("filesByRepo.noBase", { branch: changes.defaultBranch ?? "main" });
+  } else if (changes.baseStatus === null) {
+    note = t("filesByRepo.unborn");
+  } else if (changes.branch !== null && changes.branch === changes.defaultBranch) {
+    note = t("filesByRepo.onDefault", { base: changes.baseRef ?? changes.defaultBranch });
+  }
+  if (!note) return null;
+  return <div className="px-3 pt-1.5 pb-1 text-[11px] text-muted-foreground">{note}</div>;
+}
+
+interface FileRowProps {
+  file: BranchChangedFile;
+  links: readonly FileLink[];
+  selected: boolean;
+  onSelect: () => void;
+  onOpenLink: (link: FileLink) => void;
+}
+
+function FileRow({ file, links, selected, onSelect, onOpenLink }: FileRowProps) {
+  const { t } = useTranslation();
+  const { name, dir } = splitPath(file.path);
+  const first = links[0];
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-selected={selected}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+      className={cn(
+        "flex items-center gap-2 min-h-7 px-3 border-b border-(--line) cursor-pointer select-none hover:bg-accent/60",
+        selected && "bg-(--acc-sel) hover:bg-(--acc-sel)",
+      )}
+    >
+      <span className={cn("w-2.5 shrink-0 font-mono text-[10.5px] font-bold", statusTextColors[file.status])}>
+        {STATUS_LETTER[file.status]}
+      </span>
+      <span className="flex-1 min-w-0 truncate text-[12.5px] text-foreground">
+        {name} {dir && <span className="text-[11px] text-(--faint)">{dir}</span>}
+      </span>
+      {first && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenLink(first);
+          }}
+          title={t("filesByRepo.linkChipTitle", { token: first.token, count: links.length })}
+          className="inline-flex items-center gap-1 max-w-[150px] shrink-0 px-1.5 py-px rounded-(--radius-chip) bg-(--chip) text-[10.5px] font-bold text-(--fg2) hover:bg-accent"
+          data-testid="link-chip"
+        >
+          <Link2 className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">{first.token}</span>
+          {links.length > 1 && <span className="shrink-0 text-(--faint)">+{links.length - 1}</span>}
+        </button>
+      )}
+      {file.isBinary ? (
+        <span className="shrink-0 text-[10.5px] text-(--faint)">{t("filesByRepo.binary")}</span>
+      ) : (
+        <>
+          {file.additions > 0 && (
+            <span className="shrink-0 font-mono text-[11px] text-diff-add-fg">+{file.additions}</span>
+          )}
+          {file.deletions > 0 && (
+            <span className="shrink-0 font-mono text-[11px] text-diff-del-fg">−{file.deletions}</span>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** 고른 파일 하나를 그 저장소 main과 갈라진 지점 → 작업 트리로 비교한다. */
+function SelectedFileDiff({ file }: { file: FileRef & { oldPath: string | null; status: FileStatus } }) {
+  const { t } = useTranslation();
+  const targets = useMemo(() => [file], [file]);
+  const [result] = useFileDiffsVsDefault(targets);
+  if (result?.isError) {
+    return <div className="flex-1 flex items-center justify-center text-sm text-danger">{t("diff.failedToLoad")}</div>;
+  }
+  if (!result?.data) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+        {t("filesByRepo.loading")}
+      </div>
+    );
+  }
+  return <DiffViewer diff={result.data} status={file.status} />;
+}
+
+/** 연결된 변경: 두 저장소 파일에서 같은 문자열이 추가된 부분을 나란히 보여 준다. */
+function LinkedCompare({
+  openLink,
+  nameOf,
+  onClose,
+}: {
+  openLink: OpenLink;
+  nameOf: (repoPath: string) => string;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const { from, link } = openLink;
+  const [otherIndex, setOtherIndex] = useState(0);
+  const other = link.others[Math.min(otherIndex, link.others.length - 1)];
+  const sides = useMemo(
+    () => [
+      { ...from, oldPath: null },
+      { ...other, oldPath: null },
+    ],
+    [from, other],
+  );
+  const [mine, theirs] = useFileDiffsVsDefault(sides);
+  const repoNames = [nameOf(from.repoPath), nameOf(other.repoPath)].join(", ");
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0" data-testid="linked-compare">
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-(--line) shrink-0 min-w-0">
+        <strong className="shrink-0 text-[12.5px] text-foreground">{t("filesByRepo.linkedTitle")}</strong>
+        <span className="flex-1 min-w-0 truncate text-[11.5px] text-muted-foreground">
+          {t("filesByRepo.linkedSummary", { repos: repoNames })}{" "}
+          <span className="font-mono text-foreground">{link.token}</span>
+          {" · "}
+          <span className="text-(--faint)">{t("filesByRepo.estimate")}</span>
+        </span>
+        {link.others.length > 1 && (
+          <select
+            aria-label={t("filesByRepo.pickOther")}
+            value={otherIndex}
+            onChange={(e) => setOtherIndex(Number(e.target.value))}
+            className="shrink-0 h-6 max-w-[180px] px-1.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] text-(--fg2)"
+          >
+            {link.others.map((o, i) => (
+              <option key={fileKey(o.repoPath, o.filePath)} value={i}>
+                {nameOf(o.repoPath)} / {o.filePath}
+              </option>
+            ))}
+          </select>
+        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 flex items-center gap-1 h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
+        >
+          <X className="w-3 h-3" aria-hidden="true" />
+          {t("filesByRepo.closeLink")}
+        </button>
+      </div>
+      <div className="flex flex-1 min-h-0">
+        <LinkedHalf file={from} label={nameOf(from.repoPath)} diff={mine?.data} token={link.token} />
+        <LinkedHalf file={other} label={nameOf(other.repoPath)} diff={theirs?.data} token={link.token} />
+      </div>
+    </div>
+  );
+}
+
+/** 연결된 변경의 한쪽: 그 문자열이 추가된 구간(hunk)만 보여 주고 문자열을 강조한다. */
+function LinkedHalf({
+  file,
+  label,
+  diff,
+  token,
+}: {
+  file: FileRef;
+  label: string;
+  diff: DiffOutput | undefined;
+  token: string;
+}) {
+  const { t } = useTranslation();
+  const hunks = useMemo(
+    () =>
+      (diff?.hunks ?? []).filter((h) => h.lines.some((l) => l.lineType === "add" && l.content.includes(token))),
+    [diff, token],
+  );
+  return (
+    <div className="flex flex-col flex-1 min-w-0 border-r border-(--line) last:border-r-0">
+      <div className="flex items-center gap-2 h-[34px] px-3 border-b border-(--line) shrink-0 min-w-0">
+        <RepoLaneTag repoPath={file.repoPath} label={label} />
+        <strong className="truncate text-[12px] text-foreground" title={file.filePath}>
+          {file.filePath}
+        </strong>
+      </div>
+      <div className="flex-1 min-h-0 overflow-auto py-1 font-mono text-[12px]">
+        {!diff ? (
+          <div className="px-3 py-2 text-[11.5px] text-muted-foreground font-sans">{t("filesByRepo.loading")}</div>
+        ) : (
+          hunks.map((h) => (
+            <div key={`${h.oldStart}:${h.newStart}`} className="mb-2">
+              {h.lines.map((l, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "flex leading-(--code-lh)",
+                    l.lineType === "add" && "bg-diff-add text-diff-add-fg",
+                    l.lineType === "delete" && "bg-diff-del text-diff-del-fg",
+                    l.lineType === "context" && "text-(--fg2)",
+                  )}
+                >
+                  <span className="w-[38px] shrink-0 pr-1 text-right text-(--ln) select-none">
+                    {l.newLineNo ?? ""}
+                  </span>
+                  <span className="w-5 shrink-0 text-center select-none">
+                    {l.lineType === "add" ? "+" : l.lineType === "delete" ? "−" : ""}
+                  </span>
+                  <span className="whitespace-pre pr-3">
+                    {splitByToken(l.content, token).map((part, j) =>
+                      part.match ? (
+                        <mark key={j} className="bg-(--live-soft) text-inherit rounded-[2px]">
+                          {part.text}
+                        </mark>
+                      ) : (
+                        <span key={j}>{part.text}</span>
+                      ),
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * `repo:activity`를 받으면 그 저장소의 main 대비 변경과 파일 diff를 다시 읽는다.
+ * 감시에 들지 않은 저장소는 `CHANGES_VS_DEFAULT_POLL_MS` 주기 갱신이 대신한다.
+ */
+function useChangesActivityRefresh(paths: readonly string[]): void {
+  const queryClient = useQueryClient();
+  const key = paths.map(normalizePath).join("\n");
+  useEffect(() => {
+    const watched = new Set(key.split("\n").filter(Boolean));
+    let mounted = true;
+    let unlisten: (() => void) | undefined;
+    listen<ActivityEvent>("repo:activity", (event) => {
+      if (!mounted) return;
+      const path = normalizePath(event.payload.path);
+      if (!watched.has(path)) return;
+      void queryClient.invalidateQueries({
+        predicate: (q) =>
+          (q.queryKey[0] === "changesVsDefault" || q.queryKey[0] === "fileDiffVsDefault") &&
+          typeof q.queryKey[1] === "string" &&
+          normalizePath(q.queryKey[1]) === path,
+      });
+    })
+      .then((fn) => {
+        if (mounted) unlisten = fn;
+        else fn();
+      })
+      .catch(() => {
+        /* 이벤트를 못 받아도 주기적 갱신이 대신한다 */
+      });
+    return () => {
+      mounted = false;
+      unlisten?.();
+    };
+  }, [queryClient, key]);
+}

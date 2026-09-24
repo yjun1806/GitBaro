@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { AlertTriangle, Folder, GitCommitVertical } from "lucide-react";
+import { AlertTriangle, Files, Folder, GitCommitVertical } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
@@ -15,6 +15,9 @@ import { WorkspaceTitle } from "./WorkspaceTitle";
 import { ReviewFilesPanel, type ReviewSelection } from "./ReviewFilesPanel";
 import { useWorkspaceReview, type ReviewRepo } from "./useWorkspaceReview";
 import { useReviewActivityRefresh } from "./useReviewActivityRefresh";
+import { FilesByRepo } from "./FilesByRepo";
+import { TabGroup, Tab } from "@/components/ui/Tabs";
+import { cn } from "@/lib/utils";
 
 export interface WorkspaceReviewProps {
   workspaceId: string;
@@ -25,6 +28,7 @@ export interface WorkspaceReviewProps {
 /**
  * 워크스페이스를 고른 상태의 메인 칸(D1). 제목, 여러 저장소 커밋 그래프(저장소별 레인),
  * 아래에 고른 커밋이나 커밋하지 않은 변경의 파일 목록과 diff.
+ * 「파일별 변경」 탭(D7)을 고르면 그래프 대신 저장소별 main 대비 변경 목록과 연결된 변경을 보여 준다.
  * 조용한 저장소(main에 있고 새 커밋·커밋하지 않은 변경이 없음)는 접고 「모두 보기」로 펼친다.
  */
 export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
@@ -34,6 +38,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const accounts = useAccountStore((s) => s.accounts);
   const [showAll, setShowAll] = useState(false);
   const [selection, setSelection] = useState<ReviewSelection>(null);
+  const [tab, setTab] = useState<"graph" | "files">("graph");
 
   const data = useWorkspaceReview(paths, showAll);
   useReviewActivityRefresh(data.repoPaths);
@@ -48,6 +53,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const repoLabel = useCallback((path: string) => nameByPath.get(path) ?? path, [nameByPath]);
 
   const titleSlot = useToolbarTitleSlot();
+  const filesRepos = useMemo(() => data.visible.map((r) => ({ path: r.path, name: r.name })), [data.visible]);
 
   if (!workspace) return null;
 
@@ -74,14 +80,31 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
       ) : (
         <>
           <section
-            aria-label={t("shell.graphTab")}
-            className="relative flex flex-col h-[46%] min-h-[180px] shrink-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
+            aria-label={t("shell.panelTabs")}
+            className={cn(
+              "relative flex flex-col shrink-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden",
+              tab === "graph" && "h-[46%] min-h-[180px]",
+            )}
           >
             <div className="flex items-center gap-2 min-h-8 pl-3 pr-3 shrink-0 border-b border-(--line)">
-              <span className="flex items-center gap-1.5 h-8 shrink-0 border-b-2 border-(--acc) text-[12.5px] font-bold text-foreground">
-                <GitCommitVertical className="w-3.5 h-3.5" aria-hidden="true" />
-                {t("shell.graphTab")}
-              </span>
+              <TabGroup aria-label={t("shell.panelTabs")} className="shrink-0 gap-2 border-b-0">
+                <Tab
+                  variant="inline"
+                  active={tab === "graph"}
+                  onClick={() => setTab("graph")}
+                  icon={<GitCommitVertical className="w-3.5 h-3.5" />}
+                >
+                  {t("shell.graphTab")}
+                </Tab>
+                <Tab
+                  variant="inline"
+                  active={tab === "files"}
+                  onClick={() => setTab("files")}
+                  icon={<Files className="w-3.5 h-3.5" />}
+                >
+                  {t("filesByRepo.tab")}
+                </Tab>
+              </TabGroup>
               <span className="flex-1" />
               <RepoLegend repos={data.visible} />
               {data.hiddenCount > 0 || showAll ? (
@@ -94,7 +117,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                   {showAll ? t("review.hideQuiet") : t("review.showAll", { count: data.hiddenCount })}
                 </button>
               ) : null}
-              {data.newCount > 0 && (
+              {tab === "graph" && data.newCount > 0 && (
                 <>
                   <span className="w-px h-[18px] bg-(--line) mx-1 shrink-0" aria-hidden="true" />
                   <button
@@ -107,34 +130,40 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                 </>
               )}
             </div>
-            <RepoLaneCommitGraph
-              graph={data.graph}
-              lanePaths={data.lanePaths}
-              repoLabel={repoLabel}
-              selectedKey={selection?.key ?? null}
-              seenAt={data.seenAt}
-              baseTime={data.baseTime}
-              baseBranchLabel={data.baseBranchLabel}
-              isLoading={data.isLoading}
-              emptyMessage={emptyMessage}
-              onSelectCommit={(repoPath, commit, key) =>
-                setSelection({ kind: "commit", key, repoPath, oid: commit.id })
-              }
-              onSelectWip={(wip, key) =>
-                setSelection({
-                  kind: "wip",
-                  key,
-                  repoPath: wip.repoPath,
-                  path: wip.path,
-                  branch: wip.branch,
-                  isMain: wip.isMain,
-                })
-              }
-            />
+            {tab === "graph" && (
+              <RepoLaneCommitGraph
+                graph={data.graph}
+                lanePaths={data.lanePaths}
+                repoLabel={repoLabel}
+                selectedKey={selection?.key ?? null}
+                seenAt={data.seenAt}
+                baseTime={data.baseTime}
+                baseBranchLabel={data.baseBranchLabel}
+                isLoading={data.isLoading}
+                emptyMessage={emptyMessage}
+                onSelectCommit={(repoPath, commit, key) =>
+                  setSelection({ kind: "commit", key, repoPath, oid: commit.id })
+                }
+                onSelectWip={(wip, key) =>
+                  setSelection({
+                    kind: "wip",
+                    key,
+                    repoPath: wip.repoPath,
+                    path: wip.path,
+                    branch: wip.branch,
+                    isMain: wip.isMain,
+                  })
+                }
+              />
+            )}
           </section>
-          <Card className="flex-1">
-            <ReviewFilesPanel selection={selection} repoLabel={repoLabel} />
-          </Card>
+          {tab === "graph" ? (
+            <Card className="flex-1">
+              <ReviewFilesPanel selection={selection} repoLabel={repoLabel} />
+            </Card>
+          ) : (
+            <FilesByRepo repos={filesRepos} variant="panels" />
+          )}
         </>
       )}
     </div>
