@@ -17,6 +17,8 @@ const commands = vi.hoisted(() => ({
   gitPull: vi.fn(() => Promise.resolve()),
   gitPush: vi.fn(() => Promise.resolve()),
   getPushTarget: vi.fn(() => Promise.resolve({ remote: "origin", refspec: "HEAD:refs/heads/feat/x" })),
+  // 여러 저장소 확인 창(W5-T2)이 여는 계획. 창이 열리는지만 보므로 빈 계획을 돌려준다.
+  planRemoteOp: vi.fn(() => Promise.resolve([])),
   openInTerminal: vi.fn(() => Promise.resolve()),
 }));
 
@@ -185,11 +187,20 @@ describe("GitActionZone — menus and disabled reasons", () => {
 describe("GitActionZone — workspace mode", () => {
   const paths = ["/repos/a", "/repos/b", "/repos/c"];
 
-  it("turns Fetch, Pull and Push off until onMultiRepo is wired", () => {
-    renderZone(<GitActionZone mode="workspace" paths={paths} />);
+  it("turns Fetch, Pull and Push off when no multi-repository handler is given", () => {
+    renderZone(<WorkspaceSyncGroup paths={paths} />);
     for (const label of ["Fetch", "Pull", "Push"]) {
       expect(screen.getByRole("button", { name: `${label} — Pick a repository` })).toHaveProperty("disabled", true);
     }
+  });
+
+  it("opens the per-repository confirmation instead of running git (W5-T2)", async () => {
+    renderZone(<GitActionZone mode="workspace" paths={paths} />);
+    const push = screen.getByRole("button", { name: "Push" });
+    expect(push).toHaveProperty("disabled", false);
+    fireEvent.click(push);
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    expect(commands.gitPush).not.toHaveBeenCalled();
   });
 
   it("calls onMultiRepo with the operation instead of running git on one repository", () => {

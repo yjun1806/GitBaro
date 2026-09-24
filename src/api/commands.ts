@@ -1003,3 +1003,11 @@ export async function getFileDiffVsDefault(
   });
   return fileDiffVsDefaultFromRaw(raw);
 }
+
+// W5-T2 — 여러 저장소 원격 작업 확인 창(D3)
+import type { RemoteOp, RepoRemotePlan } from "@/types";
+
+/** 저장소마다 `op`을 실행하면 무엇이 일어날지. 결과는 `paths` 순서 그대로다. */
+export async function planRemoteOp(paths: string[], op: RemoteOp): Promise<RepoRemotePlan[]> {
+  return invoke("plan_remote_op", { paths, op });
+}

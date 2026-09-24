@@ -70,7 +70,7 @@ describe("ToolbarRoot — scope", () => {
     expect(actionOrder()).toEqual(ALL_ACTIONS);
   });
 
-  it("keeps the git actions in workspace mode but turns them off until they are wired", () => {
+  it("keeps the git actions in workspace mode; only Fetch, Pull and Push work across repositories", () => {
     act(() => {
       useWorkspaceStore.getState().setActiveWorkspace("w1");
     });
@@ -82,7 +82,11 @@ describe("ToolbarRoot — scope", () => {
     expect(screen.queryByText("xames-ws")).toBeNull();
     expect(actionOrder()).toEqual(ALL_ACTIONS);
 
-    for (const label of ["Fetch", "Pull", "Push", "Branch", "Merge", "Stash", "Open in Terminal"]) {
+    // Fetch·Pull·Push는 저장소별 확인 창(W5-T2)을 연다.
+    for (const label of ["Fetch", "Pull", "Push"]) {
+      expect(screen.getByRole("button", { name: label })).toHaveProperty("disabled", false);
+    }
+    for (const label of ["Branch", "Merge", "Stash", "Open in Terminal"]) {
       const button = screen.getByRole("button", { name: `${label} — Pick a repository` });
       expect(button).toHaveProperty("disabled", true);
       expect(button.parentElement?.getAttribute("title")).toBe("Pick a repository");
@@ -98,6 +102,6 @@ describe("ToolbarRoot — scope", () => {
       useWorkspaceStore.getState().setActiveWorkspace("w1");
     });
     renderToolbar();
-    expect(screen.getAllByTitle("저장소를 고르세요")).toHaveLength(7);
+    expect(screen.getAllByTitle("저장소를 고르세요")).toHaveLength(4);
   });
 });

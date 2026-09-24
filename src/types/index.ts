@@ -662,3 +662,35 @@ export interface FileDiffVsDefault extends DiffOutput {
   /** false면 갈라진 지점을 못 찾아 HEAD와 비교한 결과다(`BranchChanges.files`와 같은 규칙). */
   baseIsDivergencePoint: boolean;
 }
+
+// W5-T2 — 여러 저장소 원격 작업 확인 창(D3)
+
+/** 저장소를 이번 원격 작업에서 뺀 이유. */
+export type RemotePlanSkipReason =
+  | "upToDate"
+  | "noUpstream"
+  | "detachedHead"
+  | "unborn"
+  | "noRemote"
+  | "multipleRemotes"
+  | "error";
+
+/** `plan_remote_op`의 저장소별 계획. 로컬 상태(마지막 fetch 결과) 기준이다. */
+export interface RepoRemotePlan {
+  path: string;
+  branch: string | null;
+  remote: string | null;
+  /** 이 저장소에서 실행할 git 명령. 원격 이름만 쓰고 URL·토큰은 넣지 않는다. */
+  command: string | null;
+  /** Push: 올릴 커밋 수. Pull: 받을 커밋 수. Fetch: 0. */
+  commits: number;
+  /** 원격 브랜치에 로컬에 없는 커밋이 있다. Push는 먼저 Pull이 필요하다. */
+  needsPull: boolean;
+  /** Push가 추적 브랜치를 새로 연결한다(`-u`). */
+  setsUpstream: boolean;
+  skip: boolean;
+  skipReason: RemotePlanSkipReason | null;
+  /** 마지막 fetch 시각(유닉스 초). */
+  fetchedAt: number | null;
+  error: string | null;
+}
