@@ -178,7 +178,17 @@ export function CloneDialog({
                 <label className="text-xs font-medium text-muted-foreground">
                   {t("clone.account")}
                 </label>
-                <div ref={accountPickerRef} className="relative">
+                <div
+                  ref={accountPickerRef}
+                  className="relative"
+                  onKeyDown={(e) => {
+                    // Escape closes only the picker, not the whole dialog.
+                    if (e.key !== "Escape" || !accountPickerOpen) return;
+                    e.preventDefault();
+                    setAccountPickerOpen(false);
+                    accountPickerRef.current?.querySelector("button")?.focus();
+                  }}
+                >
                   <button
                     type="button"
                     onClick={() => !isCloning && setAccountPickerOpen(!accountPickerOpen)}
