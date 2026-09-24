@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::git::branch::validate_branch_name;
 use crate::git::cli::{GitCliEngine, WorktreeEntry};
+use crate::git::worktree_base::resolve_worktree_base_cached;
 
 #[tauri::command]
 pub async fn get_worktrees(
@@ -31,6 +32,32 @@ pub async fn get_worktrees(
         .await
         .unwrap_or(false);
         entry.is_dirty = dirty;
+    }
+
+    // 링크된 워크트리마다 기반 브랜치를 판별한다. 참조가 그대로면 캐시된 값을 쓴다.
+    let targets: Vec<(usize, String)> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| !e.is_main && !e.is_bare)
+        .filter_map(|(i, e)| e.branch.clone().map(|b| (i, b)))
+        .collect();
+    if !targets.is_empty() {
+        let bases = tokio::task::spawn_blocking(move || {
+            let Ok(repo) = git2::Repository::open(&repo_path) else {
+                return Vec::new();
+            };
+            targets
+                .into_iter()
+                .map(|(i, branch)| (i, resolve_worktree_base_cached(&repo, &branch)))
+                .collect::<Vec<_>>()
+        })
+        .await
+        .unwrap_or_default();
+        for (i, base) in bases {
+            if let Some(entry) = entries.get_mut(i) {
+                entry.base = base;
+            }
+        }
     }
 
     Ok(entries)

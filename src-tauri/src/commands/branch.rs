@@ -4,6 +4,7 @@ use crate::git::cli::{GitCliEngine, GitOperation};
 use crate::git::commit::commit_to_info;
 use crate::git::engine::{BranchCompareResult, MergePreCheckResult, MergeStrategy};
 use crate::git::libgit::is_working_tree_dirty;
+use crate::git::worktree_base::default_branch_name;
 use serde_json::{json, Value};
 
 fn is_fully_merged(repo: &git2::Repository, branch_oid: git2::Oid, default_oid: git2::Oid) -> bool {
@@ -30,11 +31,7 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
         let branches = repo.branches(None)?;
 
         // origin/HEAD로부터 default branch 이름 판별
-        let default_branch_name = repo
-            .find_reference("refs/remotes/origin/HEAD")
-            .ok()
-            .and_then(|r| r.symbolic_target().map(|s| s.to_string()))
-            .and_then(|s| s.strip_prefix("refs/remotes/origin/").map(|n| n.to_string()));
+        let default_branch_name = default_branch_name(&repo);
 
         // default branch OID (isFullyMerged 계산용)
         let default_oid = default_branch_name.as_deref().and_then(|name| {
