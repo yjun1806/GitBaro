@@ -390,7 +390,12 @@
     "ai": "AI Assistant",
     "aiDescription": "Choose the AI CLI to use with repositories",
     "detectingAiClis": "Detecting installed AI CLIs",
-    "noAiClis": "No installed AI CLIs found"
+    "noAiClis": "No installed AI CLIs found",
+    "reviewBasis": "Review basis",
+    "reviewBasisUnpushed": "Commits not on any remote",
+    "reviewBasisUnseen": "Commits you haven't marked seen",
+    "reviewBasisUnpushedHint": "Commits that no remote has yet are the ones to review.",
+    "reviewBasisUnseenHint": "Commits after your “seen up to here” mark are the ones to review."
   },
   "diff": {
     "unified": "Unified",

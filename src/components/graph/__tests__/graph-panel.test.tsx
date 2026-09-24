@@ -137,6 +137,7 @@ const branchList: { name: string; isHead: boolean; isRemote: boolean }[] = [];
 /** main 대비 변경(탭 배지·갈라진 지점 행). 테스트마다 채운다. */
 const changesVsDefaultByPath: Record<string, unknown> = {};
 
+const unpushedState = vi.hoisted(() => ({ value: undefined as unknown }));
 vi.mock("@/api/queries", async (importOriginal) => ({
   useChangesVsDefaultOnHead: (entries: readonly { path: string }[]) =>
     entries.map((e) => ({ data: changesVsDefaultByPath[e.path] })),
@@ -170,6 +171,7 @@ vi.mock("@/api/queries", async (importOriginal) => ({
   },
   useReviewStatusQuery: () => ({ data: scan, isLoading: false }),
   useNewCommitCountsQuery: () => ({ data: [], isLoading: false }),
+  useUnpushedCommits: () => ({ data: unpushedState.value }),
 }));
 
 const { GraphPanel } = await import("@/components/graph/GraphPanel");
@@ -208,7 +210,9 @@ beforeEach(async () => {
   worktreeState.histories = {};
   mergeMockStore.setState({ value: null });
   useBranchRangeStore.getState().clear();
-  useUIStore.setState({ activeTab: "history", compareBranch: null, repoListOpen: false });
+  // 이 파일의 기존 시나리오는 「확인하지 않은 커밋」 기준(확인함 표시)이다. 기본 기준은 따로 본다.
+  useUIStore.setState({ activeTab: "history", compareBranch: null, repoListOpen: false, reviewBasis: "unseen" });
+  unpushedState.value = undefined;
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
   useFollowStore.getState().stop();
@@ -247,6 +251,19 @@ describe("GraphPanel commit graph", () => {
     // Rows below the divider are drawn faded, as in the mockup.
     const seen = [...document.querySelectorAll("[data-seen]")].map((el) => el.getAttribute("data-commit-id"));
     expect(seen).toEqual(["c3", "c4"]);
+  });
+
+  it("hides every seen marker by default and badges the graph tab with commits not on any remote", async () => {
+    useUIStore.setState({ reviewBasis: "unpushed" });
+    unpushedState.value = { count: 3, hasUpstream: false, hasRemote: true, commits: [] };
+    renderPanel();
+    await screen.findByText("c1");
+    expect(screen.queryByRole("separator", { name: /Seen up to here/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /new commits? as seen/ })).toBeNull();
+    expect(screen.queryAllByTitle("New commit")).toHaveLength(0);
+    expect(document.querySelectorAll("[data-seen]")).toHaveLength(0);
+    const graphTab = screen.getByRole("tab", { name: /Commit graph/ });
+    expect(graphTab.textContent).toContain("3");
   });
 
   it("clears the button, dots and divider at once when marked seen, before the recount returns", async () => {

@@ -390,7 +390,12 @@
     "ai": "AI 어시스턴트",
     "aiDescription": "저장소에서 사용할 AI CLI를 선택하세요",
     "detectingAiClis": "설치된 AI CLI 감지 중",
-    "noAiClis": "설치된 AI CLI를 찾을 수 없습니다"
+    "noAiClis": "설치된 AI CLI를 찾을 수 없습니다",
+    "reviewBasis": "검토 기준",
+    "reviewBasisUnpushed": "원격에 없는 커밋",
+    "reviewBasisUnseen": "확인하지 않은 커밋",
+    "reviewBasisUnpushedHint": "원격에 올리지 않은 커밋을 검토할 커밋으로 봐요.",
+    "reviewBasisUnseenHint": "「여기까지 확인함」 뒤에 생긴 커밋을 검토할 커밋으로 봐요."
   },
   "diff": {
     "unified": "통합 보기",

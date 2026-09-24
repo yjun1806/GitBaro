@@ -2,9 +2,11 @@ import { useCallback, useMemo } from "react";
 import { useRepositoryStore } from "@/stores/repository";
 import { buildCountInputs, useReviewSeenStore } from "@/stores/review-seen";
 import { useLiveChangesStore } from "@/stores/live-changes";
+import { useSeenMarkerMode } from "@/stores/ui";
 import { useReviewStatus } from "@/hooks/useReviewStatus";
 import {
   useNewCommitIdsMany,
+  useRepoSyncStatuses,
   useStatusMany,
   useWorkspaceHistories,
   useWorkspaceRecentCommits,
@@ -53,6 +55,8 @@ export interface WorkspaceReviewData {
   repoPaths: ReviewRepoPaths[];
   /** 보이는 저장소 레인에 그린 새 커밋 수 합(메인 작업 트리). 「확인함으로 표시」가 옮기는 수다. */
   newCount: number;
+  /** 보이는 저장소의 모든 작업 폴더에서 원격에 없는 커밋 수 합(검토 기준 「원격에 없는 커밋」). */
+  unpushedCount: number;
   seenAt: number | null;
   baseTime: number | null;
   baseBranchLabel: string;
@@ -98,6 +102,8 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
     [members],
   );
   const statuses = useStatusMany(worktreePaths);
+  const { data: syncByPath } = useRepoSyncStatuses(worktreePaths);
+  const seenMode = useSeenMarkerMode();
 
   const entries = useReviewSeenStore((s) => s.entries);
   const initialScanDone = useReviewSeenStore((s) => s.initialScanDone);
@@ -182,8 +188,11 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
     )
     .filter((w) => w.count > 0);
 
+  // 검토 기준이 「원격에 없는 커밋」이면 새 커밋 점과 「여기까지 확인함」 줄을 그리지 않는다.
   const newIds = new Map(
-    visible.map((r) => [r.path, new Set(r.counted && r.counted.newCount > 0 ? r.counted.ids : [])]),
+    seenMode
+      ? visible.map((r) => [r.path, new Set(r.counted && r.counted.newCount > 0 ? r.counted.ids : [])])
+      : [],
   );
 
   // 행 계산은 저장소·커밋(참조 표시 포함)·WIP·새 커밋이 바뀔 때만 다시 한다. push·fetch 뒤에는
@@ -203,6 +212,9 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
     .map((r) => entries[r.path]?.seenAt)
     .filter((t): t is number => typeof t === "number");
   const seenAt = seenTimes.length > 0 ? Math.max(...seenTimes) : null;
+  const unpushedCount = visible
+    .flatMap((r) => r.worktrees)
+    .reduce((sum, w) => sum + (syncByPath?.[w.path]?.unpushed ?? 0), 0);
 
   const withBase = visible.filter((r) => r.lane?.hasBase);
   const baseTimes = withBase
@@ -235,6 +247,7 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
     lanePaths,
     repoPaths,
     newCount,
+    unpushedCount,
     seenAt,
     baseTime,
     baseBranchLabel,

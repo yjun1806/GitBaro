@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Archive, Files, GitCommitVertical, Play } from "lucide-react";
-import { useUIStore } from "@/stores/ui";
+import { useSeenMarkerMode, useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
@@ -9,6 +9,7 @@ import {
   useCommitHistoryInfinite,
   useMergeState,
   useStashList,
+  useUnpushedCommits,
   useWorkflowRuns,
   useWorktrees,
 } from "@/api/queries";
@@ -78,7 +79,11 @@ export function GraphPanel() {
   // 표시, 다른 워크트리 칩)을 감춘다. 그 표시는 체크아웃한 브랜치에만 맞는 말이다.
   const { target: viewTarget, historyTarget } = useHistoryView();
   const viewing = viewTarget !== null;
-  const newCommits = viewing ? null : review.newCommits;
+  // 검토 기준이 「원격에 없는 커밋」(기본)이면 확인함 표시(새 커밋 점·구분선·버튼)를 모두 감춘다.
+  const seenMode = useSeenMarkerMode();
+  const newCommits = viewing || !seenMode ? null : review.newCommits;
+  const { data: unpushed } = useUnpushedCommits(activeRepoPath);
+  const graphBadge = seenMode ? newCommits?.newCount : unpushed?.count;
   // 「main 대비 변경」 배지: 지금 연 워크트리의 main 대비 파일 수(그 탭이 보여 줄 목록과 같은 범위).
   const { data: history } = useCommitHistoryInfinite(activeRepoPath);
   const headOid = history?.pages[0]?.[0]?.id ?? null;
@@ -152,7 +157,7 @@ export function GraphPanel() {
             active={tab === "graph"}
             onClick={openGraphTab}
             icon={<GitCommitVertical className="w-3.5 h-3.5" />}
-            count={badgeCount(newCommits?.newCount)}
+            count={badgeCount(graphBadge)}
           >
             {t("shell.graphTab")}
           </Tab>
@@ -213,7 +218,7 @@ export function GraphPanel() {
             <CommitGraph
               wips={viewing ? NO_WIPS : worktreeFilter.wips}
               newCommits={newCommits}
-              seenAt={viewing ? null : review.seenAt}
+              seenAt={viewing || !seenMode ? null : review.seenAt}
               worktreeHeads={viewing ? NO_HEADS : worktreeFilter.heads}
               historyTarget={historyTarget}
             />

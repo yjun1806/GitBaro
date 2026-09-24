@@ -7,6 +7,7 @@ import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useReviewSeenStore } from "@/stores/review-seen";
+import { useUIStore } from "@/stores/ui";
 import { useFollowStore } from "@/stores/follow";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
 import type {
@@ -87,6 +88,7 @@ const statuses: Record<string, StatusEntry[]> = {
 /** main 대비 변경(탭 배지·갈라진 지점 행). 테스트마다 채운다. */
 const changesVsDefaultByPath: Record<string, unknown> = {};
 
+const syncState = vi.hoisted(() => ({ byPath: {} as Record<string, { unpushed: number }> }));
 vi.mock("@/api/queries", () => ({
   useChangesVsDefaultOnHead: (entries: readonly { path: string }[]) =>
     entries.map((e) => ({ data: changesVsDefaultByPath[e.path] })),
@@ -95,6 +97,7 @@ vi.mock("@/api/queries", () => ({
   useWorkspaceHistories: (repos: { path: string }[]) => repos.map((r) => histories[r.path]),
   useStatusMany: (paths: string[]) =>
     Object.fromEntries(paths.filter((p) => statuses[p]).map((p) => [p, statuses[p]])),
+  useRepoSyncStatuses: () => ({ data: syncState.byPath }),
   useNewCommitIdsMany: () => counted,
   useWorkspaceRecentCommits: (repos: { path: string }[]) =>
     Object.fromEntries(repos.filter((r) => recent[r.path]).map((r) => [r.path, recent[r.path]])),
@@ -183,6 +186,9 @@ function renderReview() {
 
 beforeEach(async () => {
   await i18n.changeLanguage("en");
+  // 기존 시나리오는 「확인하지 않은 커밋」 기준(확인함 표시)이다. 기본 기준은 따로 본다.
+  useUIStore.setState({ reviewBasis: "unseen" });
+  syncState.byPath = {};
   handlers.length = 0;
   histories = baseHistories();
   counted = baseCounted();
@@ -225,6 +231,15 @@ describe("WorkspaceReview", () => {
     expect(screen.getByRole("separator", { name: "Seen up to here" })).toBeTruthy();
     expect(screen.getByText("Where each repository branched off its default branch")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Mark 1 new commit as seen" })).toBeTruthy();
+  });
+
+  it("hides the seen divider and button by default and badges the graph with commits not on any remote", () => {
+    useUIStore.setState({ reviewBasis: "unpushed" });
+    syncState.byPath = { [APP]: { unpushed: 2 }, [API]: { unpushed: 1 }, [API_WT]: { unpushed: 4 } };
+    renderReview();
+    expect(screen.queryByRole("separator", { name: "Seen up to here" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /new commits? as seen/ })).toBeNull();
+    expect(screen.getByRole("tab", { name: /Commit graph/ }).textContent).toContain("7");
   });
 
   it("keeps each repository's lane colour when another repository is hidden or shown", () => {
