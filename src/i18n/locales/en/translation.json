@@ -154,6 +154,7 @@
     "changesRestoreFailed": "Switched branch, but your changes could not be reapplied cleanly. Check the changed files; the changes are also kept in the Stash tab. ({{error}})",
     "renameTitle": "Rename Branch",
     "noBranch": "No branch",
+    "originAhead": "↑{{count}} ahead of origin",
     "detachedHead": "Detached HEAD",
     "createBranch": "Create Branch",
     "defaultBranch": "Default Branch",
@@ -234,6 +235,16 @@
       "inferredHint": "No creation record, so this is the branch with the nearest fork point",
       "counts": "{{ahead}} commits ahead of and {{behind}} behind {{base}}"
     }
+  },
+  "worktreePanel": {
+    "title": "Worktrees",
+    "sectionMain": "Main",
+    "sectionLinked": "Linked worktrees",
+    "sectionPrunable": "Needs cleanup",
+    "open": "Open",
+    "terminal": "Terminal",
+    "editor": "Editor",
+    "remove": "Remove"
   },
   "clone": {
     "account": "Account",
@@ -514,7 +525,8 @@
     "failedToOpenRepo": "Failed to open repository: {{error}}",
     "storageFull": "Storage is full — changes can't be saved. Try clearing the activity log.",
     "failedToLogout": "Failed to log out: {{error}}",
-    "failedToUpdateSettings": "Failed to update settings: {{error}}"
+    "failedToUpdateSettings": "Failed to update settings: {{error}}",
+    "failedToOpenEditor": "Failed to open editor: {{error}}"
   },
   "preview": {
     "previewing": "Previewing: {{branch}}",

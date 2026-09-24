@@ -154,6 +154,7 @@
     "changesRestoreFailed": "Branch는 바뀌었지만 변경사항을 깔끔하게 다시 적용하지 못했습니다. 변경된 파일을 확인하세요. 변경사항은 Stash 탭에도 남아 있습니다. ({{error}})",
     "renameTitle": "Branch 이름 변경",
     "noBranch": "Branch 없음",
+    "originAhead": "origin보다 ↑{{count}}",
     "detachedHead": "Detached HEAD",
     "createBranch": "Branch 생성",
     "defaultBranch": "기본 Branch",
@@ -234,6 +235,16 @@
       "inferredHint": "브랜치 기록이 없어 가장 가까운 분기점으로 추정했어요",
       "counts": "{{base}}보다 커밋 {{ahead}}개 앞서고 {{behind}}개 뒤처짐"
     }
+  },
+  "worktreePanel": {
+    "title": "워크트리",
+    "sectionMain": "메인",
+    "sectionLinked": "링크된 워크트리",
+    "sectionPrunable": "정리 필요",
+    "open": "열기",
+    "terminal": "터미널",
+    "editor": "에디터",
+    "remove": "삭제"
   },
   "clone": {
     "account": "계정",
@@ -514,7 +525,8 @@
     "failedToOpenRepo": "저장소 열기 실패: {{error}}",
     "storageFull": "저장 공간이 가득 차 변경 사항이 저장되지 않습니다. 활동 로그를 비워주세요.",
     "failedToLogout": "로그아웃 실패: {{error}}",
-    "failedToUpdateSettings": "설정 업데이트 실패: {{error}}"
+    "failedToUpdateSettings": "설정 업데이트 실패: {{error}}",
+    "failedToOpenEditor": "에디터 열기 실패: {{error}}"
   },
   "preview": {
     "previewing": "미리보기 중: {{branch}}",

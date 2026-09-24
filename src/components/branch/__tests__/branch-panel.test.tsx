@@ -73,9 +73,12 @@ const handlers = {
   onClose: vi.fn(),
 };
 
+const anchorRef = { current: null as HTMLElement | null };
+
 function renderPanel(currentBranch: string | null = "fix/audit-bugs") {
   return render(
     <BranchPanel
+      anchorRef={anchorRef}
       repoName="GitBaro"
       activeRepoPath={AUDIT}
       currentBranch={currentBranch}
