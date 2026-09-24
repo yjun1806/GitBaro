@@ -577,6 +577,19 @@ impl GitCliEngine {
     /// stash list. Fails without touching anything when no entry matches.
     pub async fn stash_pop_oid(&self, oid: &str) -> Result<(), AppError> {
         crate::git::commit::validate_commit_oid(oid)?;
+        let index = self
+            .stash_index_of(oid)
+            .await?
+            .ok_or_else(|| AppError::GitCli {
+                message: format!("Stash {} not found", oid),
+                exit_code: None,
+            })?;
+        self.stash_pop_index(index).await
+    }
+
+    /// Where the stash entry whose commit is `oid` now sits in the stash list,
+    /// or None when no entry matches.
+    async fn stash_index_of(&self, oid: &str) -> Result<Option<usize>, AppError> {
         let list = self.run_local_probe(&["stash", "list", "--format=%H"]).await?;
         if !list.status.success() {
             return Err(AppError::GitCli {
@@ -584,14 +597,9 @@ impl GitCliEngine {
                 exit_code: list.status.code(),
             });
         }
-        let index = String::from_utf8_lossy(&list.stdout)
+        Ok(String::from_utf8_lossy(&list.stdout)
             .lines()
-            .position(|line| line.trim() == oid)
-            .ok_or_else(|| AppError::GitCli {
-                message: format!("Stash {} not found", oid),
-                exit_code: None,
-            })?;
-        self.stash_pop_index(index).await
+            .position(|line| line.trim() == oid))
     }
 
     /// Apply a stash entry by index without removing it.
@@ -1015,27 +1023,6 @@ impl PreviewMarker {
 }
 
 impl GitCliEngine {
-    /// Current `refs/stash` oid, if any stash exists.
-    async fn stash_top_oid(&self) -> Result<Option<String>, AppError> {
-        let out = self
-            .run_local(&["rev-parse", "--verify", "-q", "refs/stash"])
-            .await?;
-        let oid = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        Ok((out.status.success() && !oid.is_empty()).then_some(oid))
-    }
-
-    /// Pop the stash entry whose commit is `oid` (not whatever is on top).
-    /// Returns false when that entry no longer exists.
-    async fn stash_pop_oid(&self, oid: &str) -> Result<bool, AppError> {
-        let list = self.run_local_checked(&["stash", "list", "--format=%H"]).await?;
-        let Some(index) = list.lines().position(|l| l.trim() == oid) else {
-            return Ok(false);
-        };
-        let entry = format!("stash@{{{}}}", index);
-        self.run_local_checked(&["stash", "pop", &entry]).await?;
-        Ok(true)
-    }
-
     /// Start previewing another branch by performing a no-commit merge.
     /// Local changes (including untracked files) are stashed first.
     /// Returns false when there is nothing to preview (already up to date);
@@ -1054,10 +1041,10 @@ impl GitCliEngine {
         let stash_oid = if status.is_empty() {
             None
         } else {
-            let before = self.stash_top_oid().await?;
+            let before = self.stash_head_oid().await?;
             self.run_local_checked(&["stash", "push", "-u", "-m", "gitbaro-preview"])
                 .await?;
-            let after = self.stash_top_oid().await?;
+            let after = self.stash_head_oid().await?;
             if after.is_none() || after == before {
                 return Err(AppError::GitCli {
                     message: "Failed to stash local changes".to_string(),
@@ -1134,7 +1121,10 @@ impl GitCliEngine {
 
         if let Some(oid) = &marker.stash_oid {
             if self.operation_in(&git_dir).await?.is_none() {
-                self.stash_pop_oid(oid).await?;
+                // 사용자가 이미 꺼내거나 지운 스태시면 복원할 것이 없다.
+                if let Some(index) = self.stash_index_of(oid).await? {
+                    self.stash_pop_index(index).await?;
+                }
             }
         }
         std::fs::remove_file(&marker_path)?;
