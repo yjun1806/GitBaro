@@ -47,7 +47,7 @@ export function ImageDiffTwoUp({ oldSrc, newSrc, meta }: ImageDiffTwoUpProps) {
               <div className="checkerboard-bg rounded-md overflow-hidden image-diff-border-deleted p-1">
                 <img
                   src={oldSrc}
-                  alt="old"
+                  alt={t("diff.imageDiff.oldImage")}
                   className="max-w-full max-h-[400px] object-contain"
                   onLoad={(e) => {
                     const img = e.currentTarget;
@@ -85,7 +85,7 @@ export function ImageDiffTwoUp({ oldSrc, newSrc, meta }: ImageDiffTwoUpProps) {
               <div className="checkerboard-bg rounded-md overflow-hidden image-diff-border-added p-1">
                 <img
                   src={newSrc}
-                  alt="new"
+                  alt={t("diff.imageDiff.newImage")}
                   className="max-w-full max-h-[400px] object-contain"
                   onLoad={(e) => {
                     const img = e.currentTarget;

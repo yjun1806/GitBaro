@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 interface ImageDiffSwipeProps {
   oldSrc: string;
@@ -6,6 +7,7 @@ interface ImageDiffSwipeProps {
 }
 
 export function ImageDiffSwipe({ oldSrc, newSrc }: ImageDiffSwipeProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState(50); // percentage
   const [dragging, setDragging] = useState(false);
@@ -70,7 +72,7 @@ export function ImageDiffSwipe({ oldSrc, newSrc }: ImageDiffSwipeProps) {
         {/* New image (full) */}
         <img
           src={newSrc}
-          alt="new"
+          alt={t("diff.imageDiff.newImage")}
           className="absolute inset-0 w-full h-full object-contain"
           onLoad={handleImageLoad}
         />
@@ -82,7 +84,7 @@ export function ImageDiffSwipe({ oldSrc, newSrc }: ImageDiffSwipeProps) {
         >
           <img
             src={oldSrc}
-            alt="old"
+            alt={t("diff.imageDiff.oldImage")}
             className="w-full h-full object-contain"
             style={{
               width: containerRef.current?.offsetWidth ?? "100%",

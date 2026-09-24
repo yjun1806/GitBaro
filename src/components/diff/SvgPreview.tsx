@@ -43,7 +43,7 @@ export function SvgPreview({ preview }: SvgPreviewProps) {
               <div className="checkerboard-bg rounded-md overflow-hidden image-diff-border-deleted p-2">
                 <img
                   src={oldSrc}
-                  alt="old svg"
+                  alt={t("diff.imageDiff.oldImage")}
                   className="max-w-full max-h-[400px] object-contain"
                   onLoad={(e) => {
                     const img = e.currentTarget;
@@ -81,7 +81,7 @@ export function SvgPreview({ preview }: SvgPreviewProps) {
               <div className="checkerboard-bg rounded-md overflow-hidden image-diff-border-added p-2">
                 <img
                   src={newSrc}
-                  alt="new svg"
+                  alt={t("diff.imageDiff.newImage")}
                   className="max-w-full max-h-[400px] object-contain"
                   onLoad={(e) => {
                     const img = e.currentTarget;

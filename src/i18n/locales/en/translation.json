@@ -362,6 +362,8 @@
     "failedToLoad": "Failed to load diff",
     "commitDetails": "Commit details will render here",
     "imageDiff": {
+      "oldImage": "Previous version",
+      "newImage": "New version",
       "twoUp": "2-up",
       "swipe": "Swipe",
       "onionSkin": "Onion Skin",
@@ -449,6 +451,16 @@
     "online": "Online",
     "offline": "Offline",
     "fetched": "Fetched {{time}}"
+  },
+  "fileStatus": {
+    "modified": "Modified",
+    "added": "Added",
+    "deleted": "Deleted",
+    "renamed": "Renamed",
+    "copied": "Copied",
+    "untracked": "Untracked",
+    "ignored": "Ignored",
+    "conflicted": "Conflicted"
   },
   "pr": {
     "open": "Open",
