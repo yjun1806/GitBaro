@@ -641,6 +641,16 @@ export interface BranchChangedFile {
  * `get_changes_vs_default`의 결과. 저장소 하나가 main과 갈라진 지점 이후로 바꾼 파일.
  * 여러 저장소는 저장소마다 따로 부른다. 갈라진 지점은 `WorkspaceRepoHistory`와 같은 규칙이다.
  */
+/**
+ * 「main 대비 변경」의 비교 범위(`get_changes_vs_default`의 선택 인자).
+ * - `base`: 기본 브랜치 대신 비교할 브랜치. null이면 기본 브랜치 규칙.
+ * - `target`: 체크아웃하지 않고 보는 브랜치. null이면 HEAD와 작업 트리(커밋 안 한 변경 포함).
+ */
+export interface ChangesScope {
+  base: string | null;
+  target: string | null;
+}
+
 export interface BranchChanges {
   path: string;
   branch: string | null;

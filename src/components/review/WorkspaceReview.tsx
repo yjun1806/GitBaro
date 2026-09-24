@@ -21,7 +21,7 @@ import { FilesByRepo } from "./FilesByRepo";
 import { FilesGroupByPicker } from "./FilesGroupByPicker";
 import { useFilesViewStore } from "./files-view";
 import { badgeCount } from "./tab-counts";
-import { useChangedFileCount } from "./useChangedFileCount";
+import { useBranchChangesTab } from "./useChangedFileCount";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +34,7 @@ export interface WorkspaceReviewProps {
 /**
  * 워크스페이스를 고른 상태의 메인 칸(D1). 제목, 여러 저장소 커밋 그래프(저장소별 레인),
  * 아래에 고른 커밋이나 커밋하지 않은 변경의 파일 목록과 diff.
- * 「파일별 변경」 탭(D7)을 고르면 그래프 대신 저장소별 main 대비 변경 목록과 연결된 변경을 보여 준다.
+ * 「main 대비 변경」 탭(D7)을 고르면 그래프 대신 저장소별 main 대비 변경 목록과 연결된 변경을 보여 준다.
  * 조용한 저장소(main에 있고 새 커밋·커밋하지 않은 변경이 없음)는 접고 「모두 보기」로 펼친다.
  */
 export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
@@ -62,7 +62,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
 
   const titleSlot = useToolbarTitleSlot();
   // 그래프 탭은 저장소마다 모든 워크트리의 WIP 행을 보여 준다(에이전트가 딴 워크트리에서 작업하기
-  // 때문이다). 「파일별 변경」도 같은 목록을 봐야 두 탭이 같은 이야기를 한다 — main만 보면 안 된다.
+  // 때문이다). 「main 대비 변경」도 같은 목록을 봐야 두 탭이 같은 이야기를 한다 — main만 보면 안 된다.
   const filesRepos = useMemo(
     () =>
       data.visible.flatMap((r) =>
@@ -74,12 +74,12 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
     [data.visible],
   );
 
-  // 「파일별 변경」 배지: 그 탭이 보여 줄 워크트리마다 main 대비 파일 수의 합.
+  // 「main 대비 변경」 배지: 그 탭이 보여 줄 워크트리마다 main 대비 파일 수의 합.
   const fileCountEntries = useMemo(
     () => data.visible.flatMap((r) => r.worktrees.map((w) => ({ path: w.path, headOid: w.headOid }))),
     [data.visible],
   );
-  const changedFiles = useChangedFileCount(fileCountEntries);
+  const branchChanges = useBranchChangesTab(fileCountEntries);
 
   if (!workspace) return null;
 
@@ -130,9 +130,9 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                   active={tab === "files"}
                   onClick={() => setTab("files")}
                   icon={<Files className="w-3.5 h-3.5" />}
-                  count={badgeCount(changedFiles)}
+                  count={badgeCount(branchChanges.count)}
                 >
-                  {t("filesByRepo.tab")}
+                  {branchChanges.label}
                 </Tab>
               </TabGroup>
               <span className="flex-1" />

@@ -236,7 +236,7 @@ describe("MainColumn (two-column shell)", () => {
   it("has four panel tabs that switch the list and the area below", () => {
     renderShell();
     const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual(["Commit graph", "Changes by file", "Stash", "Actions"]);
+    expect(tabs.map((t) => t.textContent)).toEqual(["Commit graph", "Changes vs default branch", "Stash", "Actions"]);
     expect(tabs[0].getAttribute("aria-selected")).toBe("true");
     expect(screen.getByText("history-list")).toBeTruthy();
 
@@ -278,7 +278,7 @@ describe("MainColumn (two-column shell)", () => {
     const other = { ...repo, path: "/work/other", name: "other" } as RepoInfo;
     useRepositoryStore.setState({ repos: [repo, other] });
     renderShell();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
     const first = screen.getByText(/^files-by-repo \/work\/app #/).textContent;
     // 아래 칸의 파일 목록·diff 대신 파일별 변경을 그린다.
     expect(screen.queryByText("history-list")).toBeNull();
@@ -288,7 +288,7 @@ describe("MainColumn (two-column shell)", () => {
     const next = screen.getByText(/^files-by-repo \/work\/other #/).textContent;
     // 다시 마운트됐다(마운트 번호가 다르다).
     expect(next?.split("#")[1]).not.toBe(first?.split("#")[1]);
-    expect(screen.getByRole("tab", { name: /^Changes by file/ }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: /^Changes vs / }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("keeps the stash tab when the panel remounts with an old commit selection", () => {
@@ -310,7 +310,7 @@ describe("MainColumn (two-column shell)", () => {
     renderShell();
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
       "커밋 그래프",
-      "파일별 변경",
+      "기본 브랜치 대비 변경",
       "스태시",
       "Actions",
     ]);

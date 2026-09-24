@@ -23,8 +23,10 @@ import {
 } from "@/lib/linked-changes";
 import { statusTextColors } from "@/lib/file-status";
 import { cn, getErrorMessage } from "@/lib/utils";
-import type { ActivityEvent, BranchChangedFile, BranchChanges, DiffOutput, FileStatus } from "@/types";
+import type { ActivityEvent, BranchChangedFile, BranchChanges, ChangesScope, DiffOutput, FileStatus } from "@/types";
 import type { FilesGroupBy } from "./files-view";
+import { changesSummary, tabBaseName, useChangesScopes, useCompareBaseStore } from "./compare-base";
+import { BasePicker } from "./BasePicker";
 
 /** 연결된 변경을 찾으려고 diff를 읽는 파일 수의 상한(저장소를 모두 합쳐). */
 export const LINK_SCAN_FILE_LIMIT = 80;
@@ -59,7 +61,7 @@ const STATUS_LETTER: Record<FileStatus, string> = {
   conflicted: "U",
 };
 
-type SelectedFile = FileRef & { oldPath: string | null; status: FileStatus };
+type SelectedFile = FileRef & { oldPath: string | null; status: FileStatus; scope: ChangesScope | null };
 
 /** 내용이 같으면(원소가 모두 같은 참조면) 이전 배열을 돌려준다. `useQueries` 결과처럼 렌더마다 새로 생기는 배열용. */
 function useShallowStable<T>(items: readonly T[]): readonly T[] {
@@ -85,15 +87,20 @@ function addedLinesOf(diff: DiffOutput): string[] {
 }
 
 /**
- * 파일별 변경(D7). 저장소마다 그 저장소의 main과 갈라진 지점 이후로 바뀐 파일(커밋하지 않은 변경 포함)을
- * 저장소별 그룹으로 보여 주고, 그룹 머리에 그 저장소의 브랜치를 단다. 서로 다른 저장소가 같은 문자열을 새로 추가했으면
+ * main 대비 변경(D7, 예전 이름 「main 대비 변경」). 저장소마다 그 저장소의 main(또는 고른 기준 브랜치)과
+ * 갈라진 지점 이후로 바뀐 파일(커밋 안 한 변경 포함)을 저장소별 그룹으로 보여 주고, 그룹 머리에 그 저장소의
+ * 브랜치와 비교 기준 선택을 단다. 체크아웃하지 않고 다른 브랜치를 보는 중이면 그 브랜치를 기준과 비교한다
+ * (커밋 안 한 변경은 빼고). 서로 다른 저장소가 같은 문자열을 새로 추가했으면
  * 「연결된 변경」으로 표시하고 나란히 보여 준다. 연결은 문자열 일치로 찾은 추정이다.
  */
 export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
   const { t } = useTranslation();
   // 부모가 렌더마다 새 배열을 넘겨도(워크스페이스의 보이는 저장소 목록) 경로가 같으면 같은 배열을 쓴다.
   const paths = useShallowStable(repos.map((r) => r.path));
-  const results = useChangesVsDefaultMany(paths);
+  const scopes = useChangesScopes(paths);
+  const results = useChangesVsDefaultMany(paths, scopes);
+  const setBase = useCompareBaseStore((s) => s.setBase);
+  const scopeOf = (repoPath: string): ChangesScope | null => scopes[paths.indexOf(repoPath)] ?? null;
   useChangesActivityRefresh(paths);
 
   const [selectedState, setSelected] = useState<SelectedFile | null>(null);
@@ -102,7 +109,13 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
 
   // 고른 파일·연결이 지금 보이는 저장소 것이 아니면(저장소를 바꿨거나 「조용한 저장소 숨기기」로 빠졌으면) 버린다.
   const shown = useMemo(() => new Set(paths), [paths]);
-  const selected = selectedState && shown.has(selectedState.repoPath) ? selectedState : null;
+  // 비교 범위(기준·보는 브랜치)가 바뀌어도 고른 파일은 그대로 두고, diff만 새 범위로 다시 읽는다.
+  const selectedInView = selectedState && shown.has(selectedState.repoPath) ? selectedState : null;
+  const selectedScope = selectedInView ? scopeOf(selectedInView.repoPath) : null;
+  const selected = useMemo(
+    () => (selectedInView ? { ...selectedInView, scope: selectedScope } : null),
+    [selectedInView, selectedScope],
+  );
   const openLink =
     openLinkState &&
     shown.has(openLinkState.from.repoPath) &&
@@ -138,12 +151,12 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
             f.additions <= LINK_SCAN_MAX_ADDITIONS &&
             isLinkableFile(f.path),
         )
-        .map((f) => ({ repoPath, filePath: f.path, oldPath: f.oldPath })),
+        .map((f) => ({ repoPath, filePath: f.path, oldPath: f.oldPath, scope: scopes[paths.indexOf(repoPath)] })),
     );
-  }, [paths, changesByPath]);
+  }, [paths, changesByPath, scopes]);
   const eligibleCount = useMemo(() => eligibleByRepo.reduce((n, files) => n + files.length, 0), [eligibleByRepo]);
   const scanTargets = useMemo(() => {
-    const out: { repoPath: string; filePath: string; oldPath: string | null }[] = [];
+    const out: { repoPath: string; filePath: string; oldPath: string | null; scope: ChangesScope | null }[] = [];
     const cursors = eligibleByRepo.map(() => 0);
     let added = true;
     while (out.length < LINK_SCAN_FILE_LIMIT && added) {
@@ -182,11 +195,11 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
 
   const handleSelect = (repoPath: string, file: BranchChangedFile) => {
     setOpenLink(null);
-    setSelected({ repoPath, filePath: file.path, oldPath: file.oldPath, status: file.status });
+    setSelected({ repoPath, filePath: file.path, oldPath: file.oldPath, status: file.status, scope: null });
   };
 
   const handleOpenLink = (repoPath: string, file: BranchChangedFile, link: FileLink) => {
-    setSelected({ repoPath, filePath: file.path, oldPath: file.oldPath, status: file.status });
+    setSelected({ repoPath, filePath: file.path, oldPath: file.oldPath, status: file.status, scope: null });
     setOpenLink({ from: { repoPath, filePath: file.path }, link });
   };
 
@@ -194,13 +207,20 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
   const linksScanned = scanTargets.length > 0;
   const linksTruncated = repos.length >= 2 && eligibleCount > LINK_SCAN_FILE_LIMIT;
 
+  const titleBase = tabBaseName(paths.map((p, i) => ({ changes: changesByPath.get(p), scope: scopes[i] })));
+  const single = repos.length === 1;
+  const singleChanges = single ? results[0]?.data : undefined;
   const list = (
     <div className="flex flex-col min-h-0 h-full" data-testid="files-by-repo">
       <div className="flex flex-col gap-1 px-3 py-2.5 border-b border-(--line) shrink-0">
-        <strong className="text-[12.5px] text-foreground">{t("filesByRepo.title")}</strong>
-        <span className="text-[11.5px] text-muted-foreground">
-          {repos.length === 1
-            ? t("filesByRepo.subtitleSingle")
+        <strong className="text-[12.5px] text-foreground">
+          {titleBase ? t("filesByRepo.tab", { base: titleBase }) : t("filesByRepo.tabDefault")}
+        </strong>
+        <span className="text-[11.5px] text-muted-foreground" data-testid="files-summary">
+          {single
+            ? singleChanges
+              ? changesSummary(singleChanges, scopes[0] ?? null, t)
+              : t("filesByRepo.subtitleSingle")
             : t("filesByRepo.subtitleMany", { count: repos.length })}
           {linksTruncated && ` · ${t("filesByRepo.linksTruncated", { count: LINK_SCAN_FILE_LIMIT })}`}
         </span>
@@ -215,8 +235,10 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
               <RepoGroupHeader
                 repo={repo}
                 changes={changes}
+                scope={scopes[i] ?? null}
                 collapsed={isCollapsed}
                 onToggle={() => toggleCollapsed(repo.path)}
+                onBaseChange={(base) => setBase(repo.path, base)}
               />
               {isCollapsed ? null : result?.isError ? (
                 <div className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] text-danger">
@@ -227,7 +249,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
                 <div className="px-3 py-2 text-[11.5px] text-muted-foreground">{t("filesByRepo.loading")}</div>
               ) : (
                 <>
-                  <GroupNote t={t} changes={changes} />
+                  {!single && <GroupNote t={t} changes={changes} scope={scopes[i] ?? null} />}
                   {changes.files.length === 0 ? (
                     <div className="px-3 py-2 text-[11.5px] text-muted-foreground">{t("filesByRepo.noChanges")}</div>
                   ) : (
@@ -268,6 +290,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
       openLink={openLink}
       nameOf={nameOf}
       oldPathOf={oldPathOf}
+      scopeOf={scopeOf}
       onClose={() => setOpenLink(null)}
     />
   ) : selected ? (
@@ -313,28 +336,33 @@ function FolderHeader({ dir }: { dir: string }) {
   );
 }
 
-/** 저장소 그룹 머리: 접기, 저장소 색·이름, 그 저장소의 지금 브랜치, 파일 수. */
+/** 저장소 그룹 머리: 접기, 저장소 색·이름, 그 저장소의 지금(또는 보는) 브랜치, 파일 수, 비교 기준 선택. */
 function RepoGroupHeader({
   repo,
   changes,
+  scope,
   collapsed,
   onToggle,
+  onBaseChange,
 }: {
   repo: FilesByRepoRepo;
   changes: BranchChanges | undefined;
+  scope: ChangesScope | null;
   collapsed: boolean;
   onToggle: () => void;
+  onBaseChange: (base: string | null) => void;
 }) {
   const { t } = useTranslation();
   const color = repoLaneColor(repo.path);
   const Chevron = collapsed ? ChevronRight : ChevronDown;
   return (
+    <div className="flex items-center gap-2 pr-3 bg-(--acc-faint) border-b border-(--line)">
     <button
       type="button"
       onClick={onToggle}
       aria-expanded={!collapsed}
       title={repo.path}
-      className="flex items-center gap-2 w-full px-3 py-2 bg-(--acc-faint) border-b border-(--line) text-left hover:bg-accent transition-colors"
+      className="flex flex-1 min-w-0 items-center gap-2 pl-3 py-2 text-left hover:bg-accent transition-colors"
     >
       <Chevron className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       <span
@@ -361,21 +389,24 @@ function RepoGroupHeader({
         </span>
       )}
     </button>
+      <BasePicker
+        path={repo.path}
+        value={scope?.base ?? null}
+        defaultBranch={changes?.defaultBranch ?? null}
+        exclude={changes?.branch ?? null}
+        onChange={onBaseChange}
+      />
+    </div>
   );
 }
 
-/** 비교 기준이 평소(main과 갈라진 지점)와 다를 때 한 줄로 알린다. */
-function GroupNote({ t, changes }: { t: TFunction; changes: BranchChanges }) {
-  let note: string | null = null;
-  if (changes.baseStatus === "noDefaultBranch" || changes.baseStatus === "noSharedHistory") {
-    note = t("filesByRepo.noBase", { branch: changes.defaultBranch ?? "main" });
-  } else if (changes.baseStatus === null) {
-    note = t("filesByRepo.unborn");
-  } else if (changes.branch !== null && changes.branch === changes.defaultBranch) {
-    note = t("filesByRepo.onDefault", { base: changes.baseRef ?? changes.defaultBranch });
-  }
-  if (!note) return null;
-  return <div className="px-3 pt-1.5 pb-1 text-[11px] text-muted-foreground">{note}</div>;
+/** 저장소가 여럿일 때 그룹마다 무엇과 비교했는지 한 줄로 알린다(하나면 목록 맨 위에 있다). */
+function GroupNote({ t, changes, scope }: { t: TFunction; changes: BranchChanges; scope: ChangesScope | null }) {
+  return (
+    <div className="px-3 pt-1.5 pb-1 text-[11px] text-muted-foreground" data-testid="group-note">
+      {changesSummary(changes, scope, t)}
+    </div>
+  );
 }
 
 interface FileRowProps {
@@ -454,7 +485,7 @@ function FileRow({ file, showDir, links, selected, onSelect, onOpenLink }: FileR
   );
 }
 
-/** 고른 파일 하나를 그 저장소 main과 갈라진 지점 → 작업 트리로 비교한다. */
+/** 고른 파일 하나를 그 저장소 기준과 갈라진 지점 → 작업 트리(보는 중이면 그 브랜치)로 비교한다. */
 function SelectedFileDiff({ file }: { file: SelectedFile }) {
   const { t } = useTranslation();
   const targets = useMemo(() => [file], [file]);
@@ -477,10 +508,13 @@ function LinkedCompare({
   openLink,
   nameOf,
   oldPathOf,
+  scopeOf,
   onClose,
 }: {
   openLink: OpenLink;
   nameOf: (repoPath: string) => string;
+  /** 저장소의 비교 범위. 목록과 같은 기준으로 diff를 읽는다. */
+  scopeOf: (repoPath: string) => ChangesScope | null;
   /** 이름을 바꾼 파일의 옛 경로. 이것이 있어야 main 쪽 내용과 비교된다. */
   oldPathOf: (ref: FileRef) => string | null;
   onClose: () => void;
@@ -492,12 +526,14 @@ function LinkedCompare({
   const fromOld = oldPathOf(from);
   const otherOld = oldPathOf(other);
   // 목록에서 연결을 찾을 때 읽은 diff와 같은 키라 캐시를 그대로 쓴다.
+  const fromScope = scopeOf(from.repoPath);
+  const otherScope = scopeOf(other.repoPath);
   const sides = useMemo(
     () => [
-      { ...from, oldPath: fromOld },
-      { ...other, oldPath: otherOld },
+      { ...from, oldPath: fromOld, scope: fromScope },
+      { ...other, oldPath: otherOld, scope: otherScope },
     ],
-    [from, other, fromOld, otherOld],
+    [from, other, fromOld, otherOld, fromScope, otherScope],
   );
   const [mine, theirs] = useFileDiffsVsDefault(sides);
   const repoNames = [nameOf(from.repoPath), nameOf(other.repoPath)].join(", ");

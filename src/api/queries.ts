@@ -34,7 +34,7 @@ import {
   abortMergeOrRebase,
   continueMergeOrRebase,
 } from "./commands";
-import type { HistoryTarget, RepoSyncStatus } from "@/types";
+import type { ChangesScope, HistoryTarget, RepoSyncStatus } from "@/types";
 import { useSelectionStore } from "@/stores/selection";
 import { selectionAfterStashPushed, selectionAfterStashRemoved } from "@/lib/stash-selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
@@ -876,12 +876,33 @@ import { getChangesVsDefault, getFileDiffVsDefault } from "@/api/commands";
 /** 「파일별 변경」 목록을 다시 읽는 주기. `repo:activity`를 받으면 그 저장소는 바로 다시 읽는다. */
 export const CHANGES_VS_DEFAULT_POLL_MS = 30_000;
 
-/** 저장소마다 main 대비 변경(`get_changes_vs_default`). 결과는 `paths` 순서다. */
-export function useChangesVsDefaultMany(paths: readonly string[]) {
+/**
+ * main 대비 변경 쿼리 키. 기본 범위는 예전 키 `["changesVsDefault", path]`를 그대로 써서 탭 배지·
+ * 갈라진 지점 행과 캐시를 함께 쓴다. 기준 브랜치나 보는 브랜치를 정하면 그 값을 뒤에 붙인다
+ * (접두어 무효화는 그대로 적용된다).
+ */
+export function changesVsDefaultKey(path: string, scope?: ChangesScope | null): readonly unknown[] {
+  if (!scope || (!scope.base && !scope.target)) return ["changesVsDefault", path];
+  return ["changesVsDefault", path, scope.base ?? "", scope.target ?? ""];
+}
+
+/** 파일 하나의 main 대비 diff 쿼리 키. 규칙은 `changesVsDefaultKey`와 같다. */
+export function fileDiffVsDefaultKey(
+  repoPath: string,
+  filePath: string,
+  oldPath: string | null,
+  scope?: ChangesScope | null,
+): readonly unknown[] {
+  const key = ["fileDiffVsDefault", repoPath, filePath, oldPath];
+  return !scope || (!scope.base && !scope.target) ? key : [...key, scope.base ?? "", scope.target ?? ""];
+}
+
+/** 저장소마다 main 대비 변경(`get_changes_vs_default`). 결과는 `paths` 순서다. `scopes`도 같은 순서다. */
+export function useChangesVsDefaultMany(paths: readonly string[], scopes?: readonly (ChangesScope | null)[]) {
   return useQueries({
-    queries: paths.map((path) => ({
-      queryKey: ["changesVsDefault", path],
-      queryFn: () => getChangesVsDefault(path),
+    queries: paths.map((path, i) => ({
+      queryKey: changesVsDefaultKey(path, scopes?.[i]),
+      queryFn: () => getChangesVsDefault(path, scopes?.[i] ?? undefined),
       refetchInterval: CHANGES_VS_DEFAULT_POLL_MS,
       refetchIntervalInBackground: false,
     })),
@@ -890,12 +911,12 @@ export function useChangesVsDefaultMany(paths: readonly string[]) {
 
 /** 파일 여러 개의 main 대비 diff. 연결된 변경을 찾을 때 추가된 줄을 읽는 데 쓴다. 결과는 `files` 순서다. */
 export function useFileDiffsVsDefault(
-  files: readonly { repoPath: string; filePath: string; oldPath: string | null }[],
+  files: readonly { repoPath: string; filePath: string; oldPath: string | null; scope?: ChangesScope | null }[],
 ) {
   return useQueries({
-    queries: files.map(({ repoPath, filePath, oldPath }) => ({
-      queryKey: ["fileDiffVsDefault", repoPath, filePath, oldPath],
-      queryFn: () => getFileDiffVsDefault(repoPath, filePath, oldPath),
+    queries: files.map(({ repoPath, filePath, oldPath, scope }) => ({
+      queryKey: fileDiffVsDefaultKey(repoPath, filePath, oldPath, scope),
+      queryFn: () => getFileDiffVsDefault(repoPath, filePath, oldPath, scope ?? undefined),
       staleTime: 30_000,
     })),
   });
@@ -908,7 +929,9 @@ export function useFileDiffsVsDefault(
  * pull·push·fetch 뒤에는 `invalidateAfterSync`가 다시 읽게 한다. 커밋하지 않은 변경은
  * 파일 감시로 바로 갱신되는 `status`에서 따로 센다.
  */
-export function useChangesVsDefaultOnHead(entries: readonly { path: string; headOid: string | null }[]) {
+export function useChangesVsDefaultOnHead(
+  entries: readonly { path: string; headOid: string | null; scope?: ChangesScope | null }[],
+) {
   const queryClient = useQueryClient();
   const headKey = entries.map((e) => `${e.path}\u0000${e.headOid ?? ""}`).join("\u0001");
   const lastHeads = useRef(new Map<string, string | null>());
@@ -925,9 +948,9 @@ export function useChangesVsDefaultOnHead(entries: readonly { path: string; head
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headKey, queryClient]);
   return useQueries({
-    queries: entries.map(({ path }) => ({
-      queryKey: ["changesVsDefault", path],
-      queryFn: () => getChangesVsDefault(path),
+    queries: entries.map(({ path, scope }) => ({
+      queryKey: changesVsDefaultKey(path, scope),
+      queryFn: () => getChangesVsDefault(path, scope ?? undefined),
       staleTime: Infinity,
       refetchInterval: false as const,
     })),

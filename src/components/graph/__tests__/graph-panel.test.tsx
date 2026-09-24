@@ -359,16 +359,16 @@ describe("GraphPanel commit graph", () => {
 
   it("opens changes by file as header-only view state and closes it when another tab is picked", () => {
     renderPanel();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
     expect(useFilesViewStore.getState().repoTabOpen).toBe(true);
-    expect(screen.getByRole("tab", { name: /^Changes by file/ }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: /^Changes vs / }).getAttribute("aria-selected")).toBe("true");
     // 목록과 diff는 아래 칸(MainColumn)이 그린다. 카드에는 탭 머리와 「저장소별 · 폴더별」만 남는다.
     expect(screen.queryByRole("tabpanel")).toBeNull();
     expect(screen.getByRole("combobox", { name: "Group files" })).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Stash" }));
     expect(useFilesViewStore.getState().repoTabOpen).toBe(false);
     expect(screen.getByText("stash-list")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
     // 툴바·merge 흐름이 저장된 탭을 바꾸면 닫힌다.
     act(() => useUIStore.getState().setActiveTab("changes"));
     expect(useFilesViewStore.getState().repoTabOpen).toBe(false);
@@ -378,7 +378,7 @@ describe("GraphPanel commit graph", () => {
     // activeTab이 이미 "changes"라 setActiveTab("changes")가 값을 바꾸지 않는 경우(W7 버그).
     useUIStore.setState({ activeTab: "changes" });
     renderPanel();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
     expect(useFilesViewStore.getState().repoTabOpen).toBe(true);
     // 충돌로 멈춘 pull·merge가 하는 일: mergeState 갱신(react-query 재조회) + setActiveTab("changes")(같은 값이라 그 자체로는 아무것도 안 바꾼다).
     act(() => {
@@ -391,7 +391,7 @@ describe("GraphPanel commit graph", () => {
   it("closes changes by file when a branch compare starts, even while already on the history tab", () => {
     useUIStore.setState({ activeTab: "history" });
     renderPanel();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
     expect(useFilesViewStore.getState().repoTabOpen).toBe(true);
     // BranchZone.handleCompare가 하는 일: range 설정 + setActiveTab("history")(이미 그 값).
     act(() => {
@@ -542,7 +542,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     await screen.findByRole("button", { name: "Mark 2 new commits as seen" });
     expect(screen.getByRole("tab", { name: /^Commit graph/ }).textContent).toBe("Commit graph2");
     // x.ts·a.ts(커밋함) + a.ts(커밋 안 함) → 파일 2개.
-    expect(screen.getByRole("tab", { name: /^Changes by file/ }).textContent).toBe("Changes by file2");
+    expect(screen.getByRole("tab", { name: /^Changes vs / }).textContent).toBe("Changes vs main2");
     // 스태시·Actions가 0이면 배지가 없다.
     expect(screen.getByRole("tab", { name: "Stash" }).textContent).toBe("Stash");
   });

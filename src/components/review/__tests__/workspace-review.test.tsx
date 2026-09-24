@@ -235,7 +235,7 @@ describe("WorkspaceReview", () => {
 
   it("switches the graph panel to changes by file for the shown repositories and back", () => {
     renderReview();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
     // xames-backend는 워크트리가 둘이라(main + xames-backend-feat) 그래프의 WIP 행과 같은 목록이 나온다(W7 review).
     expect(
       screen.getByText("files-by-repo xames-app,xames-backend,xames-backend · xames-backend-feat"),
@@ -253,7 +253,7 @@ describe("WorkspaceReview", () => {
 
   it("lists every worktree of a repository in the files tab, not just its main working tree (W7 review)", () => {
     renderReview();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
     const filesByRepo = screen.getByText(/^files-by-repo /);
     const names = filesByRepo.textContent!.replace("files-by-repo ", "").split(",");
     expect(names).toEqual(["xames-app", "xames-backend", "xames-backend · xames-backend-feat"]);
