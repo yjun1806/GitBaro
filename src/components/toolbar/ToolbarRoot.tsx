@@ -115,11 +115,14 @@ export function ToolbarRoot() {
     <ToolbarDropdownContext.Provider value={dropdown}>
       {/* @container: 툴바 폭에 따라 git 작업 버튼 이름을 숨긴다(ActionButton의 TOOLBAR_LABEL_CLASS). */}
       <div className="@container flex items-center h-[52px] border-b border-border bg-surface select-none">
+        {/* macOS 트래픽 라이트 자리(Overlay 타이틀바). 버튼 위가 아니라 여백이라 드래그 영역이다. */}
+        <div className="w-[78px] h-full shrink-0" data-tauri-drag-region />
+
         {scope?.kind === "workspace" ? (
           <>
             {/* 워크스페이스 리뷰 화면(W4-T3)이 제목을 이 자리에 portal로 그린다. */}
             <div
-              className="flex items-center flex-1 min-w-[40px] h-full pl-4"
+              className="flex items-center flex-1 min-w-[40px] h-full pl-1"
               data-tauri-drag-region
               data-toolbar-title-slot
             />
@@ -127,19 +130,21 @@ export function ToolbarRoot() {
           </>
         ) : (
           <>
-            {/* Zone A: Branch */}
-            <BranchZone
-              isOpen={activeDropdown === "branch"}
-              onToggle={() => toggle("branch")}
-              onClose={close}
-            />
-
-            {/* Zone A2: Worktree */}
-            <WorktreeZone
-              isOpen={activeDropdown === "worktree"}
-              onToggle={() => toggle("worktree")}
-              onClose={close}
-            />
+            {/* 지금 맥락 제목 블록: 저장소 아바타 + 이름 + 브랜치(Zone A) + 워크트리 칩(Zone A2).
+                시안 `repo_title()`(gen_d2.py:108-112) 자리 — 브랜치 패널·워크트리 패널 모두
+                각자의 트리거 바로 아래에 anchor해서 연다(AnchoredPanel). */}
+            <div className="flex items-center gap-1.5 h-full pl-1 pr-2 min-w-0 shrink">
+              <BranchZone
+                isOpen={activeDropdown === "branch"}
+                onToggle={() => toggle("branch")}
+                onClose={close}
+              />
+              <WorktreeZone
+                isOpen={activeDropdown === "worktree"}
+                onToggle={() => toggle("worktree")}
+                onClose={close}
+              />
+            </div>
 
             {/* Drag region */}
             <div className="flex-1 min-w-4 h-full" data-tauri-drag-region />

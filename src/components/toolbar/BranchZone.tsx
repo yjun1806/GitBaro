@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { GitBranch, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useBranches, useHeadDetached, useStatus, useWorktrees } from "@/api/queries";
@@ -25,6 +26,7 @@ import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
 import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
 import { DeleteBranchDialog } from "@/components/branch/DeleteBranchDialog";
 import { RenameBranchDialog } from "@/components/branch/RenameBranchDialog";
+import { WorktreeBaseLabel } from "@/components/worktree/WorktreeBaseLabel";
 import { selectionAfterStashPushed } from "@/lib/stash-selection";
 import { runWithStashedChanges } from "./run-with-stashed-changes";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
@@ -64,6 +66,7 @@ interface BranchZoneProps {
 
 export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const zoneRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   useClickOutside(zoneRef, onClose, isOpen);
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
@@ -75,7 +78,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
   const activeRepoName = useRepositoryStore((s) => s.activeRepo?.name ?? "");
-  const { mainWorktree } = useWorktreeContext(activeRepoPath, worktrees);
+  const { mainWorktree, currentWorktree, isInWorktree } = useWorktreeContext(activeRepoPath, worktrees);
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
@@ -88,7 +91,6 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const isSwitchingBranch = useUIStore((s) => s.isSwitchingBranch);
   const ahead = headBranch?.aheadBehind?.ahead ?? 0;
   const behind = headBranch?.aheadBehind?.behind ?? 0;
-  const hasChanges = ahead > 0 || behind > 0;
   const isDirty = statusFiles.length > 0;
 
   // Branch switches touch the working tree, the stash list and the reflog, so
@@ -306,44 +308,58 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     addToast(t("branch.copiedName"), "success");
   };
 
+  const repoTitle = mainWorktree?.path.split("/").filter(Boolean).pop() ?? activeRepoName;
+  const avatar = avatarColor(activeRepoPath ?? repoTitle);
+  const originAhead = !isInWorktree ? ahead : 0;
+
   return (
     <div
       ref={zoneRef}
       // 툴바가 좁으면 이 칸이 먼저 줄어든다(브랜치 이름은 말줄임). 오른쪽 git 작업·계정·설정이 잘리지 않게 한다.
-      className={cn("relative w-[220px] min-w-[60px] shrink flex items-center", isOpen && "z-50")}
+      className={cn("relative min-w-[60px] shrink flex items-center", isOpen && "z-50")}
     >
       <button
+        ref={triggerRef}
         onClick={onToggle}
         title={currentBranch ?? undefined}
         className={cn(
-          "flex items-center gap-2 px-4 w-full min-w-0 overflow-hidden h-[52px] border-r border-border transition-colors text-left",
+          "flex items-center gap-2.5 pl-1 pr-3 min-w-0 overflow-hidden h-[52px] rounded-(--radius-item) transition-colors text-left",
           isOpen ? "relative z-50 bg-accent" : "hover:bg-accent",
         )}
       >
-        {isSwitchingBranch ? (
-          <Loader2 className="w-4 h-4 shrink-0 animate-spin text-primary" />
-        ) : (
-          <GitBranch className="w-4 h-4 shrink-0 opacity-50" />
-        )}
+        <span
+          aria-hidden="true"
+          className="w-7 h-7 rounded-(--radius-item) shrink-0 flex items-center justify-center text-[12px] font-extrabold shadow-(--shadow-sm)"
+          style={{ backgroundColor: avatar.background, color: avatar.foreground }}
+        >
+          {avatarInitial(repoTitle)}
+        </span>
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-muted-foreground leading-tight">{t("branch.current")}</p>
           <div className="flex items-center gap-1.5">
-            <p className="text-sm font-semibold truncate max-w-[200px]">
-              {currentBranch ?? (isDetached ? t("branch.detachedHead") : t("branch.noBranch"))}
-            </p>
-            {hasChanges && (
-              <div className="flex items-center gap-0.5">
-                {ahead > 0 && (
-                  <span className="inline-flex items-center gap-px text-[10px] font-semibold text-primary bg-primary/10 pl-1 pr-1.5 py-px rounded-full leading-tight tabular-nums">
-                    <span className="opacity-70">{"↑"}</span>{ahead}
-                  </span>
-                )}
-                {behind > 0 && (
-                  <span className="inline-flex items-center gap-px text-[10px] font-semibold text-danger bg-danger/10 pl-1 pr-1.5 py-px rounded-full leading-tight tabular-nums">
-                    <span className="opacity-70">{"↓"}</span>{behind}
-                  </span>
-                )}
-              </div>
+            <p className="text-sm font-bold text-(--fg) truncate max-w-[160px]">{repoTitle}</p>
+            <span className="flex items-center gap-1 font-mono text-xs text-(--fg2) min-w-0 shrink">
+              {isSwitchingBranch ? (
+                <Loader2 className="w-3 h-3 shrink-0 animate-spin text-primary" />
+              ) : (
+                <GitBranch className="w-3 h-3 shrink-0 opacity-60" />
+              )}
+              <span className="truncate">
+                {currentBranch ?? (isDetached ? t("branch.detachedHead") : t("branch.noBranch"))}
+              </span>
+            </span>
+          </div>
+          <div className="flex items-center gap-1 text-[11px] text-(--muted) min-w-0">
+            {isInWorktree && currentWorktree?.base ? (
+              <WorktreeBaseLabel base={currentWorktree.base} variant="compact" />
+            ) : null}
+            {originAhead > 0 && (
+              <span className="shrink-0 tabular-nums">
+                {isInWorktree && currentWorktree?.base ? " · " : ""}
+                {t("branch.originAhead", { count: originAhead })}
+              </span>
+            )}
+            {behind > 0 && (
+              <span className="shrink-0 tabular-nums text-danger">{" · "}{"↓"}{behind}</span>
             )}
           </div>
         </div>
@@ -355,26 +371,23 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
       </button>
 
       {isOpen && (
-        <>
-          {/* Backdrop — 전체 화면 (사이드바 포함) */}
-          <div className="fixed inset-0 bg-black/[0.08] z-40" onClick={onClose} />
-          <BranchPanel
-            repoName={mainWorktree?.path.split("/").filter(Boolean).pop() ?? activeRepoName}
-            activeRepoPath={activeRepoPath}
-            branches={branches}
-            worktrees={worktrees}
-            currentBranch={currentBranch}
-            onSwitch={handleSwitch}
-            onOpenWorktree={openWorktree}
-            onCompare={handleCompare}
-            onMerge={handleMerge}
-            onRename={setPendingRename}
-            onDelete={handleDelete}
-            onCopyName={handleCopyName}
-            onCreateBranch={() => setShowCreateDialog(true)}
-            onClose={onClose}
-          />
-        </>
+        <BranchPanel
+          anchorRef={triggerRef}
+          repoName={repoTitle}
+          activeRepoPath={activeRepoPath}
+          branches={branches}
+          worktrees={worktrees}
+          currentBranch={currentBranch}
+          onSwitch={handleSwitch}
+          onOpenWorktree={openWorktree}
+          onCompare={handleCompare}
+          onMerge={handleMerge}
+          onRename={setPendingRename}
+          onDelete={handleDelete}
+          onCopyName={handleCopyName}
+          onCreateBranch={() => setShowCreateDialog(true)}
+          onClose={onClose}
+        />
       )}
 
       {showCreateDialog && (

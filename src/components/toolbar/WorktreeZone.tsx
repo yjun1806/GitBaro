@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import { ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -7,17 +6,21 @@ import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useBranches, useWorktrees } from "@/api/queries";
-import { removeWorktree, stopWorktreePreview, checkPreviewActive } from "@/api/commands";
+import {
+  removeWorktree,
+  stopWorktreePreview,
+  checkPreviewActive,
+  openInTerminal,
+  openRepoInEditor,
+} from "@/api/commands";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { TOOLBAR_LABEL_CLASS } from "./ActionButton";
 import { useClickOutside } from "./useToolbarDropdown";
-import { WorktreeDropdown } from "./WorktreeDropdown";
+import { WorktreePanel } from "@/components/worktree/WorktreePanel";
 import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog";
-import { WorktreeBaseLabel } from "@/components/worktree/WorktreeBaseLabel";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
-import { mainColumnLeft } from "@/components/layout/sidebar-layout";
 
 interface WorktreeZoneProps {
   isOpen: boolean;
@@ -27,6 +30,7 @@ interface WorktreeZoneProps {
 
 export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
   const zoneRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   useClickOutside(zoneRef, onClose, isOpen);
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
@@ -35,8 +39,6 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
   const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
-  const sidebarWidth = useSidebarWidth();
-  const railMode = useUIStore((s) => s.railMode);
   const previewBranch = useUIStore((s) => s.previewBranch);
   const { currentWorktree, isInWorktree, mainWorktree } = useWorktreeContext(activeRepoPath, worktrees);
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
@@ -72,9 +74,6 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
     ? (currentWorktree.path.split("/").pop() ?? currentWorktree.path)
     : t("worktree.main");
 
-  // 링크된 워크트리 안에 있으면 그 브랜치가 어디서 갈라졌는지 값 옆에 붙인다.
-  const currentBase = isInWorktree ? currentWorktree?.base ?? null : null;
-
   const handleRemoveWorktree = async (path: string) => {
     if (!activeRepoPath) return;
     try {
@@ -86,48 +85,44 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
     }
   };
 
+  const repoName = activeRepoPath?.split("/").filter(Boolean).pop() ?? "";
+
   return (
     <div
       ref={zoneRef}
       // 툴바가 좁으면 이 칸이 먼저 줄어든다. 오른쪽 git 작업·계정·설정이 잘리지 않게 한다.
-      className={cn("relative min-w-[60px] shrink flex items-center", isOpen && "z-50")}
+      className={cn("relative min-w-[44px] shrink flex items-center", isOpen && "z-50")}
     >
+      {/* 워크트리 칩 — 시안 D5 wt_strip 칩과 같은 자리(gen_d2.py:172-176). 브랜치 칸(BranchZone) 바로
+          옆에 붙어 하나의 「지금 맥락」 제목 블록으로 읽힌다. */}
       <button
+        ref={triggerRef}
         onClick={onToggle}
         className={cn(
-          "flex items-center gap-2 px-4 w-[220px] min-w-0 overflow-hidden shrink h-[52px] border-r border-border transition-colors text-left",
-          isOpen ? "relative z-50 bg-accent" : "hover:bg-accent",
+          "flex items-center gap-1.5 h-[30px] px-2.5 rounded-(--radius-item) border border-(--line2) bg-card shadow-(--shadow-sm) min-w-0 overflow-hidden transition-colors text-left",
+          isOpen && "relative z-50 bg-accent",
         )}
       >
-        <WorktreeIcon className="w-4 h-4 shrink-0 opacity-50" />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-muted-foreground leading-tight">{t("worktree.title")}</p>
-          <div className="flex items-center gap-1.5">
-            <p className={cn("text-sm font-semibold truncate min-w-0", isInWorktree && "text-info")}>{currentLabel}</p>
-            {currentBase && (
-              <>
-                <span className="text-xs text-muted-foreground/50 shrink-0">{"·"}</span>
-                <WorktreeBaseLabel base={currentBase} variant="compact" />
-              </>
-            )}
-            {linkedCount > 0 && (
-              <span className="text-[10px] font-semibold text-info bg-info/10 px-1.5 py-0.5 rounded-full shrink-0 tabular-nums">
-                {linkedCount}
-              </span>
-            )}
-          </div>
-        </div>
+        <WorktreeIcon className={cn("w-3.5 h-3.5 shrink-0", isInWorktree ? "text-info" : "text-(--faint)")} />
+        <span className={cn("text-xs font-mono font-semibold truncate max-w-[140px]", isInWorktree && "text-info")}>
+          {currentLabel}
+        </span>
+        {linkedCount > 0 && (
+          <span className="text-[10px] font-semibold text-info bg-info/10 px-1.5 py-0.5 rounded-full shrink-0 tabular-nums">
+            {linkedCount}
+          </span>
+        )}
         {isOpen ? (
-          <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
+          <ChevronUp className="w-3 h-3 text-muted-foreground shrink-0" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+          <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
         )}
       </button>
 
       {isInWorktree && mainWorktree && (
         <button
           onClick={() => openWorktree(mainWorktree.path)}
-          className="flex items-center gap-1 h-[52px] px-3 shrink-0 border-r border-border hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1 h-[30px] px-2 ml-1.5 rounded-(--radius-item) shrink-0 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
           title={t("worktree.returnToMain")}
           aria-label={t("worktree.returnToMain")}
         >
@@ -137,24 +132,26 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
       )}
 
       {isOpen && (
-        <>
-          {/* Backdrop — 전체 화면 (사이드바 포함) */}
-          <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />
-          {/* Full-height panel — 사이드바 오른쪽, 툴바 아래부터 하단까지 */}
-          <div
-            className="fixed z-50 flex flex-col bg-popover border-r border-border shadow-2xl"
-            style={{ left: mainColumnLeft(railMode, sidebarWidth), top: 52, bottom: 0, width: '28rem' }}
-          >
-            <WorktreeDropdown
-              worktrees={worktrees}
-              currentPath={activeRepoPath}
-              onOpenWorktree={openWorktree}
-              onRemoveWorktree={handleRemoveWorktree}
-              onCreateWorktree={() => setShowCreateDialog(true)}
-              onClose={onClose}
-            />
-          </div>
-        </>
+        <WorktreePanel
+          anchorRef={triggerRef}
+          repoName={repoName}
+          worktrees={worktrees}
+          currentPath={activeRepoPath}
+          onOpenWorktree={openWorktree}
+          onOpenTerminal={(path) =>
+            openInTerminal(path).catch((err) =>
+              addToast(t("gitActions.terminalFailed", { error: getErrorMessage(err) }), "error"),
+            )
+          }
+          onOpenEditor={(path) =>
+            openRepoInEditor(path).catch((err) =>
+              addToast(t("error.failedToOpenEditor", { error: getErrorMessage(err) }), "error"),
+            )
+          }
+          onRemoveWorktree={handleRemoveWorktree}
+          onCreateWorktree={() => setShowCreateDialog(true)}
+          onClose={onClose}
+        />
       )}
 
       {showCreateDialog && (
