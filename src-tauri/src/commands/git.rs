@@ -652,21 +652,36 @@ pub async fn stash_push(
     app_handle: tauri::AppHandle,
     repo_path: String,
     message: Option<String>,
-) -> Result<(), AppError> {
+) -> Result<Option<String>, AppError> {
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
-    engine.stash_save(message.as_deref()).await?;
-    tracing::info!("Stash saved");
-    Ok(())
+    let created = engine.stash_save(message.as_deref()).await?;
+    tracing::info!("Stash saved: {:?}", created);
+    Ok(created)
 }
 
 #[tauri::command]
 pub async fn stash_pop(
     app_handle: tauri::AppHandle,
     repo_path: String,
+    index: usize,
 ) -> Result<(), AppError> {
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
-    engine.stash_pop().await?;
-    tracing::info!("Stash popped");
+    engine.stash_pop_index(index).await?;
+    tracing::info!("Stash popped: stash@{{{}}}", index);
+    Ok(())
+}
+
+/// Pop the stash a `stash_push` call returned, found by its commit id so that
+/// stashes made in the meantime cannot shift it to a different index.
+#[tauri::command]
+pub async fn stash_pop_by_oid(
+    app_handle: tauri::AppHandle,
+    repo_path: String,
+    oid: String,
+) -> Result<(), AppError> {
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    engine.stash_pop_oid(&oid).await?;
+    tracing::info!("Stash popped: {}", oid);
     Ok(())
 }
 
@@ -729,11 +744,11 @@ pub async fn stash_push_partial(
     repo_path: String,
     paths: Vec<String>,
     message: Option<String>,
-) -> Result<(), AppError> {
+) -> Result<Option<String>, AppError> {
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
-    engine.stash_push_paths(message.as_deref(), &paths).await?;
+    let created = engine.stash_push_paths(message.as_deref(), &paths).await?;
     tracing::info!("Stash pushed (partial): {} files", paths.len());
-    Ok(())
+    Ok(created)
 }
 
 /// Append `pattern` to the repo's `.gitignore` (creating it if absent).

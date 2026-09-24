@@ -344,12 +344,18 @@ export async function getConflictFileDiff(
 }
 
 // Stash
-export async function stashPush(repoPath: string, message?: string): Promise<void> {
+/** Stashes all changes, untracked files included. Resolves to the created stash's oid, or null when there was nothing to stash. */
+export async function stashPush(repoPath: string, message?: string): Promise<string | null> {
   return invoke("stash_push", { repoPath, message });
 }
 
-export async function stashPop(repoPath: string): Promise<void> {
-  return invoke("stash_pop", { repoPath });
+export async function stashPop(repoPath: string, index: number): Promise<void> {
+  return invoke("stash_pop", { repoPath, index });
+}
+
+/** Pops the stash a `stashPush` returned, wherever it now sits in the list. */
+export async function stashPopByOid(repoPath: string, oid: string): Promise<void> {
+  return invoke("stash_pop_by_oid", { repoPath, oid });
 }
 
 export async function stashList(repoPath: string): Promise<StashEntry[]> {
@@ -368,7 +374,7 @@ export async function stashShow(repoPath: string, index: number): Promise<StashS
   return invoke("stash_show", { repoPath, index });
 }
 
-export async function stashPushPartial(repoPath: string, paths: string[], message?: string): Promise<void> {
+export async function stashPushPartial(repoPath: string, paths: string[], message?: string): Promise<string | null> {
   return invoke("stash_push_partial", { repoPath, paths, message });
 }
 

@@ -13,6 +13,8 @@ import type { ContextMenuSection } from "@/components/ui/ContextMenu";
 interface BranchContextMenuProps {
   isCurrent: boolean;
   isDefault: boolean;
+  /** Remote-only branch: rename and delete only work on local branches. */
+  isRemote: boolean;
   position: { x: number; y: number };
   onCheckout: () => void;
   onCompare: () => void;
@@ -26,6 +28,7 @@ interface BranchContextMenuProps {
 export function BranchContextMenu({
   isCurrent,
   isDefault,
+  isRemote,
   position,
   onCheckout,
   onCompare,
@@ -70,14 +73,14 @@ export function BranchContextMenu({
           label: t("branch.contextMenu.rename"),
           icon: <Pencil className="w-3.5 h-3.5" />,
           onClick: onRename,
-          disabled: isDefault,
+          disabled: isDefault || isRemote,
         },
         {
           label: t("branch.contextMenu.delete"),
           icon: <Trash2 className="w-3.5 h-3.5" />,
           onClick: onDelete,
           variant: "danger" as const,
-          disabled: isCurrent || isDefault,
+          disabled: isCurrent || isDefault || isRemote,
         },
       ],
     },
