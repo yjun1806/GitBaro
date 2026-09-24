@@ -855,3 +855,34 @@ export function useWorktreeHeadHistories(heads: readonly { path: string; head: s
     })),
   });
 }
+
+// W7-T1 — 파일별 변경(D7)
+import { getChangesVsDefault, getFileDiffVsDefault } from "@/api/commands";
+
+/** 「파일별 변경」 목록을 다시 읽는 주기. `repo:activity`를 받으면 그 저장소는 바로 다시 읽는다. */
+export const CHANGES_VS_DEFAULT_POLL_MS = 30_000;
+
+/** 저장소마다 main 대비 변경(`get_changes_vs_default`). 결과는 `paths` 순서다. */
+export function useChangesVsDefaultMany(paths: readonly string[]) {
+  return useQueries({
+    queries: paths.map((path) => ({
+      queryKey: ["changesVsDefault", path],
+      queryFn: () => getChangesVsDefault(path),
+      refetchInterval: CHANGES_VS_DEFAULT_POLL_MS,
+      refetchIntervalInBackground: false,
+    })),
+  });
+}
+
+/** 파일 여러 개의 main 대비 diff. 연결된 변경을 찾을 때 추가된 줄을 읽는 데 쓴다. 결과는 `files` 순서다. */
+export function useFileDiffsVsDefault(
+  files: readonly { repoPath: string; filePath: string; oldPath: string | null }[],
+) {
+  return useQueries({
+    queries: files.map(({ repoPath, filePath, oldPath }) => ({
+      queryKey: ["fileDiffVsDefault", repoPath, filePath, oldPath],
+      queryFn: () => getFileDiffVsDefault(repoPath, filePath, oldPath),
+      staleTime: 30_000,
+    })),
+  });
+}

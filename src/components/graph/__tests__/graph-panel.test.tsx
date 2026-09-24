@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
+import { useFilesViewStore } from "@/components/review/files-view";
 import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
 import { useReviewSeenStore } from "@/stores/review-seen";
@@ -320,6 +321,23 @@ describe("GraphPanel commit graph", () => {
     expect(screen.getByText("compare-view")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes (1)" }));
     expect(useUIStore.getState().activeTab).toBe("changes");
+  });
+
+  it("opens changes by file as header-only view state and closes it when another tab is picked", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("tab", { name: "Changes by file" }));
+    expect(useFilesViewStore.getState().repoTabOpen).toBe(true);
+    expect(screen.getByRole("tab", { name: "Changes by file" }).getAttribute("aria-selected")).toBe("true");
+    // 목록과 diff는 아래 칸(MainColumn)이 그린다. 카드에는 탭 머리와 「저장소별 · 폴더별」만 남는다.
+    expect(screen.queryByRole("tabpanel")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Group files" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Stash" }));
+    expect(useFilesViewStore.getState().repoTabOpen).toBe(false);
+    expect(screen.getByText("stash-list")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Changes by file" }));
+    // 툴바·merge 흐름이 저장된 탭을 바꾸면 닫힌다.
+    act(() => useUIStore.getState().setActiveTab("changes"));
+    expect(useFilesViewStore.getState().repoTabOpen).toBe(false);
   });
 
   it("uses Korean labels for the divider and the button", async () => {

@@ -141,6 +141,12 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 
+vi.mock("../FilesByRepo", () => ({
+  FilesByRepo: ({ repos }: { repos: { name: string }[] }) => (
+    <div>files-by-repo {repos.map((r) => r.name).join(",")}</div>
+  ),
+}));
+
 const { WorkspaceReview } = await import("../WorkspaceReview");
 
 const repo = (path: string): RepoInfo =>
@@ -220,6 +226,17 @@ describe("WorkspaceReview", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show all (1 hidden)" }));
     expect(laneFill(container, "app1")).toBe(before.app);
     expect(laneFill(container, "api1")).toBe(before.api);
+  });
+
+  it("switches the graph panel to changes by file for the shown repositories and back", () => {
+    renderReview();
+    fireEvent.click(screen.getByRole("tab", { name: "Changes by file" }));
+    expect(screen.getByText("files-by-repo xames-app,xames-backend")).toBeTruthy();
+    expect(screen.queryByText("Where each repository branched off its default branch")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show all (1 hidden)" }));
+    expect(screen.getByText("files-by-repo xames-app,xames-backend,xames-design")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Commit graph" }));
+    expect(screen.getByText("Where each repository branched off its default branch")).toBeTruthy();
   });
 
   it("opens the commit detail of the picked repository", () => {
