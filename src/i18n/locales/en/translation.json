@@ -825,6 +825,13 @@
     "remotePushed": "On {{remote}}",
     "remoteUnpushed_one": "Not pushed yet (↑{{count}} ahead of {{remote}})",
     "remoteUnpushed_other": "Not pushed yet (↑{{count}} ahead of {{remote}})",
-    "remoteNoUpstream": "Not pushed yet (no remote branch linked)"
+    "remoteNoUpstream": "Not pushed yet (no remote branch linked)",
+    "ciNotRecent_one": "Not in the latest {{count}} run",
+    "ciNotRecent_other": "Not in the latest {{count}} runs",
+    "remotePushedUnnamed": "On the remote",
+    "remoteUnpushedUnnamed_one": "Not pushed yet (↑{{count}})",
+    "remoteUnpushedUnnamed_other": "Not pushed yet (↑{{count}})",
+    "changedFiles_one": "Changed files {{count}}",
+    "changedFiles_other": "Changed files {{count}}"
   }
 }

@@ -825,6 +825,13 @@
     "remotePushed": "{{remote}}에 올라가 있음",
     "remoteUnpushed_one": "아직 push 안 함 ({{remote}}보다 ↑{{count}})",
     "remoteUnpushed_other": "아직 push 안 함 ({{remote}}보다 ↑{{count}})",
-    "remoteNoUpstream": "아직 push 안 함 (연결된 원격 브랜치 없음)"
+    "remoteNoUpstream": "아직 push 안 함 (연결된 원격 브랜치 없음)",
+    "ciNotRecent_one": "최근 실행 {{count}}건에 없음",
+    "ciNotRecent_other": "최근 실행 {{count}}건에 없음",
+    "remotePushedUnnamed": "원격에 올라가 있음",
+    "remoteUnpushedUnnamed_one": "아직 push 안 함 (↑{{count}})",
+    "remoteUnpushedUnnamed_other": "아직 push 안 함 (↑{{count}})",
+    "changedFiles_one": "바뀐 파일 {{count}}",
+    "changedFiles_other": "바뀐 파일 {{count}}"
   }
 }

@@ -1,13 +1,19 @@
 import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Clock, Copy, Check, ChevronDown } from "lucide-react";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, formatRelativeTime } from "@/lib/utils";
 import { FileStatusBadge } from "@/lib/file-status";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useRepositoryStore, findOwnerRepo } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { pickRepoAccountId } from "@/hooks/useRepoAccountId";
-import { useCommitHistoryInfinite, useRepoSyncStatuses, useWorkflowRuns } from "@/api/queries";
+import {
+  useCachedCommitIsUnpushed,
+  useCachedHeadUpstream,
+  useCachedRepoSyncStatus,
+  useCachedWorkflowRunsState,
+  useWorkflowRuns,
+} from "@/api/queries";
 import type { CommitInfo, DiffOutput, FileStatus, RepoSyncStatus, WorkflowRun } from "@/types";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 
@@ -37,11 +43,32 @@ function AuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string })
   );
 }
 
-/** Where a commit stands against its remote, for the "Remote" line. */
+/**
+ * Where a commit stands against its remote, for the "Remote" line. `remote`
+ * is null when the remote cannot be named for sure.
+ */
 export type RemoteLine =
-  | { kind: "pushed"; remote: string }
-  | { kind: "unpushed"; remote: string; ahead: number }
+  | { kind: "pushed"; remote: string | null }
+  | { kind: "unpushed"; remote: string | null; ahead: number }
   | { kind: "noUpstream" };
+
+/**
+ * Remote the branch is compared against. Taken from the upstream ref
+ * ("upstream/feat" -> "upstream", longest matching remote name wins). Without
+ * an upstream it is named only when the repository has a single remote.
+ */
+export function upstreamRemoteOf(
+  upstream: string | null | undefined,
+  remoteNames: string[],
+): string | null {
+  if (upstream) {
+    const match = remoteNames
+      .filter((name) => upstream.startsWith(`${name}/`))
+      .sort((a, b) => b.length - a.length)[0];
+    if (match) return match;
+  }
+  return remoteNames.length === 1 ? remoteNames[0] : null;
+}
 
 /**
  * Remote line for one commit. `isUnpushed` comes from the history list (the
@@ -52,9 +79,10 @@ export function remoteLineOf(
   isUnpushed: boolean | undefined,
   sync: RepoSyncStatus | undefined,
   remoteNames: string[],
+  upstream?: string | null,
 ): RemoteLine | null {
   if (remoteNames.length === 0 || isUnpushed === undefined) return null;
-  const remote = remoteNames.includes("origin") ? "origin" : remoteNames[0];
+  const remote = upstreamRemoteOf(upstream, remoteNames);
   if (!isUnpushed) return { kind: "pushed", remote };
   if (!sync) return null;
   if (!sync.hasUpstream) return { kind: "noUpstream" };
@@ -111,7 +139,7 @@ const CI_TONE: Record<CiState, string> = {
 
 function MetaRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[64px_1fr] gap-x-1 text-[11.5px] leading-[18px]">
+    <div className="grid grid-cols-[56px_1fr] gap-x-1 text-[11.5px] leading-[18px]">
       <dt className="text-(--faint)">{label}</dt>
       <dd className="min-w-0 text-(--fg2) break-words">{children}</dd>
     </div>
@@ -167,19 +195,24 @@ export function CommitDetail({
   const hasRemote = remoteNames.length > 0;
   const accountId = pickRepoAccountId(ownerRepo, activeAccountId);
 
-  // Read-only lookups of data other screens already load.
-  const { data: history } = useCommitHistoryInfinite(repoPath);
-  const isUnpushed = history?.pages.flat().find((c) => c.id === commit.id)?.isUnpushed;
-  const { data: syncByPath } = useRepoSyncStatuses(repoPath ? [repoPath] : []);
-  const sync = repoPath ? syncByPath?.[repoPath] : undefined;
-  const { data: runs, isSuccess: runsLoaded } = useWorkflowRuns(
-    hasRemote ? repoPath : null,
-    accountId,
-  );
+  // Read the history, sync status and branch list straight from the cache
+  // that other screens fill. This view remounts on every commit click, so a
+  // query observer here would re-fetch all of them on each click.
+  const isUnpushed = useCachedCommitIsUnpushed(repoPath, commit.id);
+  const sync = useCachedRepoSyncStatus(repoPath);
+  const upstream = useCachedHeadUpstream(repoPath);
+  const remoteLine = remoteLineOf(isUnpushed, sync, remoteNames, upstream);
 
-  const remoteLine = remoteLineOf(isUnpushed, sync, remoteNames);
-  const ci = runsLoaded && runs ? summarizeCi(runs, commit.id) : null;
-  const showCi = hasRemote && accountId !== null && runsLoaded;
+  // Workflow runs: read the graph panel's cached list. Subscribe (and poll)
+  // only while the list is missing or this commit's CI is still running.
+  const ciEnabled = hasRemote && accountId !== null;
+  const runsState = useCachedWorkflowRunsState(ciEnabled ? repoPath : null, accountId);
+  const runs = ciEnabled ? runsState?.data : undefined;
+  const ci = runs ? summarizeCi(runs, commit.id) : null;
+  const runsMissing = runs === undefined && runsState?.status !== "error";
+  const needRuns = ciEnabled && (runsMissing || ci?.state === "running");
+  useWorkflowRuns(needRuns ? repoPath : null, accountId, { polling: true });
+  const showCi = ciEnabled && runs !== undefined;
 
   const onResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -241,9 +274,13 @@ export function CommitDetail({
   const remoteText = (line: RemoteLine): string => {
     switch (line.kind) {
       case "pushed":
-        return t("commitDetail2.remotePushed", { remote: line.remote });
+        return line.remote
+          ? t("commitDetail2.remotePushed", { remote: line.remote })
+          : t("commitDetail2.remotePushedUnnamed");
       case "unpushed":
-        return t("commitDetail2.remoteUnpushed", { remote: line.remote, count: line.ahead });
+        return line.remote
+          ? t("commitDetail2.remoteUnpushed", { remote: line.remote, count: line.ahead })
+          : t("commitDetail2.remoteUnpushedUnnamed", { count: line.ahead });
       case "noUpstream":
         return t("commitDetail2.remoteNoUpstream");
     }
@@ -279,9 +316,9 @@ export function CommitDetail({
           {commit.author.name}
         </span>
         <span aria-hidden="true">·</span>
-        <span className="flex items-center gap-1 shrink-0">
+        <span className="flex items-center gap-1 shrink-0" title={formatDate(commit.timestamp)}>
           <Clock className="w-3 h-3" />
-          {formatDate(commit.timestamp)}
+          {formatRelativeTime(commit.timestamp)}
         </span>
       </div>
       <dl className="flex flex-col gap-0.5">
@@ -336,7 +373,13 @@ export function CommitDetail({
                 {ci.names.join(", ")}
               </span>
             ) : (
-              <span className="text-(--faint)">{t("commitDetail2.ciNone")}</span>
+              <span className="text-(--faint)">
+                {/* The list holds only the newest runs of the whole repository,
+                    so a miss means "not among them", not "never ran". */}
+                {runs && runs.length > 0
+                  ? t("commitDetail2.ciNotRecent", { count: runs.length })
+                  : t("commitDetail2.ciNone")}
+              </span>
             )}
           </MetaRow>
         )}
@@ -357,13 +400,8 @@ export function CommitDetail({
           className="shrink-0 border-r border-border flex flex-col min-h-0"
         >
           {commitInfo}
-          <div className="px-3 h-[36px] border-b border-border flex items-center justify-between shrink-0">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              {t("history.changedFiles")}
-            </span>
-            <span className="text-xs text-muted-foreground/60 tabular-nums">
-              {changedFiles.length}
-            </span>
+          <div className="px-3 pt-2 pb-1 text-[11px] font-semibold text-(--faint) shrink-0">
+            {t("commitDetail2.changedFiles", { count: changedFiles.length })}
           </div>
           <div className="flex-1 overflow-y-auto" {...containerProps}>
             {changedFiles.map((f, index) => {
