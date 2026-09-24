@@ -5,6 +5,8 @@ import type { ContextMenuSection } from "@/components/ui/ContextMenu";
 
 interface WorktreeContextMenuProps {
   isLocked: boolean;
+  /** 폴더가 사라진(prunable) 워크트리는 열 수 없다. */
+  canOpen?: boolean;
   position: { x: number; y: number };
   onOpen: () => void;
   onCopyPath: () => void;
@@ -14,6 +16,7 @@ interface WorktreeContextMenuProps {
 
 export function WorktreeContextMenu({
   isLocked,
+  canOpen = true,
   position,
   onOpen,
   onCopyPath,
@@ -29,6 +32,7 @@ export function WorktreeContextMenu({
           label: t("worktree.contextMenu.open"),
           icon: <FolderOpen className="w-3.5 h-3.5" />,
           onClick: onOpen,
+          disabled: !canOpen,
         },
         {
           label: t("worktree.contextMenu.copyPath"),

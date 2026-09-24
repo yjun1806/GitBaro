@@ -44,11 +44,17 @@ export function WorktreeList({
         const isActive = i === activeIndex;
         // 메인·잠김·현재 보고 있는 워크트리는 삭제 불가(git이 거부하거나 activeRepo가 dangling된다).
         const canRemove = !wt.isLocked && !wt.isMain && !isCurrent;
+        // 폴더가 사라진 워크트리는 열 수 없다 — 흐리게 두고 삭제(정리)만 허용한다.
+        const isMissing = wt.isPrunable;
 
         return (
           <div key={wt.path} className="relative group">
             <button
-              onClick={() => onOpen(wt.path)}
+              onClick={() => {
+                if (!isMissing) onOpen(wt.path);
+              }}
+              aria-disabled={isMissing || undefined}
+              title={isMissing ? t("worktree.missingHint") : undefined}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setMenu({ wt, x: e.clientX, y: e.clientY });
@@ -60,6 +66,7 @@ export function WorktreeList({
                   : isActive
                     ? "bg-accent"
                     : "hover:bg-accent",
+                isMissing && "opacity-60 cursor-not-allowed",
               )}
             >
               <WorktreeIcon
@@ -82,6 +89,11 @@ export function WorktreeList({
                   {wt.isMain && (
                     <span className="text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
                       {t("worktree.main")}
+                    </span>
+                  )}
+                  {isMissing && (
+                    <span className="text-[10px] font-medium text-warning bg-warning/10 px-1.5 py-0.5 rounded shrink-0">
+                      {t("worktree.missing")}
                     </span>
                   )}
                   {wt.isDirty && (
@@ -170,6 +182,7 @@ export function WorktreeList({
         <WorktreeContextMenu
           isLocked={menu.wt.isLocked || menu.wt.isMain || menu.wt.path === currentPath}
           position={{ x: menu.x, y: menu.y }}
+          canOpen={!menu.wt.isPrunable}
           onOpen={() => onOpen(menu.wt.path)}
           onCopyPath={() => navigator.clipboard.writeText(menu.wt.path)}
           onRemove={() => setConfirmRemove(menu.wt.path)}

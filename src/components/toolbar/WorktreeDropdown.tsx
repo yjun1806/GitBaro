@@ -59,7 +59,7 @@ export function WorktreeDropdown({
       case "Enter": {
         e.preventDefault();
         const wt = filtered[activeIndex];
-        if (wt) {
+        if (wt && !wt.isPrunable) {
           onOpenWorktree(wt.path);
           onClose();
         }
