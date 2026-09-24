@@ -802,5 +802,17 @@
       "seconds": "{{count}}s",
       "minutes": "{{count}}m"
     }
+  },
+  "sidebarDnd": {
+    "handle": "Drag to reorder or move into a workspace",
+    "otherAccount": "Can't move to another account",
+    "accountPending": "This repository's account isn't loaded yet. Try again in a moment.",
+    "failed": "Couldn't move the repository",
+    "announce": {
+      "start": "Picked up {{name}}",
+      "over": "{{name}} is over {{target}}",
+      "end": "Dropped {{name}}",
+      "cancel": "Stopped moving {{name}}"
+    }
   }
 }

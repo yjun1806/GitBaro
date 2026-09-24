@@ -802,5 +802,17 @@
       "seconds": "{{count}}초",
       "minutes": "{{count}}분"
     }
+  },
+  "sidebarDnd": {
+    "handle": "끌어서 순서를 바꾸거나 워크스페이스에 넣기",
+    "otherAccount": "다른 계정으로는 옮길 수 없어요",
+    "accountPending": "이 저장소의 계정을 아직 불러오는 중이에요. 잠시 뒤 다시 해 주세요.",
+    "failed": "저장소를 옮기지 못했어요",
+    "announce": {
+      "start": "{{name}}을(를) 집었어요",
+      "over": "{{name}}을(를) {{target}} 위로 옮기는 중",
+      "end": "{{name}}을(를) 놓았어요",
+      "cancel": "{{name}} 옮기기를 취소했어요"
+    }
   }
 }

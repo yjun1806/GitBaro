@@ -6,6 +6,7 @@ import type { PathSignals, RepoNode } from "@/lib/repo-tree";
 import { cn } from "@/lib/utils";
 import type { RepoInfo } from "@/types";
 import { LiveDot, RowBadges } from "./RowBadges";
+import { DraggableRow } from "./TreeDnd";
 import { TreeRowFrame } from "./TreeRowFrame";
 import { WorktreeRow } from "./WorktreeRow";
 import { isLivePath, isWatchedPath, repoPaths, repoTotals } from "./tree-model";
@@ -46,6 +47,8 @@ interface RepoRowProps {
   favorite: boolean;
   expanded: boolean;
   fetching: boolean;
+  /** 끌어서 옮길 수 있는지. 검색 중에는 끈다. */
+  draggable: boolean;
   onToggle: () => void;
   onSelectRepo: (repo: RepoInfo) => void;
   onSelectWorktree: (repo: RepoInfo, worktreePath: string) => void;
@@ -68,6 +71,7 @@ export function RepoRow({
   favorite,
   expanded,
   fetching,
+  draggable,
   onToggle,
   onSelectRepo,
   onSelectWorktree,
@@ -94,60 +98,72 @@ export function RepoRow({
 
   return (
     <>
-      <TreeRowFrame
-        level={level}
-        depth={depth}
+      <DraggableRow
+        id={node.key}
+        kind="repo"
         label={repo.name}
-        expanded={hasWorktrees ? expanded : undefined}
-        selected={selected}
-        onSelect={() => onSelectRepo(repo)}
-        onToggle={onToggle}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          onContextMenu(repo, e);
-        }}
+        depth={depth}
+        path={repo.path}
+        disabled={!draggable}
       >
-        <span className="relative flex shrink-0">
-          <span
-            aria-hidden="true"
-            className="w-5 h-5 rounded-[var(--radius-chip)] flex items-center justify-center text-[10px] font-extrabold"
-            style={{ backgroundColor: color.background, color: color.foreground }}
-          >
-            {avatarInitial(repo.name)}
-          </span>
-          {live && <LiveDot watched={watched} className="absolute -left-0.5 -top-0.5" />}
-        </span>
-        <span className="flex-1 min-w-0 flex flex-col gap-px">
-          <span
-            className={cn(
-              "text-[12.5px] text-foreground truncate",
-              selected ? "font-bold" : "font-medium",
-            )}
-          >
-            {repo.name}
-            {favorite && (
-              <Star
-                className="inline-block ml-1 w-2.5 h-2.5 align-[-1px] fill-current text-[var(--faint)]"
-                role="img"
-                aria-label={t("sidebarTree.favorite")}
-              />
-            )}
-          </span>
-          {branch && (
-            <span className="flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground min-w-0">
-              <GitBranch className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{branch}</span>
+        <TreeRowFrame
+          level={level}
+          depth={depth}
+          label={repo.name}
+          expanded={hasWorktrees ? expanded : undefined}
+          selected={selected}
+          onSelect={() => onSelectRepo(repo)}
+          onToggle={onToggle}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onContextMenu(repo, e);
+          }}
+        >
+          <span className="relative flex shrink-0">
+            <span
+              aria-hidden="true"
+              className="w-5 h-5 rounded-[var(--radius-chip)] flex items-center justify-center text-[10px] font-extrabold"
+              style={{
+                backgroundColor: color.background,
+                color: color.foreground,
+              }}
+            >
+              {avatarInitial(repo.name)}
             </span>
-          )}
-        </span>
-        {fetching && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />}
-        <RowBadges
-          dirty={totals.dirty}
-          newCommits={totals.newCommits}
-          ahead={own?.ahead}
-          behind={own?.behind}
-        />
-      </TreeRowFrame>
+            {live && <LiveDot watched={watched} className="absolute -left-0.5 -top-0.5" />}
+          </span>
+          <span className="flex-1 min-w-0 flex flex-col gap-px">
+            <span
+              className={cn(
+                "text-[12.5px] text-foreground truncate",
+                selected ? "font-bold" : "font-medium",
+              )}
+            >
+              {repo.name}
+              {favorite && (
+                <Star
+                  className="inline-block ml-1 w-2.5 h-2.5 align-[-1px] fill-current text-[var(--faint)]"
+                  role="img"
+                  aria-label={t("sidebarTree.favorite")}
+                />
+              )}
+            </span>
+            {branch && (
+              <span className="flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground min-w-0">
+                <GitBranch className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{branch}</span>
+              </span>
+            )}
+          </span>
+          {fetching && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />}
+          <RowBadges
+            dirty={totals.dirty}
+            newCommits={totals.newCommits}
+            ahead={own?.ahead}
+            behind={own?.behind}
+          />
+        </TreeRowFrame>
+      </DraggableRow>
       {showWorktrees &&
         worktrees.map((wt) => {
           const wtLive = liveOf([wt.path], liveState);
