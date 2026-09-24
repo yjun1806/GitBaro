@@ -18,10 +18,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { cn, formatRelativeTime, getErrorMessage, isMergeConflictError } from "@/lib/utils";
+import { remoteErrorKey } from "@/lib/remote-error";
 import { useClickOutside } from "./useToolbarDropdown";
 import { AutoSyncHint } from "./AutoSyncHint";
 import { ActionButton, ActionGroup, ActionMenu, TOOLBAR_WIDE_LABEL_CLASS } from "./ActionButton";
 import { ConfirmCommandDialog } from "@/components/ui/ConfirmCommandDialog";
+import { MultiRepoRemoteDialog } from "@/components/review/MultiRepoRemoteDialog";
 
 type SyncZoneProps = { mode: "repo" } | { mode: "workspace"; paths: string[] };
 
@@ -37,12 +39,19 @@ const REMOTE_OPS: { op: RemoteOp; icon: typeof RefreshCw; labelKey: string }[] =
 ];
 
 /**
- * 워크스페이스 모드의 연결 자리. 여러 저장소 Fetch·Pull·Push(저장소별 명령 확인 창)는
- * W5-T2가 이 함수 안에서 `onMultiRepo`를 채워 연결한다. 연결 전(undefined)에는 세 버튼을 꺼 둔다.
+ * 워크스페이스 모드의 연결 자리. 세 버튼은 저장소별 명령을 보여 주는 확인 창(W5-T2)만 연다.
+ * 확인 창을 거치지 않고 여러 저장소에서 바로 실행하는 경로는 없다.
  */
 function WorkspaceSyncZone({ paths }: { paths: string[] }) {
-  const onMultiRepo: ((op: RemoteOp) => void) | undefined = undefined;
-  return <WorkspaceSyncGroup paths={paths} onMultiRepo={onMultiRepo} />;
+  const [pendingOp, setPendingOp] = useState<RemoteOp | null>(null);
+  return (
+    <>
+      <WorkspaceSyncGroup paths={paths} onMultiRepo={setPendingOp} />
+      {pendingOp && (
+        <MultiRepoRemoteDialog paths={paths} op={pendingOp} onClose={() => setPendingOp(null)} />
+      )}
+    </>
+  );
 }
 
 /**
@@ -98,15 +107,6 @@ const FAILURE_KEYS: Record<SyncAction, string> = {
   push: "sync.pushFailed",
   publish: "sync.publishFailed",
 };
-
-/** 백엔드가 코드로 돌려주는 원격 선택 오류를 번역 키로 바꾼다. */
-function remoteErrorKey(message: string): string | null {
-  if (message.startsWith("no_upstream:")) return "sync.noUpstreamError";
-  if (message === "no_remote") return "sync.noRemoteError";
-  if (message === "multiple_remotes") return "sync.multipleRemotesError";
-  if (message === "detached_head") return "sync.detachedHeadError";
-  return null;
-}
 
 /** 저장소 모드: 지금 연 저장소(또는 워크트리)에서 바로 실행한다. */
 function RepoSyncGroup() {

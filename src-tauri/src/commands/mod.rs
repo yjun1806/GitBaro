@@ -19,3 +19,5 @@ pub mod workspace_history;
 pub mod wip;
 // W5-T5
 pub mod branch_changes;
+// W5-T2
+pub mod remote_plan;

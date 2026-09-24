@@ -396,12 +396,13 @@ pub(crate) fn is_auth_error(err: &AppError) -> bool {
 // branch.<name>.merge)을 따르고, 없으면 기본 원격을 고른다.
 
 /// 현재 체크아웃 상태에서 동기화 대상을 정하는 데 필요한 설정.
+/// 여러 저장소 원격 작업 확인 창(`commands/remote_plan.rs`)도 같은 값을 읽어 실행될 명령을 보여 준다.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct SyncTarget {
+pub(crate) struct SyncTarget {
     /// 체크아웃된 로컬 브랜치. detached HEAD나 빈 저장소면 `None`.
-    branch: Option<String>,
+    pub(crate) branch: Option<String>,
     /// `(branch.<name>.remote, branch.<name>.merge)`. merge는 `refs/heads/x` 형태.
-    upstream: Option<(String, String)>,
+    pub(crate) upstream: Option<(String, String)>,
     /// 저장소에 등록된 원격 이름.
     remotes: Vec<String>,
     /// `push.default` 값. `upstream`(또는 옛 이름 `tracking`)일 때만 이름이 다른
@@ -427,7 +428,7 @@ fn detached_head_error() -> AppError {
 
 impl SyncTarget {
     /// 브랜치 설정이 가리키는 원격 (로컬 추적 `.`은 제외).
-    fn upstream_remote(&self) -> Option<&str> {
+    pub(crate) fn upstream_remote(&self) -> Option<&str> {
         self.upstream
             .as_ref()
             .map(|(remote, _)| remote.as_str())
@@ -436,7 +437,7 @@ impl SyncTarget {
 
     /// 추적 설정이 없을 때 쓸 원격: `origin`, 없으면 유일한 원격.
     /// 둘 이상이면 어느 쪽에 토큰을 보낼지 알 수 없으므로 고르지 않는다.
-    fn default_remote(&self) -> Result<String, AppError> {
+    pub(crate) fn default_remote(&self) -> Result<String, AppError> {
         if self.remotes.iter().any(|r| r == "origin") {
             return Ok("origin".to_string());
         }
@@ -460,7 +461,7 @@ impl SyncTarget {
     /// fork에서 `main`이 `upstream/main`을 추적해도 `origin`을 추적하는 다른
     /// 브랜치들의 앞섬·뒤처짐과 fast-forward가 멈추지 않게 둘 다 받는다.
     /// 기본 원격을 고를 수 없으면(원격 여러 개, origin 없음) 추적 원격만 받는다.
-    fn fetch_remotes(&self) -> Result<Vec<String>, AppError> {
+    pub(crate) fn fetch_remotes(&self) -> Result<Vec<String>, AppError> {
         let upstream = self.upstream_remote().map(str::to_string);
         let default = self.default_remote();
         match (upstream, default) {
@@ -477,7 +478,7 @@ impl SyncTarget {
     /// 추적 브랜치에 올리지 않고, 기본 원격에 같은 이름으로 게시한다. 그러지 않으면
     /// feature 커밋이 확인 없이 원격 main에 올라간다. `push.default=upstream`을
     /// 직접 설정한 경우에만 `local:upstream`으로 올린다.
-    fn push_target(&self) -> Result<(String, String), AppError> {
+    pub(crate) fn push_target(&self) -> Result<(String, String), AppError> {
         let branch = self.branch.as_ref().ok_or_else(detached_head_error)?;
         if let (Some((_, merge)), Some(remote)) = (&self.upstream, self.upstream_remote()) {
             let upstream_name = merge.strip_prefix("refs/heads/").unwrap_or(merge);
@@ -494,7 +495,7 @@ impl SyncTarget {
     /// pull 방식. 화면에서 고른 방식이 있으면 그대로 쓴다. 없으면 사용자의
     /// `pull.rebase` 설정을 따르고(플래그 없음), 설정이 없을 때만 `--no-rebase`를
     /// 넘겨 "Need to specify how to reconcile divergent branches" 실패를 막는다.
-    fn pull_rebase(&self, requested: Option<bool>) -> Option<bool> {
+    pub(crate) fn pull_rebase(&self, requested: Option<bool>) -> Option<bool> {
         match requested {
             Some(rebase) => Some(rebase),
             None if self.pull_mode_configured => None,
@@ -503,7 +504,7 @@ impl SyncTarget {
     }
 
     /// pull 대상 `(원격, merge ref)`. 추적 설정이 없으면 `no_upstream:<branch>`.
-    fn pull_target(&self) -> Result<(String, String), AppError> {
+    pub(crate) fn pull_target(&self) -> Result<(String, String), AppError> {
         let branch = self.branch.as_ref().ok_or_else(detached_head_error)?;
         self.upstream
             .clone()
@@ -515,36 +516,41 @@ async fn resolve_sync_target(repo_path: &str) -> Result<SyncTarget, AppError> {
     let rp = repo_path.to_string();
     tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&rp)?;
-        // An unborn HEAD (empty repository) has no branch to sync either.
-        let branch = head_branch_name(&repo).ok().flatten();
-        let config = repo.config()?;
-        let upstream = branch.as_ref().and_then(|name| {
-            let remote = config.get_string(&format!("branch.{}.remote", name)).ok()?;
-            let merge = config.get_string(&format!("branch.{}.merge", name)).ok()?;
-            Some((remote, merge))
-        });
-        let remotes = repo
-            .remotes()?
-            .iter()
-            .flatten()
-            .map(|r| r.to_string())
-            .collect();
-        let push_default = config.get_string("push.default").ok();
-        let is_set = |key: &str| config.get_entry(key).is_ok();
-        let pull_mode_configured = is_set("pull.rebase")
-            || branch
-                .as_ref()
-                .is_some_and(|name| is_set(&format!("branch.{}.rebase", name)));
-        Ok::<_, AppError>(SyncTarget {
-            branch,
-            upstream,
-            remotes,
-            push_default,
-            pull_mode_configured,
-        })
+        sync_target_from_repo(&repo)
     })
     .await
     .map_err(|e| AppError::Channel(e.to_string()))?
+}
+
+/// 열린 저장소에서 동기화 대상을 읽는다. git2 호출이므로 `spawn_blocking` 안에서 부른다.
+pub(crate) fn sync_target_from_repo(repo: &git2::Repository) -> Result<SyncTarget, AppError> {
+    // An unborn HEAD (empty repository) has no branch to sync either.
+    let branch = head_branch_name(repo).ok().flatten();
+    let config = repo.config()?;
+    let upstream = branch.as_ref().and_then(|name| {
+        let remote = config.get_string(&format!("branch.{}.remote", name)).ok()?;
+        let merge = config.get_string(&format!("branch.{}.merge", name)).ok()?;
+        Some((remote, merge))
+    });
+    let remotes = repo
+        .remotes()?
+        .iter()
+        .flatten()
+        .map(|r| r.to_string())
+        .collect();
+    let push_default = config.get_string("push.default").ok();
+    let is_set = |key: &str| config.get_entry(key).is_ok();
+    let pull_mode_configured = is_set("pull.rebase")
+        || branch
+            .as_ref()
+            .is_some_and(|name| is_set(&format!("branch.{}.rebase", name)));
+    Ok(SyncTarget {
+        branch,
+        upstream,
+        remotes,
+        push_default,
+        pull_mode_configured,
+    })
 }
 
 #[tauri::command]

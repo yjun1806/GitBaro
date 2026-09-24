@@ -975,5 +975,66 @@
     "fetchOptions": "Fetch options",
     "fetchNow": "Fetch now",
     "mergeNoBranch": "There is no current branch yet. Make the first commit or switch to a branch."
+  },
+  "multiRepoRemote": {
+    "title": {
+      "fetch_one": "Fetch in {{count}} repository",
+      "fetch_other": "Fetch in each of {{count}} repositories",
+      "pull_one": "Pull in {{count}} repository",
+      "pull_other": "Pull in each of {{count}} repositories",
+      "push_one": "Push in {{count}} repository",
+      "push_other": "Push in each of {{count}} repositories"
+    },
+    "description": {
+      "fetch": "Each repository fetches from its own remote. The commands below run separately in each repository, and if one fails the rest keep going.",
+      "pull": "Each repository pulls its current branch from the branch it tracks. The commands below run separately in each repository, and if one fails the rest keep going.",
+      "push": "Each repository pushes its current branch to its own remote. The commands below run separately in each repository, and if one fails the rest keep going."
+    },
+    "preparing": "Fetching each repository to check what will run…",
+    "prepareFailed": "Couldn't work out what to run: {{error}}",
+    "colRepo": "Repository",
+    "colCommand": "Command to run",
+    "colCommits": "Commits",
+    "skip": {
+      "upToDate_push": "Nothing to push",
+      "upToDate_pull": "Nothing to pull",
+      "noUpstream": "No tracking branch",
+      "detachedHead": "No branch",
+      "unborn": "No commits",
+      "noRemote": "No remote",
+      "multipleRemotes": "No origin",
+      "error": "Can't read",
+      "noAccount": "No account"
+    },
+    "stale": "As of last fetch · {{time}}",
+    "staleNever": "As of last fetch (time unknown)",
+    "notes": {
+      "setsUpstream": "{{name}} will be linked to a new remote branch (-u).",
+      "fetchFailed": "{{name}} couldn't fetch, so its plan is as of the last fetch. If the remote has new commits, the result may differ.",
+      "noAccount": "{{name}} has no account assigned, so it is skipped.",
+      "error": "{{name}}: {{error}}",
+      "needsPull_one": "{{name}} has {{count}} new commit on the remote, so it needs a Pull first. Left as is, only this repository will be rejected.",
+      "needsPull_other": "{{name}} has {{count}} new commits on the remote, so it needs a Pull first. Left as is, only this repository will be rejected.",
+      "staleUpToDate_pull": "{{name}} couldn't fetch, so “Nothing to pull” may be out of date. Check it to pull anyway.",
+      "staleUpToDate_push": "{{name}} couldn't fetch, so “Nothing to push” may be out of date. Check it to push anyway."
+    },
+    "pullFirst": "Pull {{name}} first, then push",
+    "confirm": {
+      "fetch_one": "Fetch {{count}} repository",
+      "fetch_other": "Fetch {{count}} repositories",
+      "pull_one": "Pull {{count}} repository",
+      "pull_other": "Pull {{count}} repositories",
+      "push_one": "Push {{count}} repository",
+      "push_other": "Push {{count}} repositories"
+    },
+    "close": "Close",
+    "result": {
+      "running": "Running…",
+      "ok": "Done",
+      "conflict": "Stopped on a conflict",
+      "failed": "Failed"
+    },
+    "summary": "{{ok}} succeeded · {{failed}} failed",
+    "preparingFetch": "Checking what will run in each repository…"
   }
 }

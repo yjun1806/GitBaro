@@ -2143,7 +2143,7 @@ fn check_output(output: std::process::Output) -> Result<(), AppError> {
 }
 
 /// `git pull`에 넘길 병합 방식 플래그. `None`이면 넘기지 않고 git 설정을 따른다.
-fn pull_mode_flag(rebase: Option<bool>) -> Option<&'static str> {
+pub(crate) fn pull_mode_flag(rebase: Option<bool>) -> Option<&'static str> {
     rebase.map(|rebase| if rebase { "--rebase" } else { "--no-rebase" })
 }
 
