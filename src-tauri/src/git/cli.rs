@@ -828,6 +828,29 @@ impl GitCliEngine {
         Ok(final_output)
     }
 
+    /// `-c credential.helper=` when `remote` points at github.com, so the
+    /// account's token from GIT_ASKPASS wins over a keychain entry for another
+    /// account. Other hosts keep the user's credential helper untouched.
+    async fn credential_helper_override(&self, remote: &str, push: bool) -> &'static [&'static str] {
+        let mut args = vec!["remote", "get-url"];
+        if push {
+            args.push("--push");
+        }
+        args.extend(["--", remote]);
+        tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
+        let output = Command::new("git")
+            .args(&args)
+            .current_dir(&self.repo_path)
+            .output()
+            .await;
+        match output {
+            Ok(o) if o.status.success() => {
+                credential_helper_override_for_url(String::from_utf8_lossy(&o.stdout).trim())
+            }
+            _ => &[],
+        }
+    }
+
     /// Best-effort dry-run push that enumerates local tags which would be newly
     /// created on the remote. Mirrors GitHub Desktop's `fetchTagsToPush`: it
     /// never mutates the remote (`--dry-run`) and parses porcelain output.
@@ -845,9 +868,8 @@ impl GitCliEngine {
             }
         };
 
-        let args = [
-            "-c",
-            "credential.helper=",
+        let mut args = self.credential_helper_override(remote, true).await.to_vec();
+        args.extend([
             "push",
             remote,
             branch,
@@ -855,7 +877,7 @@ impl GitCliEngine {
             "--dry-run",
             "--no-verify",
             "--porcelain",
-        ];
+        ]);
         tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
 
         let mut cmd = Command::new("git");
@@ -898,7 +920,8 @@ impl GitCliEngine {
         token: &str,
     ) -> Result<Vec<String>, AppError> {
         let askpass = AskpassScript::create(token).await?;
-        let args = ["-c", "credential.helper=", "ls-remote", "--tags", remote];
+        let mut args = self.credential_helper_override(remote, false).await.to_vec();
+        args.extend(["ls-remote", "--tags", remote]);
         tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
 
         let mut cmd = Command::new("git");
@@ -919,16 +942,8 @@ impl GitRemoteEngine for GitCliEngine {
     async fn clone_repo(&self, url: &str, path: &Path, token: &str) -> Result<(), AppError> {
         let askpass = AskpassScript::create(token).await?;
         let path_str = path.to_string_lossy().into_owned();
-        let args = [
-            "-c",
-            "credential.helper=",
-            "-c",
-            "protocol.ext.allow=never",
-            "clone",
-            "--",
-            url,
-            &path_str,
-        ];
+        let mut args = credential_helper_override_for_url(url).to_vec();
+        args.extend(["-c", "protocol.ext.allow=never", "clone", "--", url, &path_str]);
 
         let id = Uuid::new_v4().to_string();
         let start = Instant::now();
@@ -952,7 +967,8 @@ impl GitRemoteEngine for GitCliEngine {
 
     async fn fetch(&self, remote: &str, token: &str) -> Result<(), AppError> {
         let askpass = AskpassScript::create(token).await?;
-        let args = ["-c", "credential.helper=", "fetch", "--prune", remote];
+        let mut args = self.credential_helper_override(remote, false).await.to_vec();
+        args.extend(["fetch", "--prune", remote]);
 
         let id = Uuid::new_v4().to_string();
         let start = Instant::now();
@@ -997,7 +1013,8 @@ impl GitRemoteEngine for GitCliEngine {
 
         let askpass = AskpassScript::create(token).await?;
 
-        let mut args = vec!["-c", "credential.helper=", "push", "--set-upstream"];
+        let mut args = self.credential_helper_override(remote, true).await.to_vec();
+        args.extend(["push", "--set-upstream"]);
         if force {
             // --force-with-lease refuses to overwrite remote work the local repo
             // hasn't seen, unlike the blunt --force. Matches GitHub Desktop.
@@ -1052,7 +1069,8 @@ impl GitRemoteEngine for GitCliEngine {
     ) -> Result<(), AppError> {
         let askpass = AskpassScript::create(token).await?;
 
-        let mut args = vec!["-c", "credential.helper=", "pull"];
+        let mut args = self.credential_helper_override(remote, false).await.to_vec();
+        args.push("pull");
         if rebase {
             args.push("--rebase");
         }
@@ -1096,8 +1114,10 @@ impl GitRemoteEngine for GitCliEngine {
 ///
 /// Modeled after GitHub Desktop's credential approach:
 /// - Uses remote name (not URL) so git updates tracking refs automatically.
-/// - Clears existing credential helpers (`-c credential.helper=`) to prevent
-///   interference, then GIT_ASKPASS provides the token.
+/// - For github.com remotes, clears existing credential helpers
+///   (`-c credential.helper=`) to prevent interference; other hosts keep them.
+/// - Answers only prompts whose host is exactly github.com, so the GitHub
+///   token is never sent to another host (GitLab, Bitbucket, GHE, ...).
 /// - Token never appears in process arguments (unlike URL embedding).
 /// - Script is cleaned up on drop.
 struct AskpassScript {
@@ -1115,11 +1135,7 @@ impl AskpassScript {
                 .as_nanos()
         ));
 
-        // Git calls GIT_ASKPASS with a prompt like "Username for ..." or "Password for ...".
-        let script = format!(
-            "#!/bin/sh\ncase \"$1\" in\n*sername*) echo 'x-access-token' ;;\n*assword*) echo '{}' ;;\nesac",
-            token
-        );
+        let script = askpass_script(token);
 
         // Create the file with owner-only permissions BEFORE writing the token,
         // so there is never a window where the token-bearing script is
@@ -1153,6 +1169,41 @@ impl AskpassScript {
         &self.path
     }
 
+}
+
+/// `-c credential.helper=` for github.com URLs, nothing for other hosts.
+fn credential_helper_override_for_url(url: &str) -> &'static [&'static str] {
+    if crate::git::remote::is_github_com_url(url) {
+        &["-c", "credential.helper="]
+    } else {
+        &[]
+    }
+}
+
+/// Git calls GIT_ASKPASS with a prompt such as
+/// `Username for 'https://github.com': ` or
+/// `Password for 'https://x-access-token@github.com': `.
+/// The script extracts the host from the quoted URL and only answers for
+/// github.com; for any other host it exits non-zero without printing.
+fn askpass_script(token: &str) -> String {
+    format!(
+        r#"#!/bin/sh
+url=${{1#*\'}}
+url=${{url%\'*}}
+rest=${{url#*://}}
+authority=${{rest%%/*}}
+host=${{authority##*@}}
+host=${{host%%:*}}
+host=$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')
+[ "$host" = "github.com" ] || exit 1
+case "$1" in
+*sername*) echo 'x-access-token' ;;
+*assword*) echo '{}' ;;
+*) exit 1 ;;
+esac
+"#,
+        token
+    )
 }
 
 /// Best-effort cleanup of stale askpass scripts left behind by a previous
@@ -1246,6 +1297,52 @@ pub(crate) fn parse_git_error(stderr: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn run_askpass(script: &Path, prompt: &str) -> (bool, String) {
+        let out = std::process::Command::new("sh").arg(script).arg(prompt).output().unwrap();
+        (out.status.success(), String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
+
+    #[tokio::test]
+    async fn askpass_answers_only_for_github_com() {
+        let askpass = AskpassScript::create("tok_123").await.unwrap();
+        let path = askpass.path();
+
+        assert_eq!(
+            run_askpass(path, "Username for 'https://github.com': "),
+            (true, "x-access-token".to_string())
+        );
+        assert_eq!(
+            run_askpass(path, "Password for 'https://x-access-token@github.com': "),
+            (true, "tok_123".to_string())
+        );
+        assert_eq!(
+            run_askpass(path, "Password for 'https://x-access-token@GitHub.com:443/o/r.git': "),
+            (true, "tok_123".to_string())
+        );
+
+        for prompt in [
+            "Password for 'https://user@gitlab.com': ",
+            "Password for 'https://github.example.com': ",
+            "Password for 'https://github.com.evil.com': ",
+            "Password for 'https://evil.com/x@github.com': ",
+            "Username for 'https://bitbucket.org': ",
+        ] {
+            let (ok, out) = run_askpass(path, prompt);
+            assert!(!ok, "{prompt}");
+            assert!(out.is_empty(), "{prompt}");
+        }
+    }
+
+    #[test]
+    fn credential_helper_is_cleared_only_for_github_com() {
+        assert_eq!(
+            credential_helper_override_for_url("https://github.com/o/r.git"),
+            &["-c", "credential.helper="]
+        );
+        assert!(credential_helper_override_for_url("https://gitlab.com/o/r.git").is_empty());
+        assert!(credential_helper_override_for_url("https://ghe.corp.com/o/r.git").is_empty());
+    }
 
     /// 실제 `git worktree list --porcelain` 출력. 작업 디렉토리를 지운 워크트리는
     /// 목록에서 사라지지 않고 `prunable` 라인이 붙어서 그대로 남는다.
