@@ -18,6 +18,21 @@ pub struct FsChangeEvent {
     pub repo_path: String,
 }
 
+// W1-T3
+/// Emitted by the multi-repo activity watcher (`commands::activity`,
+/// independent from `fs:change`) when a watched repository or worktree
+/// changes, debounced to at most once per 2s per path. `.git/` internals do
+/// not count.
+pub const REPO_ACTIVITY: &str = "repo:activity";
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityEvent {
+    pub path: String,
+    /// Epoch ms of the emission.
+    pub at: i64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCommandStartEvent {

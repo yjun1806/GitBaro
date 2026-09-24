@@ -24,6 +24,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(state::TokenStore::new())
         .manage(commands::watch::WatcherState::new())
+        // W1-T3
+        .manage(commands::activity::ActivityWatcherState::new())
         .invoke_handler(tauri::generate_handler![
             commands::git::get_status,
             commands::git::stage_files,
@@ -112,6 +114,8 @@ pub fn run() {
             commands::actions::get_workflow_run_jobs,
             commands::watch::start_repo_watch,
             commands::watch::stop_repo_watch,
+            // W1-T3
+            commands::activity::set_activity_watch,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");

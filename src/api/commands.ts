@@ -27,6 +27,7 @@ import type {
   PushTarget,
   AutoSyncSnapshot,
   AutoFastForwardResult,
+  ActivityWatchResult,
 } from "@/types";
 
 // Git operations — backend returns indexStatus/worktreeStatus separately,
@@ -863,4 +864,9 @@ export async function startRepoWatch(repoPath: string, token: number): Promise<v
 
 export async function stopRepoWatch(token: number): Promise<void> {
   return invoke("stop_repo_watch", { token });
+}
+
+// W1-T3 — 여러 저장소 활동 감시
+export async function setActivityWatch(paths: string[]): Promise<ActivityWatchResult> {
+  return invoke("set_activity_watch", { paths });
 }
