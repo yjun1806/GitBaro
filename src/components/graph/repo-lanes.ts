@@ -48,7 +48,7 @@ export type RepoLaneRow =
 
 export interface RepoLaneGraph {
   rows: RepoLaneRow[];
-  /** 레인 수(= 저장소 수). */
+  /** 레인 수: 저장소 수 + 따로 떨어진 워크트리 WIP 칸 수. */
   laneCount: number;
 }
 
@@ -86,7 +86,7 @@ function mergeByTime<T>(lists: readonly (readonly T[])[], timeOf: (item: T) => n
 }
 
 type Draft =
-  | { kind: "wip"; lane: number; wip: LaneWip }
+  | { kind: "wip"; lane: number; repoLane: number; wip: LaneWip }
   | { kind: "commit"; lane: number; commit: CommitInfo; isNew: boolean; isSeen: boolean }
   | { kind: "seen" }
   | { kind: "base" };
@@ -105,6 +105,14 @@ export function buildRepoLaneRows(
 ): RepoLaneGraph {
   const laneOf = new Map(repos.map((r, i) => [r.path, i]));
 
+  // 메인 작업 트리의 WIP는 그 저장소 레인 위에 둔다(부모가 레인의 HEAD다). 다른 워크트리의
+  // WIP는 부모가 이 레인에 없으므로 저장소 레인들 오른쪽의 따로 떨어진 칸에 선 없이 둔다.
+  // 워크트리마다 레인을 나누는 일은 D5(W6-T2)가 맡는다.
+  const detachedLane = new Map<string, number>();
+  for (const w of wips) {
+    if (!laneOf.has(w.repoPath) || w.isMain || detachedLane.has(w.path)) continue;
+    detachedLane.set(w.path, repos.length + detachedLane.size);
+  }
   const wipDrafts: Draft[] = wips
     .filter((w) => laneOf.has(w.repoPath))
     .map((wip, order) => ({ wip, order }))
@@ -114,7 +122,12 @@ export function buildRepoLaneRows(
         (laneOf.get(a.wip.repoPath) ?? 0) - (laneOf.get(b.wip.repoPath) ?? 0) ||
         a.order - b.order,
     )
-    .map(({ wip }) => ({ kind: "wip", lane: laneOf.get(wip.repoPath) ?? 0, wip }));
+    .map(({ wip }) => ({
+      kind: "wip",
+      lane: detachedLane.get(wip.path) ?? laneOf.get(wip.repoPath) ?? 0,
+      repoLane: laneOf.get(wip.repoPath) ?? 0,
+      wip,
+    }));
 
   type CommitDraft = Extract<Draft, { kind: "commit" }>;
   const newLists: CommitDraft[][] = [];
@@ -152,6 +165,7 @@ export function buildRepoLaneRows(
   const last = repos.map(() => -1);
   drafts.forEach((d, i) => {
     if (d.kind !== "wip" && d.kind !== "commit") return;
+    if (d.lane >= repos.length) return; // 따로 떨어진 워크트리 WIP 칸
     if (start[d.lane] === -1) start[d.lane] = i;
     last[d.lane] = i;
   });
@@ -187,7 +201,7 @@ export function buildRepoLaneRows(
           key: `wip:${d.wip.path}`,
           repoPath,
           wip: d.wip,
-          layout: { oid: `wip:${d.wip.path}`, lane: d.lane, chain: d.lane, edges, width: Math.max(width, d.lane + 1) },
+          layout: { oid: `wip:${d.wip.path}`, lane: d.lane, chain: d.repoLane, edges, width: Math.max(width, d.lane + 1) },
         };
       }
       case "commit": {
@@ -213,5 +227,5 @@ export function buildRepoLaneRows(
     }
   });
 
-  return { rows, laneCount: repos.length };
+  return { rows, laneCount: repos.length + detachedLane.size };
 }

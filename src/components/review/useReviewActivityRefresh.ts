@@ -2,12 +2,12 @@ import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ActivityEvent } from "@/types";
-import { activityInvalidationKeys, repoOfActivityPath, type ReviewRepoPaths } from "./review-model";
+import { activityInvalidationKeys, activityTargetOf, type ReviewRepoPaths } from "./review-model";
 
 /**
- * 워크스페이스 리뷰 화면의 갱신 신호. `repo:activity`를 받으면 그 경로가 속한 저장소의
- * 커밋하지 않은 변경·상태 쿼리만 무효화한다(`activityInvalidationKeys`). 다른 저장소는
- * 다시 읽지 않는다. 감시 대상 등록은 `useWorkspaceWatchPaths`(App)가 맡는다.
+ * 워크스페이스 리뷰 화면의 갱신 신호. `repo:activity`를 받으면 그 경로의 워크트리의
+ * 커밋하지 않은 변경·상태 쿼리만 무효화한다(`activityInvalidationKeys`). 다른 저장소와
+ * 같은 저장소의 다른 워크트리는 다시 읽지 않는다. 감시 대상 등록은 `useWorkspaceWatchPaths`(App)가 맡는다.
  */
 export function useReviewActivityRefresh(repos: readonly ReviewRepoPaths[]): void {
   const queryClient = useQueryClient();
@@ -21,10 +21,9 @@ export function useReviewActivityRefresh(repos: readonly ReviewRepoPaths[]): voi
     let unlisten: (() => void) | undefined;
     listen<ActivityEvent>("repo:activity", (event) => {
       if (!mounted) return;
-      const repoPath = repoOfActivityPath(event.payload.path, reposRef.current);
-      const repo = reposRef.current.find((r) => r.repoPath === repoPath);
-      if (!repo) return;
-      for (const queryKey of activityInvalidationKeys(repo)) {
+      const target = activityTargetOf(event.payload.path, reposRef.current);
+      if (!target) return;
+      for (const queryKey of activityInvalidationKeys(target.root)) {
         void queryClient.invalidateQueries({ queryKey });
       }
     })

@@ -461,6 +461,8 @@ export interface RepoLaneCommitGraphProps {
   /** 맨 아래 행의 기본 브랜치 표시(`main`, 저장소마다 다르면 `main, trunk`). */
   baseBranchLabel: string;
   isLoading: boolean;
+  /** 그릴 행이 없을 때의 문구. 없으면 「갈라진 뒤 커밋 없음」. */
+  emptyMessage?: string;
   onSelectCommit: (repoPath: string, commit: CommitInfo, key: string) => void;
   onSelectWip: (wip: LaneWip, key: string) => void;
 }
@@ -493,6 +495,7 @@ export function RepoLaneCommitGraph({
   baseTime,
   baseBranchLabel,
   isLoading,
+  emptyMessage,
   onSelectCommit,
   onSelectWip,
 }: RepoLaneCommitGraphProps) {
@@ -536,7 +539,7 @@ export function RepoLaneCommitGraph({
         {isLoading && graph.rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{t("history.loadingHistory")}</p>
         ) : graph.rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t("review.noCommits")}</p>
+          <p className="py-6 px-4 text-center text-sm text-muted-foreground">{emptyMessage ?? t("review.noCommits")}</p>
         ) : (
           graph.rows.map((row) => {
             switch (row.kind) {

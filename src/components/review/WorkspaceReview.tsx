@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AlertTriangle, Folder, GitCommitVertical } from "lucide-react";
@@ -51,16 +52,26 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const wipPath = selection?.kind === "wip" ? [selection.path] : [];
   const statuses = useStatusMany(wipPath);
 
+  const titleSlot = useToolbarTitleSlot();
+
   if (!workspace) return null;
+
+  const title = (
+    <WorkspaceTitle
+      name={workspace.name}
+      accountLabel={accountLabel}
+      total={data.repos.length}
+      shown={data.visible.length}
+    />
+  );
+  const emptyMessage =
+    data.visible.length === 0 && data.hiddenCount > 0
+      ? t("review.allQuiet", { count: data.hiddenCount })
+      : undefined;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-(--g)">
-      <WorkspaceTitle
-        name={workspace.name}
-        accountLabel={accountLabel}
-        total={data.repos.length}
-        shown={data.visible.length}
-      />
+      {titleSlot ? createPortal(title, titleSlot) : title}
       {data.repos.length === 0 ? (
         <Card className="flex-1">
           <EmptyState icon={Folder} title={t("review.emptyTitle")} description={t("review.emptyHint")} />
@@ -110,6 +121,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
               baseTime={data.baseTime}
               baseBranchLabel={data.baseBranchLabel}
               isLoading={data.isLoading}
+              emptyMessage={emptyMessage}
               onSelectCommit={(repoPath, commit, key) =>
                 setSelection({ kind: "commit", key, repoPath, oid: commit.id })
               }
@@ -151,7 +163,11 @@ function RepoLegend({ repos }: { repos: ReviewRepo[] }) {
       {repos.map((r) => {
         const color = repoLaneColor(r.path);
         const note = historyNote(t, r.history);
-        const title = r.error ? t("review.repoError", { repo: r.name, error: r.error }) : note ?? r.path;
+        const worktreeNote =
+          r.worktreeNewCount > 0 ? t("review.worktreeNew", { count: r.worktreeNewCount }) : null;
+        const title = r.error
+          ? t("review.repoError", { repo: r.name, error: r.error })
+          : [note, worktreeNote].filter(Boolean).join("\n") || r.path;
         return (
           <span
             key={r.path}
@@ -168,9 +184,30 @@ function RepoLegend({ repos }: { repos: ReviewRepo[] }) {
             {r.name}
             {r.branch && <span className="font-mono font-medium opacity-80">{r.branch}</span>}
             {note && <span className="opacity-70" aria-hidden="true">*</span>}
+            {worktreeNote && (
+              <span
+                className="px-1 rounded-[4px] bg-(--acc-sel) text-(--acc) text-[10px] font-bold"
+                aria-label={worktreeNote}
+                data-testid="worktree-new"
+              >
+                +{r.worktreeNewCount}
+              </span>
+            )}
           </span>
         );
       })}
     </span>
   );
+}
+
+/**
+ * 툴바 왼쪽의 제목 자리(`ToolbarRoot`의 `data-toolbar-title-slot`). 시안처럼 제목을 툴바 줄에
+ * 둔다. 툴바가 없으면(테스트 등) null이고, 그때는 제목을 화면 맨 위에 그린다.
+ */
+function useToolbarTitleSlot(): HTMLElement | null {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setSlot(document.querySelector<HTMLElement>("[data-toolbar-title-slot]"));
+  }, []);
+  return slot;
 }

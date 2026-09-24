@@ -85,6 +85,7 @@ vi.mock("@/api/queries", () => ({
     })),
   useStatusMany: () => ({}),
   useNewCommitIdsMany: () => ({}),
+  useWorkspaceRecentCommits: () => ({}),
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
 
@@ -252,6 +253,8 @@ describe("MainColumn — workspace scope (W4-T1)", () => {
     expect(screen.getByRole("heading", { name: "xames" })).toBeTruthy();
     expect(screen.getByText("Workspace · Local · showing 0 of 1 repository")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Show all (1 hidden)" })).toBeTruthy();
+    // 모두 숨겼을 때는 「커밋 없음」이 아니라 숨긴 저장소가 있다고 알린다.
+    expect(screen.getByText(/1 quiet repository is hidden/)).toBeTruthy();
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.queryByText("changes-view")).toBeNull();
     expect(screen.queryByText("No repository selected")).toBeNull();

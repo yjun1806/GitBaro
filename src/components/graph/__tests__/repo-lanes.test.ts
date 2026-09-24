@@ -89,6 +89,42 @@ describe("buildRepoLaneRows", () => {
   });
 });
 
+describe("buildRepoLaneRows — other worktrees' uncommitted changes", () => {
+  const wipAFeat: LaneWip = {
+    repoPath: "/w/a",
+    path: "/w/a-feat",
+    branch: "feat/b",
+    isMain: false,
+    count: 1,
+    changedAt: 2000,
+  };
+
+  it("puts them in a separate column with no line into the repository's commits", () => {
+    const { rows, laneCount } = buildRepoLaneRows([A, B], [wipAFeat, wipA], new Map());
+    expect(laneCount).toBe(3);
+    const wt = rows.find((r) => r.kind === "wip" && r.wip.path === "/w/a-feat");
+    if (!wt || wt.kind !== "wip") throw new Error("missing worktree WIP");
+    expect(wt.layout.lane).toBe(2);
+    // 따로 떨어진 칸은 자기 선이 없다(부모가 이 레인에 없다).
+    expect(wt.layout.edges.filter((e) => e.fromLane === 2 || e.toLane === 2)).toEqual([]);
+    // 색은 저장소 레인 색을 따른다.
+    expect(wt.layout.chain).toBe(0);
+  });
+
+  it("still starts the repository lane at the main checkout's WIP", () => {
+    const { rows } = buildRepoLaneRows([A, B], [wipAFeat, wipA], new Map());
+    const mainWip = rows.find((r) => r.kind === "wip" && r.wip.path === "/w/a");
+    if (!mainWip || mainWip.kind !== "wip") throw new Error("missing main WIP");
+    expect(mainWip.layout.lane).toBe(0);
+    expect(mainWip.layout.edges.some((e) => e.kind === "out" && e.fromLane === 0)).toBe(true);
+    // 더 최근에 바뀐 워크트리 WIP가 맨 위이고, 저장소 레인은 그 행을 지나지 않는다.
+    const top = rows[0];
+    if (top.kind !== "wip") throw new Error("expected WIP on top");
+    expect(top.wip.path).toBe("/w/a-feat");
+    expect(top.layout.edges.some((e) => e.chain === 0)).toBe(false);
+  });
+});
+
 describe("repoLaneColor", () => {
   it("is fixed per repository, whatever lane it lands in", () => {
     const first = buildRepoLaneRows([A, B], [], new Map());

@@ -2,13 +2,15 @@
  * 워크스페이스 리뷰 화면의 판단 규칙(순수 함수).
  */
 
+import type { CommitInfo, NewCommitIds, WorkspaceRepoHistory } from "@/types";
+
 /** 저장소 숨김 판단에 쓰는 값. */
 export interface ReviewRepoSignals {
   /** 지금 체크아웃한 브랜치. detached HEAD면 null. */
   branch: string | null;
   /** 저장소의 기본 브랜치(`get_workspace_history`). 모르면 null. */
   defaultBranch: string | null;
-  /** 새 커밋 수. 아직 못 셌으면 null(0으로 본다). */
+  /** 모든 워크트리(메인 작업 트리 포함)의 새 커밋 수 합. 하나도 못 셌으면 null(0으로 본다). */
   newCount: number | null;
   /** 모든 워크트리의 커밋하지 않은 파일 수 합. */
   wipCount: number;
@@ -58,35 +60,90 @@ function covers(root: string, path: string): boolean {
   return path === r || path.startsWith(`${r}/`);
 }
 
+/** 활동 이벤트가 가리키는 워크트리(메인 작업 트리 포함)와 그 저장소. */
+export interface ActivityTarget {
+  repoPath: string;
+  /** 이벤트 경로를 담는 가장 깊은 저장소·워크트리 경로. */
+  root: string;
+}
+
 /**
- * `repo:activity`의 경로가 어느 저장소의 것인지. 저장소 경로와 워크트리 경로 중 이벤트 경로를
- * 담는 가장 깊은 경로의 저장소를 고른다(저장소 안에 든 `.worktrees/x` 같은 워크트리가 다른
- * 저장소로 잘못 가지 않게). 워크스페이스 밖의 경로면 null.
+ * `repo:activity`의 경로가 어느 워크트리의 것인지. 저장소 경로와 워크트리 경로 중 이벤트 경로를
+ * 담는 가장 깊은 경로를 고른다(저장소 안에 든 `.worktrees/x` 같은 워크트리가 바깥 저장소로
+ * 잘못 가지 않게). 워크스페이스 밖의 경로면 null.
  */
-export function repoOfActivityPath(path: string, repos: readonly ReviewRepoPaths[]): string | null {
+export function activityTargetOf(path: string, repos: readonly ReviewRepoPaths[]): ActivityTarget | null {
   const target = trimSlash(path);
-  let best: { repoPath: string; depth: number } | null = null;
+  let best: (ActivityTarget & { depth: number }) | null = null;
   for (const repo of repos) {
     for (const root of [repo.repoPath, ...repo.worktreePaths]) {
       if (!covers(root, target)) continue;
       const depth = trimSlash(root).length;
-      if (!best || depth > best.depth) best = { repoPath: repo.repoPath, depth };
+      if (!best || depth > best.depth) best = { repoPath: repo.repoPath, root, depth };
     }
   }
-  return best?.repoPath ?? null;
+  return best ? { repoPath: best.repoPath, root: best.root } : null;
 }
 
 /**
- * 저장소 하나에 활동이 있을 때 무효화할 쿼리 키(앞부분 일치). 그 저장소와 워크트리의
- * 커밋하지 않은 변경(`status`, 열린 파일 diff)과 그 저장소의 타임라인만 다시 읽는다.
+ * 워크트리 하나에 활동이 있을 때 무효화할 쿼리 키(앞부분 일치). 그 워크트리의 커밋하지 않은
+ * 변경(`status`)과 열린 파일 diff만 다시 읽는다. 같은 저장소의 다른 워크트리와 타임라인은
+ * 다시 읽지 않는다. 파일 저장은 커밋 이력을 바꾸지 않고, 커밋(HEAD 이동)은 타임라인 키의
+ * `headOid`가 20초 스캔에서 잡는다.
  */
-export function activityInvalidationKeys(repo: ReviewRepoPaths): unknown[][] {
-  const paths = [...new Set([repo.repoPath, ...repo.worktreePaths])];
+export function activityInvalidationKeys(root: string): unknown[][] {
   return [
-    ...paths.map((p) => ["status", p]),
-    ...paths.map((p) => ["fileDiff", p]),
-    ["workspaceHistory", repo.repoPath],
+    ["status", root],
+    ["fileDiff", root],
   ];
+}
+
+/**
+ * 워크트리 여러 개의 새 커밋 수 합. 하나도 못 셌으면 null. 숨김 규칙은 메인 작업 트리만이
+ * 아니라 저장소의 모든 워크트리를 본다(에이전트 워크트리에만 새 커밋이 있어도 보인다).
+ */
+export function sumNewCounts(
+  worktreePaths: readonly string[],
+  counted: Readonly<Record<string, NewCommitIds>>,
+): number | null {
+  let total: number | null = null;
+  for (const path of worktreePaths) {
+    const c = counted[path];
+    if (c) total = (total ?? 0) + c.newCount;
+  }
+  return total;
+}
+
+/** 저장소 레인에 그릴 커밋. */
+export interface LaneCommits {
+  commits: CommitInfo[];
+  /** 레인이 맨 아래 「갈라진 지점」 행까지 이어지는지. */
+  hasBase: boolean;
+  /** 새 커밋 중 타임라인에 없는 것이 있어 `recent`로 채워야 하는지. */
+  needsRecent: boolean;
+}
+
+/**
+ * 레인의 커밋: 타임라인(main과 갈라진 뒤의 커밋)에 새 커밋 중 빠진 것을 더한다.
+ *
+ * 새 커밋은 기준선(마지막으로 확인한 커밋)부터 세고, 타임라인은 main과 갈라진 지점에서 멈춘다.
+ * main에 있는 저장소에서 pull로 커밋을 받았거나 원격이 없는 main에 커밋이 쌓이면 갈라진 지점이
+ * HEAD 자신이라 타임라인이 비고, 센 새 커밋은 그려지지 않는다. 그런 커밋은 `recent`(HEAD부터의
+ * 최근 커밋, 최신 순)에서 찾아 타임라인 아래에 잇는다. 이때 빠진 커밋은 갈라진 지점과 같거나
+ * 그 아래라 「갈라진 지점」 행으로 잇지 않고 레인을 그 저장소의 마지막 행에서 끝낸다.
+ */
+export function laneCommitsOf(
+  history: WorkspaceRepoHistory,
+  newIds: ReadonlySet<string>,
+  recent: readonly CommitInfo[] | undefined,
+): LaneCommits {
+  const drawn = new Set(history.commits.map((c) => c.id));
+  const needsRecent = [...newIds].some((id) => !drawn.has(id));
+  if (!needsRecent) {
+    return { commits: history.commits, hasBase: history.baseStatus === "found", needsRecent };
+  }
+  const extra = (recent ?? []).filter((c) => newIds.has(c.id) && !drawn.has(c.id));
+  return { commits: [...history.commits, ...extra], hasBase: false, needsRecent };
 }
 
 /** 경로의 마지막 부분(저장소·워크트리 이름). */

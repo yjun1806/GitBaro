@@ -930,10 +930,10 @@
     "showAll_other": "Show all ({{count}} hidden)",
     "hideQuiet": "Hide quiet repositories",
     "hiddenHint": "Repositories on their default branch with no new commits and no uncommitted changes are hidden",
-    "noCommits": "No commits since these repositories branched off main",
+    "noCommits": "No commits since these repositories branched off their default branch",
     "wipLabel_one": "Uncommitted changes in {{repo}} ({{count}} file)",
     "wipLabel_other": "Uncommitted changes in {{repo}} ({{count}} files)",
-    "baseRow": "Where each repository branched off main",
+    "baseRow": "Where each repository branched off its default branch",
     "repoError": "Couldn't read {{repo}}: {{error}}",
     "noDefaultBranch": "No default branch found, so recent commits are shown instead",
     "noSharedHistory": "No history shared with {{branch}}, so recent commits are shown instead",
@@ -944,6 +944,10 @@
     "selectHint": "Its files and diff show here.",
     "openToCommit": "Open to commit",
     "noChanges": "No uncommitted changes",
-    "staged": "staged"
+    "staged": "staged",
+    "allQuiet_one": "{{count}} quiet repository is hidden: it is on its default branch with no new commits and no uncommitted changes. Use Show all to see it.",
+    "allQuiet_other": "All {{count}} repositories are quiet and hidden: they are on their default branch with no new commits and no uncommitted changes. Use Show all to see them.",
+    "worktreeNew_one": "{{count}} new commit in another worktree. Open the repository to review it.",
+    "worktreeNew_other": "{{count}} new commits in other worktrees. Open the repository to review them."
   }
 }
