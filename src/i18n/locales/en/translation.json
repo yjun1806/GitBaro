@@ -756,5 +756,17 @@
     },
     "worktreeNote": "Worktrees are only checked, never pulled automatically.",
     "openSettings": "Open auto sync settings"
+  },
+  "shell": {
+    "graphTab": "Commit graph",
+    "uncommitted": "Uncommitted changes",
+    "uncommittedCount": "Uncommitted changes ({{count}})",
+    "noRepoTitle": "No repository selected",
+    "noRepoDescription": "Pick a repository in the sidebar, or add one.",
+    "openRepoList": "All repositories",
+    "closeRepoList": "Close repository list",
+    "resizeSidebar": "Resize sidebar",
+    "panelTabs": "Main panel",
+    "selectCommitOrChanges": "Select a commit or the uncommitted changes row above."
   }
 }

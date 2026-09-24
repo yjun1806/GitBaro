@@ -36,6 +36,9 @@ interface UIState {
   setDiffLineMode: (mode: DiffLineMode) => void;
 }
 
+/** Sidebar width in the two-column shell's design (`gen_d.py` sidebar, 276px). */
+export const DEFAULT_SIDEBAR_WIDTH = 276;
+
 const RAIL_MODES: readonly RailMode[] = ["expanded", "collapsed", "hover"];
 const DIFF_LINE_MODES: readonly DiffLineMode[] = ["unified", "split"];
 
@@ -63,7 +66,8 @@ export const useUIStore = create<UIState>()(
     (set) => ({
       theme: "system",
       activeTab: "changes",
-      sidebarWidth: 500,
+      // W2-T1: 두 칸 셸에서 이 폭은 트리 사이드바 폭이다(시안 276px). 저장된 값이 있으면 그 값을 쓴다.
+      sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
       isSidebarCollapsed: false,
       railMode: "hover",
       repoListOpen: false,
@@ -97,6 +101,9 @@ export const useUIStore = create<UIState>()(
       storage: createJSONStorage(() => createSafeStorage()),
       // Layout preferences are persisted here. The theme is not: its source of
       // truth is the backend settings file, applied at startup (App.tsx).
+      // activeTab is not persisted either, so the two-column shell (W2-T1) could
+      // regroup the tabs without a storage version bump: the graph panel's
+      // "commit graph" tab covers "changes" (uncommitted row) and "history".
       partialize: (state) => ({
         railMode: state.railMode,
         sidebarWidth: state.sidebarWidth,

@@ -1,25 +1,28 @@
 import { useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useUIStore } from "@/stores/ui";
-import { useRepositoryStore } from "@/stores/repository";
 import { useAutoSync } from "@/hooks/useAutoSync";
 import { useLiveChanges } from "@/hooks/useLiveChanges"; // W1-T3
 import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import "@/stores/selection"; // ensure cross-store subscriptions are registered
 import { RepoRail } from "./RepoRail";
-import { Sidebar } from "./Sidebar";
-import { ContentArea } from "./ContentArea";
+import { MainColumn } from "./MainColumn";
 import { StatusBar } from "./StatusBar";
 import { ActivityLogPanel } from "./ActivityLogPanel";
 import { AutoSyncSettingsDialogHost } from "@/components/repository/AutoSyncSettingsDialog";
 import { clampSidebarWidth } from "@/lib/sidebar-width";
+import { cn } from "@/lib/utils";
 
+/**
+ * Two-column shell from the design (`gen_d.py` `frame(side, main)`):
+ * [sidebar | main column]. The main column holds the toolbar, the graph panel
+ * and the file list + diff.
+ */
 export function MainLayout() {
+  const { t } = useTranslation();
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
-  const activeTab = useUIStore((s) => s.activeTab);
-  const repoListOpen = useUIStore((s) => s.repoListOpen);
-  const setRepoListOpen = useUIStore((s) => s.setRepoListOpen);
-
-  useRepositoryStore((s) => s.activeRepoPath);
+  const railMode = useUIStore((s) => s.railMode);
+  const isActivityLogOpen = useUIStore((s) => s.isActivityLogOpen);
 
   // 저장소별 설정에 따라 원격을 주기적으로 확인하고, 안전할 때만 자동으로 받는다
   useAutoSync();
@@ -27,6 +30,9 @@ export function MainLayout() {
   useLiveChanges();
 
   const sidebarWidth = useSidebarWidth();
+  // 사이드바를 고정으로 펼친 모드에서만 폭을 사용자가 조절한다. 접힘·hover 모드는
+  // 좁은 레일로 남는다(hover는 레일 위에 떠서 펼쳐진다).
+  const isResizable = railMode === "expanded";
 
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -58,45 +64,38 @@ export function MainLayout() {
     [sidebarWidth, setSidebarWidth],
   );
 
-  const isActivityLogOpen = useUIStore((s) => s.isActivityLogOpen);
-
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
-      {/* Main content row */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Repo quick-switch rail (Supabase-style) */}
-        <RepoRail />
-
-        {/* Left panel — Repo header + Changes/History or Repo list */}
+        {/* Sidebar. When pinned open it takes the user-sized width: the rail's
+            own fixed widths are stretched to fill this slot. */}
         <div
-          style={{ width: sidebarWidth }}
-          className="shrink-0 overflow-hidden"
-        >
-          <Sidebar />
-        </div>
-
-        {/* Resize handle (acts as border between panels) */}
-        <div
-          onMouseDown={onMouseDown}
-          className="w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/40 transition-colors"
-        />
-
-        {/* Right panel — Branch header + Diff viewer */}
-        <div className="relative flex-1 overflow-hidden bg-background">
-          <ContentArea activeTab={activeTab} />
-          {repoListOpen && (
-            <div
-              className="absolute inset-0 bg-black/30 z-40 transition-opacity"
-              onClick={() => setRepoListOpen(false)}
-            />
+          data-testid="sidebar-slot"
+          style={isResizable ? { width: sidebarWidth } : undefined}
+          className={cn(
+            "relative shrink-0 h-full",
+            isResizable && "[&>div]:w-full! [&>div>div:first-child]:w-full!",
           )}
+        >
+          <RepoRail />
         </div>
+
+        {isResizable && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t("shell.resizeSidebar")}
+            onMouseDown={onMouseDown}
+            className="w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/40 transition-colors"
+          />
+        )}
+
+        <MainColumn />
       </div>
 
       {/* Activity log panel (above status bar) */}
       {isActivityLogOpen && <ActivityLogPanel />}
 
-      {/* Status bar */}
       <StatusBar />
 
       {/* 저장소 메뉴에서 여는 원격 자동 최신화 설정 */}

@@ -16,7 +16,7 @@ import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog
 import { WorktreeBaseLabel } from "@/components/worktree/WorktreeBaseLabel";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
-import { railFlowWidth } from "@/components/layout/RepoRail";
+import { mainColumnLeft } from "@/components/layout/sidebar-layout";
 
 interface WorktreeZoneProps {
   isOpen: boolean;
@@ -137,7 +137,7 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
           {/* Full-height panel — 사이드바 오른쪽, 툴바 아래부터 하단까지 */}
           <div
             className="fixed z-50 flex flex-col bg-popover border-r border-border shadow-2xl"
-            style={{ left: railFlowWidth(railMode) + sidebarWidth + 1, top: 52, bottom: 0, width: '28rem' }}
+            style={{ left: mainColumnLeft(railMode, sidebarWidth), top: 52, bottom: 0, width: '28rem' }}
           >
             <WorktreeDropdown
               worktrees={worktrees}

@@ -23,7 +23,7 @@ export function StatusBar() {
     <div
       className={cn(
         "flex items-center gap-4 px-3 h-6 text-xs text-muted-foreground",
-        "border-t border-border bg-surface select-none cursor-pointer",
+        "border-t border-(--line) bg-background select-none cursor-pointer",
         "hover:bg-accent transition-colors",
       )}
       onClick={() => setActivityLogOpen(!isActivityLogOpen)}
