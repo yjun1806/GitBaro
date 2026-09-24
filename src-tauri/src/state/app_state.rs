@@ -108,11 +108,6 @@ pub async fn load_app_state(_app_handle: &tauri::AppHandle) -> AppState {
 
 /// Persist `AppState` to `~/Library/Application Support/com.gitbaro.app/app-state.json`.
 pub async fn save_app_state(state: &AppState) -> Result<(), AppError> {
-    let dir = get_state_dir();
-    std::fs::create_dir_all(&dir)?;
-
-    let path = dir.join(STATE_FILE);
-    let json = serde_json::to_string_pretty(state)?;
-    std::fs::write(&path, json)?;
-    Ok(())
+    let path = get_state_dir().join(STATE_FILE);
+    super::json_file::write_json_atomic(&path, state).await
 }
