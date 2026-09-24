@@ -27,7 +27,8 @@
   "toolbar": {
     "fetch": "Fetch origin",
     "push": "Push",
-    "pull": "Pull"
+    "pull": "Pull",
+    "accountGroup": "Account and settings"
   },
   "changes": {
     "title": "Changes",

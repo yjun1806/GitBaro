@@ -53,8 +53,13 @@ export function toolbarButtonClass({
   );
 }
 
-/** 버튼 묶음 사이의 가는 세로 선 */
-export const TOOLBAR_DIVIDER = "w-px h-4 shrink-0 bg-(--line2)";
+/**
+ * 관련 버튼 묶음을 담는 흰 카드(층 2). 안의 28px 버튼 둘레로 3px 여백을 두어 34px 높이로
+ * 44px 머리 줄 가운데에 놓인다. 모서리는 버튼 모서리(6px) + 여백(3px) = 9px로 같은 중심을 가진다.
+ * 묶음 사이는 선 대신 틈(6px)으로 나눈다.
+ */
+export const TOOLBAR_GROUP =
+  "flex items-center gap-0.5 p-[3px] shrink-0 rounded-[9px] bg-card border border-(--line) shadow-(--shadow-sm)";
 
 /** 툴바 버튼 안 숫자 배지(↑·↓ 수, stash 수). 강조가 아니라 회색이다. */
 export const TOOLBAR_BADGE =

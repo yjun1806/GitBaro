@@ -27,7 +27,8 @@
   "toolbar": {
     "fetch": "Fetch origin",
     "push": "Push",
-    "pull": "Pull"
+    "pull": "Pull",
+    "accountGroup": "계정과 설정"
   },
   "changes": {
     "title": "Changes",

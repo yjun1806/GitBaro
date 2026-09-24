@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { ChevronDown, Loader2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
-import { TOOLBAR_BADGE, TOOLBAR_DIVIDER, TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
+import { TOOLBAR_BADGE, TOOLBAR_GROUP, TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
 
 /**
  * 툴바 폭이 이보다 좁으면 버튼 이름을 숨기고 아이콘·배지만 둔다. 툴바 줄(`@container`)의 폭 기준이다.
@@ -17,19 +17,14 @@ export const TOOLBAR_LABEL_CLASS = "hidden @min-[1100px]:inline";
 export const TOOLBAR_WIDE_LABEL_CLASS = "hidden @min-[1280px]:inline";
 
 /**
- * 툴바 git 작업 버튼 묶음. 층 0 위에 바탕 없이 버튼을 붙여 두고, 묶음 사이는 `ToolbarDivider`로 나눈다.
+ * 툴바 버튼 묶음: 관련 버튼을 흰 카드 하나(`TOOLBAR_GROUP`)에 담는다. 묶음 사이는 틈으로 나눈다.
  */
 export function ActionGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div role="group" aria-label={label} className="flex items-center gap-0.5">
+    <div role="group" aria-label={label} data-toolbar-group className={TOOLBAR_GROUP}>
       {children}
     </div>
   );
-}
-
-/** 툴바 묶음 사이의 가는 세로 선 */
-export function ToolbarDivider() {
-  return <span aria-hidden="true" data-toolbar-divider className={cn("mx-1", TOOLBAR_DIVIDER)} />;
 }
 
 interface ActionButtonProps {

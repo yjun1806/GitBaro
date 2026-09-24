@@ -20,7 +20,7 @@ import { BranchZone } from "./BranchZone";
 import { WorktreeZone } from "./WorktreeZone";
 import { GitActionZone } from "./GitActionZone";
 import { AccountZone } from "./AccountZone";
-import { ToolbarDivider } from "./ActionButton";
+import { ActionGroup } from "./ActionButton";
 import { TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
 import type { AppSettings } from "@/types";
 import { useActiveScope } from "@/hooks/useActiveScope";
@@ -118,8 +118,9 @@ export function ToolbarRoot() {
     <ToolbarDropdownContext.Provider value={dropdown}>
       {/* @container: 툴바 폭에 따라 git 작업 버튼 이름을 숨긴다(ActionButton의 TOOLBAR_LABEL_CLASS). */}
       {/* 머리 줄: 44px 한 줄 flex(items-center). 안의 모든 버튼은 28px 툴바 버튼(toolbar-button.ts)이라
-          한 가로 중심선에 놓인다. 좌우 여백 8px, 묶음 사이는 가는 세로 선. */}
-      <div className={cn("@container flex items-center gap-1 px-2 border-b border-(--line2) bg-(--frame) select-none", HEADER_HEIGHT_CLASS)}>
+          한 가로 중심선에 놓인다. 오른쪽 버튼은 관련된 것끼리 흰 카드(34px, TOOLBAR_GROUP)에 담고
+          카드 사이는 6px 틈으로 나눈다. 좌우 여백 8px. */}
+      <div className={cn("@container flex items-center gap-1.5 px-2 border-b border-(--line2) bg-(--frame) select-none", HEADER_HEIGHT_CLASS)}>
         {/* macOS 트래픽 라이트는 사이드바 쪽(맨 왼쪽 위 모서리)에 있다 — 그 자리 예약은
             RepoRail의 머리글이 진다(TRAFFIC_LIGHT_INSET_PX, layout-tokens.ts). */}
         {scope?.kind === "workspace" ? (
@@ -158,26 +159,24 @@ export function ToolbarRoot() {
           </>
         )}
 
-        <ToolbarDivider />
-
-        {/* Zone C: Account */}
-        <AccountZone
-          isOpen={activeDropdown === "account"}
-          onToggle={() => toggle("account")}
-          onClose={close}
-          onSignIn={() => setShowLoginDialog(true)}
-          onManageAccounts={handleOpenSettings}
-        />
-
-        {/* Zone D: Settings */}
-        <button
-          onClick={handleOpenSettings}
-          className={toolbarButtonClass({ iconOnly: true })}
-          title={t("common.settings")}
-          aria-label={t("common.settings")}
-        >
-          <Settings className={TOOLBAR_ICON} />
-        </button>
+        {/* Zone C·D: 계정 + 설정 */}
+        <ActionGroup label={t("toolbar.accountGroup")}>
+          <AccountZone
+            isOpen={activeDropdown === "account"}
+            onToggle={() => toggle("account")}
+            onClose={close}
+            onSignIn={() => setShowLoginDialog(true)}
+            onManageAccounts={handleOpenSettings}
+          />
+          <button
+            onClick={handleOpenSettings}
+            className={toolbarButtonClass({ iconOnly: true })}
+            title={t("common.settings")}
+            aria-label={t("common.settings")}
+          >
+            <Settings className={TOOLBAR_ICON} />
+          </button>
+        </ActionGroup>
       </div>
 
       {showLoginDialog && (
