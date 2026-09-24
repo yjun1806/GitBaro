@@ -128,12 +128,20 @@ export async function resetToCommit(repoPath: string, oid: string, mode: ResetMo
   return invoke("reset_to_commit", { repoPath, oid, mode });
 }
 
-export async function revertCommit(repoPath: string, oid: string): Promise<void> {
-  return invoke("revert_commit", { repoPath, oid });
+export async function revertCommit(
+  repoPath: string,
+  oid: string,
+  accountId: string | null,
+): Promise<void> {
+  return invoke("revert_commit", { repoPath, oid, accountId });
 }
 
-export async function cherryPickCommit(repoPath: string, oid: string): Promise<void> {
-  return invoke("cherry_pick_commit", { repoPath, oid });
+export async function cherryPickCommit(
+  repoPath: string,
+  oid: string,
+  accountId: string | null,
+): Promise<void> {
+  return invoke("cherry_pick_commit", { repoPath, oid, accountId });
 }
 
 /**
@@ -289,8 +297,9 @@ export async function mergeBranch(
   repoPath: string,
   branch: string,
   strategy: MergeStrategy,
+  accountId: string | null,
 ): Promise<string> {
-  return invoke("merge_branch_into_current", { repoPath, branch, strategy });
+  return invoke("merge_branch_into_current", { repoPath, branch, strategy, accountId });
 }
 
 export async function checkMergeConflicts(
@@ -309,8 +318,11 @@ export async function abortMergeOrRebase(repoPath: string): Promise<void> {
   return invoke("abort_merge_or_rebase", { repoPath });
 }
 
-export async function continueMergeOrRebase(repoPath: string): Promise<void> {
-  return invoke("continue_merge_or_rebase", { repoPath });
+export async function continueMergeOrRebase(
+  repoPath: string,
+  accountId: string | null,
+): Promise<void> {
+  return invoke("continue_merge_or_rebase", { repoPath, accountId });
 }
 
 export async function getConflictFileDiff(

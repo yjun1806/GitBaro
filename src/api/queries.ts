@@ -33,6 +33,7 @@ import {
   continueMergeOrRebase,
 } from "./commands";
 import type { RepoSyncStatus } from "@/types";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 
 export function useStatus(repoPath: string | null) {
   return useQuery({
@@ -307,6 +308,8 @@ export function useMergeState(repoPath: string | null) {
 
 export function useMergeRecoveryMutations(repoPath: string | null) {
   const queryClient = useQueryClient();
+  // merge를 마무리하며 만드는 커밋도 저장소 계정으로 기록한다.
+  const accountId = useRepoAccountId();
 
   const invalidateAll = () =>
     Promise.all([
@@ -322,7 +325,7 @@ export function useMergeRecoveryMutations(repoPath: string | null) {
   });
 
   const conclude = useMutation({
-    mutationFn: () => continueMergeOrRebase(repoPath!),
+    mutationFn: () => continueMergeOrRebase(repoPath!, accountId),
     onSuccess: invalidateAll,
   });
 
