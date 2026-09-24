@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useAccountStore } from "@/stores/account";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useClickOutside } from "./useToolbarDropdown";
 import { AccountDropdown } from "./AccountDropdown";
 
@@ -22,8 +23,9 @@ export function AccountZone({
   const zoneRef = useRef<HTMLDivElement>(null);
   useClickOutside(zoneRef, onClose, isOpen);
   const accounts = useAccountStore((s) => s.accounts);
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
-  const currentAccount = accounts.find((a) => a.id === activeAccountId);
+  // 동기화·커밋에 실제로 쓰이는 계정(열린 저장소의 계정)을 보여준다.
+  const repoAccountId = useRepoAccountId();
+  const currentAccount = accounts.find((a) => a.id === repoAccountId);
 
   return (
     <div ref={zoneRef} className="relative shrink-0">

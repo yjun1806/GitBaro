@@ -425,6 +425,8 @@
     "repoNotFoundDesc": "이 저장소에 접근할 수 없습니다",
     "readOnly": "읽기 전용",
     "readOnlyDesc": "이 저장소에 Push 권한이 없습니다",
+    "noRepoAccount": "계정 없음",
+    "noRepoAccountDesc": "이 저장소에 지정된 GitHub 계정이 없습니다. 툴바의 계정 메뉴에서 계정을 고르세요.",
     "publishBranch": "Branch 게시",
     "publishBranchDesc": "이 Branch를 Remote에 Push하여 공유합니다",
     "noUpstreamError": "이 브랜치는 리모트에 게시되지 않았습니다. Publish Branch를 먼저 해주세요.",

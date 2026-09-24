@@ -425,6 +425,8 @@
     "repoNotFoundDesc": "No access to this repository",
     "readOnly": "Read-only access",
     "readOnlyDesc": "No push permission for this repo",
+    "noRepoAccount": "No account",
+    "noRepoAccountDesc": "No GitHub account is assigned to this repository. Choose one from the account menu in the toolbar.",
     "publishBranch": "Publish Branch",
     "publishBranchDesc": "Push this branch to remote to share with others",
     "noUpstreamError": "This branch has no upstream. Please publish the branch first.",

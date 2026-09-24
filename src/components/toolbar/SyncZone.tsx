@@ -91,6 +91,8 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   const progressPercent = activeRemoteOp?.progress?.percent;
 
   const syncError = (() => {
+    // 계정이 지정되지 않은 저장소는 다른 저장소의 계정으로 동기화하지 않는다.
+    if (activeRepoPath && !accountId) return { title: t("sync.noRepoAccount"), description: t("sync.noRepoAccountDesc") };
     if (!accountId || isValidating || canSync) return null;
     if (!tokenStatus?.valid) {
       if (tokenStatus?.reason === "token_not_found") return { title: t("sync.tokenMissing"), description: t("sync.tokenMissingDesc") };
@@ -161,11 +163,12 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   };
 
   const handleSync = async () => {
-    if (!activeRepoPath || !accountId || isSyncing) return;
+    if (!activeRepoPath || isSyncing) return;
     if (syncError) {
       addToast(`${syncError.title}: ${syncError.description}`, "error");
       return;
     }
+    if (!accountId) return;
     const action: SyncAction = !hasUpstream ? "publish" : behind > 0 ? "pull" : ahead > 0 ? "push" : "fetch";
     if (action === "pull") {
       await runSync(action, (path, account) => gitPull(path, account), t("sync.pullCompleted"));

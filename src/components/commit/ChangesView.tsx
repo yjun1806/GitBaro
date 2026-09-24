@@ -6,6 +6,7 @@ import { useAccountStore } from "@/stores/account";
 import { useSelectionStore } from "@/stores/selection";
 import { useStatus } from "@/api/queries";
 import { useCurrentBranch } from "@/hooks/useCurrentBranch";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { createCommit, stageFiles, unstageFiles, openInEditor, discardChanges, revealInFinder, addToGitignore } from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
 import { FileEntry } from "@/components/commit/FileEntry";
@@ -23,7 +24,8 @@ export function ChangesView() {
   const discardTitleId = useId();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const currentBranch = useCurrentBranch();
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  // 커밋 작성자는 동기화·merge와 같은 저장소 계정이다.
+  const activeAccountId = useRepoAccountId();
   const accounts = useAccountStore((s) => s.accounts);
   const activeAccount = accounts.find((a) => a.id === activeAccountId);
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
