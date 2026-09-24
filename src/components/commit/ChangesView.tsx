@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { useHistoryView, useSetHistoryView } from "@/components/graph/useHistoryView";
 import { CheckCircle2, ChevronDown, ChevronRight, GitBranch, Loader2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
@@ -54,7 +55,35 @@ function discardMessageKey(entry: StatusEntry): string {
     : "changes.discardStagedMessage";
 }
 
+/**
+ * 스테이징 목록과 커밋 입력. 체크아웃하지 않고 다른 브랜치를 보는 중에는 그리지 않고 안내를
+ * 둔다 — 커밋 안 한 변경과 스테이징은 체크아웃한 작업 트리의 것이라, 보는 브랜치와 섞이면
+ * 어느 브랜치에 커밋하는지 헷갈린다.
+ */
 export function ChangesView() {
+  const { target } = useHistoryView();
+  if (target !== null) return <ViewingComposerNote />;
+  return <ChangesViewBody />;
+}
+
+function ViewingComposerNote() {
+  const { t } = useTranslation();
+  const setView = useSetHistoryView();
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 h-full px-6 text-center">
+      <p className="text-[12.5px] leading-[19px] text-muted-foreground">{t("historyView.composerHidden")}</p>
+      <button
+        type="button"
+        onClick={() => setView(null)}
+        className="h-7 px-3 rounded-(--radius-chip) bg-(--chip) text-[12px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
+      >
+        {t("historyView.backToCurrent")}
+      </button>
+    </div>
+  );
+}
+
+function ChangesViewBody() {
   const { t } = useTranslation();
   const discardTitleId = useId();
   const conflictStageTitleId = useId();

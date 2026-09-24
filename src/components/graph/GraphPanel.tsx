@@ -28,7 +28,9 @@ import { useFilesViewStore } from "@/components/review/files-view";
 import { activeRunCount, badgeCount } from "@/components/review/tab-counts";
 import { useChangedFileCount } from "@/components/review/useChangedFileCount";
 import { CompareChip } from "./CompareChip";
-import { CommitNowButton } from "@/components/commit/CommitNowButton";
+import { ViewBranchPicker } from "./ViewBranchPicker";
+import { useHistoryView } from "./useHistoryView";
+import { GitStatusLine } from "@/components/review/GitStatusLine";
 import { cn } from "@/lib/utils";
 
 /** Which graph-panel tab a `ui.activeTab` value belongs to. */
@@ -72,7 +74,11 @@ export function GraphPanel() {
     repoAccountId,
   );
   const runningCount = activeRunCount(workflowRuns);
-  const currentWipCount = review.wips.find((w) => w.isCurrent)?.count ?? 0;
+  // 체크아웃하지 않고 다른 브랜치를 보는 중이면 체크아웃한 작업 트리의 것(WIP 행, 새 커밋·확인함
+  // 표시, 다른 워크트리 칩)을 감춘다. 그 표시는 체크아웃한 브랜치에만 맞는 말이다.
+  const { target: viewTarget, historyTarget } = useHistoryView();
+  const viewing = viewTarget !== null;
+  const newCommits = viewing ? null : review.newCommits;
   // 「파일별 변경」 배지: 지금 연 워크트리의 main 대비 파일 수(그 탭이 보여 줄 목록과 같은 범위).
   const { data: history } = useCommitHistoryInfinite(activeRepoPath);
   const headOid = history?.pages[0]?.[0]?.id ?? null;
@@ -137,6 +143,8 @@ export function GraphPanel() {
         tab !== "files" && "flex-1 min-h-0",
       )}
     >
+      {/* 메인 칸 맨 위의 git 상태 줄. 보는 중이면 이 줄이 「보는 중」 띠가 된다. */}
+      <GitStatusLine />
       <div className="flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)">
         <TabGroup aria-label={t("shell.panelTabs")} className="flex-1 min-w-0 gap-2 px-3 border-b-0">
           <Tab
@@ -144,7 +152,7 @@ export function GraphPanel() {
             active={tab === "graph"}
             onClick={openGraphTab}
             icon={<GitCommitVertical className="w-3.5 h-3.5" />}
-            count={badgeCount(review.newCommits?.newCount)}
+            count={badgeCount(newCommits?.newCount)}
           >
             {t("shell.graphTab")}
           </Tab>
@@ -176,22 +184,22 @@ export function GraphPanel() {
             {t("actions.title")}
           </Tab>
         </TabGroup>
+        {tab === "graph" && <ViewBranchPicker />}
         {tab === "graph" && <CompareChip />}
-        {/* 툴바와 상관없이 여기서도 커밋을 시작한다. */}
-        {currentWipCount > 0 && <CommitNowButton count={currentWipCount} variant="header" />}
-        {tab === "graph" && review.newCommits !== null && review.newCommits.newCount > 0 && (
+        {/* 「커밋하기」는 위 git 상태 줄에 있다. */}
+        {tab === "graph" && newCommits !== null && newCommits.newCount > 0 && (
           <button
             type="button"
             onClick={review.markSeen}
             className="shrink-0 h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
           >
-            {t("graph.markSeen", { count: review.newCommits.newCount })}
+            {t("graph.markSeen", { count: newCommits.newCount })}
           </button>
         )}
         {tab === "files" && <FilesGroupByPicker value={groupBy} onChange={setGroupBy} />}
       </div>
 
-      {tab === "graph" && graphListShown && worktreeFilter.chips.length > 1 && (
+      {tab === "graph" && graphListShown && !viewing && worktreeFilter.chips.length > 1 && (
         <WorktreeChips
           chips={worktreeFilter.chips}
           visible={worktreeFilter.visible}
@@ -203,10 +211,11 @@ export function GraphPanel() {
         <div role="tabpanel" className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
           {tab === "graph" ? (
             <CommitGraph
-              wips={worktreeFilter.wips}
-              newCommits={review.newCommits}
-              seenAt={review.seenAt}
-              worktreeHeads={worktreeFilter.heads}
+              wips={viewing ? NO_WIPS : worktreeFilter.wips}
+              newCommits={newCommits}
+              seenAt={viewing ? null : review.seenAt}
+              worktreeHeads={viewing ? NO_HEADS : worktreeFilter.heads}
+              historyTarget={historyTarget}
             />
           ) : tab === "stash" ? (
             <StashView />
@@ -221,6 +230,7 @@ export function GraphPanel() {
 }
 
 const NO_HEADS: WorktreeHead[] = [];
+const NO_WIPS: GraphWip[] = [];
 
 /** 칩 순서: 메인 먼저, 그다음 경로순(WIP 행 순서와 같다). */
 function chipOrder(a: GraphWip, b: GraphWip): number {

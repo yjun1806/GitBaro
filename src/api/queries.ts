@@ -34,7 +34,7 @@ import {
   abortMergeOrRebase,
   continueMergeOrRebase,
 } from "./commands";
-import type { RepoSyncStatus } from "@/types";
+import type { HistoryTarget, RepoSyncStatus } from "@/types";
 import { useSelectionStore } from "@/stores/selection";
 import { selectionAfterStashPushed, selectionAfterStashRemoved } from "@/lib/stash-selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
@@ -141,15 +141,25 @@ export function useRepoSyncStatuses(repoPaths: string[]) {
 const COMMIT_HISTORY_PAGE_SIZE = 50;
 
 /**
+ * 커밋 히스토리 쿼리 키. HEAD(기본)는 예전 키 `["commitHistory", repoPath]`를 그대로 써서
+ * 캐시를 읽는 다른 화면(`useCachedCommitIsUnpushed`)과 맞춘다. 체크아웃하지 않고 보는
+ * 브랜치는 그 뒤에 붙여, 접두어 무효화(commit·fetch 등)가 함께 적용된다.
+ */
+export function commitHistoryKey(repoPath: string | null, target?: HistoryTarget): readonly unknown[] {
+  if (!target || target.kind === "head") return ["commitHistory", repoPath];
+  return ["commitHistory", repoPath, target.kind === "all" ? "all" : `ref:${target.name}`];
+}
+
+/**
  * 커밋 히스토리를 무한 스크롤로 조회한다. 백엔드 get_commit_history의 offset을
  * 활용해 스크롤 시 다음 페이지를 이어 붙인다. 마지막 페이지가 페이지 크기보다
  * 적으면 끝으로 판단한다. 키 접두어를 ["commitHistory"]로 유지해 기존 무효화
  * (commit·switch·fetch 등)가 그대로 적용된다.
  */
-export function useCommitHistoryInfinite(repoPath: string | null) {
+export function useCommitHistoryInfinite(repoPath: string | null, target?: HistoryTarget) {
   return useInfiniteQuery({
-    queryKey: ["commitHistory", repoPath],
-    queryFn: ({ pageParam }) => getCommitHistory(repoPath!, COMMIT_HISTORY_PAGE_SIZE, pageParam),
+    queryKey: commitHistoryKey(repoPath, target),
+    queryFn: ({ pageParam }) => getCommitHistory(repoPath!, COMMIT_HISTORY_PAGE_SIZE, pageParam, target),
     enabled: repoPath !== null,
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>

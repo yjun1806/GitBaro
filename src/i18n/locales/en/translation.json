@@ -1075,7 +1075,7 @@
     "remoteOf": "Remote · {{remote}}",
     "current": "Current branch",
     "mainWorktree": "main",
-    "switch": "Switch",
+    "switch": "Check out",
     "open": "Go to",
     "openHint": "Open the worktree {{name}} that uses this branch",
     "compare": "Compare",
@@ -1085,13 +1085,16 @@
     "sameAsUpstream": "same as {{upstream}}",
     "mergedInto": "Merged into {{base}}",
     "canCleanUp": "can be cleaned up",
-    "hint": "Compare switches the graph to the commits between the current branch and that branch. A branch used in another worktree opens that worktree instead of switching.",
+    "hint": "Click a row to view that branch's history without checking it out. Only Check out changes the working tree. Compare switches the graph to the commits between the current branch and that branch. A branch used in another worktree opens that worktree instead of checking out.",
     "rangeTitle": "Range",
     "rangeCount_one": "{{count}} commit",
     "rangeCount_other": "{{count}} commits",
     "rangeSwap": "Swap direction",
     "rangeClose": "Leave range view",
-    "rangeEmpty": "{{target}} has no commits that are not in {{base}}"
+    "rangeEmpty": "{{target}} has no commits that are not in {{base}}",
+    "viewHint": "View {{name}} without checking it out",
+    "viewCurrentHint": "View the current checkout",
+    "viewing": "Viewing"
   },
   "live": {
     "following": "Following",
@@ -1184,5 +1187,43 @@
   "layout": {
     "resizeFileList": "Resize file list (double-click to reset)",
     "resizeGraph": "Resize graph panel (double-click to reset)"
+  },
+  "historyView": {
+    "current": "Current checkout",
+    "allBranches": "All branches",
+    "pickerLabel": "Viewing",
+    "pickerTitle": "Choose what to view",
+    "pickerHint": "See another branch's history without checking it out",
+    "checkedOut": "checked out",
+    "checkoutThis": "Check out this branch",
+    "backToCurrent": "Back to current branch",
+    "wipHidden": "Uncommitted changes are hidden while viewing. They belong to the checked-out working tree.",
+    "composerHidden": "You're viewing another branch. Staging and committing happen on the checked-out branch only."
+  },
+  "statusLine": {
+    "mainWorktree": "Main working tree",
+    "linkedWorktree": "Working tree {{name}}",
+    "checkout": "Checked out ⎇ {{branch}}",
+    "detached": "No branch · {{sha}}",
+    "detachedUnknown": "No branch",
+    "upstream": "↑{{ahead}} ↓{{behind}} vs {{upstream}}",
+    "noUpstream": "No remote branch",
+    "clean": "No uncommitted changes",
+    "uncommitted_one": "{{count}} uncommitted change",
+    "uncommitted_other": "{{count}} uncommitted changes",
+    "uncommittedStaged_one": "{{count}} uncommitted change ({{staged}} staged)",
+    "uncommittedStaged_other": "{{count}} uncommitted changes ({{staged}} staged)",
+    "viewing": "Viewing {{target}} · not checked out",
+    "operation": "{{op}} in progress",
+    "operationConflicts_one": "{{op}} in progress · {{count}} conflict",
+    "operationConflicts_other": "{{op}} in progress · {{count}} conflicts",
+    "detachedHeadline": "Detached HEAD · new commits won't be on any branch",
+    "op": {
+      "merge": "Merge",
+      "rebase": "Rebase",
+      "cherryPick": "Cherry-pick",
+      "revert": "Revert",
+      "squash": "Squash"
+    }
   }
 }

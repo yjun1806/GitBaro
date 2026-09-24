@@ -153,6 +153,17 @@ export interface AuthorInfo {
   avatarUrl?: string;
 }
 
+/**
+ * 커밋 목록을 어디서부터 읽을지(`get_commit_history`의 `target`).
+ * - `head`: 지금 체크아웃한 HEAD(기본값)
+ * - `ref`: 로컬 브랜치, 원격 브랜치(`origin/x`), 태그. 체크아웃하지 않고 본다.
+ * - `all`: 모든 로컬·원격 브랜치 끝
+ */
+export type HistoryTarget =
+  | { kind: "head" }
+  | { kind: "ref"; name: string }
+  | { kind: "all" };
+
 export interface BranchInfo {
   name: string;
   isHead: boolean;

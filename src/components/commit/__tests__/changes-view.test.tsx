@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
+import { useHistoryViewStore } from "@/stores/history-view";
 import type { RepoInfo, StatusEntry } from "@/types";
 
 const REPO = "/work/app";
@@ -45,11 +46,37 @@ beforeEach(async () => {
   state.branches = [{ name: "feat/x", isHead: true, isRemote: false }];
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
   useUIStore.setState({ commitFocusAt: null });
+  useHistoryViewStore.getState().reset();
 });
 
 afterEach(cleanup);
 
 describe("ChangesView composer", () => {
+  it("hides staging and the composer while another branch is viewed, and goes back from the note", () => {
+    state.status = [{ path: "a.ts", status: "modified", staged: false }];
+    state.branches = [
+      { name: "feat/x", isHead: true, isRemote: false },
+      { name: "main", isHead: false, isRemote: false },
+    ];
+    useHistoryViewStore.getState().view(REPO, { kind: "ref", name: "main", isRemote: false });
+    renderView();
+    expect(screen.queryByTestId("commit-target")).toBeNull();
+    expect(screen.queryByPlaceholderText("Summary (required)")).toBeNull();
+    expect(screen.queryByText("a.ts")).toBeNull();
+    expect(screen.getByText(i18n.t("historyView.composerHidden"))).toBeTruthy();
+
+    act(() => screen.getByRole("button", { name: "Back to current branch" }).click());
+    expect(useHistoryViewStore.getState().target).toBeNull();
+    expect(screen.getByTestId("commit-target")).toBeTruthy();
+  });
+
+  it("keeps the composer when the viewed branch is the checked-out one", () => {
+    state.status = [{ path: "a.ts", status: "modified", staged: false }];
+    useHistoryViewStore.getState().view(REPO, { kind: "ref", name: "feat/x", isRemote: false });
+    renderView();
+    expect(screen.getByTestId("commit-target")).toBeTruthy();
+  });
+
   it("collapses to a short 'No changes' state when nothing is uncommitted", () => {
     renderView();
     expect(screen.getByTestId("changes-empty").textContent).toContain("No changes");

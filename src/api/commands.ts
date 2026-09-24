@@ -28,6 +28,7 @@ import type {
   AutoSyncSnapshot,
   AutoFastForwardResult,
   ActivityWatchResult,
+  HistoryTarget,
 } from "@/types";
 
 // Git operations — backend returns indexStatus/worktreeStatus separately,
@@ -502,12 +503,19 @@ export interface CommitDetailResult {
   stats: { filesChanged: number; insertions: number; deletions: number };
 }
 
+/** `target`을 빼면 HEAD(지금 체크아웃)의 이력이다. */
 export async function getCommitHistory(
   repoPath: string,
   limit = 50,
   offset = 0,
+  target?: HistoryTarget,
 ): Promise<CommitInfo[]> {
-  const raw: RawCommitHistory[] = await invoke("get_commit_history", { repoPath, limit, offset });
+  const raw: RawCommitHistory[] = await invoke("get_commit_history", {
+    repoPath,
+    limit,
+    offset,
+    ...(target && target.kind !== "head" ? { target } : {}),
+  });
   return raw.map((c) => ({
     id: c.oid,
     shortId: c.oid.slice(0, 7),
