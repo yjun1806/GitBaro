@@ -13,6 +13,7 @@ import { useCommitActions } from "@/hooks/useCommitActions";
 import { useToastStore } from "@/stores/toast";
 import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
 import { BranchCompareView } from "@/components/history/BranchCompareView";
+import { isStaleCompareBranch } from "@/components/history/compare-branch";
 import { MergeActionPanel } from "@/components/history/MergeActionPanel";
 import { CommitItem } from "@/components/history/CommitItem";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
@@ -38,7 +39,8 @@ export function HistoryView() {
     () => historyData?.pages.flat() ?? [],
     [historyData],
   );
-  const { data: branches = [] } = useBranches(activeRepoPath);
+  const { data: branchesData } = useBranches(activeRepoPath);
+  const branches = useMemo(() => branchesData ?? [], [branchesData]);
   const { data: remoteTagNames } = useRemoteTags(activeRepoPath, activeAccountId);
   // null while the remote list is unknown (loading / no account) so tags aren't
   // falsely flagged as local-only; a Set once origin's tags are known.
@@ -52,6 +54,12 @@ export function HistoryView() {
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
   const headBranch = branches.find((b) => b.isHead);
   const currentBranchName = headBranch?.name ?? null;
+  // Leave compare mode when the compared branch disappears (e.g. deleted after
+  // a merge). Otherwise the selector, which holds the only clear button, can
+  // be hidden (single branch left) and the user is stuck in compare mode.
+  useEffect(() => {
+    if (isStaleCompareBranch(compareBranch, branchesData)) setCompareBranch(null);
+  }, [compareBranch, branchesData, setCompareBranch]);
   const { data: comparisonData } = useBranchComparison(
     activeRepoPath,
     currentBranchName,
