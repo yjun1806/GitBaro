@@ -28,6 +28,7 @@ pub fn run() {
             commands::git::create_commit,
             commands::git::get_diff,
             commands::git::discard_changes,
+            commands::git::find_conflict_markers,
             commands::git::git_fetch,
             commands::git::git_push,
             commands::git::git_pull,

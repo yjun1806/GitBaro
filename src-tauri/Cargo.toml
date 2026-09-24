@@ -35,3 +35,4 @@ open = "5"
 zeroize = { version = "1", features = ["derive"] }
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
+trash = "5"

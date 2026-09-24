@@ -320,13 +320,58 @@ impl GitCliEngine {
     /// Discard working-tree changes for specific paths via git CLI.
     /// Restores the given paths from the index (`git checkout -- <paths>`).
     pub async fn discard_paths(&self, paths: &[String]) -> Result<(), AppError> {
-        if paths.is_empty() {
-            return Ok(());
+        self.run_with_pathspecs(&["checkout", "--"], paths).await
+    }
+
+    /// Restore both the index and the working tree of `paths` to HEAD
+    /// (`git checkout HEAD -- <paths>`). Used to discard staged changes.
+    pub async fn restore_paths_from_head(&self, paths: &[String]) -> Result<(), AppError> {
+        self.run_with_pathspecs(&["checkout", "HEAD", "--"], paths).await
+    }
+
+    /// Drop `paths` from the index, leaving the working-tree files alone
+    /// (`git rm --cached`). Used for files that only exist in the index.
+    pub async fn remove_paths_from_index(&self, paths: &[String]) -> Result<(), AppError> {
+        self.run_with_pathspecs(&["rm", "--cached", "-q", "-r", "--ignore-unmatch", "--"], paths)
+            .await
+    }
+
+    /// Stage `paths` exactly like `git add -A -- <paths>`: new and modified
+    /// files are added, deleted files are removed from the index. Going
+    /// through git (not libgit2) applies clean/LFS filters, handles
+    /// submodules and symlinks, and respects sparse checkout.
+    pub async fn stage_paths(&self, paths: &[String]) -> Result<(), AppError> {
+        self.run_with_pathspecs(&["add", "-A", "--"], paths).await
+    }
+
+    /// Unstage `paths` (`git reset -q -- <paths>`). Without an explicit
+    /// commit, git resets against HEAD, or against an empty tree when HEAD is
+    /// unborn, so this also works before the first commit.
+    pub async fn unstage_paths(&self, paths: &[String]) -> Result<(), AppError> {
+        self.run_with_pathspecs(&["reset", "-q", "--"], paths).await
+    }
+
+    /// Run `git <prefix> <paths...>` with literal pathspecs (so `*`, `[`, `:`
+    /// in file names are not treated as globs or magic), splitting very long
+    /// path lists across several invocations to stay under ARG_MAX.
+    async fn run_with_pathspecs(&self, prefix: &[&str], paths: &[String]) -> Result<(), AppError> {
+        const MAX_PATH_BYTES_PER_CALL: usize = 64 * 1024;
+        let literal = [("GIT_LITERAL_PATHSPECS", "1".to_string())];
+
+        let mut start = 0;
+        while start < paths.len() {
+            let mut end = start;
+            let mut bytes = 0;
+            while end < paths.len() && (end == start || bytes + paths[end].len() < MAX_PATH_BYTES_PER_CALL) {
+                bytes += paths[end].len() + 1;
+                end += 1;
+            }
+            let mut args: Vec<&str> = prefix.to_vec();
+            args.extend(paths[start..end].iter().map(String::as_str));
+            let output = self.run_local_with_env(&args, &literal).await?;
+            check_output(output)?;
+            start = end;
         }
-        let mut args = vec!["checkout", "--"];
-        let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
-        args.extend(path_refs);
-        self.run_local_checked(&args).await?;
         Ok(())
     }
 
