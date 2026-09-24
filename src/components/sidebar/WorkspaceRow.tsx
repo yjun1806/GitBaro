@@ -1,15 +1,14 @@
 import { useRef, useState, type MouseEvent } from "react";
-import { Folder, Pencil, Trash2 } from "lucide-react";
+import { Layers, Pencil, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
-import { RowSubline } from "./RowSubline";
-import { metaLineParts, metaLineText } from "./row-meta";
+import { cn } from "@/lib/utils";
 import { NEUTRAL_TILE, ROW_TITLE, TILE_ICON } from "./row-style";
+import { RowSignals, type RowSignalValues } from "./RowSignals";
 import { DraggableRow } from "./TreeDnd";
 import { TreeRowFrame } from "./TreeRowFrame";
-import type { Totals } from "./tree-model";
 import { DeleteWorkspaceDialog, WorkspaceNameDialog } from "./WorkspaceDialogs";
 
 interface WorkspaceRowProps {
@@ -23,7 +22,9 @@ interface WorkspaceRowProps {
   repoCount: number;
   /** 워크스페이스에 실제로 든 저장소 수(검색으로 거르기 전). 삭제하면 이만큼 계정 아래로 옮겨진다. */
   memberCount: number;
-  totals: Totals;
+  /** 안에 든 저장소 전체의 오른쪽 표시 값. 접혔을 때만 머리 줄에 보인다. */
+  signals: RowSignalValues;
+  now: number;
   expanded: boolean;
   /** 끌어서 옮길 수 있는지(저장소를 이 행 위에 놓을 수 있는지도 함께). 검색 중에는 끈다. */
   draggable: boolean;
@@ -31,7 +32,7 @@ interface WorkspaceRowProps {
 }
 
 /**
- * 워크스페이스 행: 폴더 아이콘, 이름, 「워크스페이스 · 저장소 N」, 안에 든 저장소의 합계 표시.
+ * 워크스페이스 카드의 머리 줄: 겹친 층 아이콘과 이름. 접혔을 때는 안에 든 저장소 전체의 합계 표시를 둔다.
  * 행을 누르면 워크스페이스를 고른다(메인 칸이 워크스페이스 화면으로 바뀌고 저장소 선택은 풀린다).
  * 접고 펴기는 ▾/▸ 표시를 누르거나 ←/→ 키로 한다.
  * 끌어서 계정 안 순서를 바꿀 수 있고, 저장소를 이 행 위에 놓으면 이 워크스페이스에 들어간다.
@@ -59,7 +60,8 @@ export function WorkspaceRow({
   accountLabel,
   repoCount,
   memberCount,
-  totals,
+  signals,
+  now,
   expanded,
   draggable,
   onToggle,
@@ -86,36 +88,32 @@ export function WorkspaceRow({
     }
   };
 
-  // 둘째 줄: 「저장소 N · 수정 N · 새 커밋 N」(안에 든 저장소의 합계)
-  const parts = metaLineParts({ repoCount, dirty: totals.dirty, newCommits: totals.newCommits }, t);
   return (
     <>
       <DraggableRow
         id={nodeKey}
         kind="workspace"
         label={name}
-        depth={1}
+        depth={0}
         groupBelow={expanded && repoCount > 0}
         disabled={!draggable}
       >
         <TreeRowFrame
           level={2}
-          depth={1}
           label={name}
           expanded={expanded}
           selected={selected}
           onSelect={() => selectWorkspace(workspaceId)}
           onToggle={onToggle}
           onContextMenu={handleContextMenu}
-          tall
         >
           <span className={NEUTRAL_TILE}>
-            <Folder className={TILE_ICON} aria-hidden="true" />
+            <Layers className={TILE_ICON} aria-hidden="true" />
           </span>
-          <span className="flex-1 min-w-0 flex flex-col gap-px" title={`${name}\n${metaLineText(parts)}`}>
-            <span className={`${ROW_TITLE} font-bold`}>{name}</span>
-            <RowSubline parts={parts} />
+          <span className={cn(ROW_TITLE, "font-semibold")} title={t("sidebarTree.card.workspaceTitle", { name, count: repoCount })}>
+            {name}
           </span>
+          {!expanded && <RowSignals values={signals} now={now} />}
         </TreeRowFrame>
       </DraggableRow>
       {menuAt && (

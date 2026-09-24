@@ -60,8 +60,8 @@ function contrast(a: string, b: string): number {
 }
 
 const TEXT_LEVELS = ["--fg", "--fg2", "--muted"] as const;
-/** 층 0~3과 사이드바 선택 채움. 글자가 올라가는 모든 바탕. */
-const SURFACES = ["--frame", "--frame-sel", "--canvas", "--panel", "--float"] as const;
+/** 층 0~3과 사이드바 선택·hover 채움. 글자가 올라가는 모든 바탕. */
+const SURFACES = ["--frame", "--frame-sel", "--canvas", "--panel", "--float", "--panel-hover", "--panel-sel"] as const;
 
 describe("브랜드 색", () => {
   it("라이트 브랜드 색은 라즈베리 #be3f72이고 primary·ring이 이를 가리킨다", () => {
@@ -111,6 +111,16 @@ describe("층", () => {
     expect(contrast(hover, "#ffffff")).toBeGreaterThan(contrast("#e9e9e7", "#ffffff"));
   });
 
+  it("사이드바 흰 섬 안 선택 채움(--panel-sel)은 흰 바탕과 구분되고 --frame-sel보다 옅으며, hover는 그 사이다", () => {
+    const panel = resolveHex(lightTokens, "--panel");
+    const sel = resolveHex(lightTokens, "--panel-sel");
+    const hover = resolveHex(lightTokens, "--panel-hover");
+    expect(sel).not.toBe(panel);
+    expect(contrast(sel, panel)).toBeLessThan(contrast(resolveHex(lightTokens, "--frame-sel"), panel));
+    expect(contrast(hover, panel)).toBeGreaterThan(1);
+    expect(contrast(hover, panel)).toBeLessThan(contrast(sel, panel));
+  });
+
   it("떠 있는 요소 그림자는 패널 그림자보다 진하고, Tailwind shadow-lg/xl/2xl이 이를 쓴다", () => {
     expect(lightTokens.get("--shadow-float")).toBeDefined();
     expect(lightTokens.get("--shadow-float")).not.toBe(lightTokens.get("--shadow"));
@@ -122,7 +132,7 @@ describe("층", () => {
   it("다크 블록도 층 토큰 이름을 모두 정의한다", () => {
     const own: TokenMap = new Map();
     readDeclarations(darkBlock, own);
-    for (const name of ["--frame", "--frame-hover", "--frame-sel", "--canvas", "--panel", "--float", "--shadow-float", "--acc-hover", "--status-fail"]) {
+    for (const name of ["--frame", "--frame-hover", "--frame-sel", "--panel-hover", "--panel-sel", "--canvas", "--panel", "--float", "--shadow-float", "--acc-hover", "--status-fail"]) {
       expect(own.has(name), `${name} missing in .dark`).toBe(true);
     }
   });

@@ -181,7 +181,7 @@ describe("MainColumn (two-column shell)", () => {
     renderShell();
     expect(screen.queryByText("changes-view")).toBeNull();
 
-    const row = screen.getByRole("button", { name: /^Uncommitted changes · .* · main working tree · 2 files$/ });
+    const row = screen.getByRole("button", { name: /^Uncommitted changes · .* · primary folder · 2 files$/ });
     fireEvent.click(row);
 
     expect(useUIStore.getState().activeTab).toBe("changes");
@@ -200,7 +200,7 @@ describe("MainColumn (two-column shell)", () => {
 
   it("stops following and shows the staging list (conflict banner) once a merge or pull stops on a conflict", () => {
     const view = renderShell();
-    fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · main working tree · 2 files$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · primary folder · 2 files$/ }));
     expect(screen.getByTestId("follow-panel")).toBeTruthy();
 
     // Pull hits a conflict: the toolbar only calls setActiveTab("changes"), which is already the tab.
@@ -211,7 +211,7 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getByText("changes-view")).toBeTruthy();
 
     // Picking the row again during the merge still shows the staging list first.
-    fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · main working tree · 2 files$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · primary folder · 2 files$/ }));
     expect(screen.queryByTestId("follow-panel")).toBeNull();
     expect(screen.getByText("changes-view")).toBeTruthy();
   });
@@ -224,7 +224,7 @@ describe("MainColumn (two-column shell)", () => {
     // Commit detail is loading (mocked query).
     expect(screen.getByText("Loading history")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · main working tree · 2 files$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · primary folder · 2 files$/ }));
     expect(useSelectionStore.getState().selectedCommitId).toBeNull();
     expect(screen.getByTestId("follow-panel")).toBeTruthy();
 

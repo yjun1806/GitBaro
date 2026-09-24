@@ -9,7 +9,7 @@ import { openInTerminal } from "@/api/commands";
 import { getErrorMessage } from "@/lib/utils";
 import { StashSaveDialog } from "@/components/stash/StashSaveDialog";
 import { SyncZone } from "./SyncZone";
-import { ActionButton, ActionGroup, ToolbarDivider } from "./ActionButton";
+import { ActionButton, ActionGroup } from "./ActionButton";
 import { TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
 import { MergeDialog } from "./MergeDialog";
 import { BranchPanelButton } from "./BranchZone";
@@ -33,17 +33,15 @@ type GitActionZoneProps =
  */
 export function GitActionZone(props: GitActionZoneProps) {
   return (
-    <div className="flex items-center gap-1 px-1 shrink-0">
+    <div className="flex items-center gap-1.5 shrink-0">
       {props.mode === "workspace" ? (
         <>
           <SyncZone mode="workspace" paths={props.paths} />
-          <ToolbarDivider />
           <WorkspaceRepoActions />
         </>
       ) : (
         <>
           <SyncZone mode="repo" />
-          <ToolbarDivider />
           <RepoActions />
         </>
       )}
@@ -51,22 +49,25 @@ export function GitActionZone(props: GitActionZoneProps) {
   );
 }
 
-function TerminalButton({ onClick, hint }: { onClick?: () => void; hint?: string }) {
+/** 터미널 버튼. 다른 묶음과 같은 흰 카드에 혼자 담는다. */
+function TerminalGroup({ onClick, hint }: { onClick?: () => void; hint?: string }) {
   const { t } = useTranslation();
   const label = t("gitActions.terminal");
   return (
-    <span title={hint ?? label} className="inline-flex">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={!onClick}
-        aria-label={hint ? `${label} — ${hint}` : label}
-        data-action="terminal"
-        className={toolbarButtonClass({ iconOnly: true, disabled: !onClick })}
-      >
-        <SquareTerminal className={TOOLBAR_ICON} aria-hidden="true" />
-      </button>
-    </span>
+    <ActionGroup label={label}>
+      <span title={hint ?? label} className="inline-flex">
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={!onClick}
+          aria-label={hint ? `${label} — ${hint}` : label}
+          data-action="terminal"
+          className={toolbarButtonClass({ iconOnly: true, disabled: !onClick })}
+        >
+          <SquareTerminal className={TOOLBAR_ICON} aria-hidden="true" />
+        </button>
+      </span>
+    </ActionGroup>
   );
 }
 
@@ -81,8 +82,7 @@ function WorkspaceRepoActions() {
         <ActionButton action="merge" icon={GitMerge} label={t("gitActions.merge")} disabled hint={hint} />
         <ActionButton action="stash" icon={Archive} label={t("gitActions.stash")} disabled hint={hint} />
       </ActionGroup>
-      <ToolbarDivider />
-      <TerminalButton hint={hint} />
+      <TerminalGroup hint={hint} />
     </>
   );
 }
@@ -158,8 +158,7 @@ function RepoActions() {
           onClick={() => setShowStash(true)}
         />
       </ActionGroup>
-      <ToolbarDivider />
-      <TerminalButton onClick={activeRepoPath ? handleOpenTerminal : undefined} />
+      <TerminalGroup onClick={activeRepoPath ? handleOpenTerminal : undefined} />
 
       {showMerge && activeRepoPath && currentBranch && (
         <MergeDialog

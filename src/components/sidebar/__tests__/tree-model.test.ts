@@ -3,16 +3,12 @@ import { buildRepoTree, type Workspace } from "@/lib/repo-tree";
 import type { RepoInfo, RepoSyncStatus } from "@/types";
 import type { WorktreeReviewStatus } from "@/hooks/useReviewStatus";
 import {
-  ancestorsToReveal,
   buildSignals,
   collapsibleKeys,
   expandedWorktreePaths,
   filterTree,
   isWatchedPath,
-  liveAvatarStack,
-  liveEntries,
-  repoTotals,
-  workspaceTotals,
+  workspaceRepoKey,
   worktreesByRepoFrom,
 } from "../tree-model";
 
@@ -100,22 +96,6 @@ describe("worktreesByRepoFrom", () => {
   });
 });
 
-describe("totals", () => {
-  it("adds worktree values to the repository and repositories to the workspace", () => {
-    const signals = {
-      [API]: { dirtyCount: 1, newCommits: 2 },
-      [WT]: { dirtyCount: 4, newCommits: 1 },
-      [WEB]: { dirtyCount: 3 },
-    };
-    const [account] = tree(signals);
-    const wsNode = account.children.find((c) => c.kind === "workspace");
-    if (wsNode?.kind !== "workspace") throw new Error("workspace missing");
-    const apiNode = wsNode.repos.find((r) => r.repo.path === API)!;
-    expect(repoTotals(apiNode, signals)).toEqual({ dirty: 5, newCommits: 3 });
-    expect(workspaceTotals(wsNode, signals)).toEqual({ dirty: 8, newCommits: 3 });
-  });
-});
-
 describe("filterTree", () => {
   const branchOf = (p: string) => (p === WEB ? "fix/nav" : p === WT ? "feat/login" : "main");
 
@@ -154,17 +134,19 @@ describe("filterTree", () => {
 });
 
 describe("collapsibleKeys", () => {
-  it("lists accounts, workspaces and repositories with worktrees", () => {
-    expect(collapsibleKeys(tree()).sort()).toEqual(["acct:acme", `repo:${API}`, "ws:w1"]);
+  it("lists accounts, workspace cards and every repository card, but not repository rows inside a workspace", () => {
+    expect(collapsibleKeys(tree()).sort()).toEqual(["acct:acme", `repo:${TOOL}`, "ws:w1"]);
   });
 });
 
 describe("expandedWorktreePaths", () => {
   const openExcept = (closed: string[]) => (key: string) => !closed.includes(key);
 
-  it("returns worktrees of expanded repositories only", () => {
+  it("returns worktrees of expanded repositories only, asking with the workspace-row key inside a workspace", () => {
     expect(expandedWorktreePaths(tree(), openExcept([]))).toEqual([WT]);
-    expect(expandedWorktreePaths(tree(), openExcept([`repo:${API}`]))).toEqual([]);
+    expect(expandedWorktreePaths(tree(), openExcept([workspaceRepoKey(API)]))).toEqual([]);
+    // 워크스페이스 밖 저장소 카드의 키(repo:)는 워크스페이스 안 줄에 영향이 없다.
+    expect(expandedWorktreePaths(tree(), openExcept([`repo:${API}`]))).toEqual([WT]);
   });
 
   it("ignores repositories hidden under a folded workspace or account", () => {
@@ -191,7 +173,7 @@ describe("expandedWorktreePaths", () => {
   it("follows the caller's open check, so a search that forces rows open counts them", () => {
     const branchOf = (p: string) => (p === WT ? "feat/login" : "main");
     const searched = filterTree(tree(), "login", branchOf);
-    const saved = ["ws:w1", `repo:${API}`];
+    const saved = ["ws:w1", workspaceRepoKey(API)];
     expect(expandedWorktreePaths(searched, openExcept(saved))).toEqual([]);
     expect(expandedWorktreePaths(searched, () => true)).toEqual([WT]);
   });
@@ -207,104 +189,5 @@ describe("isWatchedPath", () => {
 
   it("assumes watched before the backend has answered once", () => {
     expect(isWatchedPath(WT, [], [])).toBe(true);
-  });
-});
-
-describe("liveEntries", () => {
-  const branchOf = (p: string) => (p === WT ? "feat/login" : "main");
-  const worktrees = { [API]: [{ path: WT, branch: "feat/login" }] };
-
-  it("lists paths changed in the last 10 minutes, newest first, resolved to repo or worktree", () => {
-    const entries = liveEntries(
-      { [WEB]: NOW - 60_000, [WT]: NOW - 5_000, [TOOL]: NOW - 11 * 60_000 },
-      NOW,
-      repos,
-      worktrees,
-      branchOf,
-    );
-    expect(entries.map((e) => [e.path, e.repo.path, e.isWorktree, e.branch])).toEqual([
-      [WT, API, true, "feat/login"],
-      [WEB, WEB, false, "main"],
-    ]);
-  });
-
-  it("drops paths that belong to no registered repository", () => {
-    expect(liveEntries({ "/gone": NOW }, NOW, repos, worktrees, branchOf)).toEqual([]);
-  });
-});
-
-describe("ancestorsToReveal", () => {
-  it("finds a repository inside a workspace and lists the workspace and account keys to open", () => {
-    const target = ancestorsToReveal(tree(), API);
-    expect(target).toEqual({
-      accountKey: "acct:acme",
-      workspaceKey: "ws:w1",
-      isQuiet: false,
-      repoNodeKey: `repo:${API}`, // API has a worktree (WT), so its own row must open too
-    });
-  });
-
-  it("finds a repository directly under the account, with no workspace to open", () => {
-    const target = ancestorsToReveal(tree(), TOOL);
-    expect(target).toEqual({
-      accountKey: "acct:acme",
-      workspaceKey: null,
-      isQuiet: false,
-      repoNodeKey: null, // TOOL has no worktrees
-    });
-  });
-
-  it("marks a quiet repository so its account's quiet row is opened too", () => {
-    const quietTree = buildRepoTree({
-      repos,
-      accounts: [],
-      workspaces: [],
-      orderByParent: {},
-      sortModeByAccount: {},
-      signals: { [API]: { dirtyCount: 0 }, [WT]: { dirtyCount: 0 } },
-      worktreesByRepo: { [API]: [{ path: WT, branch: "feat/login" }] },
-      now: NOW,
-    });
-    const target = ancestorsToReveal(quietTree, API);
-    expect(target).toMatchObject({ isQuiet: true, repoNodeKey: `repo:${API}` });
-  });
-
-  it("returns null for a path that isn't in the tree", () => {
-    expect(ancestorsToReveal(tree(), "/gone")).toBeNull();
-  });
-});
-
-describe("liveAvatarStack", () => {
-  const branchOf = (p: string) => (p === WT ? "feat/login" : "main");
-  const worktrees = { [API]: [{ path: WT, branch: "feat/login" }] };
-
-  it("counts each repository once even if a worktree and its repo both changed", () => {
-    const entries = liveEntries(
-      { [WT]: NOW - 1_000, [API]: NOW - 2_000, [WEB]: NOW - 3_000 },
-      NOW,
-      repos,
-      worktrees,
-      branchOf,
-    );
-    const stack = liveAvatarStack(entries, 3);
-    expect(stack.shown.map((r) => r.path)).toEqual([API, WEB]);
-    expect(stack.overflow).toBe(0);
-  });
-
-  it("caps the shown avatars and reports the rest as overflow", () => {
-    const entries = liveEntries(
-      { [API]: NOW - 1_000, [WEB]: NOW - 2_000, [TOOL]: NOW - 3_000 },
-      NOW,
-      repos,
-      worktrees,
-      branchOf,
-    );
-    const stack = liveAvatarStack(entries, 2);
-    expect(stack.shown.map((r) => r.path)).toEqual([API, WEB]);
-    expect(stack.overflow).toBe(1);
-  });
-
-  it("is empty when nothing changed recently", () => {
-    expect(liveAvatarStack([], 3)).toEqual({ shown: [], overflow: 0 });
   });
 });

@@ -270,6 +270,7 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        data-sidebar-panel
         style={{ width: panelWidth }}
         className={cn(
           // 시안의 사이드바는 바탕(canvas) 위에 선 없이 놓인다. 선은 메인 칸 위에 떠서 펼쳐질 때만 긋는다.

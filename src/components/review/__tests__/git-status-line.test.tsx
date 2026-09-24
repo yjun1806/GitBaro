@@ -50,7 +50,7 @@ describe("git status line", () => {
     const line = renderLine(input());
     expect(line.dataset.tone).toBe("normal");
     expect(line.textContent).toBe(
-      "메인 작업 트리·체크아웃 ⎇ main·origin/main보다 ↑2 ↓1·커밋 안 한 변경 3개 (스테이징 1)작업 중인 변경 3",
+      "기본 폴더·체크아웃 ⎇ main·origin/main보다 ↑2 ↓1·커밋 안 한 변경 3개 (스테이징 1)작업 중인 변경 3",
     );
     fireEvent.click(screen.getByRole("button", { name: "origin/main보다 ↑2 ↓1" }));
     expect(handlers.onRemote).toHaveBeenCalled();
@@ -121,7 +121,7 @@ describe("git status line", () => {
   it("uses English terms too", async () => {
     await i18n.changeLanguage("en");
     const line = renderLine(input());
-    expect(line.textContent).toContain("Main working tree");
+    expect(line.textContent).toContain("Primary folder");
     expect(line.textContent).toContain("Checked out ⎇ main");
     expect(line.textContent).toContain("↑2 ↓1 vs origin/main");
     expect(line.textContent).toContain("3 uncommitted changes (1 staged)");

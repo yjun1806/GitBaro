@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { HEADER_HEIGHT_CLASS, HEADER_HEIGHT_PX } from "@/lib/layout-tokens";
-import { toolbarButtonClass, TOOLBAR_BUTTON_BASE } from "../toolbar-button";
+import { toolbarButtonClass, TOOLBAR_BUTTON_BASE, TOOLBAR_GROUP } from "../toolbar-button";
 
 const classes = (s: string) => new Set(s.split(/\s+/).filter(Boolean));
 
@@ -76,5 +76,19 @@ describe("toolbarButtonClass", () => {
     const primary = classes(toolbarButtonClass({ variant: "primary" }));
     expect(primary.has("bg-primary")).toBe(true);
     expect(primary.has("hover:bg-primary-hover")).toBe(true);
+  });
+});
+
+describe("toolbar group card", () => {
+  it("is a white layer-2 card that fits inside the header strip", () => {
+    const group = classes(TOOLBAR_GROUP);
+    expect(group.has("bg-card")).toBe(true);
+    expect(group.has("shadow-(--shadow-sm)")).toBe(true);
+    // 28px 버튼 + 위아래 3px 여백 + 1px 테두리 두 줄
+    expect(group.has("p-[3px]")).toBe(true);
+    expect(group.has("border")).toBe(true);
+    expect(28 + 3 * 2 + 1 * 2).toBeLessThan(HEADER_HEIGHT_PX);
+    // 모서리는 버튼 모서리(6px) + 여백(3px)
+    expect(group.has("rounded-[9px]")).toBe(true);
   });
 });

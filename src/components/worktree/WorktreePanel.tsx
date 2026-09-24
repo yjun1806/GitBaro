@@ -103,7 +103,10 @@ export function WorktreePanel({
     if (sectionRows.length === 0) return null;
     return (
       <section aria-label={title}>
-        <PanelSectionHeader title={title} />
+        {/* 「기본 폴더」는 브랜치 main과 헷갈리기 쉬워 뜻을 툴팁으로 덧붙인다. */}
+        <div title={section === "main" ? t("worktree.primaryFolderHint") : undefined}>
+          <PanelSectionHeader title={title} />
+        </div>
         {sectionRows.map(({ worktree }) => (
           <WorktreePanelRow
             key={worktree.path}
