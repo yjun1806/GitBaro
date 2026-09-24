@@ -770,3 +770,88 @@ export function useBranchBases(
     },
   });
 }
+
+// W6-T1 — 따라가기(D4)
+import { getWipFiles } from "@/api/commands";
+
+/**
+ * 워크트리 하나의 커밋하지 않은 변경 파일. 수정 시각이 늦은 순서다(`get_wip_files`).
+ * 갱신 신호는 `repo:activity`다(따라가기가 쿼리를 무효화한다).
+ */
+export function useWipFiles(path: string | null) {
+  return useQuery({
+    queryKey: ["wipFiles", path],
+    queryFn: () => getWipFiles(path!),
+    enabled: path !== null,
+  });
+}
+
+/**
+ * `useFileDiff`와 같은 캐시 항목으로 diff 하나를 읽는다. 따라가기가 시작할 때 이미 바뀌어
+ * 있던 파일의 내용을 비교 기준으로 기억해 두는 데 쓴다.
+ */
+export function fetchFileDiff(
+  queryClient: QueryClient,
+  repoPath: string,
+  filePath: string,
+  staged: boolean,
+) {
+  return queryClient.fetchQuery({
+    queryKey: ["fileDiff", repoPath, filePath, staged],
+    queryFn: () => getFileDiff(repoPath, filePath, staged),
+  });
+}
+
+// W6-T2 — 워크트리 칩·겹침 경고(D5)
+
+/** 같은 저장소의 다른 워크트리 파일 목록을 다시 읽는 주기. 따라가는 워크트리만 이벤트로 갱신한다. */
+export const SIBLING_WIP_POLL_MS = 20_000;
+
+/**
+ * 워크트리 여러 곳의 커밋하지 않은 파일(`useWipFiles`와 같은 캐시 항목). 결과는 `paths` 순서다.
+ * 따라가지 않는 워크트리는 감시 이벤트로 무효화되지 않으므로 주기적으로 다시 읽는다.
+ */
+export function useWipFilesMany(paths: readonly string[]) {
+  return useQueries({
+    queries: paths.map((path) => ({
+      queryKey: ["wipFiles", path],
+      queryFn: () => getWipFiles(path),
+      refetchInterval: SIBLING_WIP_POLL_MS,
+      refetchIntervalInBackground: false,
+    })),
+  });
+}
+
+/**
+ * 같은 파일을 고치는 다른 워크트리들의 그 파일 diff(`useFileDiff`와 같은 캐시 항목). 결과는 `sides` 순서다.
+ * 겹침 경고가 보고 있는 파일 하나에만 쓴다. 따라가지 않는 워크트리는 감시 이벤트로 갱신되지
+ * 않으므로 파일 목록과 같은 주기로 다시 읽는다.
+ */
+export function useSiblingFileDiffs(
+  sides: readonly { path: string; staged: boolean }[],
+  filePath: string | null,
+) {
+  return useQueries({
+    queries: sides.map(({ path, staged }) => ({
+      queryKey: ["fileDiff", path, filePath, staged],
+      queryFn: () => getFileDiff(path, filePath!, staged),
+      enabled: filePath !== null,
+      refetchInterval: SIBLING_WIP_POLL_MS,
+      refetchIntervalInBackground: false,
+    })),
+  });
+}
+
+/**
+ * 워크트리마다 HEAD 이력의 첫 페이지. 그래프에 다른 워크트리의 커밋을 함께 그릴 때 쓴다.
+ * HEAD가 바뀌면 키가 바뀌어 다시 읽는다(HEAD는 워크트리 목록 조회에서 온다).
+ */
+export function useWorktreeHeadHistories(heads: readonly { path: string; head: string }[]) {
+  return useQueries({
+    queries: heads.map(({ path, head }) => ({
+      queryKey: ["worktreeHeadHistory", path, head],
+      queryFn: () => getCommitHistory(path, COMMIT_HISTORY_PAGE_SIZE, 0),
+      staleTime: 30_000,
+    })),
+  });
+}

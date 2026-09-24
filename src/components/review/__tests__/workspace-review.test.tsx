@@ -6,6 +6,7 @@ import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useReviewSeenStore } from "@/stores/review-seen";
+import { useFollowStore } from "@/stores/follow";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
 import type {
   ActivityEvent,
@@ -98,6 +99,27 @@ vi.mock("@/api/queries", () => ({
   }),
   useCommitFileDiff: () => ({ data: null }),
   useFileDiff: () => ({ data: null, isLoading: false, isError: false }),
+  // W6-T1 따라가기: WIP 행을 고르면 그 워크트리의 파일을 수정 시각 순으로 읽는다.
+  useWipFiles: (path: string) => ({
+    data: (statuses[path] ?? []).map((e) => ({
+      path: e.path,
+      origPath: null,
+      status: e.status,
+      staged: e.staged,
+      unstaged: !e.staged,
+      modifiedAt: 1,
+      insertions: 1,
+      deletions: 0,
+    })),
+    isLoading: false,
+    isError: false,
+  }),
+  fetchFileDiff: () => new Promise(() => {}),
+  useWorktrees: () => ({ data: [] }),
+  // W6-T2 워크트리 칩·겹침 경고
+  useWorktreeHeadHistories: () => [],
+  useWipFilesMany: () => [],
+  useSiblingFileDiffs: (sides: unknown[]) => sides.map(() => ({ data: undefined })),
 }));
 
 vi.mock("@/components/history/CommitDetail", () => ({
@@ -206,11 +228,14 @@ describe("WorkspaceReview", () => {
     expect(screen.getByText(`commit-detail ${API} api1`)).toBeTruthy();
   });
 
-  it("lists the uncommitted files of a picked WIP row", () => {
+  it("follows the worktree of a picked WIP row and lists its uncommitted files", () => {
     renderReview();
     fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes in xames-backend (1 file)" }));
+    expect(useFollowStore.getState().target).toBe(API_WT);
     expect(screen.getByText("settings.ts")).toBeTruthy();
     expect(screen.getByText("diff-viewer")).toBeTruthy();
+    // 「따라가는 중」은 고른 WIP 행과 파일 목록 머리에 붙는다.
+    expect(screen.getAllByTestId("follow-badge").map((b) => b.textContent)).toEqual(["Following", "Following"]);
   });
 
   it("invalidates only the changed worktree's queries on repo:activity", async () => {

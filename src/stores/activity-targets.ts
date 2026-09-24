@@ -40,8 +40,15 @@ export const useActivityTargetsStore = create<ActivityTargetsState>((set) => ({
  */
 export const REPOS_KEY = "repos";
 
+/**
+ * 실시간 따라가기(W6-T1)가 따라가는 경로 하나를 등록하는 key. 따라가는 경로는 감시
+ * 대상에 반드시 들어가야 하므로(명세) 등록된 저장소보다도 앞에 둔다 — 경로가 하나라
+ * 40곳 상한에서 다른 경로를 한 곳 이상 밀어내지 않는다.
+ */
+export const FOLLOW_KEY = "follow";
+
 /** 이 순서의 key가 먼저 오고, 나머지 key는 등록 순서 그대로 뒤따른다. */
-const KEY_PRIORITY: readonly string[] = [REPOS_KEY];
+const KEY_PRIORITY: readonly string[] = [FOLLOW_KEY, REPOS_KEY];
 
 /**
  * 등록된 모든 화면의 경로를 중복 없이 하나로 합친다.

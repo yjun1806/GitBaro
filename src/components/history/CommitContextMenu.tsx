@@ -21,6 +21,11 @@ interface CommitContextMenuProps {
   onCherryPick: () => void;
   /** Merge commits cannot be cherry-picked as one change. */
   isMergeCommit: boolean;
+  /**
+   * The commit is not in the open worktree's history (another worktree's commit drawn in the
+   * same graph). Reset and revert would move this worktree onto, or undo, a change it never had.
+   */
+  notInHistory?: boolean;
   onClose: () => void;
 }
 
@@ -34,6 +39,7 @@ export function CommitContextMenu({
   onRevert,
   onCherryPick,
   isMergeCommit,
+  notInHistory = false,
   onClose,
 }: CommitContextMenuProps) {
   const { t } = useTranslation();
@@ -59,11 +65,13 @@ export function CommitContextMenu({
           label: t("history.contextMenu.reset"),
           icon: <RotateCcw className="w-3.5 h-3.5" />,
           onClick: onReset,
+          disabled: notInHistory,
         },
         {
           label: t("history.contextMenu.revert"),
           icon: <Undo2 className="w-3.5 h-3.5" />,
           onClick: onRevert,
+          disabled: notInHistory,
         },
         {
           label: t("history.contextMenu.cherryPick"),

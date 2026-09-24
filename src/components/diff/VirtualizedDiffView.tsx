@@ -277,7 +277,15 @@ interface VirtualizedDiffViewProps {
   isDark: boolean;
   highlight: boolean;
   fontSize: number;
+  /** 새 쪽 줄 번호 중 「방금 바뀐 줄」로 강조할 것(따라가기, D4). */
+  freshLines?: ReadonlySet<number>;
+  /** 이 새 쪽 줄 번호가 보이도록 스크롤한다. 값이 바뀔 때만 움직인다. */
+  revealLine?: number | null;
 }
+
+/** 방금 바뀐 줄 표시: 주황 옅은 배경과 왼쪽 3px 막대(시안 D4). */
+const FRESH_BG = "var(--live-soft)";
+const FRESH_MARK = "inset 3px 0 0 var(--live)";
 
 export function VirtualizedDiffView({
   diffFile,
@@ -285,6 +293,8 @@ export function VirtualizedDiffView({
   isDark,
   highlight,
   fontSize,
+  freshLines,
+  revealLine = null,
 }: VirtualizedDiffViewProps) {
   const { t } = useTranslation();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -365,6 +375,23 @@ export function VirtualizedDiffView({
     if (at >= 0) virtualizer.scrollToIndex(at, { align: "start" });
     setAnchorLine(null);
   }, [anchorLine, rows, virtualizer]);
+
+  // 따라가기가 새 줄을 알리면 그 줄을 화면 가운데로 가져온다. 같은 값으로 다시 부르지 않도록
+  // 마지막으로 옮긴 줄을 기억한다(같은 파일이 다시 조회돼 행 배열만 바뀔 때).
+  const revealedRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (revealLine === null || revealedRef.current === revealLine) return;
+    const at = rows.findIndex((r) => {
+      if (r.kind !== "line") return false;
+      const lineNo = isSplit
+        ? diffFile.getSplitRightLine(r.index).lineNumber
+        : diffFile.getUnifiedLine(r.index).newLineNumber;
+      return lineNo === revealLine;
+    });
+    if (at < 0) return;
+    revealedRef.current = revealLine;
+    virtualizer.scrollToIndex(at, { align: "center" });
+  }, [revealLine, rows, isSplit, diffFile, virtualizer]);
 
   // 창 너비가 바뀌어 접히는 지점이 달라져도 따로 다시 재지 않는다 — 각 행에 붙은
   // `measureElement`의 ResizeObserver가 높이 변화를 행마다 보고한다. 뷰포트 폭 변화에
@@ -501,9 +528,18 @@ export function VirtualizedDiffView({
         ? diffFile.getOldSyntaxLine(line.oldLineNumber)
         : undefined;
     const content = resolveContent(diffFile, diffLine, syntaxLine, raw, operatorOf(type), highlight);
+    const fresh = line.newLineNumber != null && freshLines?.has(line.newLineNumber) === true;
 
     return (
-      <div className="flex" style={{ minHeight: rowHeight, background: contentBg(type) }}>
+      <div
+        className="flex"
+        data-fresh={fresh || undefined}
+        style={{
+          minHeight: rowHeight,
+          background: fresh ? FRESH_BG : contentBg(type),
+          boxShadow: fresh ? FRESH_MARK : undefined,
+        }}
+      >
         <span style={{ ...numStyle, background: numberBg(type) }}>{line.oldLineNumber ?? ""}</span>
         <span style={{ ...numStyle, background: numberBg(type) }}>{line.newLineNumber ?? ""}</span>
         <ContentCell content={content} style={contentStyle} />
@@ -515,7 +551,8 @@ export function VirtualizedDiffView({
     const type = line.diff?.type;
     const raw = line.value ?? "";
     const isEmpty = line.lineNumber == null && !line.diff;
-    const bg = isEmpty ? "var(--diff-empty-content--)" : contentBg(type);
+    const fresh = side === "new" && line.lineNumber != null && freshLines?.has(line.lineNumber) === true;
+    const bg = isEmpty ? "var(--diff-empty-content--)" : fresh ? FRESH_BG : contentBg(type);
 
     const syntaxLine =
       line.lineNumber == null
@@ -530,7 +567,10 @@ export function VirtualizedDiffView({
         <span style={{ ...numStyle, background: isEmpty ? "var(--diff-empty-content--)" : numberBg(type) }}>
           {line.lineNumber ?? ""}
         </span>
-        <span style={{ display: "flex", background: bg, flex: 1, minWidth: 0 }}>
+        <span
+          data-fresh={fresh || undefined}
+          style={{ display: "flex", background: bg, flex: 1, minWidth: 0, boxShadow: fresh ? FRESH_MARK : undefined }}
+        >
           {!isEmpty && <ContentCell content={content} style={contentStyle} />}
         </span>
       </>

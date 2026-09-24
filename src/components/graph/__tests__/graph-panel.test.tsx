@@ -8,8 +8,18 @@ import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
 import { useReviewSeenStore } from "@/stores/review-seen";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
+import { useFollowStore } from "@/stores/follow";
 import { syncStatusPaths } from "@/components/sidebar/tree-model";
-import type { CommitInfo, NewCommitIds, RepoInfo, RepoReviewStatus, SeenRecordInput, StatusEntry } from "@/types";
+import { worktreeColor } from "../worktree-history";
+import type {
+  CommitInfo,
+  NewCommitIds,
+  RepoInfo,
+  RepoReviewStatus,
+  SeenRecordInput,
+  StatusEntry,
+  WorktreeInfo,
+} from "@/types";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/components/stash/StashView", () => ({ StashView: () => <div>stash-list</div> }));
@@ -84,6 +94,12 @@ function fakeIds(entry: SeenRecordInput): NewCommitIds {
   };
 }
 
+/** `useWorktrees` 응답과 다른 워크트리의 HEAD 이력(칩 줄, D5). 기본은 비어 있다. */
+const worktreeState = {
+  list: [] as WorktreeInfo[],
+  histories: {} as Record<string, CommitInfo[]>,
+};
+
 /** `useRepoSyncStatuses`에 넘긴 경로 목록. */
 const syncCalls: string[][] = [];
 
@@ -117,7 +133,9 @@ vi.mock("@/api/queries", async (importOriginal) => ({
   useBranches: () => ({ data: [] }),
   useRemoteTags: () => ({ data: undefined }),
   useCommitAvatars: () => ({ data: {} }),
-  useWorktrees: () => ({ data: [] }),
+  useWorktrees: () => ({ data: worktreeState.list }),
+  useWorktreeHeadHistories: (heads: { path: string; head: string }[]) =>
+    heads.map((h) => ({ data: worktreeState.histories[h.path], dataUpdatedAt: 1 })),
   useRepoSyncStatuses: (paths: string[]) => {
     syncCalls.push(paths);
     return { data: syncByPath };
@@ -156,9 +174,12 @@ beforeEach(async () => {
   openWorktree.mockImplementation(switchTo);
   backend.hold = false;
   backend.pending = [];
+  worktreeState.list = [];
+  worktreeState.histories = {};
   useUIStore.setState({ activeTab: "history", compareBranch: null, repoListOpen: false });
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
+  useFollowStore.getState().stop();
   useReviewSeenStore.setState({
     entries: {
       [REPO]: { branch: "main", oid: "c3", seenAt: Date.now() - 60_000 },
@@ -220,42 +241,32 @@ describe("GraphPanel commit graph", () => {
     expect(openWorktree).not.toHaveBeenCalled();
   });
 
-  it("opens another worktree and its staging list from that worktree's WIP row", async () => {
+  it("follows another worktree in place from its WIP row, without opening it", () => {
     renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" }));
-    await waitFor(() => expect(useUIStore.getState().activeTab).toBe("changes"));
-    expect(openWorktree).toHaveBeenCalledWith(FEAT);
-    expect(useRepositoryStore.getState().activeRepoPath).toBe(FEAT);
+    const row = screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" });
+    fireEvent.click(row);
+    expect(useUIStore.getState().activeTab).toBe("changes");
+    expect(useFollowStore.getState()).toMatchObject({ target: FEAT, mode: "following" });
+    expect(openWorktree).not.toHaveBeenCalled();
+    expect(useRepositoryStore.getState().activeRepoPath).toBe(REPO);
+    // Only the followed row is picked, and it carries the "following" pill.
+    expect(row.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Uncommitted changes (1)" }).getAttribute("aria-pressed")).toBe("false");
+    expect(within(row).getByTestId("follow-badge").textContent).toBe("Following");
   });
 
-  it("stays put when the other worktree could not be opened", async () => {
-    // useOpenWorktree restores the previous path and shows a toast on failure.
-    openWorktree.mockImplementation(async () => {});
+  it("stops following when a commit is picked or another repository is opened", () => {
     renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" }));
-    await waitFor(() => expect(openWorktree).toHaveBeenCalledWith(FEAT));
-    await new Promise((r) => setTimeout(r, 0));
-    expect(useUIStore.getState().activeTab).toBe("history");
-  });
-
-  it("keeps a commit picked while another worktree is still opening", async () => {
-    // Like useOpenWorktree: the path switches at once, the branch/status load takes a while.
-    let finish = () => {};
-    openWorktree.mockImplementation((path: string) => {
-      useRepositoryStore.setState({ activeRepoPath: path });
-      return new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-    });
-    renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" }));
-    await waitFor(() => expect(useRepositoryStore.getState().activeRepoPath).toBe(FEAT));
+    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes (1)" }));
+    expect(useFollowStore.getState().target).toBe(REPO);
     fireEvent.click(document.querySelector('[data-commit-id="c2"]') as HTMLElement);
-    finish();
-    await waitFor(() => expect(openWorktree).toHaveBeenCalledTimes(1));
-    await new Promise((r) => setTimeout(r, 0));
     expect(useUIStore.getState().activeTab).toBe("history");
-    expect(useSelectionStore.getState().selectedCommitId).toBe("c2");
+    expect(useFollowStore.getState().target).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" }));
+    expect(useFollowStore.getState().target).toBe(FEAT);
+    useRepositoryStore.setState({ activeRepoPath: FEAT });
+    expect(useFollowStore.getState().target).toBeNull();
   });
 
   it("shows when another worktree's files last changed", () => {
@@ -316,5 +327,118 @@ describe("GraphPanel commit graph", () => {
     renderPanel();
     expect(await screen.findByRole("button", { name: "새 커밋 2개 확인함으로 표시" })).toBeTruthy();
     expect(screen.getByRole("separator").textContent).toContain("여기까지 확인함 · 오늘 ");
+  });
+});
+
+describe("GraphPanel worktree chips (D5)", () => {
+  const worktree = (path: string, head: string, extra: Partial<WorktreeInfo> = {}): WorktreeInfo => ({
+    path,
+    head,
+    branch: null,
+    isMain: false,
+    isBare: false,
+    isLocked: false,
+    lockReason: null,
+    isDirty: false,
+    isPrunable: false,
+    base: null,
+    ...extra,
+  });
+
+  beforeEach(() => {
+    worktreeState.list = [
+      worktree(REPO, "c1", { branch: "main", isMain: true }),
+      worktree(FEAT, "f1", {
+        branch: "feat/x",
+        base: { name: "main", source: "recorded", aheadOfBase: 1, behindBase: 0 },
+      }),
+    ];
+    // feat/x has one commit of its own on top of c2, newer than main's HEAD.
+    worktreeState.histories = {
+      [FEAT]: [commit("f1", ["c2"], { timestamp: 1_700_000_100 }), commit("c2", ["c3"]), commit("c3", ["c4"])],
+    };
+  });
+
+  it("shows a chip per worktree and draws the other worktree's commits in the same graph", async () => {
+    renderPanel();
+    const chips = screen.getByRole("group", { name: "Worktrees shown in the graph" });
+    const buttons = within(chips).getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual(["mainmain tree1", "feat/xfrom main4"]);
+    expect(buttons[0].getAttribute("aria-pressed")).toBe("true");
+    expect(within(chips).getByText("Showing 2 worktrees together in the graph")).toBeTruthy();
+    await screen.findByRole("separator");
+    expect(rowLabels()).toEqual([
+      "Uncommitted changes in feat/x (4)",
+      "Uncommitted changes (1)",
+      "f1",
+      "c1",
+      "c2",
+      "--seen--",
+      "c3",
+      "c4",
+    ]);
+  });
+
+  it("hides a worktree's WIP row and commits when its chip is turned off, and brings them back", async () => {
+    renderPanel();
+    const chips = screen.getByRole("group", { name: "Worktrees shown in the graph" });
+    const feat = within(chips).getByRole("button", { name: /feat\/x/ });
+    fireEvent.click(feat);
+    expect(feat.getAttribute("aria-pressed")).toBe("false");
+    await screen.findByRole("separator");
+    expect(rowLabels()).toEqual(["Uncommitted changes (1)", "c1", "c2", "--seen--", "c3", "c4"]);
+    expect(within(chips).getByText("Showing 1 worktree in the graph")).toBeTruthy();
+
+    fireEvent.click(feat);
+    expect(rowLabels()).toContain("f1");
+    expect(rowLabels()).toContain("Uncommitted changes in feat/x (4)");
+  });
+
+  it("draws each worktree's WIP row in its own lane down to its commits, in the chip's color", async () => {
+    renderPanel();
+    await screen.findByRole("separator");
+    const featColor = worktreeColor(FEAT);
+    const chips = screen.getByRole("group", { name: "Worktrees shown in the graph" });
+    const chipIcon = within(chips).getByRole("button", { name: /feat\/x/ }).querySelector("svg") as SVGElement;
+    // jsdom writes inline colors as rgb(); convert the same way before comparing.
+    const probe = document.createElement("span");
+    probe.style.color = featColor;
+    expect((chipIcon as unknown as HTMLElement).style.color).toBe(probe.style.color);
+    const wip = screen.getByRole("button", { name: "Uncommitted changes in feat/x (4)" });
+    expect(wip.querySelector("circle")?.getAttribute("stroke")).toBe(featColor);
+    // The line leaving the WIP row reaches f1, which is drawn in the same color.
+    const f1 = document.querySelector('[data-commit-id="f1"]') as HTMLElement;
+    expect(f1.querySelector("circle")?.getAttribute("fill")).toBe(featColor);
+    expect([...f1.querySelectorAll("path")].some((p) => p.getAttribute("stroke") === featColor)).toBe(true);
+  });
+
+  it("does not offer reset or revert on another worktree's commit", async () => {
+    renderPanel();
+    await screen.findByRole("separator");
+    const disabledOf = (id: string) => {
+      fireEvent.contextMenu(document.querySelector(`[data-commit-id="${id}"]`) as HTMLElement);
+      const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
+      const out = items.filter((m) => (m as HTMLButtonElement).disabled).map((m) => m.textContent);
+      fireEvent.keyDown(document, { key: "Escape" });
+      return out;
+    };
+    expect(disabledOf("f1")).toEqual([i18n.t("history.contextMenu.reset"), i18n.t("history.contextMenu.revert")]);
+    expect(disabledOf("c1")).toEqual([]);
+  });
+
+  it("hides the chips while the graph shows a branch comparison", () => {
+    useUIStore.setState({ compareBranch: "feat/x" });
+    renderPanel();
+    expect(screen.getByText("compare-view")).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "Worktrees shown in the graph" })).toBeNull();
+  });
+
+  it("keeps the open worktree on: its chip cannot be turned off", () => {
+    renderPanel();
+    const chips = screen.getByRole("group", { name: "Worktrees shown in the graph" });
+    const main = within(chips).getByRole("button", { name: /^main/ });
+    fireEvent.click(main);
+    expect(main.getAttribute("aria-pressed")).toBe("true");
+    expect(rowLabels()).toContain("Uncommitted changes (1)");
   });
 });

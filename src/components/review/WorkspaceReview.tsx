@@ -6,7 +6,6 @@ import { AlertTriangle, Folder, GitCommitVertical } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { useStatusMany } from "@/api/queries";
 import { repoAccountsByPath } from "@/lib/repo-tree";
 import { Card, EmptyState } from "@/components/layout/ContentArea";
 import { RepoLaneCommitGraph } from "@/components/graph/CommitGraph";
@@ -47,10 +46,6 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
 
   const nameByPath = useMemo(() => new Map(data.repos.map((r) => [r.path, r.name])), [data.repos]);
   const repoLabel = useCallback((path: string) => nameByPath.get(path) ?? path, [nameByPath]);
-
-  // 아래 칸의 WIP 파일 목록은 그래프와 같은 조회를 읽는다(캐시를 같이 쓴다).
-  const wipPath = selection?.kind === "wip" ? [selection.path] : [];
-  const statuses = useStatusMany(wipPath);
 
   const titleSlot = useToolbarTitleSlot();
 
@@ -138,7 +133,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
             />
           </section>
           <Card className="flex-1">
-            <ReviewFilesPanel selection={selection} repoLabel={repoLabel} statuses={statuses} />
+            <ReviewFilesPanel selection={selection} repoLabel={repoLabel} />
           </Card>
         </>
       )}

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { clsx } from "clsx";
 import { FileStatusBadge } from "@/lib/file-status";
@@ -19,6 +20,8 @@ interface DiffHeaderProps {
   /** 이 파일에서 고를 수 있는 모드들 — 안 되는 모드는 아예 나타나지 않는다. */
   modes: DiffViewMode[];
   onSelectMode: (mode: DiffViewMode) => void;
+  /** 줄 수 앞에 둘 것(따라가기의 「4초 전 수정」 등). */
+  extra?: ReactNode;
 }
 
 export function DiffHeader({
@@ -29,6 +32,7 @@ export function DiffHeader({
   viewMode,
   modes,
   onSelectMode,
+  extra,
 }: DiffHeaderProps) {
   const { t } = useTranslation();
 
@@ -51,6 +55,7 @@ export function DiffHeader({
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {extra}
         {addedLines > 0 && (
           <span className="text-xs font-medium text-diff-add-fg">
             +{addedLines}
