@@ -790,24 +790,21 @@
     "addRepo": "저장소 추가",
     "noMatch": "「{{query}}」와 맞는 저장소가 없습니다",
     "empty": "아직 저장소가 없습니다",
-    "workspaceSubtitle_one": "워크스페이스 · 저장소 {{count}}",
-    "workspaceSubtitle_other": "워크스페이스 · 저장소 {{count}}",
     "quietRepos_one": "조용한 저장소 {{count}}개 ({{names}})",
     "quietRepos_other": "조용한 저장소 {{count}}개 ({{names}})",
     "worktree": "워크트리",
     "favorite": "즐겨찾기",
-    "baseSuffix": "{{base}}에서",
+    "meta": {
+      "modified_other": "수정 {{count}}",
+      "newCommits_other": "새 커밋 {{count}}",
+      "clean": "깨끗함",
+      "repos_other": "저장소 {{count}}",
+      "changingNow": "지금 파일이 바뀌는 중 · {{ago}} 전",
+      "changingNotWatched": "최근에 파일이 바뀜 · {{ago}} 전 (실시간 감시 밖이라 이후 변경이 늦게 보일 수 있음)"
+    },
     "badge": {
-      "uncommitted_one": "커밋하지 않은 파일 {{count}}개",
-      "uncommitted_other": "커밋하지 않은 파일 {{count}}개",
-      "newCommits_one": "새 커밋 {{count}}개",
-      "newCommits_other": "새 커밋 {{count}}개",
-      "ahead_one": "올릴 커밋 {{count}}개",
-      "ahead_other": "올릴 커밋 {{count}}개",
       "behind_one": "받을 커밋 {{count}}개",
-      "behind_other": "받을 커밋 {{count}}개",
-      "live": "최근 10분 안에 파일이 바뀜",
-      "liveNotWatched": "최근에 파일이 바뀜(지금은 실시간 감시 밖이라 이후 변경이 늦게 보이거나 보이지 않을 수 있음)"
+      "behind_other": "받을 커밋 {{count}}개"
     },
     "live": {
       "title": "지금 파일이 바뀌는 곳",

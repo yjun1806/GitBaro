@@ -18,10 +18,8 @@ export const SIDEBAR_ICON_BUTTON =
 /** 행 첫 줄(이름) */
 export const ROW_TITLE = "text-[12.5px] text-foreground truncate";
 
-/** 행 둘째 줄(브랜치 아이콘 + 고정폭 브랜치 이름 + 옅은 덧붙임) */
+/** 행 둘째 줄(브랜치 아이콘 + 고정폭 브랜치 이름 + 상태 글) */
 export const ROW_SUBLINE = "flex items-center gap-1 min-w-0 text-[10.5px] text-muted-foreground";
 
 /** 둘째 줄 브랜치 이름을 가운데 「…」로 줄이는 길이 */
 export const BRANCH_MAX_CHARS = 26;
-/** 워크트리 기반 브랜치 이름을 줄이는 길이 */
-export const BASE_MAX_CHARS = 14;

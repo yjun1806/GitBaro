@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { useToastStore } from "@/stores/toast";
 import type { WorkspaceError } from "@/stores/workspace";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
-import { BranchLine } from "./BranchLine";
+import { RowSubline } from "./RowSubline";
 import { INDENT_PX } from "./TreeRowFrame";
 import { LEADING_TILE, NEUTRAL_TILE, ROW_TITLE, TILE_ICON } from "./row-style";
 import {
@@ -228,7 +228,7 @@ function DragPreview({ data, blocked }: { data: RowDragData; blocked: boolean })
         )}
         <span className="flex-1 min-w-0 flex flex-col gap-px">
           <span className={`${ROW_TITLE} font-bold`}>{data.label}</span>
-          <BranchLine branch={data.branch ?? null} />
+          <RowSubline branch={data.branch ?? null} />
         </span>
         {data.badges}
       </span>

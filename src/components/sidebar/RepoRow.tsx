@@ -5,8 +5,9 @@ import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import type { PathSignals, RepoNode } from "@/lib/repo-tree";
 import { cn } from "@/lib/utils";
 import type { RepoInfo } from "@/types";
-import { BranchLine } from "./BranchLine";
-import { LiveDot, RowBadges } from "./RowBadges";
+import { LiveDot } from "./LiveDot";
+import { RowSubline } from "./RowSubline";
+import { liveDotLabel, metaLineParts, metaLineText } from "./row-meta";
 import { LEADING_TILE, ROW_TITLE } from "./row-style";
 import { DraggableRow, DropAfterLine } from "./TreeDnd";
 import { TreeRowFrame } from "./TreeRowFrame";
@@ -23,11 +24,12 @@ export interface LiveState {
   now: number;
 }
 
-function liveOf(paths: string[], live: LiveState): { live: boolean; watched: boolean } {
+function liveOf(paths: string[], live: LiveState): { live: boolean; watched: boolean; at: number } {
   const livePaths = paths.filter((p) => isLivePath(p, live.lastChangedAt, live.now));
   return {
     live: livePaths.length > 0,
     watched: livePaths.some((p) => isWatchedPath(p, live.watched, live.overflow)),
+    at: Math.max(0, ...livePaths.map((p) => live.lastChangedAt[p] ?? 0)),
   };
 }
 
@@ -91,20 +93,19 @@ export function RepoRow({
   const color = avatarColor(repo.path);
   const totals = repoTotals(node, signals);
   const own = signals[repo.path];
-  const { live, watched } = liveOf(repoPaths(node), liveState);
+  const { live, watched, at } = liveOf(repoPaths(node), liveState);
   const viewingHiddenWorktree =
     activeOwnerPath === repo.path &&
     activePath !== repo.path &&
     !(showWorktrees && worktrees.some((w) => w.path === activePath));
   const selected = activePath === repo.path || viewingHiddenWorktree;
-  const rowBadges = (
-    <RowBadges
-      dirty={totals.dirty}
-      newCommits={totals.newCommits}
-      ahead={own?.ahead}
-      behind={own?.behind}
-    />
+  // 둘째 줄: 「⎇ 브랜치 · 수정 N · 새 커밋 N · ↑a ↓b」(수정·새 커밋은 워크트리까지 더한 합계, ↑↓는 메인 작업 트리).
+  const parts = metaLineParts(
+    { dirty: totals.dirty, newCommits: totals.newCommits, ahead: own?.ahead, behind: own?.behind },
+    t,
   );
+  const tooltip = [repo.name, branch, metaLineText(parts)].filter(Boolean).join("\n");
+  const liveDot = live ? <LiveDot watched={watched} label={liveDotLabel(t, watched, liveState.now, at)} /> : null;
 
   return (
     <>
@@ -115,7 +116,7 @@ export function RepoRow({
         depth={depth}
         path={repo.path}
         branch={branch}
-        badges={rowBadges}
+        badges={liveDot}
         groupBelow={showWorktrees}
         disabled={!draggable}
       >
@@ -128,7 +129,7 @@ export function RepoRow({
           selected={selected}
           onSelect={() => onSelectRepo(repo)}
           onToggle={onToggle}
-          tall={branch !== null}
+          tall
           onContextMenu={(e) => {
             e.preventDefault();
             onContextMenu(repo, e);
@@ -145,12 +146,10 @@ export function RepoRow({
             >
               {avatarInitial(repo.name)}
             </span>
-            {live && <LiveDot watched={watched} className="absolute -left-0.5 -top-0.5" />}
           </span>
-          <span className="flex-1 min-w-0 flex flex-col gap-px">
+          <span className="flex-1 min-w-0 flex flex-col gap-px" title={tooltip}>
             <span
               className={cn(ROW_TITLE, selected ? "font-bold" : "font-medium")}
-              title={repo.name}
             >
               {repo.name}
               {favorite && (
@@ -161,10 +160,10 @@ export function RepoRow({
                 />
               )}
             </span>
-            <BranchLine branch={branch} />
+            <RowSubline branch={branch} parts={parts} />
           </span>
           {fetching && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
-          {rowBadges}
+          {liveDot}
         </TreeRowFrame>
       </DraggableRow>
       {showWorktrees &&
@@ -181,6 +180,8 @@ export function RepoRow({
               signals={signals[wt.path]}
               live={wtLive.live}
               watched={wtLive.watched}
+              changedAt={wtLive.at}
+              now={liveState.now}
               selected={activePath === wt.path}
               onSelect={() => onSelectWorktree(repo, wt.path)}
             />

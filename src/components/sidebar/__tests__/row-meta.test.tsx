@@ -2,28 +2,46 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import "@/i18n/config";
-import { rowMetaItems, syncText } from "../row-meta";
-import { RowBadges } from "../RowBadges";
-import { BranchLine } from "../BranchLine";
+import i18n from "@/i18n/config";
+import { formatAgo, liveDotLabel, META_ORDER, metaLineParts, metaLineText, syncText } from "../row-meta";
+import { RowSubline } from "../RowSubline";
 import { guideLineLeft, INDENT_PX } from "../TreeRowFrame";
 
 afterEach(cleanup);
 
-describe("rowMetaItems", () => {
-  it("keeps the fixed order uncommitted → new commits → ahead/behind", () => {
-    expect(rowMetaItems({ behind: 1, newCommits: 2, dirty: 3, ahead: 4 }).map((i) => i.kind)).toEqual([
-      "dirty",
-      "newCommits",
-      "sync",
-    ]);
+const en = i18n.getFixedT("en");
+const ko = i18n.getFixedT("ko");
+
+describe("metaLineParts", () => {
+  it("puts words on the numbers, in the fixed order modified → new commits → ahead/behind", () => {
+    const parts = metaLineParts({ behind: 1, newCommits: 2, dirty: 3, ahead: 4 }, en);
+    expect(parts.map((p) => p.kind)).toEqual(["modified", "newCommits", "sync"]);
+    expect(metaLineText(parts)).toBe("3 modified · 2 new commits · ↑4 ↓1");
+    expect(metaLineText(metaLineParts({ dirty: 3, newCommits: 2, ahead: 4, behind: 1 }, ko))).toBe(
+      "수정 3 · 새 커밋 2 · ↑4 ↓1",
+    );
   });
 
-  it("omits zero values", () => {
-    expect(rowMetaItems({})).toEqual([]);
-    expect(rowMetaItems({ dirty: 0, newCommits: 0, ahead: 0, behind: 0 })).toEqual([]);
-    expect(rowMetaItems({ newCommits: 5 })).toEqual([{ kind: "newCommits", count: 5 }]);
-    expect(rowMetaItems({ behind: 2 })).toEqual([{ kind: "sync", ahead: 0, behind: 2 }]);
+  it("omits zero values and says clean when everything is zero", () => {
+    expect(metaLineParts({}, ko)).toEqual([{ kind: "clean", text: "깨끗함" }]);
+    expect(metaLineParts({ newCommits: 1 }, en)).toEqual([{ kind: "newCommits", text: "1 new commit" }]);
+    expect(metaLineText(metaLineParts({ behind: 2 }, ko))).toBe("↓2");
+  });
+
+  it("starts workspace rows with the repository count", () => {
+    expect(metaLineText(metaLineParts({ repoCount: 3, dirty: 2, newCommits: 5 }, ko))).toBe(
+      "저장소 3 · 수정 2 · 새 커밋 5",
+    );
+    expect(metaLineText(metaLineParts({ repoCount: 2 }, ko))).toBe("저장소 2 · 깨끗함");
+  });
+
+  it("drops items from the end first: the display order ends with ↑↓, then new commits, then modified", () => {
+    // 줄은 CSS 말줄임(끝에서부터 자름)이라, 잘리는 순서는 표시 순서를 거꾸로 한 것이다.
+    const dropOrder = [...META_ORDER].reverse();
+    expect(dropOrder.slice(0, 3)).toEqual(["sync", "newCommits", "modified"]);
+    const parts = metaLineParts({ dirty: 1, newCommits: 1, ahead: 1 }, en);
+    const positions = parts.map((p) => META_ORDER.indexOf(p.kind));
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
   it("formats ahead/behind without the zero side", () => {
@@ -33,37 +51,38 @@ describe("rowMetaItems", () => {
   });
 });
 
-describe("RowBadges", () => {
-  it("renders the meta items in the fixed order with tooltips, and nothing when all are zero", () => {
-    const { container, rerender } = render(<RowBadges dirty={14} newCommits={14} ahead={1} behind={2} />);
-    const kinds = [...container.querySelectorAll("[data-meta]")].map((el) => el.getAttribute("data-meta"));
-    expect(kinds).toEqual(["dirty", "newCommits", "sync"]);
-    const sync = container.querySelector("[data-meta=sync]");
-    expect(sync).toHaveTextContent("↑1 ↓2");
-    // 보낼·받을 커밋은 한 툴팁에 「/」로 잇는다.
-    expect(sync?.getAttribute("title")).toMatch(/.+ \/ .+/);
-    for (const el of container.querySelectorAll("[data-meta]")) {
-      expect(el.getAttribute("title")).toBeTruthy();
-    }
-
-    rerender(<RowBadges />);
-    expect(container.querySelector("[data-testid=row-meta]")).toBeNull();
+describe("live dot label", () => {
+  it("says the files are changing now and how long ago", () => {
+    expect(formatAgo(ko, 100_000, 88_000)).toBe("12초");
+    expect(liveDotLabel(ko, true, 100_000, 88_000)).toBe("지금 파일이 바뀌는 중 · 12초 전");
+    expect(liveDotLabel(en, true, 200_000, 20_000)).toBe("Files changing now · 3m ago");
+    expect(liveDotLabel(en, false, 100_000, 88_000)).toMatch(/not watched live/);
   });
 });
 
-describe("BranchLine", () => {
-  it("shows the branch in the middle-ellipsis form, keeps the suffix whole, and puts the full text in the tooltip", () => {
+describe("RowSubline", () => {
+  it("renders branch, then the parts in order in one truncating span; only new commits use the brand color", () => {
     const long = "feature/a-very-long-branch-name-for-the-sidebar";
-    render(<BranchLine branch={long} suffix="main에서" title={`${long}\nmain`} />);
+    const parts = metaLineParts({ dirty: 14, newCommits: 3, ahead: 1 }, ko);
+    const { container } = render(<RowSubline branch={long} parts={parts} />);
     const name = screen.getByText((text) => text.includes("…"));
-    expect(name.textContent!.length).toBeLessThan(long.length);
     expect(name.textContent!.startsWith("feature/")).toBe(true);
-    expect(screen.getByText(/main에서/)).toBeInTheDocument();
-    expect(name.parentElement).toHaveAttribute("title", `${long}\nmain`);
+    expect(name.textContent!.length).toBeLessThan(long.length);
+
+    const meta = container.querySelector("[data-testid=row-meta]")!;
+    expect(meta.className).toContain("truncate");
+    expect([...meta.querySelectorAll("[data-meta]")].map((el) => el.getAttribute("data-meta"))).toEqual([
+      "modified",
+      "newCommits",
+      "sync",
+    ]);
+    expect(meta.textContent).toBe(" · 수정 14 · 새 커밋 3 · ↑1");
+    expect(container.innerHTML.match(/--acc/g)).toHaveLength(1);
+    expect(meta.querySelector("[data-meta=newCommits] span:last-child")!.className).toContain("--acc");
   });
 
-  it("renders nothing without a branch or suffix", () => {
-    const { container } = render(<BranchLine branch={null} />);
+  it("renders nothing without a branch or parts", () => {
+    const { container } = render(<RowSubline branch={null} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

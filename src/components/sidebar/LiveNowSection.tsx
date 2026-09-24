@@ -2,7 +2,8 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import { cn } from "@/lib/utils";
-import { LiveDot } from "./RowBadges";
+import { LiveDot } from "./LiveDot";
+import { formatAgo, liveDotLabel } from "./row-meta";
 import { SelectionBar } from "./TreeRowFrame";
 import { liveAvatarStack, type LiveEntry } from "./tree-model";
 
@@ -60,12 +61,7 @@ export function LiveNowSection({
   const hasActivity = entries.length > 0;
   const stack = liveAvatarStack(entries, AVATAR_STACK_MAX);
 
-  const ago = (at: number) => {
-    const seconds = Math.max(0, Math.floor((now - at) / 1000));
-    return seconds < 60
-      ? t("sidebarTree.live.seconds", { count: seconds })
-      : t("sidebarTree.live.minutes", { count: Math.floor(seconds / 60) });
-  };
+  const ago = (at: number) => formatAgo(t, now, at);
 
   return (
     <section
@@ -129,7 +125,7 @@ export function LiveNowSection({
                 )}
               >
                 {activePath === entry.path && <SelectionBar />}
-                <LiveDot watched={isWatched(entry.path)} className="shrink-0" />
+                <LiveDot watched={isWatched(entry.path)} label={liveDotLabel(t, isWatched(entry.path), now, entry.at)} />
                 {repoAvatar(`${entry.path}-avatar`, entry.repo.name, entry.repo.path, 14, "text-[8px]")}
                 <span className="flex-1 min-w-0 truncate text-[12px] text-[var(--fg2)]">
                   {entry.repo.name}
