@@ -57,6 +57,16 @@ describe("AnchoredPanel", () => {
     expect(panel.style.left).toBe("8px");
   });
 
+  it("caps its height to the room left in the window (maxHeight) once measured", () => {
+    render(<Harness />);
+    openPanel();
+    const panel = screen.getByRole("dialog");
+    // jsdom reports a 0-height window, so the clamped room is 0px here — the
+    // point of this test is that `maxHeight` gets set at all (wired through
+    // from `clampPanelToViewport`), not the specific jsdom value.
+    expect(panel.style.maxHeight).not.toBe("");
+  });
+
   it("moves focus into the panel and back to the opener on Escape", () => {
     render(<Harness />);
     const opener = openPanel();

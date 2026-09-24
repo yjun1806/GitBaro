@@ -44,7 +44,7 @@ export function AnchoredPanel({
 }: AnchoredPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const { handleKeyDown } = useDialogA11y(panelRef, { onClose, dismissible });
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
 
   useLayoutEffect(() => {
     const update = () => {
@@ -85,7 +85,19 @@ export function AnchoredPanel({
         // (0, 0) fallback exists for environments without real layout (tests)
         // or when `anchorRef` isn't attached to anything yet, and is kept
         // visible/in the accessibility tree rather than hidden behind it.
-        style={{ position: "fixed", top: position?.top ?? 0, left: position?.left ?? 0 }}
+        //
+        // `maxHeight` is the room actually available below (or above) the
+        // anchor inside the window — always `<= panel.height` — so the panel
+        // never renders past the window's bottom; its header/search stay
+        // fixed and its list scrolls to make up the difference (see
+        // `clampPanelToViewport`). Once measured it overrides any static
+        // `max-h-*` class the caller set for the pre-measurement fallback.
+        style={{
+          position: "fixed",
+          top: position?.top ?? 0,
+          left: position?.left ?? 0,
+          maxHeight: position ? position.maxHeight : undefined,
+        }}
         className={cn("outline-none", className)}
       >
         {children}

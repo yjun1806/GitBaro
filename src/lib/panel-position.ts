@@ -26,11 +26,21 @@ export interface ClampOptions {
 export interface PanelPosition {
   top: number;
   left: number;
+  /**
+   * The vertical room actually available at `top` (down to the bottom
+   * margin). Always `<= panel.height`; strictly less than it whenever the
+   * panel's natural height didn't fit and got clamped. The caller applies
+   * this as the panel's `max-height` so a header/search that stay fixed and
+   * a list that scrolls (`overflow-y: auto; min-height: 0`) can make up the
+   * difference, instead of the panel rendering past the window's edge.
+   */
+  maxHeight: number;
 }
 
 /**
  * Positions a popover panel just under its trigger button, left-edge aligned,
- * then clamps it so it never runs off any side of the window.
+ * then clamps it so it never runs off any side of the window — horizontally
+ * or vertically.
  *
  * - Left: aligned to the anchor's left edge, but pulled back so the panel's
  *   right edge stays inside the viewport, and pushed right so its left edge
@@ -39,7 +49,9 @@ export interface PanelPosition {
  *   the viewport, it flips to open *above* the anchor instead — but only when
  *   doing so actually fits; otherwise it stays below and is clamped to the
  *   viewport like any other overflow (better a slightly covered anchor than a
- *   panel pinned off-screen).
+ *   panel pinned off-screen). `maxHeight` reflects whatever room is left at
+ *   the final `top`, so the panel can never render outside the window even
+ *   when neither placement has enough room for it at full height.
  *
  * Pure and side-effect free so it can be unit tested without a DOM.
  */
@@ -62,5 +74,7 @@ export function clampPanelToViewport(
   const maxTop = Math.max(margin, viewport.height - panel.height - margin);
   const top = Math.min(Math.max(preferredTop, margin), maxTop);
 
-  return { top, left };
+  const maxHeight = Math.max(0, Math.min(panel.height, viewport.height - margin - top));
+
+  return { top, left, maxHeight };
 }
