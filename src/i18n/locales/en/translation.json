@@ -110,9 +110,11 @@
     "checkoutSuccess": "Checked out commit",
     "revertConfirm": "Create a commit that reverts {{shortId}}?",
     "revertSuccess": "Commit reverted",
+    "revertConflict": "Revert stopped on conflicts. Resolve them in the Changes tab.",
     "revertMergeConfirm": "Create a commit that undoes merge {{shortId}}? Everything it brought in from the merged branch will be removed.",
     "cherryPickConfirm": "Cherry-pick {{shortId}} onto the current branch?",
     "cherryPickSuccess": "Commit cherry-picked",
+    "cherryPickConflict": "Cherry-pick stopped on conflicts. Resolve them in the Changes tab.",
     "resetSuccess": "Branch reset",
     "reset": {
       "title": "Reset to {{shortId}}",
