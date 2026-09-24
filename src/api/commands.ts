@@ -893,3 +893,46 @@ import type { NewCommitIds } from "@/types";
 export async function listNewCommitIds(entry: SeenRecordInput): Promise<NewCommitIds> {
   return invoke("list_new_commit_ids", { entry });
 }
+
+// W4-T2 — 워크스페이스 타임라인
+
+import type { WorkspaceRepoHistory } from "@/types";
+
+type RawWorkspaceCommit = Omit<CommitInfo, "author" | "committer"> & {
+  author: RawAuthor;
+  committer: RawAuthor;
+};
+
+interface RawWorkspaceRepoHistory
+  extends Omit<WorkspaceRepoHistory, "commits" | "mergeBaseCommit"> {
+  commits: RawWorkspaceCommit[];
+  mergeBaseCommit: RawWorkspaceCommit | null;
+}
+
+function workspaceCommitFromRaw(c: RawWorkspaceCommit): CommitInfo {
+  return {
+    ...c,
+    shortId: c.id.slice(0, 7),
+    author: { name: c.author.name, email: c.author.email },
+    committer: { name: c.committer.name, email: c.committer.email },
+  };
+}
+
+/**
+ * 저장소마다 HEAD부터 main과 갈라진 지점까지의 커밋. 결과는 `paths` 순서와 같고,
+ * 한 저장소가 실패해도 나머지는 돌아온다(`error` 참고). `limitPerRepo`는 1~1000, 기본 100.
+ */
+export async function getWorkspaceHistory(
+  paths: string[],
+  limitPerRepo?: number,
+): Promise<WorkspaceRepoHistory[]> {
+  const raw: RawWorkspaceRepoHistory[] = await invoke("get_workspace_history", {
+    paths,
+    limitPerRepo,
+  });
+  return raw.map((repo) => ({
+    ...repo,
+    commits: repo.commits.map(workspaceCommitFromRaw),
+    mergeBaseCommit: repo.mergeBaseCommit && workspaceCommitFromRaw(repo.mergeBaseCommit),
+  }));
+}

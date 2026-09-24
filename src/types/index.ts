@@ -532,3 +532,45 @@ export interface NewCommitCount {
 export interface NewCommitIds extends NewCommitCount {
   ids: string[];
 }
+
+// W4-T2 — 워크스페이스 타임라인 (Rust: src-tauri/src/commands/workspace_history.rs)
+
+/**
+ * 저장소가 main과 갈라진 지점을 찾았는지.
+ * - `found`: 찾았다. `commits`는 갈라진 뒤의 커밋이다.
+ * - `noDefaultBranch`: 기본 브랜치(또는 그 로컬·원격 브랜치)가 없다.
+ * - `noSharedHistory`: 기본 브랜치와 공통 조상이 없다.
+ * `found`가 아니면 `commits`는 HEAD 이력을 한도까지 담은 것이라, 「갈라진 뒤 한 일」로 보이면 안 된다.
+ */
+export type WorkspaceBaseStatus = "found" | "noDefaultBranch" | "noSharedHistory";
+
+/**
+ * `get_workspace_history`의 저장소 하나. 저장소마다 따로 계산하고, 브랜치 이름이 같아도 합치지 않는다.
+ * 읽지 못한 저장소는 `error`만 채워지고 나머지는 비어 있다.
+ */
+export interface WorkspaceRepoHistory {
+  /** 요청에 넘긴 저장소 경로 그대로. */
+  path: string;
+  /** 체크아웃한 로컬 브랜치. 커밋이 없는 저장소도 HEAD가 가리키는 이름을 준다. detached HEAD면 null. */
+  branch: string | null;
+  /** HEAD 커밋. 커밋이 없는 저장소면 null. */
+  headOid: string | null;
+  /** 기본 브랜치(origin/HEAD → 로컬 main → 로컬 master 순, 워크트리 기반 추정과 같은 규칙). 못 찾으면 null. */
+  defaultBranch: string | null;
+  /**
+   * 갈라진 지점을 준 참조(`main`, `origin/main`). 로컬 main과 origin/main 중 더 가까운 쪽이다.
+   * HEAD가 기본 브랜치 자신이면 그 원격 추적 브랜치.
+   */
+  baseRef: string | null;
+  /** 갈라진 지점을 찾았는지. 저장소를 열지 못했거나 커밋이 없으면 null. */
+  baseStatus: WorkspaceBaseStatus | null;
+  /** main과 갈라진 지점. `baseStatus`가 `found`일 때만 있다. */
+  mergeBaseOid: string | null;
+  /** 갈라진 지점 커밋(그래프 맨 아래 행의 요약·시각). `mergeBaseOid`와 함께 있다. */
+  mergeBaseCommit: CommitInfo | null;
+  /** HEAD부터 갈라진 지점 바로 위까지, 최신 순. */
+  commits: CommitInfo[];
+  /** 한도(`limitPerRepo`)를 넘어 잘렸는가. */
+  truncated: boolean;
+  error: string | null;
+}

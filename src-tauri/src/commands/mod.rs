@@ -13,3 +13,5 @@ pub mod watch;
 pub mod worktree;
 // W1-T4
 pub mod review;
+// W4-T2
+pub mod workspace_history;
