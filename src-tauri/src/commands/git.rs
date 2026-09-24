@@ -272,6 +272,9 @@ struct DiscardPlan {
     trash: Vec<std::path::PathBuf>,
 }
 
+/// `GIT_INDEX_ENTRY_INTENT_TO_ADD` (libgit2 `index.h`): set by `git add -N`.
+const INDEX_ENTRY_INTENT_TO_ADD: u16 = 1 << 13;
+
 /// Decide how to discard `paths`. `staged == false` discards the unstaged
 /// changes only (the staged part is kept); `staged == true` discards every
 /// change to the file, returning it to its HEAD state.
@@ -292,12 +295,22 @@ fn plan_discard(
         let rel = std::path::Path::new(path);
         let full = workdir.join(rel);
         let on_disk = std::fs::symlink_metadata(&full).is_ok();
-        let in_index = index.get_path(rel, 0).is_some();
+        let index_entry = index.get_path(rel, 0);
+        let in_index = index_entry.is_some();
         let in_head = head_tree
             .as_ref()
             .is_some_and(|tree| tree.get_path(rel).is_ok());
+        // `git add -N` leaves an empty placeholder entry: the file is still new,
+        // and restoring it from the index would truncate it to nothing.
+        let intent_to_add = index_entry
+            .is_some_and(|e| e.flags_extended & INDEX_ENTRY_INTENT_TO_ADD != 0);
 
-        if !staged {
+        if !staged && intent_to_add {
+            plan.remove_from_index.push(path.clone());
+            if on_disk {
+                plan.trash.push(full);
+            }
+        } else if !staged {
             if in_index {
                 plan.from_index.push(path.clone());
             } else if on_disk {
@@ -918,6 +931,22 @@ mod tests {
         assert_eq!(staged.remove_from_index, vec!["added.txt"]);
         assert_eq!(staged.trash, vec![workdir.join("added.txt")]);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `git add -N` 파일은 새 파일이다. 버리면 빈 파일로 덮지 말고 휴지통으로 보내야 한다.
+    #[test]
+    fn plans_discard_of_an_intent_to_add_file_as_a_new_file() {
+        let dir = temp_repo("discard-ita");
+        std::fs::write(dir.join("ita.txt"), "hi\n").unwrap();
+        git(&dir, &["add", "-N", "ita.txt"]);
+        let repo = git2::Repository::open(&dir).unwrap();
+        let workdir = repo.workdir().unwrap().to_path_buf();
+
+        let plan = plan_discard(&repo, &["ita.txt".into()], false).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(plan.from_index.is_empty(), "{:?}", plan);
+        assert_eq!(plan.remove_from_index, vec!["ita.txt"]);
+        assert_eq!(plan.trash, vec![workdir.join("ita.txt")]);
     }
 
     /// 스테이징된 변경을 버리면 HEAD 상태로 돌아가야 한다(인덱스·작업 트리 모두).

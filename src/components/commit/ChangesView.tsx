@@ -38,7 +38,9 @@ import type { StatusEntry } from "@/types";
 /** Confirmation text for discarding `entry`, matching what the backend will do. */
 function discardMessageKey(entry: StatusEntry): string {
   if (!entry.staged) {
-    return entry.status === "untracked"
+    // "added" on the unstaged side is an intent-to-add (`git add -N`) file,
+    // which the backend moves to the Trash like an untracked one.
+    return entry.status === "untracked" || entry.status === "added"
       ? "changes.discardUntrackedMessage"
       : "changes.discardUnstagedMessage";
   }
