@@ -5,36 +5,29 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useActivityStore } from "@/stores/activity";
 import { useSyncStore, type SyncAction } from "@/stores/sync";
-import { invalidateAfterSync, useBranches, useHeadDetached, useTokenValidation } from "@/api/queries";
+import {
+  invalidateAfterSync,
+  useBranches,
+  useHeadDetached,
+  useRepoSyncStatuses,
+  useTokenValidation,
+} from "@/api/queries";
 import { gitFetch, gitPush, gitPull, getPushTarget } from "@/api/commands";
 import type { PushTarget, RemoteOp } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
-import { formatRelativeTime, getErrorMessage, isMergeConflictError } from "@/lib/utils";
+import { cn, formatRelativeTime, getErrorMessage, isMergeConflictError } from "@/lib/utils";
 import { useClickOutside } from "./useToolbarDropdown";
 import { AutoSyncHint } from "./AutoSyncHint";
-import { ActionButton, ActionGroup, ActionMenu } from "./ActionButton";
+import { ActionButton, ActionGroup, ActionMenu, TOOLBAR_WIDE_LABEL_CLASS } from "./ActionButton";
 import { ConfirmCommandDialog } from "@/components/ui/ConfirmCommandDialog";
 
-type SyncZoneProps =
-  | { mode: "repo" }
-  | {
-      mode: "workspace";
-      /**
-       * 여러 저장소 Fetch·Pull·Push(저장소별 명령 확인 창). 연결되기 전(undefined)에는
-       * 세 버튼을 꺼 둔다. W5-T2가 확인 창을 이 콜백으로 연결한다.
-       */
-      onMultiRepo?: (op: RemoteOp) => void;
-    };
+type SyncZoneProps = { mode: "repo" } | { mode: "workspace"; paths: string[] };
 
 /** 시안 `toolbar()`의 첫 묶음: Fetch · Pull · Push(↑ 배지). */
 export function SyncZone(props: SyncZoneProps) {
-  return props.mode === "workspace" ? (
-    <WorkspaceSyncGroup onMultiRepo={props.onMultiRepo} />
-  ) : (
-    <RepoSyncGroup />
-  );
+  return props.mode === "workspace" ? <WorkspaceSyncZone paths={props.paths} /> : <RepoSyncGroup />;
 }
 
 const REMOTE_OPS: { op: RemoteOp; icon: typeof RefreshCw; labelKey: string }[] = [
@@ -43,9 +36,42 @@ const REMOTE_OPS: { op: RemoteOp; icon: typeof RefreshCw; labelKey: string }[] =
   { op: "push", icon: ArrowUp, labelKey: "gitActions.push" },
 ];
 
-/** 워크스페이스 모드: 누르면 `onMultiRepo(op)`를 부른다. 저장소마다 명령을 확인하는 창은 그쪽이 띄운다. */
-function WorkspaceSyncGroup({ onMultiRepo }: { onMultiRepo?: (op: RemoteOp) => void }) {
+/**
+ * 워크스페이스 모드의 연결 자리. 여러 저장소 Fetch·Pull·Push(저장소별 명령 확인 창)는
+ * W5-T2가 이 함수 안에서 `onMultiRepo`를 채워 연결한다. 연결 전(undefined)에는 세 버튼을 꺼 둔다.
+ */
+function WorkspaceSyncZone({ paths }: { paths: string[] }) {
+  const onMultiRepo: ((op: RemoteOp) => void) | undefined = undefined;
+  return <WorkspaceSyncGroup paths={paths} onMultiRepo={onMultiRepo} />;
+}
+
+/**
+ * 워크스페이스 모드의 세 버튼. 누르면 `onMultiRepo(op)`를 부르고, 저장소마다 명령을 확인하는 창은
+ * 그쪽이 띄운다. 배지는 워크스페이스 저장소들의 ↑·↓ 합계다(마지막 fetch 기준, 사이드바와 같은 값).
+ */
+export function WorkspaceSyncGroup({
+  paths,
+  onMultiRepo,
+}: {
+  paths: string[];
+  onMultiRepo?: (op: RemoteOp) => void;
+}) {
   const { t } = useTranslation();
+  const { data: syncByPath } = useRepoSyncStatuses(paths);
+  const totals = paths.reduce(
+    (acc, path) => {
+      const status = syncByPath?.[path];
+      return status
+        ? { ahead: acc.ahead + status.ahead, behind: acc.behind + status.behind }
+        : acc;
+    },
+    { ahead: 0, behind: 0 },
+  );
+  const badges: Record<RemoteOp, { badge?: number; badgePrefix?: string }> = {
+    fetch: {},
+    pull: { badge: totals.behind, badgePrefix: "↓" },
+    push: { badge: totals.ahead, badgePrefix: "↑" },
+  };
   const hint = onMultiRepo ? undefined : t("activeScope.pickRepo");
   return (
     <ActionGroup label={t("gitActions.syncGroup")}>
@@ -57,6 +83,8 @@ function WorkspaceSyncGroup({ onMultiRepo }: { onMultiRepo?: (op: RemoteOp) => v
           label={t(labelKey)}
           disabled={!onMultiRepo}
           hint={hint}
+          {...badges[op]}
+          highlighted={(badges[op].badge ?? 0) > 0}
           onClick={onMultiRepo ? () => onMultiRepo(op) : undefined}
         />
       ))}
@@ -83,7 +111,7 @@ function remoteErrorKey(message: string): string | null {
 /** 저장소 모드: 지금 연 저장소(또는 워크트리)에서 바로 실행한다. */
 function RepoSyncGroup() {
   const zoneRef = useRef<HTMLDivElement>(null);
-  const [openMenu, setOpenMenu] = useState<"pull" | "push" | null>(null);
+  const [openMenu, setOpenMenu] = useState<"fetch" | "pull" | "push" | null>(null);
   const closeMenu = () => setOpenMenu(null);
   useClickOutside(zoneRef, closeMenu, openMenu !== null);
   const { t } = useTranslation();
@@ -255,20 +283,24 @@ function RepoSyncGroup() {
   // 올릴 커밋이 없으면 Push를 끈다. 추적 브랜치가 없으면 첫 push(publish)는 연다.
   const pushDisabled = branchOpsDisabled || (!needsPublish && ahead === 0);
   const pullDisabled = branchOpsDisabled || needsPublish;
-  const toggleMenu = (id: "pull" | "push") => setOpenMenu((prev) => (prev === id ? null : id));
+  const toggleMenu = (id: "fetch" | "pull" | "push") => setOpenMenu((prev) => (prev === id ? null : id));
 
   return (
     <div ref={zoneRef} className="relative flex items-center gap-1.5 shrink-0">
-      <AutoSyncHint />
+      {/* 좁은 툴바에서는 자동 최신화 안내를 숨긴다. 같은 내용은 설정에서 볼 수 있다. */}
+      <span className="hidden @min-[1280px]:contents">
+        <AutoSyncHint />
+      </span>
       {syncError && (
         <button
           type="button"
           onClick={handleSyncErrorClick}
           title={syncError.description}
+          aria-label={`${syncError.title} — ${syncError.description}`}
           className="flex items-center gap-1 h-[30px] px-2 rounded-lg text-[12px] font-semibold text-danger hover:bg-danger/5 transition-colors"
         >
           <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
-          <span className="whitespace-nowrap">{syncError.title}</span>
+          <span className={cn("whitespace-nowrap", TOOLBAR_WIDE_LABEL_CLASS)}>{syncError.title}</span>
         </button>
       )}
       <ActionGroup label={t("gitActions.syncGroup")}>
@@ -280,6 +312,11 @@ function RepoSyncGroup() {
           disabled={syncDisabled}
           hint={fetchHint}
           onClick={handleFetch}
+          menu={{
+            label: t("gitActions.fetchOptions"),
+            isOpen: openMenu === "fetch",
+            onToggle: () => toggleMenu("fetch"),
+          }}
         />
         <ActionButton
           action="pull"
@@ -295,6 +332,7 @@ function RepoSyncGroup() {
             label: t("gitActions.pullOptions"),
             isOpen: openMenu === "pull",
             onToggle: () => toggleMenu("pull"),
+            disabled: pullDisabled,
           }}
         />
         <ActionButton
@@ -315,9 +353,26 @@ function RepoSyncGroup() {
             label: t("gitActions.pushOptions"),
             isOpen: openMenu === "push",
             onToggle: () => toggleMenu("push"),
+            // 올릴 커밋이 없어도(ahead 0) force push는 필요할 수 있다. 이미 올린 커밋을 되돌린 뒤가 그렇다.
+            disabled: branchOpsDisabled,
           }}
         />
       </ActionGroup>
+
+      {openMenu === "fetch" && (
+        <ActionMenu
+          onClose={closeMenu}
+          items={[
+            {
+              key: "fetch",
+              label: t("gitActions.fetchNow"),
+              description: fetchHint,
+              disabled: syncDisabled,
+              onSelect: () => handleFetch(),
+            },
+          ]}
+        />
+      )}
 
       {openMenu === "pull" && (
         <ActionMenu

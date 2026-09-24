@@ -14,7 +14,7 @@ import { useToastStore } from "@/stores/toast";
 import { getErrorMessage } from "@/lib/utils";
 import { GhLoginDialog } from "@/components/account/GhLoginDialog";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
-import { useToolbarDropdown } from "./useToolbarDropdown";
+import { ToolbarDropdownContext, useToolbarDropdown } from "./useToolbarDropdown";
 import { BranchZone } from "./BranchZone";
 import { WorktreeZone } from "./WorktreeZone";
 import { GitActionZone } from "./GitActionZone";
@@ -23,7 +23,8 @@ import type { AppSettings } from "@/types";
 import { useActiveScope } from "@/hooks/useActiveScope";
 
 export function ToolbarRoot() {
-  const { activeDropdown, toggle, close } = useToolbarDropdown();
+  const dropdown = useToolbarDropdown();
+  const { activeDropdown, toggle, close } = dropdown;
   const scope = useActiveScope();
 
   const [showLoginDialog, setShowLoginDialog] = useState(false);
@@ -111,8 +112,9 @@ export function ToolbarRoot() {
   };
 
   return (
-    <>
-      <div className="flex items-center h-[52px] border-b border-border bg-surface select-none">
+    <ToolbarDropdownContext.Provider value={dropdown}>
+      {/* @container: 툴바 폭에 따라 git 작업 버튼 이름을 숨긴다(ActionButton의 TOOLBAR_LABEL_CLASS). */}
+      <div className="@container flex items-center h-[52px] border-b border-border bg-surface select-none">
         {scope?.kind === "workspace" ? (
           <>
             {/* 워크스페이스 리뷰 화면(W4-T3)이 제목을 이 자리에 portal로 그린다. */}
@@ -121,7 +123,7 @@ export function ToolbarRoot() {
               data-tauri-drag-region
               data-toolbar-title-slot
             />
-            <GitActionZone mode="workspace" />
+            <GitActionZone mode="workspace" paths={scope.paths} />
           </>
         ) : (
           <>
@@ -140,10 +142,10 @@ export function ToolbarRoot() {
             />
 
             {/* Drag region */}
-            <div className="flex-1 min-w-[40px] h-full" data-tauri-drag-region />
+            <div className="flex-1 min-w-4 h-full" data-tauri-drag-region />
 
-            {/* Zone B: git 작업 묶음. 브랜치 버튼은 W5-T3의 브랜치 패널이 연결될 때까지 기존 브랜치 목록을 연다. */}
-            <GitActionZone mode="repo" onOpenBranchPanel={() => toggle("branch")} />
+            {/* Zone B: git 작업 묶음 */}
+            <GitActionZone mode="repo" />
           </>
         )}
 
@@ -193,6 +195,6 @@ export function ToolbarRoot() {
           onClose={() => setShowSettings(false)}
         />
       )}
-    </>
+    </ToolbarDropdownContext.Provider>
   );
 }

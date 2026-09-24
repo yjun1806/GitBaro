@@ -5,7 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "@/i18n/config";
 
 // 저장소 전용 영역은 Tauri를 부른다. 이 테스트는 툴바가 어느 영역을 띄우는지만 본다.
-vi.mock("@/components/toolbar/BranchZone", () => ({ BranchZone: () => <div>branch-zone</div> }));
+vi.mock("@/components/toolbar/BranchZone", async () => {
+  // 브랜치 버튼(BranchPanelButton)은 실제 것을 쓴다. 왼쪽 브랜치 칸만 가린다.
+  const actual = await vi.importActual<typeof import("@/components/toolbar/BranchZone")>(
+    "@/components/toolbar/BranchZone",
+  );
+  return { ...actual, BranchZone: () => <div>branch-zone</div> };
+});
 vi.mock("@/components/toolbar/WorktreeZone", () => ({ WorktreeZone: () => <div>worktree-zone</div> }));
 vi.mock("@/components/toolbar/AccountZone", () => ({ AccountZone: () => <div>account-zone</div> }));
 vi.mock("@/components/toolbar/AutoSyncHint", () => ({ AutoSyncHint: () => null }));
@@ -17,6 +23,7 @@ vi.mock("@/api/queries", () => ({
   useStatus: () => ({ data: [] }),
   useStashList: () => ({ data: [] }),
   useStashMutations: () => ({ push: {}, pushPartial: {} }),
+  useRepoSyncStatuses: () => ({ data: undefined }),
   invalidateAfterSync: () => Promise.resolve(),
 }));
 

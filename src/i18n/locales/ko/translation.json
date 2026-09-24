@@ -969,6 +969,9 @@
     "mergeTitle": "{{branch}}에 Merge",
     "mergePick": "지금 브랜치로 가져올 브랜치를 고르세요.",
     "mergePickPlaceholder": "브랜치 선택",
-    "close": "닫기"
+    "close": "닫기",
+    "fetchOptions": "Fetch 방식",
+    "fetchNow": "지금 Fetch",
+    "mergeNoBranch": "아직 현재 브랜치가 없습니다. 첫 커밋을 만들거나 브랜치로 전환하세요."
   }
 }

@@ -971,6 +971,9 @@
     "mergeTitle": "Merge into {{branch}}",
     "mergePick": "Pick the branch to bring into the current branch.",
     "mergePickPlaceholder": "Choose a branch",
-    "close": "Close"
+    "close": "Close",
+    "fetchOptions": "Fetch options",
+    "fetchNow": "Fetch now",
+    "mergeNoBranch": "There is no current branch yet. Make the first commit or switch to a branch."
   }
 }

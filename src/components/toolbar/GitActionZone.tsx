@@ -7,22 +7,22 @@ import { useToastStore } from "@/stores/toast";
 import { useBranches, useHeadDetached, useStashList, useStashMutations, useStatus } from "@/api/queries";
 import { openInTerminal } from "@/api/commands";
 import { cn, getErrorMessage } from "@/lib/utils";
-import type { RemoteOp } from "@/types";
 import { StashSaveDialog } from "@/components/stash/StashSaveDialog";
 import { SyncZone } from "./SyncZone";
 import { ActionButton, ActionGroup } from "./ActionButton";
 import { MergeDialog } from "./MergeDialog";
+import { BranchPanelButton } from "./BranchZone";
 
+/**
+ * 콜백은 받지 않는다. 여러 저장소 Fetch·Pull·Push는 `SyncZone.tsx`(W5-T2)가, 브랜치 패널은
+ * `BranchZone.tsx`(W5-T3)가 각자 파일 안에서 연결한다.
+ */
 type GitActionZoneProps =
-  | {
-      mode: "repo";
-      /** 브랜치 패널을 연다(W5-T3가 연결). */
-      onOpenBranchPanel: () => void;
-    }
+  | { mode: "repo" }
   | {
       mode: "workspace";
-      /** 여러 저장소 Fetch·Pull·Push. 연결 전(undefined)에는 세 버튼을 꺼 둔다(W5-T2가 연결). */
-      onMultiRepo?: (op: RemoteOp) => void;
+      /** 워크스페이스에 든 저장소 경로. Push·Pull 배지 합계에 쓴다. */
+      paths: string[];
     };
 
 /**
@@ -35,13 +35,13 @@ export function GitActionZone(props: GitActionZoneProps) {
     <div className="flex items-center gap-2.5 px-2 shrink-0">
       {props.mode === "workspace" ? (
         <>
-          <SyncZone mode="workspace" onMultiRepo={props.onMultiRepo} />
+          <SyncZone mode="workspace" paths={props.paths} />
           <WorkspaceRepoActions />
         </>
       ) : (
         <>
           <SyncZone mode="repo" />
-          <RepoActions onOpenBranchPanel={props.onOpenBranchPanel} />
+          <RepoActions />
         </>
       )}
     </div>
@@ -77,7 +77,7 @@ function WorkspaceRepoActions() {
   return (
     <>
       <ActionGroup label={t("gitActions.branchGroup")}>
-        <ActionButton action="branch" icon={GitBranch} label={t("gitActions.branch")} disabled hint={hint} />
+        <ActionButton action="branch" icon={GitBranch} label={t("gitActions.branch")} disabled caret hint={hint} />
         <ActionButton action="merge" icon={GitMerge} label={t("gitActions.merge")} disabled hint={hint} />
         <ActionButton action="stash" icon={Archive} label={t("gitActions.stash")} disabled hint={hint} />
       </ActionGroup>
@@ -86,11 +86,11 @@ function WorkspaceRepoActions() {
   );
 }
 
-function RepoActions({ onOpenBranchPanel }: { onOpenBranchPanel: () => void }) {
+function RepoActions() {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const addToast = useToastStore((s) => s.addToast);
-  const { data: branches = [] } = useBranches(activeRepoPath);
+  const { data: branches = [], isLoading: branchesLoading } = useBranches(activeRepoPath);
   const { data: isDetached = false } = useHeadDetached(activeRepoPath);
   const { data: statusFiles = [] } = useStatus(activeRepoPath);
   const { data: stashes = [] } = useStashList(activeRepoPath);
@@ -100,9 +100,15 @@ function RepoActions({ onOpenBranchPanel }: { onOpenBranchPanel: () => void }) {
 
   const currentBranch = branches.find((b) => b.isHead && !b.isRemote)?.name ?? null;
   const isDirty = statusFiles.length > 0;
-  // 분리된 HEAD에는 가져와 합칠 브랜치가 없다.
+  // 합칠 대상이 되는 지금 브랜치가 있어야 한다. 분리된 HEAD나 첫 커밋 전 저장소에는 없다.
   const mergeDisabled = !activeRepoPath || isDetached || currentBranch === null;
-  const mergeHint = mergeDisabled && activeRepoPath ? t("sync.detachedHeadError") : undefined;
+  // 브랜치 목록을 받는 중에는 꺼진 이유를 아직 모르므로 안내를 달지 않는다.
+  const mergeHint =
+    !mergeDisabled || !activeRepoPath || (!isDetached && branchesLoading)
+      ? undefined
+      : isDetached
+        ? t("sync.detachedHeadError")
+        : t("gitActions.mergeNoBranch");
 
   const handleStashSave = async (message?: string, paths?: string[]) => {
     try {
@@ -133,13 +139,7 @@ function RepoActions({ onOpenBranchPanel }: { onOpenBranchPanel: () => void }) {
   return (
     <>
       <ActionGroup label={t("gitActions.branchGroup")}>
-        <ActionButton
-          action="branch"
-          icon={GitBranch}
-          label={t("gitActions.branch")}
-          disabled={!activeRepoPath}
-          onClick={onOpenBranchPanel}
-        />
+        <BranchPanelButton />
         <ActionButton
           action="merge"
           icon={GitMerge}
