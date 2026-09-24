@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { WorktreeList } from "@/components/worktree/WorktreeList";
 import type { WorktreeInfo } from "@/types";
+import { isImeComposing } from "@/lib/keyboard";
 
 interface WorktreeDropdownProps {
   worktrees: WorktreeInfo[];
@@ -39,6 +40,8 @@ export function WorktreeDropdown({
   }, [sorted, query]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // 한글 조합을 확정하는 키 입력(Enter·방향키)은 목록 조작으로 받지 않는다.
+    if (isImeComposing(e)) return;
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { BranchInfo } from "@/types";
 import { Dialog } from "@/components/ui/Dialog";
+import { isSubmitEnter } from "@/lib/keyboard";
 
 interface CreateBranchDialogProps {
   branches: BranchInfo[];
@@ -77,7 +78,7 @@ export function CreateBranchDialog({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
                 placeholder="feature/my-feature"
                 className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
               />
