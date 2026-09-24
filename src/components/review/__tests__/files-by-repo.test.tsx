@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "@/i18n/config";
+import { useUIStore } from "@/stores/ui";
 import type { ActivityEvent, BranchChangedFile, BranchChanges, FileDiffVsDefault } from "@/types";
 
 const APP = "/work/xames-app";
 const API = "/work/xames-backend";
 const DESIGN = "/work/xames-design";
+const BIG = "/work/xames-big";
+const WEB = "/work/xames-web";
+const ADMIN = "/work/xames-admin";
 
 function file(path: string, additions: number, status: BranchChangedFile["status"] = "added"): BranchChangedFile {
   return { path, oldPath: null, status, additions, deletions: 0, isBinary: false };
@@ -72,6 +76,21 @@ const DIFFS: Record<string, FileDiffVsDefault> = {
   [`${DESIGN}:src/new.ts`]: diff("src/new.ts", ['const ROUTE = "/api/v1/notifications/settings";']),
 };
 
+// BIG: 예산(LINK_SCAN_FILE_LIMIT)보다 많은, 서로 무관한 파일을 가진 저장소.
+const BIG_FILE_COUNT = 100;
+const BIG_FILES: BranchChangedFile[] = Array.from({ length: BIG_FILE_COUNT }, (_, i) =>
+  file(`src/gen/file${i}.ts`, 1),
+);
+CHANGES[BIG] = changes(BIG, "refactor/huge", BIG_FILES);
+BIG_FILES.forEach((f, i) => {
+  DIFFS[`${BIG}:${f.path}`] = diff(f.path, [`const unrelated${i} = ${i};`]);
+});
+// WEB/ADMIN이 공유하는, BIG의 파일에는 없는 연결 후보 문자열.
+CHANGES[WEB] = changes(WEB, "feat/shared-route", [file("src/route.ts", 1)]);
+DIFFS[`${WEB}:src/route.ts`] = diff("src/route.ts", ['const ROUTE = "/api/v1/shared/route";']);
+CHANGES[ADMIN] = changes(ADMIN, "feat/shared-route", [file("src/route.ts", 1)]);
+DIFFS[`${ADMIN}:src/route.ts`] = diff("src/route.ts", ['const ROUTE = "/api/v1/shared/route";']);
+
 const getChangesVsDefault = vi.fn(async (path: string) => CHANGES[path]);
 const getFileDiffVsDefault = vi.fn(
   async (path: string, filePath: string, _oldPath: string | null) => DIFFS[`${path}:${filePath}`],
@@ -109,7 +128,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 
-const { FilesByRepo } = await import("../FilesByRepo");
+const { FilesByRepo, LINK_SCAN_FILE_LIMIT } = await import("../FilesByRepo");
 
 function renderFiles(repos: { path: string; name: string }[], groupBy: "repo" | "folder" = "repo") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -133,6 +152,7 @@ beforeEach(async () => {
   handlers.length = 0;
   getChangesVsDefault.mockClear();
   getFileDiffVsDefault.mockClear();
+  useUIStore.setState({ isSwitchingBranch: false });
 });
 
 afterEach(cleanup);
@@ -242,6 +262,47 @@ describe("FilesByRepo", () => {
     const api = await within(app).findByRole("group", { name: "src/api" });
     expect(within(api).getByText("notifications.ts")).toBeTruthy();
     expect(within(app).getByRole("group", { name: "src/theme" })).toBeTruthy();
+  });
+
+  it("fills the link-scan budget round-robin, so a repo with many files does not starve the others (W7 review)", async () => {
+    expect(BIG_FILE_COUNT).toBeGreaterThan(LINK_SCAN_FILE_LIMIT);
+    renderFiles([
+      { path: BIG, name: "xames-big" },
+      { path: WEB, name: "xames-web" },
+      { path: ADMIN, name: "xames-admin" },
+    ]);
+    const web = await screen.findByRole("region", { name: "xames-web" });
+    await waitFor(() => expect(within(web).getByTestId("link-chip")).toBeTruthy());
+    const admin = screen.getByRole("region", { name: "xames-admin" });
+    expect(within(admin).getByTestId("link-chip")).toBeTruthy();
+  });
+
+  it("does not claim link-scan truncation when the eligible file count exactly fills the budget (W7 review)", async () => {
+    // BIG alone has more eligible files than the budget when both other repos are hidden;
+    // shrink the view to exactly LINK_SCAN_FILE_LIMIT files across two repos.
+    const exact = LINK_SCAN_FILE_LIMIT - 1; // WEB contributes 1 more eligible file
+    CHANGES[BIG] = changes(
+      BIG,
+      "refactor/huge",
+      BIG_FILES.slice(0, exact),
+    );
+    renderFiles([
+      { path: BIG, name: "xames-big" },
+      { path: WEB, name: "xames-web" },
+    ]);
+    await screen.findByRole("region", { name: "xames-big" });
+    await waitFor(() => expect(getFileDiffVsDefault).toHaveBeenCalled());
+    expect(screen.queryByText(/links searched in the first/)).toBeNull();
+    // restore the full fixture for later tests
+    CHANGES[BIG] = changes(BIG, "refactor/huge", BIG_FILES);
+  });
+
+  it("covers the list and diff with the branch-switch overlay, like the other repo-view screens (W7 review)", async () => {
+    renderFiles(BOTH);
+    await screen.findByText("notifications.ts");
+    expect(document.querySelector(".animate-spin")).toBeNull();
+    act(() => useUIStore.setState({ isSwitchingBranch: true }));
+    expect(document.querySelector(".animate-spin")).toBeTruthy();
   });
 
   it("uses the single-repository subtitle in Korean too", async () => {

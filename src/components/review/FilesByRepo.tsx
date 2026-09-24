@@ -7,6 +7,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, FileText, Folder, GitBranch, 
 import { useChangesVsDefaultMany, useFileDiffsVsDefault } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { EmptyState } from "@/components/layout/ContentArea";
+import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import { RepoLaneTag } from "@/components/graph/CommitGraph";
 import { normalizePath } from "@/components/graph/graph-model";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
@@ -121,24 +122,42 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
   const oldPathOf = (ref: FileRef): string | null =>
     changesByPath.get(ref.repoPath)?.files.find((f) => f.path === ref.filePath)?.oldPath ?? null;
 
-  // 연결은 다른 저장소와만 맺으므로 저장소가 둘 이상일 때만 diff를 읽는다.
-  const scanTargets = useMemo(() => {
+  // 연결은 다른 저장소와만 맺으므로 저장소가 둘 이상일 때만 diff를 읽는다. 저장소 순서대로
+  // 다 채우면 파일이 많은 저장소 하나가 예산을 다 써서 나머지 저장소는 diff를 하나도 못
+  // 읽는다(W7 리뷰) — 그래서 저장소를 한 바퀴씩 돌며(라운드로빈) 고른다.
+  const eligibleByRepo = useMemo(() => {
     if (paths.length < 2) return [];
-    return paths
-      .flatMap((repoPath) =>
-        (changesByPath.get(repoPath)?.files ?? [])
-          .filter(
-            (f) =>
-              !f.isBinary &&
-              f.status !== "deleted" &&
-              f.additions > 0 &&
-              f.additions <= LINK_SCAN_MAX_ADDITIONS &&
-              isLinkableFile(f.path),
-          )
-          .map((f) => ({ repoPath, filePath: f.path, oldPath: f.oldPath })),
-      )
-      .slice(0, LINK_SCAN_FILE_LIMIT);
+    return paths.map((repoPath) =>
+      (changesByPath.get(repoPath)?.files ?? [])
+        .filter(
+          (f) =>
+            !f.isBinary &&
+            f.status !== "deleted" &&
+            f.additions > 0 &&
+            f.additions <= LINK_SCAN_MAX_ADDITIONS &&
+            isLinkableFile(f.path),
+        )
+        .map((f) => ({ repoPath, filePath: f.path, oldPath: f.oldPath })),
+    );
   }, [paths, changesByPath]);
+  const eligibleCount = useMemo(() => eligibleByRepo.reduce((n, files) => n + files.length, 0), [eligibleByRepo]);
+  const scanTargets = useMemo(() => {
+    const out: { repoPath: string; filePath: string; oldPath: string | null }[] = [];
+    const cursors = eligibleByRepo.map(() => 0);
+    let added = true;
+    while (out.length < LINK_SCAN_FILE_LIMIT && added) {
+      added = false;
+      for (let i = 0; i < eligibleByRepo.length && out.length < LINK_SCAN_FILE_LIMIT; i++) {
+        const files = eligibleByRepo[i];
+        if (cursors[i] < files.length) {
+          out.push(files[cursors[i]]);
+          cursors[i]++;
+          added = true;
+        }
+      }
+    }
+    return out;
+  }, [eligibleByRepo]);
   const scanResults = useFileDiffsVsDefault(scanTargets);
   const scanDiffs = useShallowStable(scanResults.map((r) => r.data));
 
@@ -172,7 +191,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
 
   const nameOf = (path: string) => repos.find((r) => r.path === path)?.name ?? path;
   const linksScanned = scanTargets.length > 0;
-  const linksTruncated = repos.length >= 2 && scanTargets.length >= LINK_SCAN_FILE_LIMIT;
+  const linksTruncated = repos.length >= 2 && eligibleCount > LINK_SCAN_FILE_LIMIT;
 
   const list = (
     <div className="flex flex-col min-h-0 h-full" data-testid="files-by-repo">
@@ -257,13 +276,16 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
   );
 
   return (
-    <div className="flex flex-1 min-h-0 gap-(--g)">
+    <div className="relative flex flex-1 min-h-0 gap-(--g)">
       <div className="w-[400px] max-w-[45%] shrink-0 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden">
         {list}
       </div>
       <div className="flex-1 min-w-0 min-h-0 flex flex-col bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden">
         {detail}
       </div>
+      {/* 다른 화면(ContentArea, FollowPanel)과 달리 이 탭에는 전환 덮개가 없었다(W7 리뷰) —
+          브랜치 전환 중에도 목록·diff를 그대로 누를 수 있었다. */}
+      <SwitchingOverlay />
     </div>
   );
 }

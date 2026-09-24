@@ -64,6 +64,26 @@ describe("linkTokens", () => {
     expect(linkTokens('const x = require("notification-service");')).toEqual([]);
     expect(linkTokens("use crate::notification_settings::Store;")).toEqual([]);
   });
+
+  it("drops Tailwind utility classes carried in className/class attributes (W7 review)", () => {
+    expect(
+      linkTokens('<div className="flex items-center justify-between text-muted-foreground">'),
+    ).toEqual([]);
+    expect(linkTokens("<span class='flex items-center gap-2 text-muted-foreground'>")).toEqual([]);
+    // 같은 줄에 진짜 연결 후보가 있으면 그건 남는다.
+    expect(
+      linkTokens('<div className="text-muted-foreground" data-testid="notification-settings">'),
+    ).toContain("notification-settings");
+  });
+
+  it("drops common serde/Rust boilerplate identifiers (W7 review)", () => {
+    expect(linkTokens('#[serde(rename_all = "camelCase")]')).toEqual([]);
+    expect(linkTokens("tokio::task::spawn_blocking(move || {")).toEqual([]);
+  });
+
+  it("drops common hyphenated English words written as prose (W7 review)", () => {
+    expect(linkTokens("Real-time updates and a follow-up PR are planned.")).toEqual([]);
+  });
 });
 
 describe("findLinkedChanges", () => {

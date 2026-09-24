@@ -7,6 +7,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { repoAccountsByPath } from "@/lib/repo-tree";
+import { baseName } from "./review-model";
 import { Card, EmptyState } from "@/components/layout/ContentArea";
 import { RepoLaneCommitGraph } from "@/components/graph/CommitGraph";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
@@ -57,7 +58,18 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const repoLabel = useCallback((path: string) => nameByPath.get(path) ?? path, [nameByPath]);
 
   const titleSlot = useToolbarTitleSlot();
-  const filesRepos = useMemo(() => data.visible.map((r) => ({ path: r.path, name: r.name })), [data.visible]);
+  // 그래프 탭은 저장소마다 모든 워크트리의 WIP 행을 보여 준다(에이전트가 딴 워크트리에서 작업하기
+  // 때문이다). 「파일별 변경」도 같은 목록을 봐야 두 탭이 같은 이야기를 한다 — main만 보면 안 된다.
+  const filesRepos = useMemo(
+    () =>
+      data.visible.flatMap((r) =>
+        r.worktrees.map((w) => ({
+          path: w.path,
+          name: w.isMain ? r.name : `${r.name} · ${baseName(w.path)}`,
+        })),
+      ),
+    [data.visible],
+  );
 
   if (!workspace) return null;
 

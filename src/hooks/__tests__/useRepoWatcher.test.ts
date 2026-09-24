@@ -64,4 +64,27 @@ describe("useRepoWatcher — fs:git-dir-change invalidation", () => {
       { timeout: 2000 },
     );
   });
+
+  it("invalidates wipFiles for a followed worktree other than the watched repo (W7 review)", async () => {
+    // The backend always reports the watched repo's own path, even when the
+    // change it detected (e.g. a commit's ref update) came from a different
+    // linked worktree (git-dir-only changes there, like index, are not even
+    // watched) — see fs_events.rs's WatchTargets::classify. The follow panel
+    // can be following that other worktree, so its wipFiles query must still
+    // refresh.
+    const OTHER_WORKTREE = "/repos/app-feat";
+    const { queryClient } = renderWatcher(REPO);
+    await waitFor(() => expect(handlers.has("fs:git-dir-change")).toBe(true));
+
+    await queryClient.prefetchQuery({ queryKey: ["wipFiles", OTHER_WORKTREE], queryFn: async () => [] });
+    const before = queryClient.getQueryState(["wipFiles", OTHER_WORKTREE]);
+    expect(before?.isInvalidated).toBe(false);
+
+    handlers.get("fs:git-dir-change")?.({ payload: { repoPath: REPO } });
+
+    await waitFor(
+      () => expect(queryClient.getQueryState(["wipFiles", OTHER_WORKTREE])?.isInvalidated).toBe(true),
+      { timeout: 2000 },
+    );
+  });
 });

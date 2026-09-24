@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { create } from "zustand";
 import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useFilesViewStore } from "@/components/review/files-view";
@@ -10,10 +11,12 @@ import { useSelectionStore } from "@/stores/selection";
 import { useReviewSeenStore } from "@/stores/review-seen";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useFollowStore } from "@/stores/follow";
+import { useBranchRangeStore } from "@/components/branch/branch-range";
 import { syncStatusPaths } from "@/components/sidebar/tree-model";
 import { worktreeColor } from "../worktree-history";
 import type {
   CommitInfo,
+  GitOperation,
   NewCommitIds,
   RepoInfo,
   RepoReviewStatus,
@@ -101,6 +104,12 @@ const worktreeState = {
   histories: {} as Record<string, CommitInfo[]>,
 };
 
+/**
+ * `useMergeState` 응답. react-query 대신 zustand로 흉내 낸다 — 실제 흐름처럼 값을 바꾸면
+ * (activeTab 값이 그대로여도) 그 자체로 다시 그려야 하기 때문이다.
+ */
+const mergeMockStore = create<{ value: GitOperation | null }>()(() => ({ value: null }));
+
 /** `useRepoSyncStatuses`에 넘긴 경로 목록. */
 const syncCalls: string[][] = [];
 
@@ -124,6 +133,7 @@ vi.mock("@/api/queries", async (importOriginal) => ({
   useStatus: (path: string | null) => ({ data: path ? statusEntries : undefined }),
   useStashList: () => ({ data: [] }),
   useWorkflowRuns: () => ({ data: [] }),
+  useMergeState: () => ({ data: mergeMockStore((s) => s.value) }),
   useCommitHistoryInfinite: () => ({
     data: history,
     isLoading: false,
@@ -177,6 +187,8 @@ beforeEach(async () => {
   backend.pending = [];
   worktreeState.list = [];
   worktreeState.histories = {};
+  mergeMockStore.setState({ value: null });
+  useBranchRangeStore.getState().clear();
   useUIStore.setState({ activeTab: "history", compareBranch: null, repoListOpen: false });
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
@@ -337,6 +349,33 @@ describe("GraphPanel commit graph", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Changes by file" }));
     // 툴바·merge 흐름이 저장된 탭을 바꾸면 닫힌다.
     act(() => useUIStore.getState().setActiveTab("changes"));
+    expect(useFilesViewStore.getState().repoTabOpen).toBe(false);
+  });
+
+  it("closes changes by file when a pull/merge stops on a conflict, even while already on the changes tab", () => {
+    // activeTab이 이미 "changes"라 setActiveTab("changes")가 값을 바꾸지 않는 경우(W7 버그).
+    useUIStore.setState({ activeTab: "changes" });
+    renderPanel();
+    fireEvent.click(screen.getByRole("tab", { name: "Changes by file" }));
+    expect(useFilesViewStore.getState().repoTabOpen).toBe(true);
+    // 충돌로 멈춘 pull·merge가 하는 일: mergeState 갱신(react-query 재조회) + setActiveTab("changes")(같은 값이라 그 자체로는 아무것도 안 바꾼다).
+    act(() => {
+      mergeMockStore.setState({ value: "merge" });
+      useUIStore.getState().setActiveTab("changes");
+    });
+    expect(useFilesViewStore.getState().repoTabOpen).toBe(false);
+  });
+
+  it("closes changes by file when a branch compare starts, even while already on the history tab", () => {
+    useUIStore.setState({ activeTab: "history" });
+    renderPanel();
+    fireEvent.click(screen.getByRole("tab", { name: "Changes by file" }));
+    expect(useFilesViewStore.getState().repoTabOpen).toBe(true);
+    // BranchZone.handleCompare가 하는 일: range 설정 + setActiveTab("history")(이미 그 값).
+    act(() => {
+      useBranchRangeStore.getState().setRange({ repoPath: REPO, base: "main", target: "feat/x", head: "main" });
+      useUIStore.getState().setActiveTab("history");
+    });
     expect(useFilesViewStore.getState().repoTabOpen).toBe(false);
   });
 

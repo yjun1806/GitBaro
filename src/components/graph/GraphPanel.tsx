@@ -5,7 +5,7 @@ import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
-import { useStashList, useWorkflowRuns, useWorktrees } from "@/api/queries";
+import { useMergeState, useStashList, useWorkflowRuns, useWorktrees } from "@/api/queries";
 import { CommitGraph, type WorktreeHead } from "./CommitGraph";
 import { useGraphReview } from "./useGraphReview";
 import { normalizePath, type GraphWip } from "./graph-model";
@@ -71,14 +71,20 @@ export function GraphPanel() {
   const setFilesOpen = useFilesViewStore((s) => s.setRepoTabOpen);
   const groupBy = useFilesViewStore((s) => s.groupBy);
   const setGroupBy = useFilesViewStore((s) => s.setGroupBy);
-  useEffect(() => setFilesOpen(false), [activeTab, setFilesOpen]);
-  useEffect(() => () => setFilesOpen(false), [setFilesOpen]);
-  const tab: ShownTab = filesOpen ? "files" : graphPanelTabOf(activeTab);
-  const worktreeFilter = useWorktreeFilter(review.wips);
   // 범위·비교 화면은 지금 연 워크트리의 커밋만 그린다 — 칩으로 고를 것이 없으니 칩 줄을 감춘다.
   const compareBranch = useUIStore((s) => s.compareBranch);
   const branchRange = useBranchRangeStore((s) => s.range);
   const graphListShown = !compareBranch && activeRange(branchRange, activeRepoPath) === null;
+  // 저장된 탭(activeTab)의 "값"이 바뀔 때만 도는 effect라, 툴바·merge 흐름이 이미 그 값으로
+  // 가 있는 탭(예: changes)으로 다시 옮기려 하면(같은 값이라 아무것도 바뀌지 않아) 파일별
+  // 탭이 안 닫힌다. merge 진입(충돌 포함)과 브랜치 비교 시작도 같은 이유로 별도로 지켜본다.
+  const { data: mergeState } = useMergeState(activeRepoPath);
+  const merging = mergeState !== undefined && mergeState !== null;
+  const comparing = compareBranch !== null || activeRange(branchRange, activeRepoPath) !== null;
+  useEffect(() => setFilesOpen(false), [activeTab, merging, comparing, setFilesOpen]);
+  useEffect(() => () => setFilesOpen(false), [setFilesOpen]);
+  const tab: ShownTab = filesOpen ? "files" : graphPanelTabOf(activeTab);
+  const worktreeFilter = useWorktreeFilter(review.wips);
 
   // 커밋을 새로 고를 때만 아래 칸을 커밋 상세로 바꾼다. 패널이 다시 마운트될 때
   // (저장소 목록을 열었다 닫을 때 등) 남아 있던 선택으로 스태시·Actions 탭에서

@@ -40,6 +40,10 @@ const GIT_DIR_QUERY_KEYS = [
   "recentBranches",
   "fileDiff",
   "wipFiles",
+  // 「파일별 변경」(D7) 탭도 git-dir 전용 변화(예: 터미널에서 한 commit)에는 30초 poll까지
+  // 기다렸다 — repo:activity가 .git을 무시해서 유일한 신호가 이 이벤트다(W7 리뷰).
+  "changesVsDefault",
+  "fileDiffVsDefault",
 ] as const;
 
 /**
@@ -113,8 +117,15 @@ export function useRepoWatcher(repoPath: string | null) {
         clearTimeout(gitDirTimer);
         gitDirTimer = setTimeout(() => {
           for (const key of GIT_DIR_QUERY_KEYS) {
+            if (key === "wipFiles") continue; // handled below, across every path
             queryClient.invalidateQueries({ queryKey: [key, changedPath] });
           }
+          // 백엔드는 감시를 시작한 저장소 경로로만 이벤트를 보낸다 — 감시자는 다른
+          // 워크트리(.git/worktrees/<name>)의 HEAD·refs 변화도 감지하지만(예: 거기서
+          // 커밋), 어느 워크트리가 실제로 바뀌었는지는 알려 주지 않는다. 팔로우 패널은
+          // 지금 연 워크트리가 아닌 다른 워크트리를 따라갈 수 있으므로, wipFiles는
+          // changedPath로 좁히지 않고 경로를 가리지 않은 채 모두 갱신한다.
+          queryClient.invalidateQueries({ queryKey: ["wipFiles"] });
           // The worktree list is keyed by the owning repository, not by the
           // linked worktree being watched, so refresh it for every path.
           queryClient.invalidateQueries({ queryKey: ["worktrees"] });

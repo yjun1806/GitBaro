@@ -105,6 +105,9 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         "stashShow",
         "recentBranches",
         "worktrees",
+        // 브랜치를 만들거나 바꾸면 「파일별 변경」(D7)의 기준(브랜치)과 목록도 바뀐다(W7 리뷰).
+        "changesVsDefault",
+        "fileDiffVsDefault",
       ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
     );
 

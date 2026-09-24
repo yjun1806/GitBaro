@@ -96,6 +96,47 @@ const GENERIC_TOKENS = new Set([
   "sessionStorage",
   "https://",
   "http://",
+  // Rust 표준·프레임워크 상용구: 여러 저장소가 각자 독립적으로 똑같이 쓴다(도메인 연결이 아니다).
+  "tokio::task::spawn_blocking",
+  "await.map_err",
+  "e.to_string",
+  "rename_all",
+  "camelCase",
+]);
+
+/**
+ * 흔한 영어 합성어(하이픈으로 이어 쓴 것)를 코드 밖 글(README 등)에서 흔히 쓴다.
+ * 대개 도메인 연결이 아니라서 대소문자 구분 없이 뺀다.
+ */
+const COMMON_HYPHENATED_WORDS = new Set([
+  "real-time",
+  "follow-up",
+  "long-term",
+  "short-term",
+  "built-in",
+  "read-only",
+  "write-only",
+  "high-level",
+  "low-level",
+  "open-source",
+  "end-to-end",
+  "well-known",
+  "well-defined",
+  "check-in",
+  "sign-in",
+  "sign-up",
+  "set-up",
+  "back-end",
+  "front-end",
+  "up-to-date",
+  "out-of-date",
+  "self-contained",
+  "cross-repo",
+  "multi-line",
+  "single-line",
+  "pre-existing",
+  "co-author",
+  "co-authored",
 ]);
 
 /** 따옴표 안 낱말이라도 연결 후보가 되기에는 너무 흔한 값. */
@@ -134,9 +175,14 @@ const COMMON_QUOTED_WORDS = new Set([
   "anonymous",
   "noopener",
   "noreferrer",
+  "camelcase",
+  "renameall",
 ]);
 
 const IMPORT_LINE = /^\s*(import\b|export\s+(\*|\{[^}]*\})\s+from\b|from\s+\S+\s+import\b|use\s+[\w:]+|#include\b|require\b|package\s+[\w.]+;?\s*$)|\brequire\s*\(/;
+
+/** `className="a b c"` / `class='a b c'` 값. 유틸리티 CSS 클래스 목록이라 도메인 연결이 아니다. */
+const CLASS_ATTR = /\bclass(?:Name)?\s*=\s*(["'])((?:(?!\1).)*)\1/g;
 
 const SKIPPED_FILE =
   /(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|Cargo\.lock|poetry\.lock|Gemfile\.lock|composer\.lock|go\.sum|bun\.lockb?)$|\.min\.(js|css)$|\.map$|\.snap$/;
@@ -175,6 +221,7 @@ function isDistinctive(token: string): boolean {
   if (!/[A-Za-z]/.test(token)) return false;
   if (/^[0-9a-f]+$/i.test(token) && /\d/.test(token)) return false; // 해시
   if (GENERIC_TOKENS.has(token)) return false;
+  if (COMMON_HYPHENATED_WORDS.has(token.toLowerCase())) return false;
   const hasSeparator = /[./_:-]/.test(token.replace(/^\//, ""));
   const hasCamel = /[a-z0-9][A-Z]/.test(token);
   return hasSeparator || hasCamel;
@@ -200,7 +247,8 @@ function acceptQuotedWord(word: string, out: Set<string>): void {
  */
 export function linkTokens(line: string): string[] {
   if (IMPORT_LINE.test(line)) return [];
-  const text = line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) : line;
+  const withoutClassAttrs = line.replace(CLASS_ATTR, "");
+  const text = withoutClassAttrs.length > MAX_LINE_LENGTH ? withoutClassAttrs.slice(0, MAX_LINE_LENGTH) : withoutClassAttrs;
   const out = new Set<string>();
   for (const m of text.matchAll(/"([^"\s]+)"|'([^'\s]+)'|`([^`\s]+)`/g)) {
     const literal = m[1] ?? m[2] ?? m[3] ?? "";

@@ -107,6 +107,10 @@ export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> 
       "remoteTags",
       "reviewStatus",
       "workspaceHistory",
+      // 「파일별 변경」(D7) 탭도 push·pull로 바뀐다 — 특히 push 뒤 "커밋 아직 안 올림" 안내와
+      // pull 뒤의 파일 목록. 빠지면 최대 30초(staleTime) 동안 옛 목록이 남는다(W7 리뷰).
+      "changesVsDefault",
+      "fileDiffVsDefault",
     ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
   );
 }
