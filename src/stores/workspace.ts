@@ -1,12 +1,16 @@
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import { createSafeStorage } from "@/lib/safe-storage";
+import en from "@/i18n/locales/en/translation.json";
+import ko from "@/i18n/locales/ko/translation.json";
 import {
   SORT_MODES,
-  accountKeysByPath,
   accountNodeKey,
+  repoAccountsByPath,
   repoNodeKey,
+  toAccountKey,
   workspaceNodeKey,
+  type RepoAccount,
   type SortMode,
   type Workspace,
 } from "@/lib/repo-tree";
@@ -20,7 +24,8 @@ import { useRepositoryStore } from "@/stores/repository";
  * - 워크스페이스는 한 계정 안에만 있다. 다른 계정의 저장소는 넣을 수 없다.
  * - 저장소는 워크스페이스 하나에만 속한다. 다른 워크스페이스에 넣으면 옮겨 간다.
  *
- * 노드 키 형식: `acct:<계정>`, `ws:<id>`, `repo:<경로>` (`@/lib/repo-tree`).
+ * 노드 키 형식: `acct:<계정 키>`, `ws:<id>`, `repo:<경로>` (`@/lib/repo-tree`).
+ * 계정 키는 대소문자를 가리지 않도록 소문자로 맞춘다(`toAccountKey`).
  */
 
 export const WORKSPACES_STORAGE_KEY = "gitbaro-workspaces";
@@ -32,6 +37,8 @@ export type WorkspaceError =
   | "unknown-workspace"
   | "unknown-repo"
   | "account-mismatch"
+  /** 저장소의 계정을 아직 모른다(계정 목록을 불러오기 전 등). 잠시 뒤 다시 시도한다. */
+  | "account-pending"
   | "empty-name";
 
 export type WorkspaceResult = { ok: true } | { ok: false; reason: WorkspaceError };
@@ -48,8 +55,11 @@ export interface WorkspacePersistedState {
 }
 
 interface WorkspaceActions {
-  /** 워크스페이스를 만든다. 저장소는 모두 `accountKey` 계정이어야 한다. */
-  createWorkspace: (name: string, accountKey: string, repoPaths?: string[]) => CreateWorkspaceResult;
+  /**
+   * 워크스페이스를 만든다. 저장소는 모두 `account` 계정이어야 한다. 계정은 대소문자를
+   * 가리지 않고, 저장할 때 소문자 키로 맞춘다.
+   */
+  createWorkspace: (name: string, account: string, repoPaths?: string[]) => CreateWorkspaceResult;
   renameWorkspace: (id: string, name: string) => WorkspaceResult;
   /** 워크스페이스만 지운다. 저장소는 계정 바로 아래, 워크스페이스가 있던 자리로 돌아간다. */
   deleteWorkspace: (id: string) => WorkspaceResult;
@@ -86,6 +96,11 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 const isStringArray = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((x) => typeof x === "string");
 
+/** `acct:<계정>` 노드 키의 계정 부분을 소문자로 맞춘다. 다른 노드 키는 그대로 둔다. */
+function canonicalNodeKey(key: string): string {
+  return key.startsWith("acct:") ? accountNodeKey(toAccountKey(key.slice("acct:".length))) : key;
+}
+
 function sanitizeWorkspaces(v: unknown): Workspace[] {
   if (!Array.isArray(v)) return [];
   const seenRepos = new Set<string>();
@@ -101,51 +116,84 @@ function sanitizeWorkspaces(v: unknown): Workspace[] {
       seenRepos.add(p);
       return true;
     });
-    return [{ id, name, accountKey, repoPaths: paths }];
+    return [{ id, name, accountKey: toAccountKey(accountKey), repoPaths: paths }];
   });
 }
 
 function sanitizeOrder(v: unknown): Record<string, string[]> {
   if (!isRecord(v)) return {};
   return Object.fromEntries(
-    Object.entries(v).filter((entry): entry is [string, string[]] => isStringArray(entry[1])),
+    Object.entries(v)
+      .filter((entry): entry is [string, string[]] => isStringArray(entry[1]))
+      .map(([parent, keys]) => [canonicalNodeKey(parent), keys.map(canonicalNodeKey)]),
   );
 }
 
 function sanitizeSortModes(v: unknown): Record<string, SortMode> {
   if (!isRecord(v)) return {};
   return Object.fromEntries(
-    Object.entries(v).filter((entry): entry is [string, SortMode] =>
-      SORT_MODES.includes(entry[1] as SortMode),
-    ),
+    Object.entries(v)
+      .filter((entry): entry is [string, SortMode] => SORT_MODES.includes(entry[1] as SortMode))
+      .map(([account, mode]) => [toAccountKey(account), mode]),
   );
 }
 
+const sanitizeKeyList = (v: unknown): string[] =>
+  isStringArray(v) ? [...new Set(v.map(canonicalNodeKey))] : [];
+
+/**
+ * 저장 필드마다 검증 함수 하나. 매핑 타입이라 `WorkspacePersistedState`에 필드를 더하고
+ * 여기에 검증을 빠뜨리면 타입 검사가 실패한다. 결과에는 여기 적힌 필드만 들어가므로,
+ * 저장값에 모르는 필드가 있어도 상태로 흘러들지 않는다.
+ */
+const FIELD_SANITIZERS: {
+  [K in keyof WorkspacePersistedState]: (v: unknown) => WorkspacePersistedState[K];
+} = {
+  workspaces: sanitizeWorkspaces,
+  orderByParent: sanitizeOrder,
+  sortModeByAccount: sanitizeSortModes,
+  collapsed: sanitizeKeyList,
+  dismissedSuggestions: (v) => (isStringArray(v) ? [...new Set(v)] : []),
+};
+
 /** 저장소에서 읽은 값을 믿지 않고 모양을 확인해 옳은 부분만 남긴다. */
 export function sanitizeWorkspaceState(v: unknown): WorkspacePersistedState {
-  if (!isRecord(v)) return EMPTY_STATE;
+  const source = isRecord(v) ? v : {};
   return {
-    workspaces: sanitizeWorkspaces(v.workspaces),
-    orderByParent: sanitizeOrder(v.orderByParent),
-    sortModeByAccount: sanitizeSortModes(v.sortModeByAccount),
-    collapsed: isStringArray(v.collapsed) ? v.collapsed : [],
-    dismissedSuggestions: isStringArray(v.dismissedSuggestions) ? v.dismissedSuggestions : [],
+    workspaces: FIELD_SANITIZERS.workspaces(source.workspaces),
+    orderByParent: FIELD_SANITIZERS.orderByParent(source.orderByParent),
+    sortModeByAccount: FIELD_SANITIZERS.sortModeByAccount(source.sortModeByAccount),
+    collapsed: FIELD_SANITIZERS.collapsed(source.collapsed),
+    dismissedSuggestions: FIELD_SANITIZERS.dismissedSuggestions(source.dismissedSuggestions),
   };
 }
 
 // ───────────────────────── 옛 접힘 상태 가져오기
 
 /**
- * `gitbaro-repos`의 `collapsedGroups`(계정 이름)를 `acct:<이름>` 접힘으로 바꾼다.
- * 옛 값이 없거나 읽을 수 없으면 null.
+ * 옛 목록(`RepoListView`, `RepoRail`)은 즐겨찾기 그룹도 번역된 이름으로 `collapsedGroups`에
+ * 넣는다. 계정이 아니므로 가져오지 않는다. 지원하는 모든 언어의 표기를 뺀다.
+ */
+const LEGACY_FAVORITES_LABELS = new Set([en.repo.favorites, ko.repo.favorites]);
+
+/**
+ * `gitbaro-repos`의 `collapsedGroups`(계정 이름)를 `acct:<계정 키>` 접힘으로 바꾼다.
+ * 즐겨찾기 그룹 이름은 뺀다. 옛 값이 없거나, 읽을 수 없거나, 가져올 계정이 없으면 null.
  */
 export function seedFromLegacyRepos(legacyRaw: string | null): WorkspacePersistedState | null {
   if (legacyRaw === null) return null;
   try {
     const parsed: unknown = JSON.parse(legacyRaw);
     const groups = isRecord(parsed) && isRecord(parsed.state) ? parsed.state.collapsedGroups : null;
-    if (!isStringArray(groups) || groups.length === 0) return null;
-    return { ...EMPTY_STATE, collapsed: groups.map(accountNodeKey) };
+    if (!isStringArray(groups)) return null;
+    const collapsed = [
+      ...new Set(
+        groups
+          .filter((label) => !LEGACY_FAVORITES_LABELS.has(label))
+          .map((label) => accountNodeKey(toAccountKey(label))),
+      ),
+    ];
+    return collapsed.length > 0 ? { ...EMPTY_STATE, collapsed } : null;
   } catch {
     return null;
   }
@@ -154,6 +202,10 @@ export function seedFromLegacyRepos(legacyRaw: string | null): WorkspacePersiste
 /**
  * zustand persist는 같은 키에 저장값이 있고 버전이 다를 때만 `migrate`를 부른다.
  * 다른 키의 값을 옮기려면 「새 키에 저장값이 없을 때」 읽는 쪽에서 채워야 한다.
+ *
+ * 가져온 값은 그 자리에서 새 키에 바로 쓴다. persist는 버전이 같으면 복원 뒤 다시 쓰지
+ * 않으므로, 쓰지 않으면 첫 액션 전까지 실행할 때마다 옛 값을 다시 가져와 `RepoListView`의
+ * 접기가 트리로 계속 흘러든다. 한 번 쓰면 그 뒤로는 두 값이 따로 움직인다.
  * 옛 키는 지우지 않는다(`RepoListView`가 계속 쓴다).
  */
 export function withLegacySeed(backing: StateStorage): StateStorage {
@@ -165,7 +217,10 @@ export function withLegacySeed(backing: StateStorage): StateStorage {
       const legacy = backing.getItem(LEGACY_REPOS_STORAGE_KEY);
       if (typeof legacy !== "string" && legacy !== null) return null;
       const seed = seedFromLegacyRepos(legacy);
-      return seed ? JSON.stringify({ state: seed, version: WORKSPACES_STORAGE_VERSION }) : null;
+      if (!seed) return null;
+      const seeded = JSON.stringify({ state: seed, version: WORKSPACES_STORAGE_VERSION });
+      void backing.setItem(name, seeded);
+      return seeded;
     },
   };
 }
@@ -200,12 +255,27 @@ function detachRepo(
   };
 }
 
-/** 지금 저장소 목록과 계정 목록으로 저장소의 계정 키를 구한다. */
-function currentAccountKeys(): Map<string, string> {
-  return accountKeysByPath(
+/** 지금 저장소 목록과 계정 목록으로 저장소의 계정을 구한다. */
+function currentRepoAccounts(): Map<string, RepoAccount> {
+  return repoAccountsByPath(
     useRepositoryStore.getState().repos,
     useAccountStore.getState().accounts,
   );
+}
+
+/**
+ * 저장소를 `accountKey` 워크스페이스에 넣을 수 있는지 본다. 계정을 아직 모르는 저장소는
+ * 임시 키로 판단하지 않고 거부한다(잠시 뒤 계정을 불러오면 다시 시도할 수 있다).
+ */
+function checkRepoAccount(
+  accounts: Map<string, RepoAccount>,
+  repoPath: string,
+  accountKey: string,
+): WorkspaceError | null {
+  const account = accounts.get(repoPath);
+  if (account === undefined) return "unknown-repo";
+  if (account.pending) return "account-pending";
+  return account.key === accountKey ? null : "account-mismatch";
 }
 
 function newWorkspaceId(): string {
@@ -219,14 +289,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     (set, get) => ({
       ...EMPTY_STATE,
 
-      createWorkspace: (name, accountKey, repoPaths = []) => {
+      createWorkspace: (name, accountLabel, repoPaths = []) => {
         const trimmed = name.trim();
         if (!trimmed) return { ok: false, reason: "empty-name" };
-        const keys = currentAccountKeys();
+        const accountKey = toAccountKey(accountLabel);
+        const accounts = currentRepoAccounts();
         for (const path of repoPaths) {
-          const repoAccount = keys.get(path);
-          if (repoAccount === undefined) return { ok: false, reason: "unknown-repo" };
-          if (repoAccount !== accountKey) return { ok: false, reason: "account-mismatch" };
+          const reason = checkRepoAccount(accounts, path, accountKey);
+          if (reason) return { ok: false, reason };
         }
         const id = newWorkspaceId();
         const members = [...new Set(repoPaths)];
@@ -295,9 +365,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       addRepoToWorkspace: (id, repoPath, index) => {
         const ws = get().workspaces.find((w) => w.id === id);
         if (!ws) return { ok: false, reason: "unknown-workspace" };
-        const repoAccount = currentAccountKeys().get(repoPath);
-        if (repoAccount === undefined) return { ok: false, reason: "unknown-repo" };
-        if (repoAccount !== ws.accountKey) return { ok: false, reason: "account-mismatch" };
+        const reason = checkRepoAccount(currentRepoAccounts(), repoPath, ws.accountKey);
+        if (reason) return { ok: false, reason };
         set((state) => {
           const detached = { ...state, ...detachRepo(state, repoPath) };
           const wsKey = workspaceNodeKey(id);
@@ -325,11 +394,15 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       removeRepoFromWorkspace: (repoPath) =>
         set((state) => detachRepo(state, repoPath)),
 
-      setChildOrder: (parentKey, childKeys) =>
+      setChildOrder: (rawParentKey, childKeys) =>
         set((state) => {
+          const parentKey = canonicalNodeKey(rawParentKey);
           const accountKey = accountKeyOfNode(parentKey, state.workspaces);
           return {
-            orderByParent: { ...state.orderByParent, [parentKey]: [...new Set(childKeys)] },
+            orderByParent: {
+              ...state.orderByParent,
+              [parentKey]: [...new Set(childKeys.map(canonicalNodeKey))],
+            },
             sortModeByAccount:
               accountKey === null
                 ? state.sortModeByAccount
@@ -337,19 +410,22 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           };
         }),
 
-      setSortMode: (accountKey, mode) =>
+      setSortMode: (accountLabel, mode) =>
         set((state) => ({
-          sortModeByAccount: { ...state.sortModeByAccount, [accountKey]: mode },
+          sortModeByAccount: { ...state.sortModeByAccount, [toAccountKey(accountLabel)]: mode },
         })),
 
-      toggleCollapsed: (key) =>
-        set((state) => ({
+      toggleCollapsed: (rawKey) =>
+        set((state) => {
+          const key = canonicalNodeKey(rawKey);
+          return {
           collapsed: state.collapsed.includes(key)
             ? without(state.collapsed, key)
             : [...state.collapsed, key],
-        })),
+          };
+        }),
 
-      setCollapsed: (keys) => set({ collapsed: [...new Set(keys)] }),
+      setCollapsed: (keys) => set({ collapsed: [...new Set(keys.map(canonicalNodeKey))] }),
 
       dismissSuggestion: (key) =>
         set((state) =>
@@ -399,7 +475,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
 /** 노드 키가 속한 계정 키. 계정·워크스페이스 노드가 아니면 null. */
 function accountKeyOfNode(nodeKey: string, workspaces: Workspace[]): string | null {
-  if (nodeKey.startsWith("acct:")) return nodeKey.slice("acct:".length);
+  if (nodeKey.startsWith("acct:")) return toAccountKey(nodeKey.slice("acct:".length));
   if (nodeKey.startsWith("ws:")) {
     const id = nodeKey.slice("ws:".length);
     return workspaces.find((w) => w.id === id)?.accountKey ?? null;

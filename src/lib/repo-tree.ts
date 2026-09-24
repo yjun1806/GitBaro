@@ -1,11 +1,11 @@
-import { groupReposByOwner } from "@/lib/group-repos";
+import { extractOwnerFromRemoteUrl, groupReposByOwner } from "@/lib/group-repos";
 import type { RepoInfo } from "@/types";
 
 /**
  * 사이드바 트리(계정 → 워크스페이스 → 저장소 → 워크트리)를 만드는 순수 함수 모음.
  *
- * 트리는 계정과 앱 전용 워크스페이스로만 묶는다. 브랜치 이름으로 저장소를 묶는
- * 코드는 두지 않는다(README 「브랜치 묶음」 금지).
+ * 트리는 계정과 앱 전용 워크스페이스로만 나눈다. 브랜치 이름으로 저장소를 모으는
+ * 코드는 두지 않는다(README의 브랜치 기준 그룹 금지).
  */
 
 /** 계정 머리글의 정렬 방식. custom은 사용자가 끌어서 정한 순서다. */
@@ -13,7 +13,10 @@ export type SortMode = "custom" | "name" | "recent" | "todo";
 
 export const SORT_MODES: readonly SortMode[] = ["custom", "name", "recent", "todo"];
 
-/** 앱 상태에만 저장하는 저장소 묶음. 한 계정 안에만 존재한다. */
+/**
+ * 앱 상태에만 저장하는 폴더. 저장소 여러 개를 담고, 한 계정 안에만 존재한다.
+ * `accountKey`는 `toAccountKey`로 만든 소문자 키다.
+ */
 export interface Workspace {
   id: string;
   name: string;
@@ -71,7 +74,10 @@ export interface WorkspaceNode {
 export interface AccountNode {
   kind: "account";
   key: string;
+  /** 비교·저장용 계정 키(소문자) */
   accountKey: string;
+  /** 표시용 계정 이름(처음 나온 저장소의 origin 표기) */
+  label: string;
   sortMode: SortMode;
   /** 워크스페이스와, 워크스페이스에 넣지 않은 저장소 */
   children: (WorkspaceNode | RepoNode)[];
@@ -96,18 +102,42 @@ export interface BuildRepoTreeInput {
 export const QUIET_WINDOW_MS = 10 * 60 * 1000;
 
 /**
- * 저장소 경로 → 계정 키. 계정 판별은 기존 그룹핑(`groupReposByOwner`)을 그대로 쓴다.
- * 그래서 계정 키는 지금 사이드바 그룹 이름(origin owner, 없으면 계정 username, 그것도
- * 없으면 "Local")과 같다.
+ * 계정 키. GitHub owner 이름은 대소문자를 가리지 않으므로(`YJun`과 `yjun`은 같은 계정)
+ * 소문자로 맞춘다. 워크스페이스 `accountKey`, `sortModeByAccount`의 키, `acct:<키>` 노드
+ * 키가 모두 이 값을 쓴다. 화면에는 `RepoAccount.label`(원래 표기)을 보여 준다.
  */
-export function accountKeysByPath(
+export const toAccountKey = (label: string): string => label.toLowerCase();
+
+export interface RepoAccount {
+  /** 비교·저장용 계정 키(소문자) */
+  key: string;
+  /** 표시용 이름. 기존 사이드바 그룹 이름과 같다. */
+  label: string;
+  /**
+   * 계정을 아직 모른다: GitHub origin이 없고 `accountId`는 있는데, 그 계정이 계정 목록에
+   * 없다(시작 직후 계정을 불러오기 전, 로그아웃 뒤). 이때 `key`는 임시값("other")이라
+   * 규칙 판단에 쓰면 안 된다.
+   */
+  pending: boolean;
+}
+
+/**
+ * 저장소 경로 → 계정. 계정 판별은 기존 그룹핑(`groupReposByOwner`)을 그대로 쓴다.
+ * 그래서 `label`은 지금 사이드바 그룹 이름(origin owner, 없으면 계정 username, 그것도
+ * 없으면 "Local")과 같고, `key`는 그 소문자다.
+ */
+export function repoAccountsByPath(
   repos: RepoInfo[],
   accounts: { id: string; username: string }[],
-): Map<string, string> {
-  const result = new Map<string, string>();
+): Map<string, RepoAccount> {
+  const knownIds = new Set(accounts.map((a) => a.id));
+  const result = new Map<string, RepoAccount>();
   for (const group of groupReposByOwner(repos, accounts)) {
     for (const repo of group.repos) {
-      result.set(repo.path, group.label);
+      const origin = repo.remotes.find((r) => r.name === "origin");
+      const owner = origin ? extractOwnerFromRemoteUrl(origin.url) : null;
+      const pending = owner === null && !!repo.accountId && !knownIds.has(repo.accountId);
+      result.set(repo.path, { key: toAccountKey(group.label), label: group.label, pending });
     }
   }
   return result;
@@ -215,8 +245,10 @@ export function isQuietRepo(
 /**
  * 사이드바 트리를 만든다.
  * - 저장소 목록(`repos`)에 없는 경로는 워크스페이스에 남아 있어도 무시한다.
+ * - 계정은 대소문자를 가리지 않는다(`toAccountKey`).
  * - 워크스페이스의 저장소라도 지금 계정이 워크스페이스 계정과 다르면(원격이 바뀐 경우)
  *   자기 계정 바로 아래에 둔다. 워크스페이스가 계정을 넘나들지 않게 하기 위해서다.
+ *   계정을 아직 모르는 저장소(`RepoAccount.pending`)는 저장된 소속을 그대로 따른다.
  * - 조용한 저장소는 계정 바로 아래 저장소에서만 따로 뺀다. 워크스페이스 안은 그대로 둔다.
  */
 export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
@@ -231,7 +263,7 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
     now = Date.now(),
   } = input;
 
-  const keyByPath = accountKeysByPath(repos, accounts);
+  const accountByPath = repoAccountsByPath(repos, accounts);
   const repoByPath = new Map(repos.map((r) => [r.path, r]));
 
   const makeRepoNode = (repo: RepoInfo): RepoNode => ({
@@ -246,27 +278,43 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
     })),
   });
 
-  // 계정 순서: 저장소에서 처음 나온 순서, 그 뒤에 저장소 없이 워크스페이스만 있는 계정.
-  const accountKeys: string[] = [];
-  for (const key of [...keyByPath.values(), ...workspaces.map((w) => w.accountKey)]) {
-    if (!accountKeys.includes(key)) accountKeys.push(key);
-  }
-
-  const claimed = new Set<string>();
+  // 저장소 경로 → 담긴 워크스페이스의 계정 키. 계정을 아직 모르는 저장소는 저장된 소속을
+  // 믿고 워크스페이스에 둔다(모른다고 빼면 계정 목록을 불러오기 전마다 워크스페이스가 빈다).
+  const claimedBy = new Map<string, string>();
   const workspaceNodes = new Map<string, WorkspaceNode[]>();
   for (const ws of workspaces) {
+    const wsAccount = toAccountKey(ws.accountKey);
     const memberRepos = ws.repoPaths
       .map((p) => repoByPath.get(p))
       .filter((r): r is RepoInfo => r !== undefined)
-      .filter((r) => keyByPath.get(r.path) === ws.accountKey && !claimed.has(r.path));
-    memberRepos.forEach((r) => claimed.add(r.path));
+      .filter((r) => {
+        const acc = accountByPath.get(r.path);
+        return !!acc && (acc.pending || acc.key === wsAccount) && !claimedBy.has(r.path);
+      });
+    memberRepos.forEach((r) => claimedBy.set(r.path, wsAccount));
     const node: WorkspaceNode = {
       kind: "workspace",
       key: workspaceNodeKey(ws.id),
       workspace: ws,
       repos: memberRepos.map(makeRepoNode),
     };
-    workspaceNodes.set(ws.accountKey, [...(workspaceNodes.get(ws.accountKey) ?? []), node]);
+    workspaceNodes.set(wsAccount, [...(workspaceNodes.get(wsAccount) ?? []), node]);
+  }
+
+  // 계정 순서: 저장소에서 처음 나온 순서, 그 뒤에 저장소 없이 워크스페이스만 있는 계정.
+  // 표시 이름은 그 계정에서 처음 나온 저장소의 표기를 쓴다.
+  const accountKeys: string[] = [];
+  const labels = new Map<string, string>();
+  for (const repo of repos) {
+    const acc = accountByPath.get(repo.path);
+    if (!acc) continue;
+    const key = claimedBy.get(repo.path) ?? acc.key;
+    if (!accountKeys.includes(key)) accountKeys.push(key);
+    // 워크스페이스로 계정이 정해진 저장소의 임시 이름("Other")은 쓰지 않는다.
+    if (acc.key === key && !labels.has(key)) labels.set(key, acc.label);
+  }
+  for (const key of workspaceNodes.keys()) {
+    if (!accountKeys.includes(key)) accountKeys.push(key);
   }
 
   return accountKeys.map((accountKey) => {
@@ -276,7 +324,7 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
       repos: sortSiblings(ws.repos, sortMode, orderByParent[ws.key], signals),
     }));
     const looseRepos = repos
-      .filter((r) => keyByPath.get(r.path) === accountKey && !claimed.has(r.path))
+      .filter((r) => accountByPath.get(r.path)?.key === accountKey && !claimedBy.has(r.path))
       .map(makeRepoNode);
     const quietRepos = looseRepos.filter((n) => isQuietRepo(n, signals, now));
     const activeRepos = looseRepos.filter((n) => !quietRepos.includes(n));
@@ -286,6 +334,7 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
       kind: "account",
       key,
       accountKey,
+      label: labels.get(accountKey) ?? accountKey,
       sortMode,
       children: sortSiblings<WorkspaceNode | RepoNode>(
         [...wsNodes, ...activeRepos],

@@ -60,4 +60,27 @@ describe("suggestWorkspace", () => {
 
     expect(suggestWorkspace(repos)[0]?.name).toBe("Xames");
   });
+
+  it("owner 표기의 대소문자가 달라도 한 계정으로 센다", () => {
+    const repos = [
+      makeRepo("xames", "Mos"),
+      makeRepo("xames-a", "mos"),
+      makeRepo("xames-b", null, {
+        remotes: [{ name: "origin", url: "git@github.com:MOS/xames-b.git" }],
+      }),
+    ];
+
+    expect(suggestWorkspace(repos).map((s) => [s.key, s.accountKey])).toEqual([
+      ["mos/xames", "mos"],
+    ]);
+  });
+
+  it("계정을 아직 모르는 저장소는 세지 않아 제안 키가 계정 로딩에 따라 바뀌지 않는다", () => {
+    const repos = ["x", "x-a", "x-b"].map((name) => makeRepo(name, null, { accountId: "acc1" }));
+
+    expect(suggestWorkspace(repos, { accounts: [] })).toEqual([]);
+    expect(
+      suggestWorkspace(repos, { accounts: [{ id: "acc1", username: "yj" }] }).map((s) => s.key),
+    ).toEqual(["yj/x"]);
+  });
 });

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
 import {
   WORKSPACES_STORAGE_KEY,
@@ -24,6 +25,7 @@ function createOk(name: string, accountKey: string, paths: string[] = []): strin
 describe("useWorkspaceStore", () => {
   beforeEach(() => {
     localStorage.clear();
+    useAccountStore.setState({ accounts: [] });
     useRepositoryStore.setState({ repos: [xames, xamesApp, xamesAdmin, gitbaro] });
     useWorkspaceStore.setState({
       workspaces: [],
@@ -66,6 +68,46 @@ describe("useWorkspaceStore", () => {
         ok: false,
         reason: "unknown-workspace",
       });
+    });
+
+    it("owner 표기의 대소문자가 달라도 같은 계정으로 받아들이고 소문자 키로 저장한다", () => {
+      const upper = makeRepo("a", "YJun");
+      const lowerSsh = makeRepo("b", null, {
+        remotes: [{ name: "origin", url: "git@github.com:yjun/b.git" }],
+      });
+      useRepositoryStore.setState({ repos: [upper, lowerSsh] });
+
+      const result = ws().createWorkspace("w", "YJun", [upper.path, lowerSsh.path]);
+
+      expect(result.ok).toBe(true);
+      expect(ws().workspaces[0]).toMatchObject({
+        accountKey: "yjun",
+        repoPaths: [upper.path, lowerSsh.path],
+      });
+    });
+
+    it("계정 목록을 불러오기 전에는 계정을 모르는 저장소를 임시 키로 판단하지 않는다", () => {
+      const gitlab = makeRepo("g", null, {
+        remotes: [{ name: "origin", url: "https://gitlab.com/yj/g.git" }],
+        accountId: "acc1",
+      });
+      useRepositoryStore.setState({ repos: [gitlab] });
+      const id = createOk("w", "yj");
+
+      expect(ws().addRepoToWorkspace(id, gitlab.path)).toEqual({
+        ok: false,
+        reason: "account-pending",
+      });
+      expect(ws().createWorkspace("w2", "other", [gitlab.path])).toEqual({
+        ok: false,
+        reason: "account-pending",
+      });
+
+      useAccountStore.setState({
+        accounts: [{ id: "acc1", username: "yj", email: "", avatarUrl: "" }],
+      });
+
+      expect(ws().addRepoToWorkspace(id, gitlab.path)).toEqual({ ok: true });
     });
 
     it("빈 이름은 거부한다", () => {
@@ -182,6 +224,31 @@ describe("useWorkspaceStore", () => {
       expect(ws().workspaces[0].repoPaths).toEqual([xames.path, xamesApp.path]);
     });
 
+    it("실제 복원(rehydrate) 중 저장소 목록이 비어도 워크스페이스를 비우지 않는다", async () => {
+      createOk("x", "mos", [xames.path, xamesApp.path]);
+      // 저장소 스토어의 저장값이 아직 비어 있는 상태에서 복원이 일어나는 경우.
+      localStorage.setItem("gitbaro-repos", JSON.stringify({ state: { repos: [] }, version: 0 }));
+
+      await useRepositoryStore.persist.rehydrate();
+
+      expect(useRepositoryStore.getState().repos).toEqual([]);
+      expect(ws().workspaces[0].repoPaths).toEqual([xames.path, xamesApp.path]);
+      expect(useRepositoryStore.persist.hasHydrated()).toBe(true);
+    });
+
+    it("복원이 끝난 뒤의 제거는 다시 정리한다", async () => {
+      createOk("x", "mos", [xames.path, xamesApp.path]);
+      localStorage.setItem(
+        "gitbaro-repos",
+        JSON.stringify({ state: { repos: [xames, xamesApp] }, version: 0 }),
+      );
+      await useRepositoryStore.persist.rehydrate();
+
+      useRepositoryStore.getState().removeRepo(xames.path);
+
+      expect(ws().workspaces[0].repoPaths).toEqual([xamesApp.path]);
+    });
+
     it("워크스페이스 스토어가 복원되기 전에도 정리하지 않는다", () => {
       createOk("x", "mos", [xames.path]);
       vi.spyOn(useWorkspaceStore.persist, "hasHydrated").mockReturnValue(false);
@@ -249,6 +316,24 @@ describe("useWorkspaceStore", () => {
         dismissedSuggestions: [],
       });
     });
+
+    it("저장값의 계정 키는 소문자로 맞추고 모르는 필드는 버린다", () => {
+      const result = sanitizeWorkspaceState({
+        workspaces: [{ id: "w1", name: "a", accountKey: "YJun", repoPaths: [] }],
+        orderByParent: { "acct:YJun": ["ws:w1", "repo:/r/A"] },
+        sortModeByAccount: { YJun: "todo" },
+        collapsed: ["acct:YJun", "acct:yjun", "repo:/r/A"],
+        extra: 1,
+      });
+
+      expect(result).toEqual({
+        workspaces: [{ id: "w1", name: "a", accountKey: "yjun", repoPaths: [] }],
+        orderByParent: { "acct:yjun": ["ws:w1", "repo:/r/A"] },
+        sortModeByAccount: { yjun: "todo" },
+        collapsed: ["acct:yjun", "repo:/r/A"],
+        dismissedSuggestions: [],
+      });
+    });
   });
 });
 
@@ -258,22 +343,47 @@ describe("gitbaro-repos 접힘 상태 가져오기", () => {
     vi.resetModules();
   });
 
-  const legacy = JSON.stringify({
-    state: { repos: [], collapsedGroups: ["mondayoversleepclub", "Local"] },
-    version: 0,
-  });
+  const legacyWith = (collapsedGroups: string[]) =>
+    JSON.stringify({ state: { repos: [], collapsedGroups }, version: 0 });
+  const legacy = legacyWith(["mondayoversleepclub", "Local"]);
 
-  it("새 키가 없고 옛 키가 있으면 collapsedGroups를 acct:<이름>으로 복사한다", async () => {
+  it("새 키가 없고 옛 키가 있으면 collapsedGroups를 acct:<계정 키>로 복사한다", async () => {
     localStorage.setItem("gitbaro-repos", legacy);
 
     const { useWorkspaceStore: fresh } = await import("@/stores/workspace");
 
-    expect(fresh.getState().collapsed).toEqual(["acct:mondayoversleepclub", "acct:Local"]);
+    expect(fresh.getState().collapsed).toEqual(["acct:mondayoversleepclub", "acct:local"]);
     // 원본은 지우지 않는다(RepoListView가 계속 쓴다).
     expect(JSON.parse(localStorage.getItem("gitbaro-repos")!).state.collapsedGroups).toEqual([
       "mondayoversleepclub",
       "Local",
     ]);
+  });
+
+  it("즐겨찾기 그룹 이름(모든 언어)은 계정이 아니므로 가져오지 않는다", async () => {
+    localStorage.setItem("gitbaro-repos", legacyWith(["즐겨찾기", "Favorites", "mos"]));
+
+    const { useWorkspaceStore: fresh } = await import("@/stores/workspace");
+
+    expect(fresh.getState().collapsed).toEqual(["acct:mos"]);
+  });
+
+  it("가져온 값은 바로 새 키에 저장해, 그 뒤 옛 목록의 접기가 트리로 흘러들지 않는다", async () => {
+    localStorage.setItem("gitbaro-repos", legacy);
+    await import("@/stores/workspace");
+
+    const saved = JSON.parse(localStorage.getItem(WORKSPACES_STORAGE_KEY)!);
+    expect(saved).toMatchObject({
+      version: 1,
+      state: { collapsed: ["acct:mondayoversleepclub", "acct:local"] },
+    });
+
+    // 스토어 액션 없이 다음 실행: 그 사이 옛 목록에서 yjun을 접었다.
+    localStorage.setItem("gitbaro-repos", legacyWith(["mondayoversleepclub", "Local", "yjun"]));
+    vi.resetModules();
+    const { useWorkspaceStore: relaunched } = await import("@/stores/workspace");
+
+    expect(relaunched.getState().collapsed).toEqual(["acct:mondayoversleepclub", "acct:local"]);
   });
 
   it("새 키에 저장값이 있으면 옛 값을 가져오지 않는다", async () => {

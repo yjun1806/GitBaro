@@ -45,7 +45,57 @@ describe("buildRepoTree", () => {
   it("원격도 계정도 없는 저장소는 Local 계정에 들어간다", () => {
     const tree = build({ repos: [makeRepo("scratch", null)] });
 
-    expect(tree.map((a) => a.accountKey)).toEqual(["Local"]);
+    expect(tree.map((a) => [a.accountKey, a.label])).toEqual([["local", "Local"]]);
+  });
+
+  describe("계정 판별", () => {
+    const upper = makeRepo("a", "YJun");
+    const lowerSsh = makeRepo("b", null, {
+      remotes: [{ name: "origin", url: "git@github.com:yjun/b.git" }],
+    });
+
+    it("owner 표기의 대소문자가 달라도 한 계정으로 본다", () => {
+      const tree = build({
+        repos: [upper, lowerSsh],
+        workspaces: [{ id: "w1", name: "w", accountKey: "yjun", repoPaths: [upper.path, lowerSsh.path] }],
+      });
+
+      expect(tree.map((a) => [a.accountKey, a.label])).toEqual([["yjun", "YJun"]]);
+      const ws = tree[0].children[0] as WorkspaceNode;
+      expect(ws.repos.map((r) => r.repo.name)).toEqual(["a", "b"]);
+    });
+
+    // GitHub 밖 origin(또는 origin 없음) + accountId 저장소는 계정 목록이 있어야 계정을 안다.
+    const gitlab = makeRepo("g", null, {
+      remotes: [{ name: "origin", url: "https://gitlab.com/yj/g.git" }],
+      accountId: "acc1",
+    });
+    const noOrigin = makeRepo("n", null, { accountId: "acc1" });
+    const pendingInput: Partial<BuildRepoTreeInput> = {
+      repos: [gitlab, noOrigin],
+      workspaces: [{ id: "w", name: "w", accountKey: "yj", repoPaths: [gitlab.path, noOrigin.path] }],
+    };
+    const shape = (tree: AccountNode[]) =>
+      tree.map((a) => [
+        a.accountKey,
+        a.children.map((c) =>
+          c.kind === "workspace" ? [c.key, c.repos.map((r) => r.repo.name)] : c.repo.name,
+        ),
+      ]);
+
+    it("계정 목록을 불러오기 전에도 워크스페이스 소속을 그대로 보여 준다", () => {
+      const before = build({ ...pendingInput, accounts: [] });
+      const after = build({ ...pendingInput, accounts: [{ id: "acc1", username: "yj" }] });
+
+      expect(shape(before)).toEqual([["yj", [["ws:w", ["g", "n"]]]]]);
+      expect(shape(after)).toEqual(shape(before));
+    });
+
+    it("계정 목록에 없는 accountId 저장소가 워크스페이스 밖이면 기존처럼 Other에 둔다", () => {
+      const tree = build({ repos: [noOrigin], accounts: [] });
+
+      expect(tree.map((a) => [a.accountKey, a.label])).toEqual([["other", "Other"]]);
+    });
   });
 
   it("워크스페이스에 넣지 않은 저장소는 계정 바로 아래에 온다", () => {
