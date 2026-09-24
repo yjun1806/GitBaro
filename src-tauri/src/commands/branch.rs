@@ -3,7 +3,7 @@ use crate::git::branch::validate_branch_name;
 use crate::git::cli::{GitCliEngine, GitOperation};
 use crate::git::commit::commit_to_info;
 use crate::git::engine::{BranchCompareResult, MergePreCheckResult, MergeStrategy};
-use crate::git::libgit::is_working_tree_dirty;
+use crate::git::libgit::working_tree_dirty_summary;
 use crate::git::worktree_base::default_branch_name;
 use serde_json::{json, Value};
 
@@ -237,11 +237,18 @@ pub async fn repo_sync_status(repo_paths: Vec<String>) -> Result<Vec<Value>, App
 
 /// 단일 레포의 HEAD ahead/behind 및 working-tree dirty 상태를 계산한다.
 /// 레포를 열 수 없을 때만 `None`. detached HEAD여도 dirty는 계산해 반환한다.
+///
+/// dirty 관련 필드:
+/// - `isDirty`: 커밋하지 않은 변경이 있는지. `dirtyCount > 0`과 같다.
+///   `is_working_tree_dirty`(RepoInfo.isDirty)와 판정 기준이 같다 — 둘 다
+///   untracked를 세고 ignored는 뺀다. 상태 스캔을 한 번만 하려고 개수에서 얻는다.
+/// - `dirtyCount`: 커밋하지 않은 파일 수. untracked 폴더 안의 파일까지 하나씩 센다.
+/// - `dirtyLatestMtime`: 그 파일들 중 가장 늦은 수정 시각(epoch ms). 없으면 null.
 fn head_sync_status(path: &str) -> Option<Value> {
     let repo = git2::Repository::open(path).ok()?;
 
-    // working-tree 변경 여부 — RepoInfo.isDirty와 같은 함수를 쓴다
-    let is_dirty = is_working_tree_dirty(&repo);
+    let dirty = working_tree_dirty_summary(&repo);
+    let is_dirty = dirty.count > 0;
 
     // 현재 브랜치 기준 ahead/behind (detached HEAD·upstream 없으면 0/0)
     let head_branch = repo
@@ -276,6 +283,8 @@ fn head_sync_status(path: &str) -> Option<Value> {
         "behind": behind,
         "hasUpstream": has_upstream,
         "isDirty": is_dirty,
+        "dirtyCount": dirty.count,
+        "dirtyLatestMtime": dirty.latest_mtime_ms,
     }))
 }
 
@@ -928,5 +937,78 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&tmp);
         assert_eq!(is_dirty, Some(true));
+    }
+
+    /// 파일 수는 untracked 폴더 안까지 하나씩 센다: 추적 파일 1개 수정 +
+    /// untracked 폴더 안 파일 3개 → 4. 깨끗한 저장소는 0과 null이다.
+    #[tokio::test]
+    async fn reports_dirty_count_and_latest_mtime() {
+        let tmp = std::env::temp_dir().join(format!("gitbaro-branch-dirty-count-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        git(&tmp, &["init", "-q", "-b", "main"]);
+        std::fs::write(tmp.join("README.md"), "hello\n").unwrap();
+        git(&tmp, &["add", "-A"]);
+        git(&tmp, &["commit", "-qm", "init"]);
+        let path = tmp.to_string_lossy().to_string();
+
+        let clean = repo_sync_status(vec![path.clone()]).await.unwrap();
+        assert_eq!(field(&clean[0], "dirtyCount").as_u64(), Some(0));
+        assert!(field(&clean[0], "dirtyLatestMtime").is_null());
+
+        let before = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64
+            - 2_000; // 파일 시스템 시각 해상도 여유
+        std::fs::write(tmp.join("README.md"), "hello\nchanged\n").unwrap();
+        std::fs::create_dir_all(tmp.join("agent/out")).unwrap();
+        std::fs::write(tmp.join("agent/a.txt"), "x").unwrap();
+        std::fs::write(tmp.join("agent/b.txt"), "x").unwrap();
+        std::fs::write(tmp.join("agent/out/c.txt"), "x").unwrap();
+
+        let dirty = repo_sync_status(vec![path]).await.unwrap();
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        assert_eq!(field(&dirty[0], "isDirty").as_bool(), Some(true));
+        assert_eq!(field(&dirty[0], "dirtyCount").as_u64(), Some(4));
+        let mtime = field(&dirty[0], "dirtyLatestMtime").as_i64().expect("mtime 있음");
+        assert!(mtime >= before, "mtime {mtime} < {before}");
+    }
+
+    /// 계획의 비용 확인: 저장소 40개를 한 번에 조회하는 시간을 로그로 남긴다
+    /// (`cargo test -- --nocapture`로 본다). 1초를 넘으면 개수에 상한을 두기로 했다.
+    #[tokio::test]
+    async fn sync_status_for_forty_repos_timing() {
+        let root = std::env::temp_dir().join(format!("gitbaro-sync-40-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let mut paths = Vec::new();
+        for i in 0..40 {
+            let dir = root.join(format!("repo{i}"));
+            std::fs::create_dir_all(dir.join("src")).unwrap();
+            for f in 0..20 {
+                std::fs::write(dir.join(format!("src/f{f}.txt")), "x\n").unwrap();
+            }
+            git(&dir, &["init", "-q", "-b", "main"]);
+            git(&dir, &["add", "-A"]);
+            git(&dir, &["commit", "-qm", "init"]);
+            // 수정 1개 + untracked 폴더 안 파일 5개
+            std::fs::write(dir.join("src/f0.txt"), "changed\n").unwrap();
+            std::fs::create_dir_all(dir.join("scratch")).unwrap();
+            for f in 0..5 {
+                std::fs::write(dir.join(format!("scratch/n{f}.txt")), "x").unwrap();
+            }
+            paths.push(dir.to_string_lossy().to_string());
+        }
+
+        let started = std::time::Instant::now();
+        let statuses = repo_sync_status(paths).await.unwrap();
+        let elapsed = started.elapsed();
+        let _ = std::fs::remove_dir_all(&root);
+
+        eprintln!("[W1-T2] repo_sync_status x40 repos took {elapsed:?}");
+        assert_eq!(statuses.len(), 40);
+        assert!(statuses.iter().all(|s| field(s, "dirtyCount").as_u64() == Some(6)));
     }
 }

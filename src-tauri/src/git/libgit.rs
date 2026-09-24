@@ -623,12 +623,154 @@ impl LibGitEngine {
 /// 여기서 빼면 새 파일만 만든 저장소가 목록에서는 깨끗해 보이는 불일치가 생긴다.
 ///
 /// 디렉토리 재귀는 하지 않는다(`recurse_untracked_dirs` 기본값). 있는지 없는지만
-/// 알면 되므로 untracked 디렉토리는 항목 하나로 접힌 채여도 충분하고, 여러 저장소를
-/// 주기적으로 훑는 호출부(repo_sync_status)의 비용을 낮춘다.
+/// 알면 되므로 untracked 디렉토리는 항목 하나로 접힌 채여도 충분하다. 파일 수가
+/// 필요한 `repo_sync_status`는 대신 `working_tree_dirty_summary`를 쓴다.
 pub fn is_working_tree_dirty(repo: &Repository) -> bool {
     let mut opts = git2::StatusOptions::new();
     opts.include_untracked(true).exclude_submodules(true);
     repo.statuses(Some(&mut opts))
         .map(|s| !s.is_empty())
         .unwrap_or(false)
+}
+
+/// Uncommitted-change summary of a working tree, for the sidebar file count and
+/// for guessing activity in repos the FS watcher does not cover.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DirtySummary {
+    /// Number of uncommitted files. Files inside untracked folders are counted
+    /// one by one (`recurse_untracked_dirs`), unlike `is_working_tree_dirty`.
+    pub count: usize,
+    /// Latest modification time among those files, in epoch milliseconds.
+    /// `None` when nothing is dirty or no dirty file exists on disk (deletions).
+    pub latest_mtime_ms: Option<i64>,
+}
+
+/// Count uncommitted files (staged, unstaged and untracked, recursing into
+/// untracked folders) and find the newest mtime among them.
+///
+/// Ignored files are skipped by libgit2, so large ignored folders such as
+/// `node_modules` or `target` cost nothing. Returns an empty summary when the
+/// status scan fails (e.g. a bare repo).
+pub fn working_tree_dirty_summary(repo: &Repository) -> DirtySummary {
+    let mut opts = git2::StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .exclude_submodules(true);
+    let Ok(statuses) = repo.statuses(Some(&mut opts)) else {
+        return DirtySummary { count: 0, latest_mtime_ms: None };
+    };
+    let workdir = repo.workdir();
+    let latest_mtime_ms = statuses
+        .iter()
+        .filter_map(|entry| {
+            let path = workdir?.join(entry.path()?);
+            let modified = std::fs::symlink_metadata(path).ok()?.modified().ok()?;
+            let millis = modified.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis();
+            i64::try_from(millis).ok()
+        })
+        .max();
+    DirtySummary { count: statuses.len(), latest_mtime_ms }
+}
+
+#[cfg(test)]
+mod dirty_summary_tests {
+    use super::*;
+    use std::path::Path;
+    use std::time::{Duration, SystemTime};
+
+    fn temp_repo(tag: &str) -> (std::path::PathBuf, Repository) {
+        let dir = std::env::temp_dir()
+            .join(format!("gitbaro-libgit-dirty-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let repo = Repository::init(&dir).unwrap();
+        (dir, repo)
+    }
+
+    fn commit_file(repo: &Repository, dir: &Path, file: &str, content: &str) {
+        std::fs::write(dir.join(file), content).unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new(file)).unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+        let sig = git2::Signature::now("t", "t@t").unwrap();
+        let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        let parents: Vec<&git2::Commit> = parent.iter().collect();
+        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &parents).unwrap();
+    }
+
+    fn set_mtime(path: &Path, at: SystemTime) {
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(at)
+            .unwrap();
+    }
+
+    fn epoch_ms(at: SystemTime) -> i64 {
+        at.duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64
+    }
+
+    #[test]
+    fn clean_repo_has_zero_count_and_no_mtime() {
+        let (dir, repo) = temp_repo("clean");
+        commit_file(&repo, &dir, "a.txt", "1\n");
+        let summary = working_tree_dirty_summary(&repo);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(summary, DirtySummary { count: 0, latest_mtime_ms: None });
+    }
+
+    #[test]
+    fn counts_files_inside_untracked_folders() {
+        let (dir, repo) = temp_repo("count");
+        commit_file(&repo, &dir, "a.txt", "1\n");
+        std::fs::write(dir.join("a.txt"), "changed\n").unwrap();
+        std::fs::create_dir_all(dir.join("new/nested")).unwrap();
+        std::fs::write(dir.join("new/one.txt"), "x").unwrap();
+        std::fs::write(dir.join("new/two.txt"), "x").unwrap();
+        std::fs::write(dir.join("new/nested/three.txt"), "x").unwrap();
+
+        let summary = working_tree_dirty_summary(&repo);
+        // The existing check still sees the folder as a single entry.
+        let dirty = is_working_tree_dirty(&repo);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(summary.count, 4);
+        assert!(dirty);
+    }
+
+    #[test]
+    fn ignored_folders_are_not_counted() {
+        let (dir, repo) = temp_repo("ignored");
+        commit_file(&repo, &dir, ".gitignore", "build/\n");
+        std::fs::create_dir_all(dir.join("build")).unwrap();
+        std::fs::write(dir.join("build/out.bin"), "x").unwrap();
+        let summary = working_tree_dirty_summary(&repo);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(summary.count, 0);
+    }
+
+    #[test]
+    fn latest_mtime_is_the_newest_dirty_file() {
+        let (dir, repo) = temp_repo("mtime");
+        commit_file(&repo, &dir, "a.txt", "1\n");
+        commit_file(&repo, &dir, "gone.txt", "1\n");
+        std::fs::write(dir.join("a.txt"), "changed\n").unwrap();
+        std::fs::create_dir_all(dir.join("new")).unwrap();
+        std::fs::write(dir.join("new/b.txt"), "x").unwrap();
+        // A deleted file has no mtime and must not break the scan.
+        std::fs::remove_file(dir.join("gone.txt")).unwrap();
+
+        let older = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        let newer = older + Duration::from_millis(5_250);
+        set_mtime(&dir.join("a.txt"), older);
+        set_mtime(&dir.join("new/b.txt"), newer);
+
+        let summary = working_tree_dirty_summary(&repo);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(summary.count, 3);
+        assert_eq!(summary.latest_mtime_ms, Some(epoch_ms(newer)));
+    }
 }

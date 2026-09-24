@@ -9,6 +9,7 @@ import type {
   BranchDivergence,
   RepoSyncStatus,
   CommitInfo,
+  CoAuthor,
   RefLabel,
   GitHubAccount,
   GhStatus,
@@ -439,7 +440,7 @@ export async function stashPushPartial(repoPath: string, paths: string[], messag
   return invoke("stash_push_partial", { repoPath, paths, message });
 }
 
-// History — backend returns raw fields (oid, parentCount, etc.)
+// History — backend returns raw fields (oid, parents, etc.)
 // that differ from the frontend CommitInfo type, so we map here.
 
 interface RawAuthor {
@@ -455,8 +456,11 @@ interface RawCommitHistory {
   author: RawAuthor;
   timestamp: number;
   parentCount: number;
+  parentIds: string[];
   refs: RefLabel[];
   isUnpushed: boolean;
+  coAuthors: CoAuthor[];
+  isAgentAuthored: boolean;
 }
 
 interface RawCommitDetailFile {
@@ -480,6 +484,8 @@ interface RawCommitDetail {
   committer: RawAuthor;
   timestamp: number;
   parents: string[];
+  coAuthors: CoAuthor[];
+  isAgentAuthored: boolean;
   diff: RawCommitDetailDiff;
 }
 
@@ -509,9 +515,11 @@ export async function getCommitHistory(
     author: c.author,
     committer: c.author,
     timestamp: c.timestamp,
-    parentIds: [],
+    parentIds: c.parentIds,
     refs: c.refs,
     isUnpushed: c.isUnpushed,
+    coAuthors: c.coAuthors,
+    isAgentAuthored: c.isAgentAuthored,
   }));
 }
 
@@ -540,6 +548,8 @@ export async function getCommitDetail(
       timestamp: c.timestamp,
       parentIds: c.parents,
       refs: [],
+      coAuthors: c.coAuthors,
+      isAgentAuthored: c.isAgentAuthored,
     },
     changedFiles: (c.diff?.files ?? []).map((f) => ({
       path: f.newPath ?? f.oldPath ?? "",

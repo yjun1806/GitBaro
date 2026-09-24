@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::error::AppError;
 use crate::gh::cli;
 use crate::git::binary::{detect_file_type, extension_to_mime, is_previewable, MAX_PREVIEW_SIZE};
+use crate::git::commit::{agent_attribution, parent_ids};
 use crate::git::diff::{detect_renames, rename_source};
 use crate::git::remote::parse_github_url;
 use crate::github::client::GitHubClient;
@@ -96,24 +97,30 @@ pub async fn get_commit_history(
                 let timestamp = commit.time().seconds();
 
                 let author_email = author.email().unwrap_or("").to_string();
+                let author_name = author.name().unwrap_or("").to_string();
                 let refs = ref_map.get(&oid).cloned().unwrap_or_default();
                 let is_unpushed = match &unpushed {
                     None => true,
                     Some(set) => set.contains(&oid),
                 };
+                let message = commit.message().unwrap_or("");
+                let (co_authors, is_agent_authored) = agent_attribution(message);
                 Some(json!({
                     "oid": oid.to_string(),
-                    "message": commit.message().unwrap_or("").trim().to_string(),
+                    "message": message.trim().to_string(),
                     "summary": commit.summary().unwrap_or("").to_string(),
                     "author": {
-                        "name": author.name().unwrap_or("").to_string(),
+                        "name": author_name,
                         "email": &author_email,
                         "avatarUrl": gravatar_url(&author_email),
                     },
                     "timestamp": timestamp,
                     "parentCount": commit.parent_count(),
+                    "parentIds": parent_ids(&commit),
                     "refs": refs,
                     "isUnpushed": is_unpushed,
+                    "coAuthors": co_authors,
+                    "isAgentAuthored": is_agent_authored,
                 }))
             })
             .collect();
@@ -185,10 +192,8 @@ pub async fn get_commit_detail(repo_path: String, oid: String) -> Result<Value, 
             None,
         )?;
 
-        let parents: Vec<String> = commit
-            .parent_ids()
-            .map(|id| id.to_string())
-            .collect();
+        let parents = parent_ids(&commit);
+        let (co_authors, is_agent_authored) = agent_attribution(commit.message().unwrap_or(""));
 
         Ok::<_, AppError>(json!({
             "oid": commit.id().to_string(),
@@ -206,6 +211,8 @@ pub async fn get_commit_detail(repo_path: String, oid: String) -> Result<Value, 
             },
             "timestamp": commit.time().seconds(),
             "parents": parents,
+            "coAuthors": co_authors,
+            "isAgentAuthored": is_agent_authored,
             "diff": {
                 "filesChanged": stats.files_changed(),
                 "insertions": stats.insertions(),
@@ -734,5 +741,57 @@ mod tests {
             .unwrap();
         assert_eq!(diff["oldContent"], content);
         assert_eq!(diff["hunks"].as_array().unwrap().len(), 0, "{}", diff["hunks"]);
+    }
+
+    /// 히스토리 목록과 커밋 상세가 병합 커밋의 부모 2개와 공동 작성자·에이전트
+    /// 추정을 같은 값으로 내려주는지.
+    #[tokio::test]
+    async fn history_and_detail_report_merge_parents_and_co_authors() {
+        let tmp = TempRepo::new();
+        let repo_path = tmp.path.to_str().unwrap().to_string();
+        let (left, right, merge) = {
+            let repo = tmp.open();
+            let base = commit(&repo, "a.txt", "1");
+            let main_branch = head_branch(&repo);
+            repo.branch("side", &repo.find_commit(base).unwrap(), false).unwrap();
+            let left = commit(&repo, "a.txt", "2");
+            repo.set_head("refs/heads/side").unwrap();
+            let right = commit(&repo, "b.txt", "3");
+            repo.set_head(&format!("refs/heads/{main_branch}")).unwrap();
+
+            let sig = Signature::now("Test", "test@example.com").unwrap();
+            let tree = repo.find_commit(left).unwrap().tree().unwrap();
+            let merge = repo
+                .commit(
+                    Some("HEAD"),
+                    &sig,
+                    &sig,
+                    "Merge side\n\nCo-authored-by: Claude <noreply@anthropic.com>\n",
+                    &tree,
+                    &[&repo.find_commit(left).unwrap(), &repo.find_commit(right).unwrap()],
+                )
+                .unwrap();
+            (left, right, merge)
+        };
+
+        let history = get_commit_history(repo_path.clone(), Some(10), Some(0)).await.unwrap();
+        let top = &history[0];
+        assert_eq!(top["oid"], merge.to_string());
+        assert_eq!(top["parentIds"], json!([left.to_string(), right.to_string()]));
+        assert_eq!(top["parentCount"], 2);
+        assert_eq!(
+            top["coAuthors"],
+            json!([{ "name": "Claude", "email": "noreply@anthropic.com" }])
+        );
+        assert_eq!(top["isAgentAuthored"], true);
+
+        let plain = history.iter().find(|c| c["oid"] == left.to_string()).unwrap();
+        assert_eq!(plain["coAuthors"], json!([]));
+        assert_eq!(plain["isAgentAuthored"], false);
+
+        let detail = get_commit_detail(repo_path, merge.to_string()).await.unwrap();
+        assert_eq!(detail["parents"], top["parentIds"]);
+        assert_eq!(detail["coAuthors"], top["coAuthors"]);
+        assert_eq!(detail["isAgentAuthored"], true);
     }
 }
