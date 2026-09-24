@@ -30,9 +30,12 @@ describe("sanitizePersistedUI", () => {
 });
 
 // W2-T1: the two-column shell regroups the tabs in the graph panel but keeps
-// the activeTab values, and activeTab is never written to storage. What did
-// change is the meaning of sidebarWidth (old tab column -> tree sidebar), which
-// the v0 -> v1 migration handles.
+// the activeTab values, and activeTab is never written to storage. sidebarWidth
+// now sizes the tree sidebar instead of the old tab column, but that does not
+// warrant a version bump or a migration (the task's own rule: only bump when a
+// persisted value's *values* change, which activeTab's did not). A v0 user's
+// railMode and sidebarWidth are kept as-is (W2-T2: keep the rail's
+// collapsed/hover modes).
 describe("ui store after the two-column shell", () => {
   it("does not persist activeTab, so old stored values cannot leak in", () => {
     useUIStore.getState().setActiveTab("stash");
@@ -52,37 +55,26 @@ describe("ui store after the two-column shell", () => {
     expect(useUIStore.getInitialState().sidebarWidth).toBe(276);
   });
 
-  it("is stored as version 1 with a migration", () => {
-    expect(UI_STORE_VERSION).toBe(1);
-    expect(useUIStore.persist.getOptions().version).toBe(1);
+  it("stays at version 0 with an identity migration (no activeTab value changed)", () => {
+    expect(UI_STORE_VERSION).toBe(0);
+    expect(useUIStore.persist.getOptions().version).toBe(0);
     expect(useUIStore.persist.getOptions().migrate).toBeDefined();
   });
 });
 
 describe("migrateUI", () => {
-  it("drops the v0 tab-column width and rail mode so the sidebar starts expanded at the design width", () => {
-    // What the old build wrote after any tab click (whole state, default 500,
-    // and railMode defaulted to "hover" pre-W2, so almost every v0 user has it).
+  it("passes every field through unchanged regardless of version", () => {
     const v0 = { railMode: "hover", sidebarWidth: 500, diffLineMode: "split" };
-    const migrated = migrateUI(v0, 0);
-    expect(migrated).toEqual({ diffLineMode: "split" });
-    // The input is not changed.
-    expect(v0.sidebarWidth).toBe(500);
-    expect(v0.railMode).toBe("hover");
-    // After merge the new defaults apply: the tree sidebar is visible.
-    const merged = { ...useUIStore.getInitialState(), ...sanitizePersistedUI(migrated) };
-    expect(merged.sidebarWidth).toBe(DEFAULT_SIDEBAR_WIDTH);
-    expect(merged.railMode).toBe("expanded");
+    expect(migrateUI(v0, 0)).toEqual(v0);
+    expect(migrateUI(v0, 1)).toEqual(v0);
   });
 
-  it("keeps a v1 width and rail mode, and tolerates empty or broken storage", () => {
-    expect(migrateUI({ sidebarWidth: 320 }, 1)).toEqual({ sidebarWidth: 320 });
-    expect(migrateUI({ railMode: "collapsed" }, 1)).toEqual({ railMode: "collapsed" });
+  it("tolerates empty or broken storage", () => {
     expect(migrateUI(null, 0)).toBeNull();
     expect(sanitizePersistedUI(migrateUI("junk", 0))).toEqual({});
   });
 
-  it("runs through persist rehydration for a v0 entry, resetting rail mode along with width", async () => {
+  it("keeps a v0 user's deliberately chosen rail mode and width across rehydration (W2-T2)", async () => {
     // setState writes storage too, so reset first, then plant the old entry.
     useUIStore.setState({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH, railMode: "expanded" });
     localStorage.setItem(
@@ -90,16 +82,16 @@ describe("migrateUI", () => {
       JSON.stringify({ state: { railMode: "collapsed", sidebarWidth: 500 }, version: 0 }),
     );
     await useUIStore.persist.rehydrate();
-    expect(useUIStore.getState().railMode).toBe("expanded");
-    expect(useUIStore.getState().sidebarWidth).toBe(DEFAULT_SIDEBAR_WIDTH);
+    expect(useUIStore.getState().railMode).toBe("collapsed");
+    expect(useUIStore.getState().sidebarWidth).toBe(500);
     localStorage.removeItem("gitbaro-ui");
   });
 
-  it("keeps a deliberately chosen v1 rail mode across rehydration", async () => {
+  it("keeps a deliberately chosen hover rail mode across rehydration", async () => {
     useUIStore.setState({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH, railMode: "expanded" });
     localStorage.setItem(
       "gitbaro-ui",
-      JSON.stringify({ state: { railMode: "hover", sidebarWidth: 320, diffLineMode: "unified" }, version: 1 }),
+      JSON.stringify({ state: { railMode: "hover", sidebarWidth: 320, diffLineMode: "unified" }, version: 0 }),
     );
     await useUIStore.persist.rehydrate();
     expect(useUIStore.getState().railMode).toBe("hover");
