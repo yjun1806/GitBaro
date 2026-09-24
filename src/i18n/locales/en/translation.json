@@ -814,5 +814,47 @@
       "end": "Dropped {{name}}",
       "cancel": "Stopped moving {{name}}"
     }
+  },
+  "workspace": {
+    "sort": {
+      "label": "Sort",
+      "custom": "Custom order",
+      "customMenu": "Custom order (drag)",
+      "name": "By name",
+      "recent": "Recent activity",
+      "todo": "Needs attention first"
+    },
+    "create": "New workspace",
+    "createTitle": "New workspace in {{account}}",
+    "renameTitle": "Rename workspace",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. product",
+    "createButton": "Create",
+    "renameButton": "Rename",
+    "menu": {
+      "label": "Workspace menu",
+      "rename": "Rename…",
+      "delete": "Delete workspace…"
+    },
+    "deleteTitle": "Delete workspace",
+    "deleteConfirm": "Delete the workspace “{{name}}”?",
+    "deleteKeepsRepos_one": "Its {{count}} repository moves back directly under {{account}}. The repository itself is not removed from GitBaro or from disk.",
+    "deleteKeepsRepos_other": "Its {{count}} repositories move back directly under {{account}}. The repositories themselves are not removed from GitBaro or from disk.",
+    "deleteButton": "Delete workspace",
+    "suggestion": {
+      "title": "Group {{count}} {{name}} repositories?",
+      "body": "These repositories share the name prefix “{{name}}”. Put them in one workspace to review them together.",
+      "accept": "Create workspace",
+      "dismiss": "Not now",
+      "dismissLabel": "Dismiss suggestion",
+      "created": "Created the workspace “{{name}}”"
+    },
+    "error": {
+      "empty-name": "Enter a name",
+      "unknown-workspace": "This workspace no longer exists",
+      "unknown-repo": "One of the repositories is no longer in the list",
+      "account-mismatch": "A workspace can only hold repositories from one account",
+      "account-pending": "Repository accounts are still loading. Try again in a moment."
+    }
   }
 }

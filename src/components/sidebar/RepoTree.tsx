@@ -12,6 +12,7 @@ import { QuietReposRow } from "./QuietReposRow";
 import { RepoRow, type LiveState } from "./RepoRow";
 import { DropAfterLine, TreeDndProvider } from "./TreeDnd";
 import { WorkspaceRow } from "./WorkspaceRow";
+import { WorkspaceSuggestion } from "./WorkspaceSuggestion";
 import {
   collapsibleKeys,
   expandedWorktreePaths,
@@ -174,6 +175,8 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
           onSelect={selectLive}
         />
 
+        {!searching && <WorkspaceSuggestion />}
+
         {/* 끌어서 놓기는 검색으로 거르지 않은 전체 트리(`tree`)의 순서로 계산한다. */}
         <TreeDndProvider tree={tree}>
           <div role="tree" aria-label={t("sidebarTree.tree")} className="flex flex-col">
@@ -184,6 +187,8 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
                 <div key={account.key} role="none" className="flex flex-col">
                   <AccountHeader
                     label={account.label}
+                    accountKey={account.accountKey}
+                    sortMode={account.sortMode}
                     repoCount={accountRepoCount(account)}
                     ownerType={ownerTypes[account.label]}
                     expanded={accountOpen}
@@ -197,7 +202,9 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
                         <div key={child.key} role="none" className="flex flex-col">
                           <WorkspaceRow
                             nodeKey={child.key}
+                            workspaceId={child.workspace.id}
                             name={child.workspace.name}
+                            accountLabel={account.label}
                             repoCount={child.repos.length}
                             totals={workspaceTotals(child, signals)}
                             expanded={wsOpen}
