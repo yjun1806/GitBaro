@@ -3,7 +3,7 @@ import { Tag, GitBranch } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { CommitInfo, RefLabel } from "@/types";
 
-function RefBadge({
+export function RefBadge({
   label,
   remoteTags,
 }: {

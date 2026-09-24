@@ -10,13 +10,9 @@ import type { RepoInfo, StatusEntry } from "@/types";
 
 // Heavy children talk to Tauri; the shell only decides which one to show.
 vi.mock("@/components/toolbar", () => ({ ToolbarRoot: () => <div>toolbar</div> }));
-vi.mock("@/components/history/HistoryView", () => ({
-  HistoryView: () => (
-    <button type="button" onClick={() => useSelectionStore.getState().selectCommit("c1")}>
-      history-list
-    </button>
-  ),
-}));
+// The commit graph renders for real; its one commit is titled "history-list"
+// so picking it reads the same as picking a row of the old list.
+vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/components/stash/StashView", () => ({ StashView: () => <div>stash-list</div> }));
 vi.mock("@/components/actions/ActionsView", () => ({ ActionsView: () => <div>actions-list</div> }));
 vi.mock("@/components/commit/ChangesView", () => ({ ChangesView: () => <div>changes-view</div> }));
@@ -30,8 +26,41 @@ const statusEntries: StatusEntry[] = [
   { path: "b.ts", status: "untracked", staged: false },
 ] as StatusEntry[];
 
+const historyPages = {
+  pages: [
+    [
+      {
+        id: "c1",
+        shortId: "c1",
+        message: "history-list",
+        summary: "history-list",
+        author: { name: "YJ", email: "yj@example.com" },
+        committer: { name: "YJ", email: "yj@example.com" },
+        timestamp: 1_700_000_000,
+        parentIds: [],
+        refs: [],
+        coAuthors: [],
+        isAgentAuthored: false,
+      },
+    ],
+  ],
+};
+
 vi.mock("@/api/queries", () => ({
   useStatus: (path: string | null) => ({ data: path ? statusEntries : [] }),
+  useCommitHistoryInfinite: () => ({
+    data: historyPages,
+    isLoading: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: vi.fn(),
+  }),
+  useBranches: () => ({ data: [] }),
+  useRemoteTags: () => ({ data: undefined }),
+  useWorktrees: () => ({ data: [] }),
+  useRepoSyncStatuses: () => ({ data: undefined }),
+  useReviewStatusQuery: () => ({ data: undefined, isLoading: false }),
+  useNewCommitCountsQuery: () => ({ data: undefined, isLoading: false }),
   useStashList: () => ({ data: [] }),
   useWorkflowRuns: () => ({ data: [] }),
   useFileDiff: () => ({ data: null, isLoading: false, isError: false }),
@@ -59,6 +88,9 @@ function renderShell() {
     </QueryClientProvider>,
   );
 }
+
+// jsdom has no scrollIntoView; the graph's keyboard nav scrolls the picked row into view.
+Element.prototype.scrollIntoView = vi.fn();
 
 beforeEach(async () => {
   await i18n.changeLanguage("en");

@@ -5,13 +5,13 @@ import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
-import { useStatus, useStashList, useWorkflowRuns } from "@/api/queries";
-import { HistoryView } from "@/components/history/HistoryView";
+import { useStashList, useWorkflowRuns } from "@/api/queries";
+import { CommitGraph } from "./CommitGraph";
+import { useGraphReview } from "./useGraphReview";
 import { StashView } from "@/components/stash/StashView";
 import { ActionsView } from "@/components/actions/ActionsView";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
-import { cn } from "@/lib/utils";
 
 /** Which graph-panel tab a `ui.activeTab` value belongs to. */
 export type GraphPanelTab = "graph" | "stash" | "actions";
@@ -26,41 +26,12 @@ export function graphPanelTabOf(activeTab: "changes" | "history" | "stash" | "ac
   return activeTab === "stash" || activeTab === "actions" ? activeTab : "graph";
 }
 
-function UncommittedRow({ count, selected, onSelect }: {
-  count: number;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onSelect}
-      className={cn(
-        "flex items-center gap-2.5 w-full min-h-(--row) px-3 shrink-0 text-left border-b border-(--line) transition-colors",
-        selected ? "bg-(--acc-sel)" : "hover:bg-accent",
-      )}
-    >
-      {/* 점선 원: 아직 커밋이 아닌 변경(WIP)을 뜻한다 */}
-      <span
-        aria-hidden="true"
-        className={cn(
-          "w-3 h-3 rounded-full border-2 border-dashed shrink-0",
-          count > 0 ? "border-(--live)" : "border-(--faint)",
-        )}
-      />
-      <span className="flex-1 min-w-0 truncate text-[12.5px] font-semibold text-foreground">
-        {t("shell.uncommittedCount", { count })}
-      </span>
-    </button>
-  );
-}
-
 /**
- * Full-width card above the file list and diff. Tabs: commit graph (the
- * existing history list for now, with the uncommitted-changes row on top),
- * stash, Actions. The "changes per file" tab slot is filled in W7.
+ * Full-width card above the file list and diff. Tabs: commit graph (lane
+ * graph with a WIP row per worktree on top, new-commit dots and the "seen up
+ * to here" divider), stash, Actions. The "changes per file" tab slot is
+ * filled in W7. On the graph tab the header carries the "mark N new commits
+ * as seen" button.
  */
 export function GraphPanel() {
   const { t } = useTranslation();
@@ -72,7 +43,7 @@ export function GraphPanel() {
   const clearCommitSelection = useSelectionStore((s) => s.clearCommitSelection);
   const repoAccountId = useRepoAccountId();
 
-  const { data: statusEntries = [] } = useStatus(activeRepoPath);
+  const review = useGraphReview();
   const { data: stashes = [] } = useStashList(activeRepoPath);
   const hasRemote = activeRepo ? activeRepo.remotes.length > 0 : false;
   const { data: workflowRuns = [] } = useWorkflowRuns(
@@ -109,45 +80,55 @@ export function GraphPanel() {
       aria-label={t("shell.panelTabs")}
       className="relative flex flex-col h-[42%] min-h-[180px] shrink-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
     >
-      <TabGroup aria-label={t("shell.panelTabs")} className="gap-2 px-3 shrink-0 border-(--line)">
-        <Tab
-          variant="inline"
-          active={tab === "graph"}
-          onClick={openGraphTab}
-          icon={<GitCommitVertical className="w-3.5 h-3.5" />}
-        >
-          {t("shell.graphTab")}
-        </Tab>
-        <Tab
-          variant="inline"
-          active={tab === "stash"}
-          onClick={() => setActiveTab("stash")}
-          icon={<Archive className="w-3.5 h-3.5" />}
-          count={stashes.length > 0 ? stashes.length : undefined}
-        >
-          {t("shell.stashTab")}
-        </Tab>
-        <Tab
-          variant="inline"
-          active={tab === "actions"}
-          onClick={() => setActiveTab("actions")}
-          icon={<Play className="w-3.5 h-3.5" />}
-          count={activeRunCount > 0 ? activeRunCount : undefined}
-        >
-          {t("actions.title")}
-        </Tab>
-      </TabGroup>
+      <div className="flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)">
+        <TabGroup aria-label={t("shell.panelTabs")} className="flex-1 min-w-0 gap-2 px-3 border-b-0">
+          <Tab
+            variant="inline"
+            active={tab === "graph"}
+            onClick={openGraphTab}
+            icon={<GitCommitVertical className="w-3.5 h-3.5" />}
+          >
+            {t("shell.graphTab")}
+          </Tab>
+          <Tab
+            variant="inline"
+            active={tab === "stash"}
+            onClick={() => setActiveTab("stash")}
+            icon={<Archive className="w-3.5 h-3.5" />}
+            count={stashes.length > 0 ? stashes.length : undefined}
+          >
+            {t("shell.stashTab")}
+          </Tab>
+          <Tab
+            variant="inline"
+            active={tab === "actions"}
+            onClick={() => setActiveTab("actions")}
+            icon={<Play className="w-3.5 h-3.5" />}
+            count={activeRunCount > 0 ? activeRunCount : undefined}
+          >
+            {t("actions.title")}
+          </Tab>
+        </TabGroup>
+        {tab === "graph" && review.newCount !== null && review.newCount > 0 && (
+          <button
+            type="button"
+            onClick={review.markSeen}
+            className="shrink-0 h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
+          >
+            {t("graph.markSeen", { count: review.newCount })}
+          </button>
+        )}
+      </div>
 
       <div role="tabpanel" className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
         {tab === "graph" ? (
-          <>
-            <UncommittedRow
-              count={statusEntries.length}
-              selected={activeTab === "changes"}
-              onSelect={() => setActiveTab("changes")}
-            />
-            <HistoryView />
-          </>
+          <CommitGraph
+            wips={review.wips}
+            newCount={review.newCount}
+            basis={review.basis}
+            seenOid={review.seenOid}
+            seenAt={review.seenAt}
+          />
         ) : tab === "stash" ? (
           <StashView />
         ) : (
