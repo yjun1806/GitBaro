@@ -263,6 +263,11 @@ export async function getBranches(repoPath: string): Promise<BranchInfo[]> {
   return invoke("get_branches", { repoPath });
 }
 
+/** HEAD points at a commit, not a branch. An unborn (orphan) branch is not detached. */
+export async function isHeadDetached(repoPath: string): Promise<boolean> {
+  return invoke("is_head_detached", { repoPath });
+}
+
 export async function getBranchDivergence(repoPath: string): Promise<BranchDivergence[]> {
   return invoke("get_branch_divergence", { repoPath });
 }

@@ -3,7 +3,7 @@ import { GitBranch, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
-import { useBranches, useRecentBranches, useStatus, useWorktrees } from "@/api/queries";
+import { useBranches, useHeadDetached, useRecentBranches, useStatus, useWorktrees } from "@/api/queries";
 import { switchBranch, createBranch, deleteBranch, renameBranch, stashPush, stashPop } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
@@ -31,6 +31,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const ownerRepoPath = useOwnerRepoPath();
   const { data: branches = [] } = useBranches(activeRepoPath);
+  const { data: isDetached = false } = useHeadDetached(activeRepoPath);
   const { data: recentBranchNames = [] } = useRecentBranches(activeRepoPath);
   const { data: statusFiles = [] } = useStatus(activeRepoPath);
   const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
@@ -205,9 +206,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           <p className="text-xs text-muted-foreground leading-tight">{t("branch.current")}</p>
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-semibold truncate max-w-[200px]">
-              {currentBranch ??
-                // 로컬 브랜치가 있는데 HEAD인 브랜치가 없으면 detached HEAD다.
-                (branches.some((b) => !b.isRemote) ? t("branch.detachedHead") : t("branch.noBranch"))}
+              {currentBranch ?? (isDetached ? t("branch.detachedHead") : t("branch.noBranch"))}
             </p>
             {hasChanges && (
               <div className="flex items-center gap-0.5">
