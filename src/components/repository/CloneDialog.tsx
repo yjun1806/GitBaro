@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useId } from "react";
 import { X, FolderOpen, Search, Download, Lock, GitFork, Loader2, ChevronDown, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -8,6 +8,7 @@ import { cn, getErrorMessage } from "@/lib/utils";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { useActivityStore } from "@/stores/activity";
+import { Dialog } from "@/components/ui/Dialog";
 
 type CloneTab = "github" | "url";
 
@@ -27,6 +28,7 @@ export function CloneDialog({
   onClose,
 }: CloneDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const [tab, setTab] = useState<CloneTab>(accounts.length > 0 ? "github" : "url");
   const [repoSearch, setRepoSearch] = useState("");
   const [url, setUrl] = useState("");
@@ -130,11 +132,15 @@ export function CloneDialog({
     (tab === "url" ? url.trim().length > 0 : selectedRepo !== null);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-lg">
+    <Dialog
+      onClose={onClose}
+      dismissible={!isCloning}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-lg"
+    >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 id={titleId} className="text-base font-semibold text-foreground">
             {t("repo.clone")}
           </h2>
           <button
@@ -382,7 +388,6 @@ export function CloneDialog({
             </p>
           )}
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useId } from "react";
 import { Check, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { GitHubAccount } from "@/types";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import { cn } from "@/lib/utils";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface AccountSelectDialogProps {
   accounts: GitHubAccount[];
@@ -19,14 +20,18 @@ export function AccountSelectDialog({
   onClose,
 }: AccountSelectDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const [selectedId, setSelectedId] = useState<string | null>(activeAccountId);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm">
+    <Dialog
+      onClose={onClose}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-sm"
+    >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 id={titleId} className="text-base font-semibold text-foreground">
             {t("repo.selectDefaultAccount")}
           </h2>
           <button
@@ -94,7 +99,6 @@ export function AccountSelectDialog({
             {t("common.confirm")}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

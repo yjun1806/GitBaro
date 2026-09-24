@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useId } from "react";
 import { X, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { BranchInfo } from "@/types";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface CreateBranchDialogProps {
   branches: BranchInfo[];
@@ -22,6 +23,7 @@ export function CreateBranchDialog({
   onClose,
 }: CreateBranchDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const defaultBranch = branches.find((b) => !b.isRemote && b.isDefault);
   const defaultBranchName = defaultBranch?.name ?? "main";
   const isSameBranch = currentBranch === defaultBranchName;
@@ -38,10 +40,13 @@ export function CreateBranchDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-md">
+    <Dialog
+      onClose={onClose}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-md"
+    >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 id={titleId} className="text-base font-semibold text-foreground">
             {t("branch.create")}
           </h2>
           <button
@@ -165,7 +170,6 @@ export function CreateBranchDialog({
             {t("branch.createBranch")}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

@@ -1,5 +1,7 @@
+import { useId } from "react";
 import { X, AlertCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface CommitErrorDialogProps {
   message: string;
@@ -8,14 +10,18 @@ interface CommitErrorDialogProps {
 
 export function CommitErrorDialog({ message, onClose }: CommitErrorDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-md">
+    <Dialog
+      onClose={onClose}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-md"
+    >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-destructive" />
-            <h2 className="text-base font-semibold text-foreground">
+            <h2 id={titleId} className="text-base font-semibold text-foreground">
               {t("commit.errorTitle")}
             </h2>
           </div>
@@ -41,7 +47,6 @@ export function CommitErrorDialog({ message, onClose }: CommitErrorDialogProps) 
             {t("commit.close")}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

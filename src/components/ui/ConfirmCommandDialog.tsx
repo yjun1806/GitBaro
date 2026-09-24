@@ -1,5 +1,7 @@
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, X } from "lucide-react";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface ConfirmCommandDialogProps {
   title: string;
@@ -23,13 +25,17 @@ export function ConfirmCommandDialog({
   onClose,
 }: ConfirmCommandDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-md mx-4">
+    <Dialog
+      onClose={onClose}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-md mx-4"
+    >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h3 className="text-base font-semibold text-primary">{title}</h3>
+          <h3 id={titleId} className="text-base font-semibold text-primary">{title}</h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-primary">
             <X size={16} />
           </button>
@@ -83,7 +89,6 @@ export function ConfirmCommandDialog({
             {confirmLabel ?? t("common.proceed")}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

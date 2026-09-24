@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { useMenuKeyboard } from "@/hooks/useMenuKeyboard";
 
 export interface ContextMenuItem {
   label: string;
@@ -21,6 +22,7 @@ interface ContextMenuProps {
 
 export function ContextMenu({ sections, position, onClose }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const { onKeyDown, restoreFocus } = useMenuKeyboard(ref, onClose);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -51,25 +53,30 @@ export function ContextMenu({ sections, position, onClose }: ContextMenuProps) {
   return (
     <div
       ref={ref}
-      className="fixed bg-popover border border-border rounded-lg shadow-lg z-[100] py-1 min-w-[200px]"
+      role="menu"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="fixed outline-none bg-popover border border-border rounded-lg shadow-lg z-[100] py-1 min-w-[200px]"
       style={{ left: position.x, top: position.y }}
     >
       {sections.map((section, si) => (
         <div key={si}>
-          {si > 0 && <div className="border-t border-border my-1" />}
+          {si > 0 && <div role="separator" className="border-t border-border my-1" />}
           {section.items.map((item) => (
             <button
               key={item.label}
+              role="menuitem"
               onClick={(e) => {
                 e.stopPropagation();
                 if (!item.disabled) {
+                  restoreFocus();
                   item.onClick();
                   onClose();
                 }
               }}
               disabled={item.disabled}
               className={cn(
-                "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors text-left",
+                "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors text-left outline-none focus-visible:bg-accent",
                 item.disabled && "opacity-40 cursor-not-allowed",
                 item.variant === "danger"
                   ? "text-danger hover:bg-accent"

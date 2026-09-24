@@ -66,6 +66,7 @@ function FileEntryComponent({
         type="checkbox"
         className="w-3.5 h-3.5 shrink-0 cursor-pointer"
         checked={entry.staged}
+        aria-label={t(entry.staged ? "changes.checkbox.unstageFile" : "changes.checkbox.stageFile", { file: entry.path })}
         onChange={(e) => {
           e.stopPropagation();
           onToggleStage();

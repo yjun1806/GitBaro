@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Loader2, CheckCircle, XCircle, Copy, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { startGhLogin } from "@/api/commands";
+import { Dialog } from "@/components/ui/Dialog";
 
 type FlowState = "idle" | "code" | "waiting" | "success" | "error";
 
@@ -97,8 +98,12 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-5">
+    <Dialog
+      onClose={onClose}
+      dismissible={flowState !== "idle"}
+      ariaLabel={t("account.signInToGitHub")}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-5"
+    >
         {/* Requesting code */}
         {flowState === "idle" && (
           <>
@@ -231,7 +236,6 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
             </button>
           </>
         )}
-      </div>
-    </div>
+    </Dialog>
   );
 }

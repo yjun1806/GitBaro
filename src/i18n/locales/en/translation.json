@@ -51,6 +51,12 @@
       "copyPath": "Copy path",
       "addToGitignore": "Add to .gitignore",
       "discard": "Discard changes"
+    },
+    "checkbox": {
+      "stageFile": "Stage {{file}}",
+      "unstageFile": "Unstage {{file}}",
+      "stageAll": "Stage all changes",
+      "unstageAll": "Unstage all changes"
     }
   },
   "commit": {

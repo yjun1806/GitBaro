@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { X } from "lucide-react";
 import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { useTranslation } from "react-i18next";
@@ -10,6 +10,7 @@ import { useToastStore } from "@/stores/toast";
 import { getErrorMessage } from "@/lib/utils";
 import { BranchCombobox } from "@/components/ui/BranchCombobox";
 import type { BranchInfo, WorktreeInfo } from "@/types";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface CreateWorktreeDialogProps {
   repoPath: string;
@@ -40,6 +41,7 @@ export function CreateWorktreeDialog({
   onClose,
 }: CreateWorktreeDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
 
@@ -130,11 +132,14 @@ export function CreateWorktreeDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-md">
+    <Dialog
+      onClose={onClose}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-md"
+    >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 id={titleId} className="text-base font-semibold text-foreground">
             {t("worktree.create")}
           </h2>
           <button
@@ -295,7 +300,6 @@ export function CreateWorktreeDialog({
             {creating ? t("common.loading") : t("worktree.create")}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
@@ -16,9 +16,11 @@ import { cn, getErrorMessage } from "@/lib/utils";
 import { groupFilesByDirectory } from "@/lib/group-files";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
+import { Dialog } from "@/components/ui/Dialog";
 
 export function ChangesView() {
   const { t } = useTranslation();
+  const discardTitleId = useId();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const currentBranch = useCurrentBranch();
   const activeAccountId = useAccountStore((s) => s.activeAccountId);
@@ -267,6 +269,7 @@ export function ChangesView() {
                   type="checkbox"
                   className="w-3.5 h-3.5 shrink-0 cursor-pointer"
                   checked={true}
+                  aria-label={t("changes.checkbox.unstageAll")}
                   onChange={handleUnstageAll}
                 />
                 <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex-1">
@@ -331,6 +334,7 @@ export function ChangesView() {
                   type="checkbox"
                   className="w-3.5 h-3.5 shrink-0 cursor-pointer"
                   checked={false}
+                  aria-label={t("changes.checkbox.stageAll")}
                   onChange={handleStageAll}
                 />
                 <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex-1">
@@ -464,15 +468,13 @@ export function ChangesView() {
       </div>
 
       {discardTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setDiscardTarget(null)}
+        <Dialog
+          onClose={() => setDiscardTarget(null)}
+          closeOnBackdrop
+          labelledBy={discardTitleId}
+          className="w-[380px] max-w-[90vw] rounded-xl border border-border bg-card p-5 shadow-xl"
         >
-          <div
-            className="w-[380px] max-w-[90vw] rounded-xl border border-border bg-card p-5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-sm font-semibold text-foreground">
+            <h3 id={discardTitleId} className="text-sm font-semibold text-foreground">
               {t("changes.discardConfirmTitle")}
             </h3>
             <p className="mt-2 text-xs text-muted-foreground break-all">
@@ -492,8 +494,7 @@ export function ChangesView() {
                 {t("changes.discardConfirm")}
               </button>
             </div>
-          </div>
-        </div>
+        </Dialog>
       )}
 
       {/* 파일 우클릭 메뉴 */}
