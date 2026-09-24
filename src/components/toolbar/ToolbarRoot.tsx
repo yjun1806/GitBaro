@@ -1,16 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import {
-  Archive,
-  ArrowDown,
-  ArrowUp,
-  GitBranch,
-  GitMerge,
-  RefreshCw,
-  Settings,
-  type LucideIcon,
-} from "lucide-react";
+import { Settings } from "lucide-react";
 import { useAccountStore } from "@/stores/account";
 import {
   getAccounts,
@@ -23,71 +14,17 @@ import { useToastStore } from "@/stores/toast";
 import { getErrorMessage } from "@/lib/utils";
 import { GhLoginDialog } from "@/components/account/GhLoginDialog";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
-import { useToolbarDropdown } from "./useToolbarDropdown";
+import { ToolbarDropdownContext, useToolbarDropdown } from "./useToolbarDropdown";
 import { BranchZone } from "./BranchZone";
 import { WorktreeZone } from "./WorktreeZone";
-import { SyncZone } from "./SyncZone";
+import { GitActionZone } from "./GitActionZone";
 import { AccountZone } from "./AccountZone";
 import type { AppSettings } from "@/types";
 import { useActiveScope } from "@/hooks/useActiveScope";
 
-/** 워크스페이스 모드에서 꺼 두는 저장소 전용 동작. 시안 툴바(`gen_d.py` toolbar())의 두 묶음과 같은 순서다. */
-const REPO_ONLY_ACTIONS: { key: string; icon: LucideIcon; labelKey: string }[][] = [
-  [
-    { key: "fetch", icon: RefreshCw, labelKey: "activeScope.actions.fetch" },
-    { key: "pull", icon: ArrowDown, labelKey: "activeScope.actions.pull" },
-    { key: "push", icon: ArrowUp, labelKey: "activeScope.actions.push" },
-  ],
-  [
-    { key: "branch", icon: GitBranch, labelKey: "activeScope.actions.branch" },
-    { key: "merge", icon: GitMerge, labelKey: "activeScope.actions.merge" },
-    { key: "stash", icon: Archive, labelKey: "activeScope.actions.stash" },
-  ],
-];
-
-/**
- * 워크스페이스를 고른 동안 저장소 전용 영역(브랜치·워크트리·동기화) 자리에 두는 꺼진 버튼 묶음.
- * 지금 툴바에는 Merge·Stash 버튼이 없어서, 「꺼 둔다」는 조건을 보이려고 시안의 두 묶음을
- * 꺼진 상태로만 그린다. 워크스페이스 이름은 메인 칸 제목(W4-T3)이 보여 주므로 여기 두지 않는다.
- *
- * 임시 자리다. W5-T1의 `GitActionZone`이 저장소·워크스페이스 두 모드를 모두 맡으면 이 컴포넌트와
- * `REPO_ONLY_ACTIONS`는 통째로 지운다(모양도 그쪽을 따른다).
- * 꺼진 버튼은 마우스 이벤트를 받지 않아 툴팁이 뜨지 않으므로, 툴팁은 감싼 span에 단다.
- */
-function WorkspaceDisabledActions() {
-  const { t } = useTranslation();
-  const hint = t("activeScope.pickRepo");
-  return (
-    <div className="flex items-center gap-2.5 px-2 shrink-0">
-      {REPO_ONLY_ACTIONS.map((group) => (
-        <div
-          key={group.map((a) => a.key).join("-")}
-          role="group"
-          className="flex items-center gap-0.5 p-[3px] rounded-[11px] bg-card shadow-(--shadow-sm)"
-        >
-          {group.map(({ key, icon: Icon, labelKey }) => (
-            <span key={key} title={hint} className="inline-flex">
-              <button
-                type="button"
-                disabled
-                aria-disabled="true"
-                aria-label={`${t(labelKey)} — ${hint}`}
-                data-action={key}
-                className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg text-[12.5px] font-semibold text-muted-foreground opacity-50 cursor-not-allowed"
-              >
-                <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-                {t(labelKey)}
-              </button>
-            </span>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function ToolbarRoot() {
-  const { activeDropdown, toggle, close } = useToolbarDropdown();
+  const dropdown = useToolbarDropdown();
+  const { activeDropdown, toggle, close } = dropdown;
   const scope = useActiveScope();
 
   const [showLoginDialog, setShowLoginDialog] = useState(false);
@@ -175,8 +112,9 @@ export function ToolbarRoot() {
   };
 
   return (
-    <>
-      <div className="flex items-center h-[52px] border-b border-border bg-surface select-none">
+    <ToolbarDropdownContext.Provider value={dropdown}>
+      {/* @container: 툴바 폭에 따라 git 작업 버튼 이름을 숨긴다(ActionButton의 TOOLBAR_LABEL_CLASS). */}
+      <div className="@container flex items-center h-[52px] border-b border-border bg-surface select-none">
         {scope?.kind === "workspace" ? (
           <>
             {/* 워크스페이스 리뷰 화면(W4-T3)이 제목을 이 자리에 portal로 그린다. */}
@@ -185,7 +123,7 @@ export function ToolbarRoot() {
               data-tauri-drag-region
               data-toolbar-title-slot
             />
-            <WorkspaceDisabledActions />
+            <GitActionZone mode="workspace" paths={scope.paths} />
           </>
         ) : (
           <>
@@ -204,14 +142,10 @@ export function ToolbarRoot() {
             />
 
             {/* Drag region */}
-            <div className="flex-1 min-w-[40px] h-full" data-tauri-drag-region />
+            <div className="flex-1 min-w-4 h-full" data-tauri-drag-region />
 
-            {/* Zone B: Sync */}
-            <SyncZone
-              isOpen={activeDropdown === "sync"}
-              onToggle={() => toggle("sync")}
-              onClose={close}
-            />
+            {/* Zone B: git 작업 묶음 */}
+            <GitActionZone mode="repo" />
           </>
         )}
 
@@ -261,6 +195,6 @@ export function ToolbarRoot() {
           onClose={() => setShowSettings(false)}
         />
       )}
-    </>
+    </ToolbarDropdownContext.Provider>
   );
 }

@@ -17,7 +17,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { useSelectionStore } from "@/stores/selection";
 import { cn, getErrorMessage } from "@/lib/utils";
-import { useClickOutside } from "./useToolbarDropdown";
+import { useClickOutside, useToolbarDropdownContext } from "./useToolbarDropdown";
+import { ActionButton } from "./ActionButton";
 import { BranchDropdown } from "./BranchDropdown";
 import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
 import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
@@ -28,6 +29,32 @@ import { runWithStashedChanges } from "./run-with-stashed-changes";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { mainColumnLeft } from "@/components/layout/sidebar-layout";
+
+/**
+ * 툴바 오른쪽 [브랜치 · Merge · Stash] 묶음의 「브랜치」 버튼. 브랜치 패널을 여는 연결은
+ * 이 파일이 맡는다(W5-T3는 `useOpenBranchPanel`만 새 패널로 바꾼다).
+ */
+export function BranchPanelButton() {
+  const { t } = useTranslation();
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const onOpenBranchPanel = useOpenBranchPanel();
+  return (
+    <ActionButton
+      action="branch"
+      icon={GitBranch}
+      label={t("gitActions.branch")}
+      disabled={!activeRepoPath}
+      caret
+      onClick={onOpenBranchPanel}
+    />
+  );
+}
+
+/** 브랜치 패널을 연다. W5-T3의 브랜치 패널이 들어올 때까지는 왼쪽 브랜치 목록을 연다. */
+function useOpenBranchPanel(): () => void {
+  const { toggle } = useToolbarDropdownContext();
+  return () => toggle("branch");
+}
 
 interface BranchZoneProps {
   isOpen: boolean;
@@ -272,11 +299,16 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   };
 
   return (
-    <div ref={zoneRef} className={cn("relative shrink-0 flex items-center", isOpen && "z-50")}>
+    <div
+      ref={zoneRef}
+      // 툴바가 좁으면 이 칸이 먼저 줄어든다(브랜치 이름은 말줄임). 오른쪽 git 작업·계정·설정이 잘리지 않게 한다.
+      className={cn("relative w-[220px] min-w-[60px] shrink flex items-center", isOpen && "z-50")}
+    >
       <button
         onClick={onToggle}
+        title={currentBranch ?? undefined}
         className={cn(
-          "flex items-center gap-2 px-4 w-[220px] h-[52px] border-r border-border transition-colors text-left",
+          "flex items-center gap-2 px-4 w-full min-w-0 overflow-hidden h-[52px] border-r border-border transition-colors text-left",
           isOpen ? "relative z-50 bg-accent" : "hover:bg-accent",
         )}
       >

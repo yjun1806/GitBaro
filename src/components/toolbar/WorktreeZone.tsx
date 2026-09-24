@@ -10,6 +10,7 @@ import { useBranches, useWorktrees } from "@/api/queries";
 import { removeWorktree, stopWorktreePreview, checkPreviewActive } from "@/api/commands";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { TOOLBAR_LABEL_CLASS } from "./ActionButton";
 import { useClickOutside } from "./useToolbarDropdown";
 import { WorktreeDropdown } from "./WorktreeDropdown";
 import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog";
@@ -86,11 +87,15 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
   };
 
   return (
-    <div ref={zoneRef} className={cn("relative shrink-0 flex items-center", isOpen && "z-50")}>
+    <div
+      ref={zoneRef}
+      // 툴바가 좁으면 이 칸이 먼저 줄어든다. 오른쪽 git 작업·계정·설정이 잘리지 않게 한다.
+      className={cn("relative min-w-[60px] shrink flex items-center", isOpen && "z-50")}
+    >
       <button
         onClick={onToggle}
         className={cn(
-          "flex items-center gap-2 px-4 w-[220px] h-[52px] border-r border-border transition-colors text-left",
+          "flex items-center gap-2 px-4 w-[220px] min-w-0 overflow-hidden shrink h-[52px] border-r border-border transition-colors text-left",
           isOpen ? "relative z-50 bg-accent" : "hover:bg-accent",
         )}
       >
@@ -122,11 +127,12 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
       {isInWorktree && mainWorktree && (
         <button
           onClick={() => openWorktree(mainWorktree.path)}
-          className="flex items-center gap-1 h-[52px] px-3 border-r border-border hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1 h-[52px] px-3 shrink-0 border-r border-border hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
           title={t("worktree.returnToMain")}
+          aria-label={t("worktree.returnToMain")}
         >
           <Undo2 className="w-3.5 h-3.5" />
-          <span className="text-xs font-medium">{t("worktree.returnToMainShort")}</span>
+          <span className={cn("text-xs font-medium", TOOLBAR_LABEL_CLASS)}>{t("worktree.returnToMainShort")}</span>
         </button>
       )}
 
