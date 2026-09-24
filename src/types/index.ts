@@ -44,6 +44,8 @@ export interface RepoAccountMapping {
 
 export interface StatusEntry {
   path: string;
+  /** Previous path when the entry is a rename or copy (`git mv`). */
+  origPath?: string | null;
   status: FileStatus;
   staged: boolean;
   modifiedAt?: number | null;

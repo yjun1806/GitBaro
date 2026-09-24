@@ -30,6 +30,8 @@ import type {
 
 interface RawStatusEntry {
   path: string;
+  /** Source path of a rename/copy detected by `git status`. */
+  origPath: string | null;
   staged: boolean;
   unstaged: boolean;
   conflicted: boolean;
@@ -60,9 +62,12 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
       });
       continue;
     }
+    const indexRenamed = entry.indexStatus === "renamed" || entry.indexStatus === "copied";
+    const worktreeRenamed = entry.worktreeStatus === "renamed" || entry.worktreeStatus === "copied";
     if (entry.staged && entry.indexStatus !== "unchanged") {
       entries.push({
         path: entry.path,
+        origPath: indexRenamed ? entry.origPath : null,
         status: entry.indexStatus as FileStatus,
         staged: true,
         modifiedAt: entry.modifiedAt,
@@ -74,6 +79,7 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
     if (entry.unstaged && entry.worktreeStatus !== "unchanged") {
       entries.push({
         path: entry.path,
+        origPath: !indexRenamed && worktreeRenamed ? entry.origPath : null,
         status: entry.worktreeStatus as FileStatus,
         staged: false,
         modifiedAt: entry.modifiedAt,
@@ -108,8 +114,22 @@ export async function getDiff(repoPath: string, staged: boolean): Promise<DiffOu
   return invoke("get_diff", { repoPath, staged });
 }
 
-export async function discardChanges(repoPath: string, paths: string[]): Promise<void> {
-  return invoke("discard_changes", { repoPath, paths });
+/**
+ * Discard changes to `paths`. With `staged` false only the unstaged changes are
+ * dropped (restored from the index); with `staged` true the files return to
+ * their HEAD state. Untracked and index-only files are moved to the Trash.
+ */
+export async function discardChanges(
+  repoPath: string,
+  paths: string[],
+  staged: boolean,
+): Promise<void> {
+  return invoke("discard_changes", { repoPath, paths, staged });
+}
+
+/** Paths among `paths` whose file still contains `<<<<<<<`/`>>>>>>>` conflict markers. */
+export async function findConflictMarkers(repoPath: string, paths: string[]): Promise<string[]> {
+  return invoke("find_conflict_markers", { repoPath, paths });
 }
 
 export async function addToGitignore(repoPath: string, pattern: string): Promise<void> {

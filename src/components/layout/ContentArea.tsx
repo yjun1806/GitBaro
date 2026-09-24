@@ -47,8 +47,9 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
   const { data: diff, isLoading, isError } = useFileDiff(activeRepoPath, filePath, staged);
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
 
+  // 일부만 스테이징된 파일은 두 행이 있으므로 섹션(staged)까지 맞는 행을 쓴다.
   const fileStatus: FileStatus =
-    statusEntries.find((e) => e.path === filePath)?.status ?? "modified";
+    statusEntries.find((e) => e.path === filePath && e.staged === staged)?.status ?? "modified";
 
   if (isLoading) {
     return (
