@@ -922,5 +922,28 @@
       "merge": "Merge",
       "stash": "Stash"
     }
+  },
+  "review": {
+    "subtitle_one": "Workspace · {{account}} · showing {{shown}} of {{count}} repository",
+    "subtitle_other": "Workspace · {{account}} · showing {{shown}} of {{count}} repositories",
+    "showAll_one": "Show all ({{count}} hidden)",
+    "showAll_other": "Show all ({{count}} hidden)",
+    "hideQuiet": "Hide quiet repositories",
+    "hiddenHint": "Repositories on their default branch with no new commits and no uncommitted changes are hidden",
+    "noCommits": "No commits since these repositories branched off main",
+    "wipLabel_one": "Uncommitted changes in {{repo}} ({{count}} file)",
+    "wipLabel_other": "Uncommitted changes in {{repo}} ({{count}} files)",
+    "baseRow": "Where each repository branched off main",
+    "repoError": "Couldn't read {{repo}}: {{error}}",
+    "noDefaultBranch": "No default branch found, so recent commits are shown instead",
+    "noSharedHistory": "No history shared with {{branch}}, so recent commits are shown instead",
+    "truncated": "Showing the latest {{count}} commits",
+    "emptyTitle": "No repositories in this workspace",
+    "emptyHint": "Drag repositories onto the workspace in the sidebar.",
+    "selectTitle": "Pick a commit or uncommitted changes",
+    "selectHint": "Its files and diff show here.",
+    "openToCommit": "Open to commit",
+    "noChanges": "No uncommitted changes",
+    "staged": "staged"
   }
 }

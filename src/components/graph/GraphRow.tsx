@@ -1,4 +1,4 @@
-import type { MouseEvent, Ref } from "react";
+import type { MouseEvent, ReactNode, Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, Bot, FolderGit2 } from "lucide-react";
 import { RefBadge } from "@/components/history/CommitItem";
@@ -16,7 +16,7 @@ const WIP_R = 5;
 export const GRAPH_COLUMNS = "grid grid-cols-[minmax(0,1fr)_110px_80px_70px] gap-3 items-center";
 
 /** 한 선의 SVG 경로. 레인이 바뀌는 선은 행 가운데 높이를 지나는 곡선으로 그린다. */
-function edgePath(edge: GraphEdge, dotLane: number): string {
+export function edgePath(edge: GraphEdge, dotLane: number): string {
   const [x1, y1, x2, y2] =
     edge.kind === "pass"
       ? [laneX(edge.fromLane), 0, laneX(edge.toLane), H]
@@ -88,8 +88,10 @@ interface GraphRowProps {
   /** 「여기까지 확인함」 아래(이미 확인한) 커밋. 시안처럼 흐리게 그린다. */
   isSeen: boolean;
   wipAbove: boolean;
+  /** 설명 칸 맨 앞(ref 라벨 앞)에 둘 것. 저장소별 레인 모드의 저장소 표시에 쓴다. */
+  leading?: ReactNode;
   onClick: () => void;
-  onContextMenu: (e: MouseEvent) => void;
+  onContextMenu?: (e: MouseEvent) => void;
   ref?: Ref<HTMLButtonElement>;
 }
 
@@ -109,6 +111,7 @@ export function GraphRow({
   isNew,
   isSeen,
   wipAbove,
+  leading,
   onClick,
   onContextMenu,
   ref,
@@ -146,6 +149,7 @@ export function GraphRow({
             className={cn("w-1.5 h-1.5 rounded-full shrink-0", isNew ? "bg-(--acc)" : "bg-transparent")}
             title={isNew ? t("graph.newCommit") : undefined}
           />
+          {leading}
           {commit.refs.map((label) => (
             <RefBadge key={`${label.kind}:${label.name}`} label={label} remoteTags={remoteTags} />
           ))}
@@ -205,6 +209,14 @@ interface GraphWipRowProps {
   selected: boolean;
   /** 아래 HEAD 커밋 행까지 점선을 잇는다. */
   connectDown: boolean;
+  /**
+   * 저장소별 레인 모드: 원을 이 레인에 두고, 지나가는 선과 아래로 잇는 선을 그린다.
+   * 없으면 첫 레인에 원만 그린다(단일 저장소 그래프).
+   */
+  layout?: GraphRowLayout;
+  colorOf?: (chain: number) => string;
+  /** 설명 칸 맨 앞에 둘 것(저장소 표시). */
+  leading?: ReactNode;
   onSelect: () => void;
 }
 
@@ -221,10 +233,13 @@ export function GraphWipRow({
   graphWidth,
   selected,
   connectDown,
+  layout,
+  colorOf,
+  leading,
   onSelect,
 }: GraphWipRowProps) {
   const { t } = useTranslation();
-  const x = laneX(0);
+  const x = laneX(layout?.lane ?? 0);
   const active = (count ?? 0) > 0;
   return (
     <button
@@ -239,6 +254,17 @@ export function GraphWipRow({
       style={{ height: H }}
     >
       <svg width={graphWidth} height={H} viewBox={`0 0 ${graphWidth} ${H}`} aria-hidden="true" className="shrink-0">
+        {layout?.edges.map((edge, i) => (
+          <path
+            key={i}
+            d={edgePath(edge, layout.lane)}
+            stroke={colorOf ? colorOf(edge.chain) : color}
+            strokeWidth={2}
+            strokeOpacity={0.9}
+            strokeDasharray={edge.kind === "out" && edge.fromLane === layout.lane ? "2.5 2" : undefined}
+            fill="none"
+          />
+        ))}
         {connectDown && (
           <path d={`M${x} ${MID + WIP_R} V${H}`} stroke={color} strokeWidth={2} strokeDasharray="2.5 2" fill="none" />
         )}
@@ -255,6 +281,7 @@ export function GraphWipRow({
       <span className={cn(GRAPH_COLUMNS, "flex-1 min-w-0 pl-2 pr-3 text-[12.5px]")}>
         <span className="flex items-center gap-2 min-w-0">
           <span className="w-1.5 shrink-0" />
+          {leading}
           {worktreeName && (
             <span
               className="inline-flex items-center gap-1 max-w-[180px] shrink-0 px-[7px] py-px rounded-[6px] border border-(--line2) text-[10.5px] font-bold text-(--fg2)"

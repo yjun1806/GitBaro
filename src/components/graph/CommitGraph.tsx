@@ -21,22 +21,25 @@ import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { computeGraphLanes } from "@/lib/graph-lanes";
-import { getErrorMessage } from "@/lib/utils";
+import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
 import { HistoryView } from "@/components/history/HistoryView";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
 import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
 import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
 import type { CommitInfo } from "@/types";
-import { GRAPH_COLUMNS, GraphRow, GraphWipRow, SeenDivider } from "./GraphRow";
+import { edgePath, GRAPH_COLUMNS, GraphRow, GraphWipRow, SeenDivider } from "./GraphRow";
 import {
   edgesThroughBottom,
+  GRAPH_ROW_HEIGHT,
   graphColumnWidth,
   laneColor,
+  laneX,
   markNewCommits,
   normalizePath,
   type GraphWip,
 } from "./graph-model";
+import { repoLaneColor, type LaneWip, type RepoLaneGraph } from "./repo-lanes";
 
 export interface CommitGraphProps {
   /** 맨 위 WIP 행(`useGraphReview`가 순서까지 정한 목록). */
@@ -439,4 +442,225 @@ function useCommitMenu(repoPath: string | null) {
     open: (commit: CommitInfo, x: number, y: number) => setTarget({ commit, x, y }),
     element,
   };
+}
+
+/* --- 저장소별 레인 모드(워크스페이스 리뷰, W4-T3) --- */
+
+export interface RepoLaneCommitGraphProps {
+  graph: RepoLaneGraph;
+  /** 레인 순서대로의 저장소 경로. 레인 번호 → 색을 고르는 데 쓴다. */
+  lanePaths: readonly string[];
+  /** 저장소 경로 → 행 앞에 붙일 짧은 이름. */
+  repoLabel: (repoPath: string) => string;
+  /** 고른 행의 `key`(`RepoLaneRow.key`). */
+  selectedKey: string | null;
+  /** 가장 최근에 확인한 시각(epoch ms). 구분선 문구에 쓴다. */
+  seenAt: number | null;
+  /** 가장 가까운 갈라진 지점 커밋의 시각(epoch s). 모르면 null. */
+  baseTime: number | null;
+  /** 맨 아래 행의 기본 브랜치 표시(`main`, 저장소마다 다르면 `main, trunk`). */
+  baseBranchLabel: string;
+  isLoading: boolean;
+  onSelectCommit: (repoPath: string, commit: CommitInfo, key: string) => void;
+  onSelectWip: (wip: LaneWip, key: string) => void;
+}
+
+/** 저장소 이름 표시. 레인 색의 옅은 배경에 레인 색 글자. */
+export function RepoLaneTag({ repoPath, label }: { repoPath: string; label: string }) {
+  const color = repoLaneColor(repoPath);
+  return (
+    <span
+      className="shrink-0 max-w-[140px] truncate px-[7px] py-px rounded-[6px] text-[10.5px] font-bold"
+      style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}
+      title={repoPath}
+    >
+      {label}
+    </span>
+  );
+}
+
+/**
+ * 워크스페이스의 커밋 그래프. 레인 하나가 저장소 하나이고, 레인 색은 저장소 색으로 고정이다.
+ * 맨 위에 커밋하지 않은 변경(WIP) 행, 새 커밋 점과 「여기까지 확인함」 구분선, 맨 아래에
+ * 각 저장소가 main에서 갈라진 지점을 둔다. 행 계산은 `buildRepoLaneRows`가 한다.
+ */
+export function RepoLaneCommitGraph({
+  graph,
+  lanePaths,
+  repoLabel,
+  selectedKey,
+  seenAt,
+  baseTime,
+  baseBranchLabel,
+  isLoading,
+  onSelectCommit,
+  onSelectWip,
+}: RepoLaneCommitGraphProps) {
+  const { t } = useTranslation();
+  const accounts = useAccountStore((s) => s.accounts);
+  const accountAvatarMap = useMemo(
+    () => new Map(accounts.map((a) => [a.email.toLowerCase(), a.avatarUrl])),
+    [accounts],
+  );
+  const graphWidth = graphColumnWidth(graph.laneCount);
+  const colorOf = useCallback(
+    (chain: number) => (lanePaths[chain] ? repoLaneColor(lanePaths[chain]) : "var(--faint)"),
+    [lanePaths],
+  );
+
+  const commitRows = useMemo(
+    () => graph.rows.filter((r) => r.kind === "commit"),
+    [graph.rows],
+  );
+  const selectedIdx = commitRows.findIndex((r) => r.key === selectedKey);
+  const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
+    items: commitRows,
+    onSelect: (r) => onSelectCommit(r.repoPath, r.commit, r.key),
+    selectedIndex: selectedIdx,
+  });
+  const navIndex = new Map(commitRows.map((r, i) => [r.key, i]));
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div
+        className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11px] font-semibold text-(--faint)"}
+        style={{ paddingLeft: graphWidth + 8 }}
+        aria-hidden="true"
+      >
+        <span className="pl-3.5">{t("graph.colDescription")}</span>
+        <span>{t("graph.colAuthor")}</span>
+        <span>{t("graph.colTime")}</span>
+        <span>{t("graph.colCommit")}</span>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
+        {isLoading && graph.rows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">{t("history.loadingHistory")}</p>
+        ) : graph.rows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">{t("review.noCommits")}</p>
+        ) : (
+          graph.rows.map((row) => {
+            switch (row.kind) {
+              case "wip": {
+                const wt = row.wip.isMain ? null : worktreeName({ ...row.wip, isCurrent: false });
+                return (
+                  <GraphWipRow
+                    key={row.key}
+                    wipLabel={t("review.wipLabel", { repo: repoLabel(row.repoPath), count: row.wip.count })}
+                    worktreeName={wt}
+                    count={row.wip.count}
+                    changedAt={row.wip.changedAt}
+                    color={repoLaneColor(row.repoPath)}
+                    graphWidth={graphWidth}
+                    selected={selectedKey === row.key}
+                    connectDown={false}
+                    layout={row.layout}
+                    colorOf={colorOf}
+                    leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
+                    onSelect={() => onSelectWip(row.wip, row.key)}
+                  />
+                );
+              }
+              case "commit": {
+                const idx = navIndex.get(row.key) ?? -1;
+                const emailKey = row.commit.author.email?.toLowerCase() ?? "";
+                return (
+                  <GraphRow
+                    key={row.key}
+                    ref={itemRef(idx)}
+                    commit={row.commit}
+                    layout={row.layout}
+                    graphWidth={graphWidth}
+                    colorOf={colorOf}
+                    remoteTags={null}
+                    avatarUrl={accountAvatarMap.get(emailKey) || undefined}
+                    isSelected={selectedKey === row.key}
+                    isHighlighted={activeIndex === idx}
+                    isNew={row.isNew}
+                    isSeen={row.isSeen}
+                    wipAbove={false}
+                    leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
+                    onClick={() => onSelectCommit(row.repoPath, row.commit, row.key)}
+                  />
+                );
+              }
+              case "seen":
+                return (
+                  <SeenDivider
+                    key={row.key}
+                    seenAt={seenAt}
+                    graphWidth={graphWidth}
+                    through={row.through}
+                    colorOf={colorOf}
+                  />
+                );
+              case "base":
+                return (
+                  <BaseRow
+                    key={row.key}
+                    row={row}
+                    graphWidth={graphWidth}
+                    colorOf={colorOf}
+                    baseTime={baseTime}
+                    branchLabel={baseBranchLabel}
+                  />
+                );
+            }
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 맨 아래 행: 각 저장소 레인이 모이는 「main에서 갈라진 지점」. */
+function BaseRow({
+  row,
+  graphWidth,
+  colorOf,
+  baseTime,
+  branchLabel,
+}: {
+  branchLabel: string;
+  row: Extract<RepoLaneGraph["rows"][number], { kind: "base" }>;
+  graphWidth: number;
+  colorOf: (chain: number) => string;
+  baseTime: number | null;
+}) {
+  const { t } = useTranslation();
+  const H = GRAPH_ROW_HEIGHT;
+  return (
+    <div
+      className="flex items-center border-b border-(--line)"
+      style={{ height: H }}
+      data-testid="repo-lane-base"
+    >
+      <svg width={graphWidth} height={H} viewBox={`0 0 ${graphWidth} ${H}`} aria-hidden="true" className="shrink-0">
+        {row.layout.edges.map((edge, i) => (
+          <path
+            key={i}
+            d={edgePath(edge, 0)}
+            stroke={colorOf(edge.chain)}
+            strokeWidth={2}
+            strokeOpacity={0.9}
+            fill="none"
+          />
+        ))}
+        <circle cx={laneX(0)} cy={H / 2} r={5} fill="var(--card)" stroke="var(--muted)" strokeWidth={2} />
+      </svg>
+      <span className={GRAPH_COLUMNS + " flex-1 min-w-0 pl-2 pr-3 text-[12.5px]"}>
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="w-1.5 shrink-0" />
+          <span className="shrink-0 px-[7px] py-px rounded-[6px] bg-(--chip) text-[10.5px] font-bold text-(--fg2)">
+            {branchLabel}
+          </span>
+          <span className="truncate text-(--fg2)">{t("review.baseRow")}</span>
+        </span>
+        <span />
+        <span className="truncate text-[12px] text-muted-foreground">
+          {baseTime !== null ? formatRelativeTime(baseTime) : null}
+        </span>
+        <span />
+      </span>
+    </div>
+  );
 }

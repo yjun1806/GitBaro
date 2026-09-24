@@ -572,3 +572,76 @@ export function useCachedWorkflowRunsState(
     client.getQueryState<WorkflowRun[]>(["workflowRuns", repoPath, accountId]),
   );
 }
+
+// W4-T3 — 워크스페이스 리뷰 화면
+
+import { useQueries } from "@tanstack/react-query";
+import { getWorkspaceHistory } from "./commands";
+import type { NewCommitIds, StatusEntry, WorkspaceRepoHistory } from "@/types";
+
+/** 워크스페이스 타임라인에서 저장소마다 불러올 커밋 수. */
+export const WORKSPACE_HISTORY_LIMIT = 100;
+
+/**
+ * 저장소마다 따로 부르는 워크스페이스 타임라인. 키 앞부분이 `["workspaceHistory", repoPath]`라
+ * 저장소 하나만 무효화할 수 있다. `headOid`(리뷰 스캔의 HEAD)가 키에 들어 있어 커밋이 생기면
+ * 20초 스캔 뒤 바로 다시 읽는다(`.git/` 안쪽 변경은 활동 이벤트가 오지 않는다).
+ * 결과는 `repos` 순서와 같고, 아직 못 읽은 저장소는 undefined다.
+ */
+export function useWorkspaceHistories(
+  repos: readonly { path: string; headOid: string | null }[],
+): (WorkspaceRepoHistory | undefined)[] {
+  return useQueries({
+    queries: repos.map(({ path, headOid }) => ({
+      queryKey: ["workspaceHistory", path, headOid, WORKSPACE_HISTORY_LIMIT],
+      queryFn: async () => (await getWorkspaceHistory([path], WORKSPACE_HISTORY_LIMIT))[0],
+      placeholderData: keepPreviousData,
+    })),
+    combine: (results) => results.map((r) => r.data),
+  });
+}
+
+/**
+ * 여러 워크트리의 커밋하지 않은 변경. 키가 `useStatus`와 같아(`["status", path]`) 캐시를 같이 쓴다.
+ * 결과는 경로 → 목록이고, 아직 못 읽은 경로는 빠진다.
+ */
+export function useStatusMany(paths: readonly string[]): Record<string, StatusEntry[]> {
+  return useQueries({
+    queries: paths.map((path) => ({
+      queryKey: ["status", path],
+      queryFn: () => getStatus(path),
+      staleTime: 0,
+      refetchInterval: 30_000,
+      refetchIntervalInBackground: false,
+    })),
+    combine: (results) => {
+      const out: Record<string, StatusEntry[]> = {};
+      results.forEach((r, i) => {
+        if (r.data) out[paths[i]] = r.data;
+      });
+      return out;
+    },
+  });
+}
+
+/**
+ * 여러 워크트리의 새 커밋. 키가 `useNewCommitIdsQuery`와 같아 단일 저장소 그래프와 캐시를 같이 쓴다.
+ * 결과는 경로 → 응답이고, 아직 못 센 경로는 빠진다.
+ */
+export function useNewCommitIdsMany(
+  entries: readonly { entry: SeenRecordInput; headOid: string | null }[],
+): Record<string, NewCommitIds> {
+  return useQueries({
+    queries: entries.map(({ entry, headOid }) => ({
+      queryKey: ["newCommitIds", entry, headOid],
+      queryFn: () => listNewCommitIds(entry),
+      refetchInterval: REVIEW_POLL_MS,
+      refetchIntervalInBackground: false,
+    })),
+    combine: (results) => {
+      const out: Record<string, NewCommitIds> = {};
+      for (const r of results) if (r.data) out[r.data.path] = r.data;
+      return out;
+    },
+  });
+}
