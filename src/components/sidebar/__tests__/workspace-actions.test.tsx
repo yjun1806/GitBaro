@@ -110,6 +110,30 @@ describe("workspace suggestion", () => {
     expect(screen.queryByRole("region", { name: suggestionTitle() })).not.toBeInTheDocument();
   });
 
+  it("stays dismissed after the app restarts (the key is persisted and restored)", async () => {
+    const first = renderTree();
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    first.unmount();
+
+    const storageKey = useWorkspaceStore.persist.getOptions().name ?? "";
+    const saved = localStorage.getItem(storageKey);
+    expect(saved).toContain("acme/xames");
+
+    // 앱을 다시 켠 것처럼 메모리의 상태를 비운다. setState는 저장값도 덮어쓰므로
+    // 비운 뒤 앞서 저장된 값을 되돌려 놓고, 그 값에서 복원한다.
+    act(() => {
+      useWorkspaceStore.setState({ dismissedSuggestions: [] });
+    });
+    localStorage.setItem(storageKey, saved ?? "");
+    await act(async () => {
+      await useWorkspaceStore.persist.rehydrate();
+    });
+
+    expect(useWorkspaceStore.getState().dismissedSuggestions).toEqual(["acme/xames"]);
+    renderTree();
+    expect(screen.queryByRole("region", { name: suggestionTitle() })).not.toBeInTheDocument();
+  });
+
   it("creates the workspace on accept and does not suggest it again after the workspace is deleted", () => {
     renderTree();
     fireEvent.click(screen.getByRole("button", { name: "Create workspace" }));
@@ -198,6 +222,43 @@ describe("workspace create / rename / delete", () => {
     expect(useRepositoryStore.getState().repos.map((r) => r.path)).toEqual(repos.map((r) => r.path));
   });
 
+  it("counts every repository in the workspace while searching, not only the matches", () => {
+    useWorkspaceStore.setState({ dismissedSuggestions: ["acme/xames"] });
+    const created = useWorkspaceStore
+      .getState()
+      .createWorkspace("product", "acme", [solo.path, xamesAdmin.path, xamesApi.path]);
+    if (!created.ok) throw new Error(created.reason);
+    renderTree();
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "solo" } });
+    expect(screen.queryByRole("treeitem", { name: "xames-admin" })).not.toBeInTheDocument();
+
+    fireEvent.contextMenu(item("product"), { clientX: 30, clientY: 40 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete workspace…" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete workspace" });
+    expect(dialog).toHaveTextContent("Its 3 repositories move back directly under acme");
+  });
+
+  it("moves keyboard focus to the row above after deleting, not to the page body", () => {
+    useWorkspaceStore.setState({ dismissedSuggestions: ["acme/xames"] });
+    const created = useWorkspaceStore.getState().createWorkspace("product", "acme", [solo.path]);
+    if (!created.ok) throw new Error(created.reason);
+    renderTree();
+
+    const row = item("product");
+    act(() => row.focus());
+    // 메뉴 키로 열면 좌표가 0이다.
+    fireEvent.contextMenu(row, { clientX: 0, clientY: 0 });
+    expect(screen.getByRole("menu", { name: "Workspace menu" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete workspace…" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete workspace" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete workspace" }));
+
+    expect(screen.queryByRole("treeitem", { name: "product" })).not.toBeInTheDocument();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(item("acme")).toHaveFocus();
+  });
+
   it("cancelling the delete confirmation keeps the workspace", () => {
     const created = useWorkspaceStore.getState().createWorkspace("product", "acme", [solo.path]);
     if (!created.ok) throw new Error(created.reason);
@@ -210,6 +271,19 @@ describe("workspace create / rename / delete", () => {
 
     expect(useWorkspaceStore.getState().workspaces).toHaveLength(1);
     expect(item("solo")).toHaveAttribute("aria-level", "3");
+  });
+});
+
+describe("account whose owner is not known yet", () => {
+  it("has no sort menu or new-workspace button on the temporary Other group", () => {
+    const scratch = makeRepo("scratch", null, { accountId: "not-loaded-yet" });
+    useRepositoryStore.setState({ repos: [...repos, scratch] });
+    renderTree();
+
+    const other = item("Other");
+    expect(within(other).queryByRole("button", { name: "New workspace" })).not.toBeInTheDocument();
+    expect(within(other).queryByRole("button", { name: /Sort:/ })).not.toBeInTheDocument();
+    expect(within(item("acme")).getByRole("button", { name: "New workspace" })).toBeInTheDocument();
   });
 });
 

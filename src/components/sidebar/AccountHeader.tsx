@@ -15,6 +15,11 @@ interface AccountHeaderProps {
   repoCount: number;
   ownerType?: "User" | "Organization";
   sortMode: SortMode;
+  /**
+   * 정렬 메뉴와 새 워크스페이스 버튼을 보일지. 계정을 아직 모르는 임시 그룹(「Other」)에서는
+   * 끈다. 그 키에 워크스페이스나 정렬을 저장하면 계정을 불러온 뒤 어느 계정에도 속하지 않는다.
+   */
+  showActions: boolean;
   expanded: boolean;
   onToggle: () => void;
 }
@@ -27,8 +32,9 @@ function accountIcon(label: string, ownerType?: "User" | "Organization") {
 }
 
 /**
- * 계정 머리글: ▾/▸, 개인·조직 아이콘, 계정 이름(대문자), 저장소 수,
- * 정렬 메뉴와 새 워크스페이스 버튼(D2 시안).
+ * 계정 머리글: ▾/▸, 개인·조직 아이콘, 계정 이름(대문자), 저장소 수, 정렬 메뉴(D2 시안).
+ * 끝의 새 워크스페이스 버튼은 시안에 없다. README는 제안과 끌어 놓기로만 만든다고 적지만,
+ * 끌어 놓을 워크스페이스가 먼저 있어야 해서 직접 만드는 입구로 더했다.
  */
 export function AccountHeader({
   label,
@@ -36,6 +42,7 @@ export function AccountHeader({
   repoCount,
   ownerType,
   sortMode,
+  showActions,
   expanded,
   onToggle,
 }: AccountHeaderProps) {
@@ -59,20 +66,24 @@ export function AccountHeader({
           {label}
         </span>
         <span className="text-[10.5px] text-[var(--faint)] tabular-nums">{repoCount}</span>
-        <SortMenu mode={sortMode} onChange={(mode) => setSortMode(accountKey, mode)} />
-        <button
-          type="button"
-          title={t("workspace.create")}
-          aria-label={t("workspace.create")}
-          onClick={(e) => {
-            e.stopPropagation();
-            setCreating(true);
-          }}
-          onKeyDown={(e) => e.stopPropagation()}
-          className="w-5 h-5 shrink-0 flex items-center justify-center rounded-[var(--radius-chip)] text-[var(--faint)] hover:text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-        >
-          <FolderPlus className="w-3 h-3" aria-hidden="true" />
-        </button>
+        {showActions && (
+          <SortMenu mode={sortMode} onChange={(mode) => setSortMode(accountKey, mode)} />
+        )}
+        {showActions && (
+          <button
+            type="button"
+            title={t("workspace.create")}
+            aria-label={t("workspace.create")}
+            onClick={(e) => {
+              e.stopPropagation();
+              setCreating(true);
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="w-5 h-5 shrink-0 flex items-center justify-center rounded-[var(--radius-chip)] text-[var(--faint)] hover:text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <FolderPlus className="w-3 h-3" aria-hidden="true" />
+          </button>
+        )}
       </TreeRowFrame>
       {/* 창은 행 밖에 둔다. 행 안에 두면 창 안의 누르기가 React 트리를 따라 행의 접기로 올라간다. */}
       {creating && (

@@ -96,6 +96,21 @@ describe("buildRepoTree", () => {
 
       expect(tree.map((a) => [a.accountKey, a.label])).toEqual([["other", "Other"]]);
     });
+
+    it("계정을 아직 모르는 저장소만 모인 Other 그룹만 임시(pending) 계정으로 표시한다", () => {
+      const before = build({ repos: [noOrigin, muxa], accounts: [] });
+      expect(before.map((a) => [a.accountKey, a.pending])).toEqual([
+        ["other", true],
+        ["yjun", false],
+      ]);
+
+      // 워크스페이스가 계정을 정해 준 저장소는 임시 그룹을 만들지 않는다.
+      const claimed = build({ ...pendingInput, accounts: [] });
+      expect(claimed.map((a) => [a.accountKey, a.pending])).toEqual([["yj", false]]);
+
+      const local = build({ repos: [makeRepo("scratch", null)] });
+      expect(local.map((a) => [a.accountKey, a.pending])).toEqual([["local", false]]);
+    });
   });
 
   it("워크스페이스에 넣지 않은 저장소는 계정 바로 아래에 온다", () => {

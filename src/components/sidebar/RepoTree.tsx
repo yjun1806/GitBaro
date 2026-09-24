@@ -38,6 +38,16 @@ interface RepoTreeProps {
   onRepoContextMenu: (repo: RepoInfo, e: MouseEvent) => void;
 }
 
+function workspaceMemberCounts(tree: AccountNode[]): Map<string, number> {
+  return new Map(
+    tree.flatMap((account) =>
+      account.children.flatMap((c) =>
+        c.kind === "workspace" ? [[c.workspace.id, c.repos.length] as const] : [],
+      ),
+    ),
+  );
+}
+
 function accountRepoCount(account: AccountNode): number {
   return (
     account.children.reduce((n, c) => n + (c.kind === "repo" ? 1 : c.repos.length), 0) +
@@ -71,6 +81,9 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
   const isOpen = (key: string) => searching || !closed.has(key);
 
   const visibleTree = useMemo(() => filterTree(tree, query, branchOf), [tree, query, branchOf]);
+  // 검색은 워크스페이스 안 저장소를 맞는 것만 남긴다. 삭제 확인은 실제로 옮겨질 수를 알려야
+  // 하므로 거르기 전 트리에서 센다.
+  const memberCounts = useMemo(() => workspaceMemberCounts(tree), [tree]);
   const live = useMemo(
     () => liveEntries(lastChangedAt, now, repos, worktreesByRepo, branchOf),
     [lastChangedAt, now, repos, worktreesByRepo, branchOf],
@@ -189,6 +202,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
                     label={account.label}
                     accountKey={account.accountKey}
                     sortMode={account.sortMode}
+                    showActions={!account.pending}
                     repoCount={accountRepoCount(account)}
                     ownerType={ownerTypes[account.label]}
                     expanded={accountOpen}
@@ -206,6 +220,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
                             name={child.workspace.name}
                             accountLabel={account.label}
                             repoCount={child.repos.length}
+                            memberCount={memberCounts.get(child.workspace.id) ?? child.repos.length}
                             totals={workspaceTotals(child, signals)}
                             expanded={wsOpen}
                             draggable={!searching}
