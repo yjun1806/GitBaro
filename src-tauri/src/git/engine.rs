@@ -94,6 +94,22 @@ pub struct CommitInfo {
     /// Refs (tags/branches) that point at this commit. Populated by `log()` and
     /// `get_commit_history` (both via `build_ref_map`); empty elsewhere.
     pub refs: Vec<RefLabel>,
+    /// People listed in `Co-Authored-By:` trailers, in message order, deduplicated.
+    /// Filled by `commit_to_info` (see `git::commit::parse_co_authors`).
+    pub co_authors: Vec<CoAuthor>,
+    /// Best guess that a coding agent wrote this commit: the author or a
+    /// co-author matches `git::commit::AGENT_NAMES`. An estimate, not a fact —
+    /// the UI shows it dimmed.
+    pub is_agent_authored: bool,
+}
+
+/// One `Co-Authored-By: Name <email>` trailer. `email` is empty when the
+/// trailer has no `<...>` part.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CoAuthor {
+    pub name: String,
+    pub email: String,
 }
 
 /// A tag or branch label pointing at a commit, shown in the history list.

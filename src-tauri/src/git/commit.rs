@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use git2::Repository;
 
 use crate::error::AppError;
-use crate::git::engine::{AuthorInfo, CommitInfo, RefKind, RefLabel};
+use crate::git::engine::{AuthorInfo, CoAuthor, CommitInfo, RefKind, RefLabel};
 
 /// Validate a commit message — must not be empty or whitespace-only.
 pub fn validate_message(message: &str) -> Result<(), AppError> {
@@ -56,6 +56,80 @@ pub fn signature_to_author(sig: &git2::Signature<'_>) -> AuthorInfo {
     }
 }
 
+/// Names of coding agents whose commits we mark as agent-authored. The single
+/// source for this list — every commit response (`commit_to_info`,
+/// `get_commit_history`, `get_commit_detail`) goes through `agent_attribution`.
+/// Matched case-insensitively against whole words of a name, so
+/// "Claude Opus 4.5" and "github-copilot[bot]" both match.
+pub const AGENT_NAMES: &[&str] = &["Claude", "Codex", "Copilot", "Cursor", "Gemini", "Devin", "Aider"];
+
+/// Parse `Co-Authored-By: Name <email>` trailers from a commit message.
+///
+/// The key is matched case-insensitively (`Co-authored-by`, `CO-AUTHORED-BY`).
+/// Every line is scanned rather than only the last paragraph, because agents
+/// often put other trailers or notes after a blank line. Duplicates (same
+/// email, or same name when there is no email) are dropped, keeping the first.
+pub fn parse_co_authors(message: &str) -> Vec<CoAuthor> {
+    let mut result: Vec<CoAuthor> = Vec::new();
+    for line in message.lines() {
+        let Some((key, value)) = line.trim().split_once(':') else {
+            continue;
+        };
+        if !key.trim().eq_ignore_ascii_case("co-authored-by") {
+            continue;
+        }
+        let Some(co_author) = co_author_from_value(value.trim()) else {
+            continue;
+        };
+        let is_duplicate = result.iter().any(|c| {
+            if co_author.email.is_empty() {
+                c.email.is_empty() && c.name.eq_ignore_ascii_case(&co_author.name)
+            } else {
+                c.email.eq_ignore_ascii_case(&co_author.email)
+            }
+        });
+        if !is_duplicate {
+            result.push(co_author);
+        }
+    }
+    result
+}
+
+/// Split a trailer value `Name <email>` (email optional) into a `CoAuthor`.
+fn co_author_from_value(value: &str) -> Option<CoAuthor> {
+    let (name, email) = match (value.find('<'), value.rfind('>')) {
+        (Some(open), Some(close)) if open < close => {
+            (value[..open].trim(), value[open + 1..close].trim())
+        }
+        _ => (value, ""),
+    };
+    if name.is_empty() && email.is_empty() {
+        return None;
+    }
+    Some(CoAuthor { name: name.to_string(), email: email.to_string() })
+}
+
+/// True when any whole word of `name` equals one of `AGENT_NAMES` (ignoring case).
+pub fn is_agent_name(name: &str) -> bool {
+    name.split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .any(|word| AGENT_NAMES.iter().any(|agent| agent.eq_ignore_ascii_case(word)))
+}
+
+/// Co-authors and the agent-authored guess for one commit. Shared by every
+/// commit response so the history list, commit detail and branch compare agree.
+pub fn agent_attribution(message: &str, author_name: &str) -> (Vec<CoAuthor>, bool) {
+    let co_authors = parse_co_authors(message);
+    let is_agent_authored =
+        is_agent_name(author_name) || co_authors.iter().any(|c| is_agent_name(&c.name));
+    (co_authors, is_agent_authored)
+}
+
+/// Full SHAs of a commit's parents, in parent order (first parent first).
+pub fn parent_ids(commit: &git2::Commit<'_>) -> Vec<String> {
+    commit.parent_ids().map(|oid| oid.to_string()).collect()
+}
+
 /// Convert a git2 `Commit` into our `CommitInfo`.
 pub fn commit_to_info(commit: &git2::Commit<'_>) -> CommitInfo {
     let id = commit.id().to_string();
@@ -65,9 +139,8 @@ pub fn commit_to_info(commit: &git2::Commit<'_>) -> CommitInfo {
     let author = signature_to_author(&commit.author());
     let committer = signature_to_author(&commit.committer());
     let timestamp = commit.time().seconds();
-    let parent_ids = (0..commit.parent_count())
-        .map(|i| commit.parent_id(i).map(|oid| oid.to_string()).unwrap_or_default())
-        .collect();
+    let parent_ids = parent_ids(commit);
+    let (co_authors, is_agent_authored) = agent_attribution(&message, &author.name);
 
     CommitInfo {
         id,
@@ -79,6 +152,8 @@ pub fn commit_to_info(commit: &git2::Commit<'_>) -> CommitInfo {
         timestamp,
         parent_ids,
         refs: Vec::new(),
+        co_authors,
+        is_agent_authored,
     }
 }
 
@@ -177,5 +252,93 @@ mod tests {
     #[test]
     fn rejects_leading_dash_option_injection() {
         assert!(validate_commit_oid("-rf").is_err());
+    }
+
+    fn co(name: &str, email: &str) -> CoAuthor {
+        CoAuthor { name: name.to_string(), email: email.to_string() }
+    }
+
+    #[test]
+    fn parses_co_author_trailer_regardless_of_key_case() {
+        let message = "feat: x\n\nco-authored-by: Alice <a@x.io>\nCO-AUTHORED-BY:Bob <b@x.io>";
+        assert_eq!(parse_co_authors(message), vec![co("Alice", "a@x.io"), co("Bob", "b@x.io")]);
+    }
+
+    #[test]
+    fn parses_multiple_trailer_lines_and_skips_other_trailers() {
+        let message = "fix: y\n\nbody text\n\n\
+            Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\n\
+            Signed-off-by: Dev <dev@x.io>\n\
+            Co-Authored-By: Carol <c@x.io>\n\
+            \n\
+            Claude-Session: https://example.com/s";
+        assert_eq!(
+            parse_co_authors(message),
+            vec![co("Claude Opus 4.5", "noreply@anthropic.com"), co("Carol", "c@x.io")]
+        );
+    }
+
+    #[test]
+    fn drops_duplicate_co_authors_and_keeps_trailer_without_email() {
+        let message = "x\n\nCo-Authored-By: A <a@x.io>\nCo-Authored-By: A again <A@X.IO>\nCo-Authored-By: Codex";
+        assert_eq!(parse_co_authors(message), vec![co("A", "a@x.io"), co("Codex", "")]);
+    }
+
+    #[test]
+    fn no_trailer_yields_empty_list() {
+        assert!(parse_co_authors("chore: bump\n\nJust a body. Co-authored by nobody.").is_empty());
+        assert!(parse_co_authors("").is_empty());
+    }
+
+    #[test]
+    fn agent_attribution_matches_whole_words_ignoring_case() {
+        let (co_authors, is_agent) =
+            agent_attribution("x\n\nCo-Authored-By: claude <noreply@anthropic.com>", "Dev");
+        assert_eq!(co_authors.len(), 1);
+        assert!(is_agent);
+
+        // The author alone can mark the commit (e.g. a bot account).
+        assert!(agent_attribution("x", "github-copilot[bot]").1);
+        // "Claudette" is not "Claude": only whole words count.
+        assert!(!agent_attribution("x\n\nCo-Authored-By: Claudette <c@x.io>", "Dev").1);
+        assert!(!agent_attribution("x", "Dev").1);
+    }
+
+    #[test]
+    fn commit_to_info_reports_both_parents_of_a_merge_commit() {
+        let dir = std::env::temp_dir()
+            .join(format!("gitbaro-merge-parents-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let repo = Repository::init(&dir).unwrap();
+        let sig = git2::Signature::now("Dev", "dev@x.io").unwrap();
+        let tree_id = repo.treebuilder(None).unwrap().write().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+
+        let root = repo.commit(None, &sig, &sig, "root", &tree, &[]).unwrap();
+        let root_commit = repo.find_commit(root).unwrap();
+        let left = repo.commit(None, &sig, &sig, "left", &tree, &[&root_commit]).unwrap();
+        let right = repo.commit(None, &sig, &sig, "right", &tree, &[&root_commit]).unwrap();
+        let left_commit = repo.find_commit(left).unwrap();
+        let right_commit = repo.find_commit(right).unwrap();
+        let merge = repo
+            .commit(
+                None,
+                &sig,
+                &sig,
+                "Merge right\n\nCo-Authored-By: Codex <codex@openai.com>",
+                &tree,
+                &[&left_commit, &right_commit],
+            )
+            .unwrap();
+
+        let info = commit_to_info(&repo.find_commit(merge).unwrap());
+        let root_info = commit_to_info(&root_commit);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(info.parent_ids, vec![left.to_string(), right.to_string()]);
+        assert_eq!(info.co_authors, vec![co("Codex", "codex@openai.com")]);
+        assert!(info.is_agent_authored);
+        assert!(root_info.parent_ids.is_empty());
+        assert!(!root_info.is_agent_authored);
     }
 }
