@@ -35,7 +35,7 @@
   --color-primary-hover: var(--primary-hover);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
+  --color-muted: var(--muted-bg);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
@@ -114,9 +114,9 @@
 /* 키컬러: Violet — 버튼, 선택, 링크, 포커스에만 사용
    WCAG AA 전체 통과 */
 :root {
-  --background: var(--white);
-  --foreground: var(--gray-975);
-  --card: var(--white);
+  --background: var(--canvas);
+  --foreground: var(--fg);
+  --card: var(--panel);
   --card-foreground: var(--foreground);
   --popover: var(--card);
   --popover-foreground: var(--foreground);
@@ -127,8 +127,8 @@
 
   --secondary: var(--gray-200);
   --secondary-foreground: var(--foreground);
-  --muted: var(--gray-100);
-  --muted-foreground: var(--gray-600);
+  --muted-bg: var(--chip);
+  --muted-foreground: var(--muted);
   --accent: var(--gray-200);
   --accent-foreground: var(--foreground);
 
@@ -143,28 +143,65 @@
   --info: var(--blue-600);
   --info-foreground: var(--white);
 
-  --border: var(--gray-300);
+  --border: var(--line2);
   --input: var(--border);
   --ring: var(--primary);
-  --surface: var(--gray-100);
+  --surface: var(--chip);
 
-  --diff-add: var(--green-50);
-  --diff-add-fg: var(--green-900);
-  --diff-del: var(--red-50);
-  --diff-del-fg: var(--red-900);
+  --diff-add: #e8f6ee;
+  --diff-add-fg: #145332;
+  --diff-del: #fdeeed;
+  --diff-del-fg: #8e211b;
   --diff-hunk: var(--gray-100);
   --diff-hunk-fg: var(--gray-700);
 
-  --scrollbar-track: var(--gray-100);
+  --scrollbar-track: var(--chip);
   --scrollbar-thumb: #d4d4d4;
   --scrollbar-thumb-hover: #a1a1a1;
+
+  /* ── 리뷰 개편 시각 토큰 (원천: plans/design/README.md, plans/design/gen_c2.py TONES["뉴트럴"] + DENS["촘촘"])
+     W1-T1: 위 시맨틱 토큰(--background 등)은 이 원천 토큰을 값으로 그대로 가리킨다(별칭).
+     기존 컴포넌트는 시맨틱 토큰 이름을 그대로 쓰므로 고치지 않는다. */
+  --canvas: #efefee;
+  --panel: #ffffff;
+  --line: #ebebea;
+  --line2: #d4d4d2;
+  --chip: #f3f3f2;
+  --fg: #1a1a19;
+  --fg2: #3d3d3b;
+  --muted: #62625f;
+  --faint: #8a8a86;
+  --ln: #b6b6b2;
+
+  --acc: #16181d;
+  --acc-sel: color-mix(in srgb, var(--acc) 8%, var(--panel));
+  --acc-faint: color-mix(in srgb, var(--acc) 4%, var(--panel));
+  --acc-line: color-mix(in srgb, var(--acc) 35%, transparent);
+
+  --live: #e5700b;
+  --live-soft: rgba(229, 112, 11, 0.16);
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 20px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.07);
+
+  /* 모서리: 패널 14–16px(14 채택), 항목 8–10px(8 채택), 칩 6px, 알약은 끝까지 둥글게 */
+  --radius-panel: 14px;
+  --radius-item: 8px;
+  --radius-chip: 6px;
+  --radius-pill: 9999px;
+
+  /* 간격(촘촘 밀도) */
+  --g: 8px;
+  --row: 28px;
+  --item: 7px;
+  --code-lh: 21px;
 }
 
 /* ── Dark 테마 ── */
 .dark {
-  --background: var(--gray-1000);
-  --foreground: var(--gray-300);
-  --card: var(--gray-950);
+  --background: var(--canvas);
+  --foreground: var(--fg);
+  --card: var(--panel);
   --card-foreground: var(--foreground);
   --popover: var(--card);
   --popover-foreground: var(--foreground);
@@ -175,8 +212,8 @@
 
   --secondary: var(--gray-900);
   --secondary-foreground: var(--foreground);
-  --muted: var(--gray-925);
-  --muted-foreground: var(--gray-600);
+  --muted-bg: var(--chip);
+  --muted-foreground: var(--muted);
   --accent: var(--gray-850);
   --accent-foreground: var(--foreground);
 
@@ -191,10 +228,10 @@
   --info: var(--blue-400);
   --info-foreground: var(--background);
 
-  --border: var(--gray-900);
+  --border: var(--line2);
   --input: var(--border);
   --ring: var(--primary);
-  --surface: var(--gray-950);
+  --surface: var(--chip);
 
   --diff-add: rgba(74, 183, 130, 0.12);
   --diff-add-fg: var(--green-300);
@@ -206,6 +243,40 @@
   --scrollbar-track: var(--background);
   --scrollbar-thumb: var(--border);
   --scrollbar-thumb-hover: var(--gray-800);
+
+  /* ── 리뷰 개편 시각 토큰 (다크): 이번 범위는 「같은 토큰 구조 유지, 깨지지 않으면 됨」(README).
+     기존 다크 그레이스케일 계단에서 값을 고른다. */
+  --canvas: var(--gray-1000);
+  --panel: var(--gray-950);
+  --line: var(--gray-900);
+  --line2: var(--gray-850);
+  --chip: var(--gray-925);
+  --fg: var(--gray-300);
+  --fg2: var(--gray-400);
+  --muted: var(--gray-500);
+  --faint: var(--gray-600);
+  --ln: var(--gray-700);
+
+  --acc: var(--primary-500);
+  --acc-sel: color-mix(in srgb, var(--acc) 8%, var(--panel));
+  --acc-faint: color-mix(in srgb, var(--acc) 4%, var(--panel));
+  --acc-line: color-mix(in srgb, var(--acc) 35%, transparent);
+
+  --live: #e5700b;
+  --live-soft: rgba(229, 112, 11, 0.16);
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+
+  --radius-panel: 14px;
+  --radius-item: 8px;
+  --radius-chip: 6px;
+  --radius-pill: 9999px;
+
+  --g: 8px;
+  --row: 28px;
+  --item: 7px;
+  --code-lh: 21px;
 }
 
 /* ── 스크롤바 (시맨틱 토큰 사용) ── */
