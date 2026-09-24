@@ -6,11 +6,40 @@ use crate::git::libgit::is_working_tree_dirty;
 use crate::state::TokenStore;
 use serde_json::{json, Value};
 
+/// Open the repository at exactly `repo_path` (a path the app already knows
+/// as a repo root) and describe it.
 fn repo_info_from_path(repo_path: &str) -> Result<Value, AppError> {
     let repo = git2::Repository::open(repo_path)?;
-    let path = repo_path.to_string();
+    repo_info(&repo, repo_path.to_string())
+}
 
-    let name = std::path::Path::new(repo_path)
+/// Find the repository containing `path` (the folder the user picked may be a
+/// subfolder) and describe it under its working-tree root.
+fn repo_info_from_discovered(path: &str) -> Result<Value, AppError> {
+    let repo = git2::Repository::discover(path)?;
+    let root = repo
+        .workdir()
+        .map(workdir_to_string)
+        .ok_or_else(|| AppError::BareRepository(path.to_string()))?;
+    repo_info(&repo, root)
+}
+
+/// git2 reports the working directory with a trailing slash; the app keys
+/// repositories by the plain path.
+fn workdir_to_string(workdir: &std::path::Path) -> String {
+    let s = workdir.to_string_lossy();
+    let trimmed = s.trim_end_matches('/');
+    if trimmed.is_empty() { "/".to_string() } else { trimmed.to_string() }
+}
+
+fn repo_info(repo: &git2::Repository, path: String) -> Result<Value, AppError> {
+    // A bare repository has no working tree — status, staging and commits
+    // would all fail, so it cannot be used here.
+    if repo.is_bare() {
+        return Err(AppError::BareRepository(path));
+    }
+
+    let name = std::path::Path::new(&path)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".to_string());
@@ -20,7 +49,7 @@ fn repo_info_from_path(repo_path: &str) -> Result<Value, AppError> {
         .ok()
         .and_then(|h| h.shorthand().map(|s| s.to_string()));
 
-    let is_dirty = is_working_tree_dirty(&repo);
+    let is_dirty = is_working_tree_dirty(repo);
 
     let remote_names: Vec<String> = repo
         .remotes()
@@ -255,10 +284,79 @@ pub async fn close_repository(path: String) -> Result<(), AppError> {
 
 #[tauri::command]
 pub async fn add_local_repository(path: String) -> Result<Value, AppError> {
-    let result = tokio::task::spawn_blocking(move || repo_info_from_path(&path))
+    let result = tokio::task::spawn_blocking(move || repo_info_from_discovered(&path))
         .await
         .map_err(|e| AppError::Channel(e.to_string()))??;
 
     tracing::info!("Added local repository: {}", result["path"]);
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+    use std::process::Command;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .output()
+            .expect("git 실행 실패");
+        assert!(out.status.success(), "git {:?}: {}", args, String::from_utf8_lossy(&out.stderr));
+    }
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let tmp = std::env::temp_dir().join(format!("gitbaro-repo-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        // git2 reports resolved paths (/private/var/... on macOS).
+        std::fs::canonicalize(&tmp).unwrap()
+    }
+
+    /// 하위 폴더를 골라도 저장소 루트로 추가되어야 한다 (B18).
+    #[tokio::test]
+    async fn adding_a_subfolder_adds_the_repository_root() {
+        let root = temp_dir("subfolder");
+        git(&root, &["init", "-q", "-b", "main"]);
+        let sub = root.join("src").join("deep");
+        std::fs::create_dir_all(&sub).unwrap();
+
+        let info = add_local_repository(sub.to_string_lossy().to_string()).await.unwrap();
+
+        assert_eq!(info["path"], root.to_string_lossy().as_ref());
+        assert_eq!(info["name"], root.file_name().unwrap().to_string_lossy().as_ref());
+    }
+
+    #[tokio::test]
+    async fn adding_the_root_keeps_the_root() {
+        let root = temp_dir("root");
+        git(&root, &["init", "-q", "-b", "main"]);
+
+        let info = add_local_repository(root.to_string_lossy().to_string()).await.unwrap();
+
+        assert_eq!(info["path"], root.to_string_lossy().as_ref());
+    }
+
+    #[tokio::test]
+    async fn a_bare_repository_is_rejected() {
+        let bare = temp_dir("bare");
+        git(&bare, &["init", "-q", "--bare"]);
+        let path = bare.to_string_lossy().to_string();
+
+        let added = add_local_repository(path.clone()).await;
+        assert!(matches!(added, Err(AppError::BareRepository(_))), "{added:?}");
+
+        let opened = open_repository(path).await;
+        assert!(matches!(opened, Err(AppError::BareRepository(_))), "{opened:?}");
+    }
+
+    #[test]
+    fn workdir_trailing_slash_is_trimmed() {
+        assert_eq!(workdir_to_string(Path::new("/a/b/")), "/a/b");
+        assert_eq!(workdir_to_string(Path::new("/a/b")), "/a/b");
+    }
 }

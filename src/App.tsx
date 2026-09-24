@@ -9,7 +9,7 @@ import { addLocalRepository, cloneRepository, getAccounts, getSettings, openRepo
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import i18n from "@/i18n/config";
-import { getErrorMessage } from "@/lib/utils";
+import { getErrorMessage, isAppErrorType } from "@/lib/utils";
 import { onStorageFailure } from "@/lib/safe-storage";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { WelcomeScreen } from "@/components/welcome/WelcomeScreen";
@@ -200,7 +200,12 @@ function AppContent() {
         setActiveRepo(repoInfo.path);
       }
     } catch (err) {
-      addToast(t("error.failedToOpenRepo", { error: getErrorMessage(err) }), "error");
+      addToast(
+        isAppErrorType(err, "BareRepository")
+          ? t("repo.bareNotSupported")
+          : t("error.failedToOpenRepo", { error: getErrorMessage(err) }),
+        "error",
+      );
     }
   }, [addRepo, setActiveRepo, addToast]);
 

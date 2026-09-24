@@ -29,7 +29,7 @@ import { useAccountStore } from "@/stores/account";
 import { addLocalRepository, cloneRepository, getRepoVisibility, getOwnerType, validateToken } from "@/api/commands";
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
-import { cn, getErrorMessage } from "@/lib/utils";
+import { cn, getErrorMessage, isAppErrorType } from "@/lib/utils";
 import { extractOwnerFromRemoteUrl, groupReposByOwner, type GroupedRepos } from "@/lib/group-repos";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
@@ -205,7 +205,12 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
         onSelectRepo(repoInfo.path);
       }
     } catch (err) {
-      addToast(t("repo.failedToAdd", { error: getErrorMessage(err) }), "error");
+      addToast(
+        isAppErrorType(err, "BareRepository")
+          ? t("repo.bareNotSupported")
+          : t("repo.failedToAdd", { error: getErrorMessage(err) }),
+        "error",
+      );
     }
   }, [accounts, addRepo, onSelectRepo, addToast, t]);
 
