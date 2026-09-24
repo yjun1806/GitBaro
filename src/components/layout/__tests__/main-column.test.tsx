@@ -134,6 +134,43 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getByText("changes-view")).toBeTruthy();
   });
 
+  it("blocks the staging list and the diff while a branch switch runs", () => {
+    renderShell();
+    act(() => useUIStore.getState().setSwitchingBranch(true));
+    try {
+      const changesCard = screen.getByText("changes-view").closest("section");
+      expect(changesCard?.querySelector(".animate-spin")).toBeTruthy();
+      const diffCard = screen.getByText("No file selected").closest("section");
+      expect(diffCard?.querySelector(".animate-spin")).toBeTruthy();
+    } finally {
+      act(() => useUIStore.getState().setSwitchingBranch(false));
+    }
+  });
+
+  it("keeps the stash tab when the panel remounts with an old commit selection", () => {
+    const { unmount } = renderShell();
+    fireEvent.click(screen.getByText("history-list"));
+    fireEvent.click(screen.getAllByRole("tab")[1]);
+    expect(useUIStore.getState().activeTab).toBe("stash");
+    expect(useSelectionStore.getState().selectedCommitId).toBe("c1");
+    unmount();
+
+    // Opening and closing the repository list remounts the panel.
+    renderShell();
+    expect(useUIStore.getState().activeTab).toBe("stash");
+    expect(screen.getByText("stash-list")).toBeTruthy();
+  });
+
+  it("names the stash tab 스태시 in Korean", async () => {
+    await i18n.changeLanguage("ko");
+    renderShell();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
+      "커밋 그래프",
+      "스태시",
+      "Actions",
+    ]);
+  });
+
   it("replaces the panels with the repository list while it is open", () => {
     useUIStore.setState({ repoListOpen: true });
     renderShell();

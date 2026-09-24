@@ -74,7 +74,8 @@ export function MainColumn() {
       <ToolbarRoot />
       <PreviewBanner onStopPreview={handleStopPreview} />
 
-      <div className="flex flex-col flex-1 min-h-0 gap-(--g) p-(--g)">
+      {/* 시안 frame()의 메인 칸 여백: 오른쪽·아래 g, 왼쪽 2px(사이드바가 자기 오른쪽 여백을 가진다) */}
+      <div className="flex flex-col flex-1 min-h-0 gap-(--g) pt-(--g) pr-(--g) pb-(--g) pl-0.5">
         {repoListOpen ? (
           <RepoListCard />
         ) : !activeRepoPath ? (

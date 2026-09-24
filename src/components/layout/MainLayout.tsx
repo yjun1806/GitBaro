@@ -7,6 +7,7 @@ import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import "@/stores/selection"; // ensure cross-store subscriptions are registered
 import { RepoRail } from "./RepoRail";
 import { MainColumn } from "./MainColumn";
+import { SIDEBAR_HANDLE_WIDTH } from "./sidebar-layout";
 import { StatusBar } from "./StatusBar";
 import { ActivityLogPanel } from "./ActivityLogPanel";
 import { AutoSyncSettingsDialogHost } from "@/components/repository/AutoSyncSettingsDialog";
@@ -80,13 +81,16 @@ export function MainLayout() {
           <RepoRail />
         </div>
 
+        {/* 시안에는 사이드바와 메인 사이에 선이 없다. 손잡이는 투명한 잡는 영역이고
+            올리면 색이 드러난다. */}
         {isResizable && (
           <div
             role="separator"
             aria-orientation="vertical"
             aria-label={t("shell.resizeSidebar")}
             onMouseDown={onMouseDown}
-            className="w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/40 transition-colors"
+            style={{ width: SIDEBAR_HANDLE_WIDTH }}
+            className="shrink-0 cursor-col-resize bg-transparent hover:bg-primary/40 transition-colors"
           />
         )}
 

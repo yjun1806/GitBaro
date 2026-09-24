@@ -85,9 +85,13 @@ export function GraphPanel() {
 
   const tab = graphPanelTabOf(activeTab);
 
-  // 커밋을 고르면 아래 칸이 커밋 상세로 바뀐다.
+  // 커밋을 새로 고를 때만 아래 칸을 커밋 상세로 바꾼다. 패널이 다시 마운트될 때
+  // (저장소 목록을 열었다 닫을 때 등) 남아 있던 선택으로 스태시·Actions 탭에서
+  // 끌려 나오지 않도록, 이전 값과 달라졌을 때만 반응한다.
+  const prevCommitId = useRef(selectedCommitId);
   useEffect(() => {
-    if (selectedCommitId) setActiveTab("history");
+    if (selectedCommitId && selectedCommitId !== prevCommitId.current) setActiveTab("history");
+    prevCommitId.current = selectedCommitId;
   }, [selectedCommitId, setActiveTab]);
 
   // 「커밋하지 않은 변경」으로 넘어오면(행 클릭, 툴바·merge 흐름) 커밋 선택을 푼다.
@@ -121,7 +125,7 @@ export function GraphPanel() {
           icon={<Archive className="w-3.5 h-3.5" />}
           count={stashes.length > 0 ? stashes.length : undefined}
         >
-          {t("stash.title")}
+          {t("shell.stashTab")}
         </Tab>
         <Tab
           variant="inline"

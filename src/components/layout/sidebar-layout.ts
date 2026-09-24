@@ -1,8 +1,12 @@
 import type { RailMode } from "@/stores/ui";
 import { railFlowWidth } from "./RepoRail";
 
-/** Width of the sidebar resize handle drawn between the two columns. */
-export const SIDEBAR_HANDLE_WIDTH = 1;
+/**
+ * Width of the sidebar resize handle between the two columns. It is an
+ * invisible grab area (the design has no line there), so it is wider than a
+ * hairline to stay easy to hit.
+ */
+export const SIDEBAR_HANDLE_WIDTH = 6;
 
 /**
  * Where the main column starts, in px from the window's left edge. When the

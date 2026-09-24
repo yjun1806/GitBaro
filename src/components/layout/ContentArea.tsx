@@ -11,6 +11,7 @@ import { CommitDetail } from "@/components/history/CommitDetail";
 import { StashDetailView } from "@/components/stash/StashDetailView";
 import { ActionsDetailView } from "@/components/actions/ActionsDetailView";
 import { ChangesView } from "@/components/commit/ChangesView";
+import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import type { FileStatus } from "@/types";
 
 /* --- Empty / Placeholder States --- */
@@ -124,6 +125,8 @@ interface ContentAreaProps {
  * - uncommitted changes row: staging list + commit box on the left, diff on the right
  * - a commit: commit detail (its own file list + diff)
  * - stash / Actions tab: the existing detail view
+ * Each card carries the branch-switch overlay, so staging and committing are
+ * blocked while a checkout runs (the graph panel has its own).
  */
 export function ContentArea({ activeTab }: ContentAreaProps) {
   const { t } = useTranslation();
@@ -140,6 +143,7 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
       <div className="flex flex-1 min-h-0 gap-(--g)">
         <Card className="w-[320px] shrink-0">
           <ChangesView />
+          <SwitchingOverlay />
         </Card>
         <Card className="flex-1">
           {selectedFile ? (
@@ -151,6 +155,7 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
               description={t("diff.selectFile")}
             />
           )}
+          <SwitchingOverlay />
         </Card>
       </div>
     );
@@ -193,6 +198,7 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
           description={t("shell.selectCommitOrChanges")}
         />
       )}
+      <SwitchingOverlay />
     </Card>
   );
 }

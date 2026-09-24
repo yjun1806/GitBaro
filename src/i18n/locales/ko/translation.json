@@ -759,6 +759,7 @@
   },
   "shell": {
     "graphTab": "커밋 그래프",
+    "stashTab": "스태시",
     "uncommitted": "커밋하지 않은 변경",
     "uncommittedCount": "커밋하지 않은 변경 ({{count}})",
     "noRepoTitle": "고른 저장소가 없어요",
