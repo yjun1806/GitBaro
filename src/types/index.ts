@@ -574,3 +574,38 @@ export interface WorkspaceRepoHistory {
   truncated: boolean;
   error: string | null;
 }
+
+// W5-T5 — main 대비 변경
+
+/** `get_changes_vs_default`의 바뀐 파일 하나. */
+export interface BranchChangedFile {
+  /** 저장소 루트 기준 경로. 지운 파일은 지우기 전 경로. */
+  path: string;
+  /** 이름을 바꾼 파일의 이전 경로. */
+  oldPath: string | null;
+  status: FileStatus;
+  additions: number;
+  deletions: number;
+  isBinary: boolean;
+}
+
+/**
+ * `get_changes_vs_default`의 결과. 저장소 하나가 main과 갈라진 지점 이후로 바꾼 파일.
+ * 여러 저장소는 저장소마다 따로 부른다. 갈라진 지점은 `WorkspaceRepoHistory`와 같은 규칙이다.
+ */
+export interface BranchChanges {
+  path: string;
+  branch: string | null;
+  headOid: string | null;
+  defaultBranch: string | null;
+  baseRef: string | null;
+  /** `found`가 아니면 `committed`는 비고 `files`는 `uncommitted`와 같다. 커밋이 없는 저장소면 null. */
+  baseStatus: WorkspaceBaseStatus | null;
+  mergeBaseOid: string | null;
+  /** 갈라진 지점 → HEAD. */
+  committed: BranchChangedFile[];
+  /** HEAD → 작업 트리(스테이징·추적하지 않는 파일 포함). */
+  uncommitted: BranchChangedFile[];
+  /** 갈라진 지점 → 작업 트리. 고쳤다가 되돌린 파일은 빠진다. */
+  files: BranchChangedFile[];
+}

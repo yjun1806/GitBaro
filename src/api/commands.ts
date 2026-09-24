@@ -936,3 +936,12 @@ export async function getWorkspaceHistory(
     mergeBaseCommit: repo.mergeBaseCommit && workspaceCommitFromRaw(repo.mergeBaseCommit),
   }));
 }
+
+// W5-T5 — main 대비 변경
+
+import type { BranchChanges } from "@/types";
+
+/** 저장소 하나가 main과 갈라진 지점 이후로 바꾼 파일과 커밋하지 않은 변경. 저장소마다 따로 부른다. */
+export async function getChangesVsDefault(path: string): Promise<BranchChanges> {
+  return invoke("get_changes_vs_default", { path });
+}

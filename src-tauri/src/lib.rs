@@ -123,6 +123,8 @@ pub fn run() {
             commands::review::list_new_commit_ids,
             // W4-T2
             commands::workspace_history::get_workspace_history,
+            // W5-T5
+            commands::branch_changes::get_changes_vs_default,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");
