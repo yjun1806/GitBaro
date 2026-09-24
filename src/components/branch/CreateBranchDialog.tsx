@@ -1,19 +1,17 @@
-import { useState, useId } from "react";
-import { X, GitBranch } from "lucide-react";
+import { useState, useId, useRef } from "react";
+import { X, GitBranch, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { BranchInfo } from "@/types";
 import { Dialog } from "@/components/ui/Dialog";
+import { checkNewBranchName } from "./branch-name";
 
 interface CreateBranchDialogProps {
   branches: BranchInfo[];
   currentBranch: string | null;
-  onCreate: (name: string, fromBranch: string) => void;
+  /** Runs the whole create flow; the dialog stays busy until it settles. */
+  onCreate: (name: string, fromBranch: string) => Promise<void>;
   onClose: () => void;
-}
-
-function isValidBranchName(name: string): boolean {
-  return /^[a-zA-Z0-9._/-]+$/.test(name) && !name.startsWith("/") && !name.endsWith("/");
 }
 
 export function CreateBranchDialog({
@@ -30,18 +28,35 @@ export function CreateBranchDialog({
 
   const [name, setName] = useState("");
   const [fromBranch, setFromBranch] = useState(defaultBranchName);
+  const [isCreating, setIsCreating] = useState(false);
+  // A ref, not just state: a second Enter can arrive before the re-render.
+  const creatingRef = useRef(false);
 
-  const valid = name.length > 0 && isValidBranchName(name);
-  const error = name.length > 0 && !valid ? t("branch.invalidName") : null;
+  const problem = name.length > 0 ? checkNewBranchName(name, branches) : null;
+  const valid = name.length > 0 && problem === null;
+  const error =
+    problem === "invalid"
+      ? t("branch.invalidName")
+      : problem === "exists"
+        ? t("branch.alreadyExists", { name })
+        : null;
 
-  const handleCreate = () => {
-    if (!valid) return;
-    onCreate(name, fromBranch);
+  const handleCreate = async () => {
+    if (!valid || creatingRef.current) return;
+    creatingRef.current = true;
+    setIsCreating(true);
+    try {
+      await onCreate(name, fromBranch);
+    } finally {
+      creatingRef.current = false;
+      setIsCreating(false);
+    }
   };
 
   return (
     <Dialog
       onClose={onClose}
+      dismissible={!isCreating}
       labelledBy={titleId}
       className="bg-card rounded-xl shadow-2xl w-full max-w-md"
     >
@@ -51,7 +66,8 @@ export function CreateBranchDialog({
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
+            disabled={isCreating}
+            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors disabled:opacity-40"
           >
             <X className="w-4 h-4" />
           </button>
@@ -77,7 +93,10 @@ export function CreateBranchDialog({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                readOnly={isCreating}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) void handleCreate();
+                }}
                 placeholder="feature/my-feature"
                 className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
               />
@@ -158,15 +177,17 @@ export function CreateBranchDialog({
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            disabled={isCreating}
+            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
           >
             {t("common.cancel")}
           </button>
           <button
-            onClick={handleCreate}
-            disabled={!valid}
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors"
+            onClick={() => void handleCreate()}
+            disabled={!valid || isCreating}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors"
           >
+            {isCreating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {t("branch.createBranch")}
           </button>
         </div>

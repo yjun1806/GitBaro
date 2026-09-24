@@ -393,21 +393,51 @@ impl GitCliEngine {
         Ok(())
     }
 
-    /// Stash working changes via git CLI.
-    pub async fn stash_save(&self, message: Option<&str>) -> Result<(), AppError> {
-        let mut args = vec!["stash", "push"];
+    /// The commit `refs/stash` points at (the newest stash), or None when the
+    /// stash list is empty.
+    async fn stash_head_oid(&self) -> Result<Option<String>, AppError> {
+        let output = self
+            .run_local(&["rev-parse", "-q", "--verify", "refs/stash"])
+            .await?;
+        let oid = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok((output.status.success() && !oid.is_empty()).then_some(oid))
+    }
+
+    /// Stash working changes via git CLI, untracked files included.
+    ///
+    /// Returns the oid of the stash this call created, or None when there was
+    /// nothing to stash — git then prints "No local changes to save" and still
+    /// exits 0, so the exit code alone cannot tell the two apart.
+    pub async fn stash_save(&self, message: Option<&str>) -> Result<Option<String>, AppError> {
+        let mut args = vec!["stash", "push", "--include-untracked"];
         if let Some(msg) = message {
             args.push("-m");
             args.push(msg);
         }
-        self.run_local_checked(&args).await?;
-        Ok(())
+        self.run_stash_push(&args).await
     }
 
-    /// Pop the latest stash entry via git CLI (post-checkout hook may run).
-    pub async fn stash_pop(&self) -> Result<(), AppError> {
-        self.run_local_checked(&["stash", "pop"]).await?;
-        Ok(())
+    /// Run a `git stash push` and report the stash it created, if any.
+    async fn run_stash_push(&self, args: &[&str]) -> Result<Option<String>, AppError> {
+        let before = self.stash_head_oid().await?;
+        self.run_local_checked(args).await?;
+        let after = self.stash_head_oid().await?;
+        Ok(if after != before { after } else { None })
+    }
+
+    /// Pop the stash entry whose commit is `oid`, wherever it now sits in the
+    /// stash list. Fails without touching anything when no entry matches.
+    pub async fn stash_pop_oid(&self, oid: &str) -> Result<(), AppError> {
+        crate::git::commit::validate_commit_oid(oid)?;
+        let list = self.run_local_checked(&["stash", "list", "--format=%H"]).await?;
+        let index = list
+            .lines()
+            .position(|line| line.trim() == oid)
+            .ok_or_else(|| AppError::GitCli {
+                message: format!("Stash {} not found", oid),
+                exit_code: None,
+            })?;
+        self.stash_pop_index(index).await
     }
 
     /// Apply a stash entry by index without removing it.
@@ -431,22 +461,22 @@ impl GitCliEngine {
         Ok(())
     }
 
-    /// Stash only specific paths (partial stash).
+    /// Stash only specific paths (partial stash). `--include-untracked` lets the
+    /// pathspec name new files too; without it one untracked path fails the
+    /// whole batch with "did not match any file(s) known to git".
     pub async fn stash_push_paths(
         &self,
         message: Option<&str>,
         paths: &[String],
-    ) -> Result<(), AppError> {
-        let mut args = vec!["stash", "push"];
+    ) -> Result<Option<String>, AppError> {
+        let mut args = vec!["stash", "push", "--include-untracked"];
         if let Some(msg) = message {
             args.push("-m");
             args.push(msg);
         }
         args.push("--");
-        let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
-        args.extend(path_refs);
-        self.run_local_checked(&args).await?;
-        Ok(())
+        args.extend(paths.iter().map(|s| s.as_str()));
+        self.run_stash_push(&args).await
     }
 
     /// Merge a branch into the current branch via git CLI so that hooks run.
@@ -1309,5 +1339,123 @@ branch refs/heads/feat
         assert!(entries[0].is_locked);
         assert!(!entries[0].is_prunable);
         assert_eq!(entries[0].lock_reason.as_deref(), Some("in use elsewhere"));
+    }
+
+    // ── stash ────────────────────────────────────────────────────────────
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .output()
+            .expect("git 실행 실패");
+        assert!(out.status.success(), "git {:?}: {}", args, String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// 커밋 하나(tracked.txt)가 있는 임시 저장소.
+    fn temp_repo(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("gitbaro-stash-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        git(&dir, &["config", "user.email", "t@t"]);
+        git(&dir, &["config", "user.name", "t"]);
+        std::fs::write(dir.join("tracked.txt"), "one\n").unwrap();
+        git(&dir, &["add", "-A"]);
+        git(&dir, &["commit", "-qm", "init"]);
+        dir
+    }
+
+    fn stash_count(dir: &Path) -> usize {
+        git(dir, &["stash", "list"]).lines().filter(|l| !l.is_empty()).count()
+    }
+
+    /// 새 파일만 있어도 스태시가 만들어지고, 그 oid로 되돌릴 수 있어야 한다.
+    #[tokio::test]
+    async fn stash_save_includes_untracked_files_and_returns_its_oid() {
+        let dir = temp_repo("untracked");
+        std::fs::write(dir.join("new.txt"), "new\n").unwrap();
+        let engine = GitCliEngine::new(&dir);
+
+        let oid = engine.stash_save(None).await.unwrap().expect("스태시가 만들어져야 함");
+        assert!(!dir.join("new.txt").exists(), "새 파일이 스태시되지 않음");
+        assert_eq!(oid, git(&dir, &["rev-parse", "refs/stash"]));
+
+        engine.stash_pop_oid(&oid).await.unwrap();
+        assert!(dir.join("new.txt").exists());
+        assert_eq!(stash_count(&dir), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 변경이 없으면 None을 돌려주고, 이전에 있던 스태시는 건드리지 않는다.
+    #[tokio::test]
+    async fn stash_save_reports_nothing_when_tree_is_clean() {
+        let dir = temp_repo("clean");
+        std::fs::write(dir.join("tracked.txt"), "older\n").unwrap();
+        git(&dir, &["stash", "push", "-m", "older"]);
+        let engine = GitCliEngine::new(&dir);
+
+        assert_eq!(engine.stash_save(None).await.unwrap(), None);
+        assert_eq!(stash_count(&dir), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 위에 다른 스태시가 쌓여도 oid로 고른 스태시만 꺼낸다.
+    #[tokio::test]
+    async fn stash_pop_oid_pops_that_entry_even_when_not_on_top() {
+        let dir = temp_repo("by-oid");
+        let engine = GitCliEngine::new(&dir);
+        std::fs::write(dir.join("tracked.txt"), "mine\n").unwrap();
+        let mine = engine.stash_save(Some("mine")).await.unwrap().unwrap();
+        std::fs::write(dir.join("tracked.txt"), "other\n").unwrap();
+        git(&dir, &["stash", "push", "-m", "other"]);
+
+        engine.stash_pop_oid(&mine).await.unwrap();
+
+        assert_eq!(std::fs::read_to_string(dir.join("tracked.txt")).unwrap(), "mine\n");
+        assert!(git(&dir, &["stash", "list"]).contains("other"));
+        assert_eq!(stash_count(&dir), 1);
+        assert!(engine.stash_pop_oid(&mine).await.is_err(), "이미 꺼낸 스태시는 없어야 함");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 목록에서 고른 인덱스의 스태시를 꺼낸다(맨 위가 아니라).
+    #[tokio::test]
+    async fn stash_pop_index_pops_the_selected_entry() {
+        let dir = temp_repo("by-index");
+        std::fs::write(dir.join("tracked.txt"), "first\n").unwrap();
+        git(&dir, &["stash", "push", "-m", "first"]);
+        std::fs::write(dir.join("tracked.txt"), "second\n").unwrap();
+        git(&dir, &["stash", "push", "-m", "second"]);
+
+        GitCliEngine::new(&dir).stash_pop_index(1).await.unwrap();
+
+        assert_eq!(std::fs::read_to_string(dir.join("tracked.txt")).unwrap(), "first\n");
+        assert!(git(&dir, &["stash", "list"]).contains("second"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 부분 스태시에 새 파일이 섞여 있어도 전체가 실패하지 않는다.
+    #[tokio::test]
+    async fn stash_push_paths_accepts_untracked_paths() {
+        let dir = temp_repo("partial");
+        std::fs::write(dir.join("tracked.txt"), "changed\n").unwrap();
+        std::fs::write(dir.join("new.txt"), "new\n").unwrap();
+        std::fs::write(dir.join("keep.txt"), "keep\n").unwrap();
+        let engine = GitCliEngine::new(&dir);
+
+        let oid = engine
+            .stash_push_paths(None, &["tracked.txt".to_string(), "new.txt".to_string()])
+            .await
+            .unwrap();
+
+        assert!(oid.is_some());
+        assert!(!dir.join("new.txt").exists());
+        assert!(dir.join("keep.txt").exists(), "고르지 않은 새 파일은 남아야 함");
+        assert_eq!(std::fs::read_to_string(dir.join("tracked.txt")).unwrap(), "one\n");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

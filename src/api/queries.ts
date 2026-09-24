@@ -33,6 +33,8 @@ import {
   continueMergeOrRebase,
 } from "./commands";
 import type { RepoSyncStatus } from "@/types";
+import { useSelectionStore } from "@/stores/selection";
+import { selectionAfterStashPushed, selectionAfterStashRemoved } from "@/lib/stash-selection";
 
 export function useStatus(repoPath: string | null) {
   return useQuery({
@@ -332,11 +334,29 @@ export function useMergeRecoveryMutations(repoPath: string | null) {
 export function useStashMutations(repoPath: string | null) {
   const queryClient = useQueryClient();
 
-  const invalidateStashAndStatus = () =>
+  // stashShow is keyed by index, so any change to the list makes it stale.
+  const invalidateStash = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["stashList"] }),
+      queryClient.invalidateQueries({ queryKey: ["stashShow"] }),
+    ]);
+
+  const invalidateStashAndStatus = () =>
+    Promise.all([
+      invalidateStash(),
       queryClient.invalidateQueries({ queryKey: ["status"] }),
     ]);
+
+  const onStashRemoved = (index: number) => {
+    const { selectedStashIndex, selectStash } = useSelectionStore.getState();
+    selectStash(selectionAfterStashRemoved(selectedStashIndex, index));
+  };
+
+  const onStashPushed = (oid: string | null) => {
+    if (oid === null) return;
+    const { selectedStashIndex, selectStash } = useSelectionStore.getState();
+    selectStash(selectionAfterStashPushed(selectedStashIndex));
+  };
 
   const applyMutation = useMutation({
     mutationFn: (index: number) => stashApply(repoPath!, index),
@@ -344,24 +364,38 @@ export function useStashMutations(repoPath: string | null) {
   });
 
   const popMutation = useMutation({
-    mutationFn: () => stashPop(repoPath!),
-    onSuccess: () => invalidateStashAndStatus(),
+    mutationFn: (index: number) => stashPop(repoPath!, index),
+    onSuccess: (_data, index) => {
+      onStashRemoved(index);
+      return invalidateStashAndStatus();
+    },
+    // A conflicting pop applies the changes but keeps the entry.
+    onError: () => invalidateStashAndStatus(),
   });
 
   const dropMutation = useMutation({
     mutationFn: (index: number) => stashDrop(repoPath!, index),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["stashList"] }),
+    onSuccess: (_data, index) => {
+      onStashRemoved(index);
+      return invalidateStash();
+    },
   });
 
   const pushMutation = useMutation({
     mutationFn: (message?: string) => stashPush(repoPath!, message),
-    onSuccess: () => invalidateStashAndStatus(),
+    onSuccess: (oid) => {
+      onStashPushed(oid);
+      return invalidateStashAndStatus();
+    },
   });
 
   const pushPartialMutation = useMutation({
     mutationFn: ({ paths, message }: { paths: string[]; message?: string }) =>
       stashPushPartial(repoPath!, paths, message),
-    onSuccess: () => invalidateStashAndStatus(),
+    onSuccess: (oid) => {
+      onStashPushed(oid);
+      return invalidateStashAndStatus();
+    },
   });
 
   return {
