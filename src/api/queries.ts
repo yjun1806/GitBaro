@@ -491,3 +491,84 @@ export function useNewCommitIdsQuery(entry: SeenRecordInput | null, headOid: str
     refetchIntervalInBackground: false,
   });
 }
+
+// W3-T4
+import { useCallback, useSyncExternalStore } from "react";
+import type { InfiniteData, QueryState } from "@tanstack/react-query";
+import type { BranchInfo, CommitInfo, WorkflowRun } from "@/types";
+
+/**
+ * Reads a value from the query cache without adding an observer, so reading
+ * never starts a fetch. Re-renders when the cache changes. `read` must return
+ * a primitive or an object that already lives in the cache, so the snapshot
+ * stays stable between changes.
+ */
+function useQueryCacheValue<T>(read: (client: QueryClient) => T): T {
+  const client = useQueryClient();
+  const subscribe = useCallback(
+    (onChange: () => void) => client.getQueryCache().subscribe(onChange),
+    [client],
+  );
+  return useSyncExternalStore(subscribe, () => read(client));
+}
+
+/**
+ * `isUnpushed` of one commit from the history list other screens already
+ * loaded. undefined when the commit is not in the loaded pages.
+ */
+export function useCachedCommitIsUnpushed(
+  repoPath: string | null,
+  commitId: string,
+): boolean | undefined {
+  return useQueryCacheValue((client) =>
+    client
+      .getQueryData<InfiniteData<CommitInfo[]>>(["commitHistory", repoPath])
+      ?.pages.flat()
+      .find((c) => c.id === commitId)?.isUnpushed,
+  );
+}
+
+/**
+ * Sync status of one repository, taken from whichever `repoSyncStatus` query
+ * (sidebar, repo list, live changes) holds it, newest first. Adds no scan of
+ * its own.
+ */
+export function useCachedRepoSyncStatus(repoPath: string | null): RepoSyncStatus | undefined {
+  return useQueryCacheValue((client) => {
+    if (!repoPath) return undefined;
+    const queries = client
+      .getQueryCache()
+      .findAll({ queryKey: ["repoSyncStatus"] })
+      .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt);
+    for (const query of queries) {
+      const hit = (query.state.data as RepoSyncStatus[] | undefined)?.find(
+        (s) => s.path === repoPath,
+      );
+      if (hit) return hit;
+    }
+    return undefined;
+  });
+}
+
+/**
+ * Upstream of the checked-out branch (for example "upstream/feat") from the
+ * cached branch list. null when the branch has no upstream, undefined when
+ * the list is not loaded.
+ */
+export function useCachedHeadUpstream(repoPath: string | null): string | null | undefined {
+  return useQueryCacheValue((client) => {
+    const branches = client.getQueryData<BranchInfo[]>(["branches", repoPath]);
+    if (!branches) return undefined;
+    return branches.find((b) => b.isHead && !b.isRemote)?.upstream ?? null;
+  });
+}
+
+/** Cache state of the workflow run list that the graph panel loads. */
+export function useCachedWorkflowRunsState(
+  repoPath: string | null,
+  accountId: string | null,
+): QueryState<WorkflowRun[]> | undefined {
+  return useQueryCacheValue((client) =>
+    client.getQueryState<WorkflowRun[]>(["workflowRuns", repoPath, accountId]),
+  );
+}

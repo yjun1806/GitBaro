@@ -878,5 +878,36 @@
     "modifiedAgo": "modified {{time}}",
     "markSeen_one": "Mark {{count}} new commit as seen",
     "markSeen_other": "Mark {{count}} new commits as seen"
+  },
+  "commitDetail2": {
+    "repo": "Repository",
+    "commit": "Commit",
+    "copyHash": "Copy full commit hash",
+    "parents_one": "parent",
+    "parents_other": "parents",
+    "noParents": "no parent (first commit)",
+    "coAuthors": "Co-authors",
+    "agentGuess": "agent-written (guess)",
+    "ci": "CI",
+    "ciState": {
+      "running": "Running",
+      "failed": "Failed",
+      "passed": "Passed",
+      "cancelled": "Cancelled",
+      "other": "Finished"
+    },
+    "ciNone": "No runs for this commit",
+    "remote": "Remote",
+    "remotePushed": "On {{remote}}",
+    "remoteUnpushed_one": "Not pushed yet (↑{{count}} ahead of {{remote}})",
+    "remoteUnpushed_other": "Not pushed yet (↑{{count}} ahead of {{remote}})",
+    "remoteNoUpstream": "Not pushed yet (no remote branch linked)",
+    "ciNotRecent_one": "Not in the latest {{count}} run",
+    "ciNotRecent_other": "Not in the latest {{count}} runs",
+    "remotePushedUnnamed": "On the remote",
+    "remoteUnpushedUnnamed_one": "Not pushed yet (↑{{count}})",
+    "remoteUnpushedUnnamed_other": "Not pushed yet (↑{{count}})",
+    "changedFiles_one": "Changed files {{count}}",
+    "changedFiles_other": "Changed files {{count}}"
   }
 }
