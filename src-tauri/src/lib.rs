@@ -74,6 +74,7 @@ pub fn run() {
             commands::history::cherry_pick_commit,
             commands::auth::check_gh_status,
             commands::auth::start_gh_login,
+            commands::auth::cancel_gh_login,
             commands::auth::get_accounts,
             commands::auth::remove_account,
             commands::auth::set_repo_account,

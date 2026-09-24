@@ -1,4 +1,4 @@
-use crate::commands::auth::{resolve_repo_owner, resolve_token};
+use crate::commands::auth::{call_with_token_retry, resolve_repo_owner};
 use crate::error::AppError;
 use crate::github::client::GitHubClient;
 use crate::state::token_store::TokenStore;
@@ -54,9 +54,12 @@ pub async fn list_workflow_runs(
         .await
         .ok_or_else(|| AppError::Auth("Could not resolve owner/repo from remote URL".into()))?;
 
-    let token = resolve_token(&token_store, &account_id).await?;
     let client = GitHubClient::new();
-    let body = crate::github::actions::list_workflow_runs(&client, &token, &owner, &repo, 1).await?;
+    let body = call_with_token_retry(&token_store, &account_id, |token| {
+        let (client, owner, repo) = (&client, &owner, &repo);
+        async move { crate::github::actions::list_workflow_runs(client, &token, owner, repo, 1).await }
+    })
+    .await?;
 
     let runs = body["workflow_runs"]
         .as_array()
@@ -93,11 +96,14 @@ pub async fn get_workflow_run_jobs(
         .await
         .ok_or_else(|| AppError::Auth("Could not resolve owner/repo from remote URL".into()))?;
 
-    let token = resolve_token(&token_store, &account_id).await?;
     let client = GitHubClient::new();
-    let body =
-        crate::github::actions::get_workflow_run_jobs(&client, &token, &owner, &repo, run_id)
-            .await?;
+    let body = call_with_token_retry(&token_store, &account_id, |token| {
+        let (client, owner, repo) = (&client, &owner, &repo);
+        async move {
+            crate::github::actions::get_workflow_run_jobs(client, &token, owner, repo, run_id).await
+        }
+    })
+    .await?;
 
     let jobs = body["jobs"]
         .as_array()

@@ -431,16 +431,13 @@ pub async fn resolve_commit_avatars(
         Some(u) => u,
         None => return Ok(HashMap::new()),
     };
-    let token = match crate::commands::auth::resolve_token(&token_store, &username).await {
-        Ok(t) => t,
-        Err(_) => return Ok(HashMap::new()),
-    };
-
     // 4. Fetch avatars from GitHub API — any error → return empty
     let client = GitHubClient::new();
-    match client
-        .get_commit_author_avatars(&token, &owner, &repo_name)
-        .await
+    match crate::commands::auth::call_with_token_retry(&token_store, &username, |token| {
+        let (client, owner, repo_name) = (&client, &owner, &repo_name);
+        async move { client.get_commit_author_avatars(&token, owner, repo_name).await }
+    })
+    .await
     {
         Ok(map) => Ok(map),
         Err(_) => Ok(HashMap::new()),

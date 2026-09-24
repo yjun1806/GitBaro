@@ -133,7 +133,6 @@ pub async fn search_github_repos(
     query: String,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<Value, AppError> {
-    let token = resolve_token(&token_store, &account_id).await?;
     let client = crate::github::client::GitHubClient::new();
 
     // Paginate through the user's repositories (100 per page). Stops at a partial
@@ -141,7 +140,11 @@ pub async fn search_github_repos(
     const MAX_PAGES: u32 = 10;
     let mut repos: Vec<Value> = Vec::new();
     for page in 1..=MAX_PAGES {
-        let batch = client.list_repos(&token, page).await?;
+        let batch = crate::commands::auth::call_with_token_retry(&token_store, &account_id, |token| {
+            let client = &client;
+            async move { client.list_repos(&token, page).await }
+        })
+        .await?;
         let batch_len = batch.len();
         repos.extend(batch);
         if batch_len < 100 {
@@ -195,12 +198,13 @@ pub async fn get_repo_visibility(
     let (owner, repo_name) = crate::git::remote::parse_github_url(&origin_url)
         .ok_or_else(|| AppError::RepoNotFound("Not a GitHub repository URL".to_string()))?;
 
-    // 3. Resolve token for the linked account
-    let token = crate::commands::auth::resolve_token(&token_store, &account_id).await?;
-
-    // 4. Call GitHub API
+    // 3. Call GitHub API with the linked account's token
     let client = crate::github::client::GitHubClient::new();
-    let repo_info = client.get_repo(&token, &owner, &repo_name).await?;
+    let repo_info = crate::commands::auth::call_with_token_retry(&token_store, &account_id, |token| {
+        let (client, owner, repo_name) = (&client, &owner, &repo_name);
+        async move { client.get_repo(&token, owner, repo_name).await }
+    })
+    .await?;
 
     let is_private = repo_info["private"].as_bool().unwrap_or(false);
     let is_fork = repo_info["fork"].as_bool().unwrap_or(false);
@@ -225,10 +229,12 @@ pub async fn get_owner_type(
     account_id: String,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<Value, AppError> {
-    let token = crate::commands::auth::resolve_token(&token_store, &account_id).await?;
-
     let client = crate::github::client::GitHubClient::new();
-    let user_info = client.get_user_by_login(&token, &owner).await?;
+    let user_info = crate::commands::auth::call_with_token_retry(&token_store, &account_id, |token| {
+        let (client, owner) = (&client, &owner);
+        async move { client.get_user_by_login(&token, owner).await }
+    })
+    .await?;
 
     let owner_type = user_info["type"]
         .as_str()

@@ -7,7 +7,8 @@ import type { RepoVisibility } from "@/api/commands";
 
 export interface RepoPermission {
   valid: boolean;
-  canPush: boolean;
+  /** null when push access cannot be checked (the remote is not on github.com). */
+  canPush: boolean | null;
   reason?: string;
 }
 

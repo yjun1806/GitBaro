@@ -29,6 +29,42 @@ pub struct GhLoginResult {
     pub username: String,
 }
 
+/// The login currently in progress: its id and the sender that cancels it.
+/// Starting a new login drops the previous sender, which cancels that login.
+static ACTIVE_LOGIN: std::sync::Mutex<Option<(u64, tokio::sync::oneshot::Sender<()>)>> =
+    std::sync::Mutex::new(None);
+static NEXT_LOGIN_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// Register a new login attempt and return its id plus the cancel receiver.
+pub fn begin_login() -> (u64, tokio::sync::oneshot::Receiver<()>) {
+    let id = NEXT_LOGIN_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if let Ok(mut active) = ACTIVE_LOGIN.lock() {
+        *active = Some((id, tx));
+    }
+    (id, rx)
+}
+
+/// Cancel the login with `id` if it is still running. Unknown ids are ignored.
+pub fn cancel_login(id: u64) {
+    if let Ok(mut active) = ACTIVE_LOGIN.lock() {
+        if active.as_ref().is_some_and(|(active_id, _)| *active_id == id) {
+            if let Some((_, tx)) = active.take() {
+                let _ = tx.send(());
+            }
+        }
+    }
+}
+
+/// Forget the login with `id` once it has finished.
+fn end_login(id: u64) {
+    if let Ok(mut active) = ACTIVE_LOGIN.lock() {
+        if active.as_ref().is_some_and(|(active_id, _)| *active_id == id) {
+            *active = None;
+        }
+    }
+}
+
 // ─── Binary Discovery ───
 
 /// Find the `gh` binary by searching PATH and well-known install locations.
@@ -125,7 +161,10 @@ fn parse_auth_status(text: &str) -> Vec<GhAccount> {
     for line in text.lines() {
         let trimmed = line.trim();
 
-        // "✓ Logged in to github.com account USERNAME (source)"
+        // "✓ Logged in to github.com account USERNAME (source)", and the offline /
+        // revoked-token forms "X Failed to log in to github.com account USERNAME (source)"
+        // and "X Timeout trying to log in to github.com account USERNAME (source)".
+        // The account is still configured in gh in every case.
         if let Some(username) = extract_logged_in_account(trimmed) {
             accounts.push(GhAccount {
                 username,
@@ -145,9 +184,13 @@ fn parse_auth_status(text: &str) -> Vec<GhAccount> {
 }
 
 fn extract_logged_in_account(line: &str) -> Option<String> {
-    let needle = "Logged in to github.com account ";
-    let pos = line.find(needle)?;
-    let after = &line[pos + needle.len()..];
+    const NEEDLES: [&str; 2] = [
+        "Logged in to github.com account ",
+        "log in to github.com account ",
+    ];
+    let after = NEEDLES
+        .iter()
+        .find_map(|needle| line.find(needle).map(|pos| &line[pos + needle.len()..]))?;
     let username = if let Some(paren) = after.rfind('(') {
         after[..paren].trim()
     } else {
@@ -200,10 +243,23 @@ pub async fn gh_auth_token(username: &str) -> Result<String, AppError> {
 /// `on_device_code` is called once with `(user_code, verification_uri)` when
 /// the one-time code is available. The caller should display this to the user.
 ///
-/// Returns the logged-in username on success.
+/// Returns the logged-in username on success, or `Ok(None)` when the login was
+/// cancelled through [`cancel_login`] (or replaced by a newer login). The `gh`
+/// child process is killed on cancel, on timeout, and on any early return.
 pub async fn run_gh_login(
+    login_id: u64,
+    cancel: tokio::sync::oneshot::Receiver<()>,
     on_device_code: impl FnOnce(String, String) + Send,
-) -> Result<GhLoginResult, AppError> {
+) -> Result<Option<GhLoginResult>, AppError> {
+    let result = run_gh_login_inner(cancel, on_device_code).await;
+    end_login(login_id);
+    result
+}
+
+async fn run_gh_login_inner(
+    mut cancel: tokio::sync::oneshot::Receiver<()>,
+    on_device_code: impl FnOnce(String, String) + Send,
+) -> Result<Option<GhLoginResult>, AppError> {
     let gh = find_gh_binary()?;
 
     let mut child = tokio::process::Command::new(&gh)
@@ -221,6 +277,7 @@ pub async fn run_gh_login(
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
         .spawn()
         .map_err(|e| AppError::GhCli(format!("Failed to start gh: {}", e)))?;
 
@@ -263,7 +320,14 @@ pub async fn run_gh_login(
                 }
             }
             _ = tokio::time::sleep_until(deadline) => {
+                let _ = child.kill().await;
                 return Err(AppError::GhCli("gh auth login timed out (5 min)".into()));
+            }
+            _ = &mut cancel => {
+                // Either an explicit cancel or the sender was dropped by a newer login.
+                tracing::info!("gh auth login cancelled");
+                let _ = child.kill().await;
+                return Ok(None);
             }
         }
 
@@ -311,7 +375,7 @@ pub async fn run_gh_login(
         ));
     }
 
-    Ok(GhLoginResult { username })
+    Ok(Some(GhLoginResult { username }))
 }
 
 fn extract_device_code(text: &str) -> Option<String> {
@@ -408,6 +472,36 @@ mod tests {
         assert_eq!(accounts.len(), 1);
         assert_eq!(accounts[0].username, "octocat");
         assert!(accounts[0].active);
+    }
+
+    #[test]
+    fn parse_auth_status_keeps_accounts_that_failed_online_checks() {
+        let text = "github.com\n  X Failed to log in to github.com account user1 (keyring)\n  - Active account: true\n  - The token in keyring is invalid.\n  X Timeout trying to log in to github.com account user2 (keyring)\n  - Active account: false\n  ✓ Logged in to github.com account user3 (keyring)\n  - Active account: false\n";
+        let accounts = parse_auth_status(text);
+        let names: Vec<_> = accounts.iter().map(|a| a.username.as_str()).collect();
+        assert_eq!(names, ["user1", "user2", "user3"]);
+        assert!(accounts[0].active);
+        assert!(!accounts[1].active);
+    }
+
+    #[test]
+    fn parse_auth_status_ignores_token_env_lines() {
+        let text = "github.com\n  X Failed to log in to github.com using token (GH_TOKEN)\n";
+        assert!(parse_auth_status(text).is_empty());
+    }
+
+    #[tokio::test]
+    async fn cancel_login_only_signals_the_matching_login() {
+        let (first, mut first_rx) = begin_login();
+        cancel_login(first + 1000);
+        assert!(first_rx.try_recv().is_err());
+        cancel_login(first);
+        assert!(first_rx.await.is_ok());
+
+        let (_second, second_rx) = begin_login();
+        let (_third, _third_rx) = begin_login();
+        // Starting a newer login cancels the older one (its sender is dropped).
+        assert!(second_rx.await.is_err());
     }
 
     #[test]

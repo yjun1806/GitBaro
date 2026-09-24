@@ -498,7 +498,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                                 </span>
                               </div>
                             )}
-                            {!isValidating && permission && permission.valid && !permission.canPush && (
+                            {!isValidating && permission && permission.valid && permission.canPush === false && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <ShieldAlert className={cn("w-3 h-3 shrink-0", "text-warning")} />
                                 <span className={cn("text-xs font-medium", "text-warning")}>
