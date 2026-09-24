@@ -662,3 +662,10 @@ export interface FileDiffVsDefault extends DiffOutput {
   /** false면 갈라진 지점을 못 찾아 HEAD와 비교한 결과다(`BranchChanges.files`와 같은 규칙). */
   baseIsDivergencePoint: boolean;
 }
+
+// W5-T3
+/** `branch_bases`의 한 행. 기반 브랜치를 모르거나 계산하지 않는 브랜치(기본·원격)는 `base`가 null. */
+export interface BranchBaseInfo {
+  name: string;
+  base: WorktreeBase | null;
+}

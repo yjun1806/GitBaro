@@ -717,3 +717,32 @@ export function useNewCommitIdsMany(
     },
   });
 }
+
+// W5-T3
+import { getBranchBases } from "./commands";
+import type { WorktreeBase } from "@/types";
+
+/**
+ * 브랜치 패널에 보이는 행의 기반 브랜치. 브랜치마다 따로 캐시해 스크롤해도 이미 받은
+ * 값은 다시 묻지 않는다. 결과는 브랜치 이름 → 기반(모르면 null)이고, 아직 못 받은 이름은 빠진다.
+ */
+export function useBranchBases(
+  repoPath: string | null,
+  names: readonly string[],
+): ReadonlyMap<string, WorktreeBase | null> {
+  return useQueries({
+    queries: names.map((name) => ({
+      queryKey: ["branchBase", repoPath, name],
+      queryFn: async () => (await getBranchBases(repoPath!, [name]))[0]?.base ?? null,
+      enabled: repoPath !== null,
+      staleTime: 30_000,
+    })),
+    combine: (results) => {
+      const out = new Map<string, WorktreeBase | null>();
+      results.forEach((r, i) => {
+        if (r.data !== undefined) out.set(names[i], r.data);
+      });
+      return out;
+    },
+  });
+}

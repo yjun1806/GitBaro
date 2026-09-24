@@ -1,10 +1,9 @@
 import { useState, useRef } from "react";
-import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import { GitBranch, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
-import { useBranches, useHeadDetached, useRecentBranches, useStatus, useWorktrees } from "@/api/queries";
+import { useBranches, useHeadDetached, useStatus, useWorktrees } from "@/api/queries";
 import {
   switchBranch,
   createBranch,
@@ -19,7 +18,9 @@ import { useSelectionStore } from "@/stores/selection";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { useClickOutside, useToolbarDropdownContext } from "./useToolbarDropdown";
 import { ActionButton } from "./ActionButton";
-import { BranchDropdown } from "./BranchDropdown";
+import { BranchPanel } from "@/components/branch/BranchPanel";
+import { BranchMergeDialog } from "@/components/branch/BranchMergeDialog";
+import { useBranchRangeStore } from "@/components/branch/branch-range";
 import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
 import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
 import { DeleteBranchDialog } from "@/components/branch/DeleteBranchDialog";
@@ -28,11 +29,10 @@ import { selectionAfterStashPushed } from "@/lib/stash-selection";
 import { runWithStashedChanges } from "./run-with-stashed-changes";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
-import { mainColumnLeft } from "@/components/layout/sidebar-layout";
 
 /**
- * 툴바 오른쪽 [브랜치 · Merge · Stash] 묶음의 「브랜치」 버튼. 브랜치 패널을 여는 연결은
- * 이 파일이 맡는다(W5-T3는 `useOpenBranchPanel`만 새 패널로 바꾼다).
+ * 툴바 오른쪽 [브랜치 · Merge · Stash] 묶음의 「브랜치」 버튼. 왼쪽 브랜치 칸과 같은
+ * 브랜치 패널(시안 D6, `BranchPanel`)을 연다.
  */
 export function BranchPanelButton() {
   const { t } = useTranslation();
@@ -50,7 +50,7 @@ export function BranchPanelButton() {
   );
 }
 
-/** 브랜치 패널을 연다. W5-T3의 브랜치 패널이 들어올 때까지는 왼쪽 브랜치 목록을 연다. */
+/** 브랜치 패널을 연다. 패널은 `BranchZone`이 그린다. */
 function useOpenBranchPanel(): () => void {
   const { toggle } = useToolbarDropdownContext();
   return () => toggle("branch");
@@ -70,19 +70,18 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const ownerRepoPath = useOwnerRepoPath();
   const { data: branches = [] } = useBranches(activeRepoPath);
   const { data: isDetached = false } = useHeadDetached(activeRepoPath);
-  const { data: recentBranchNames = [] } = useRecentBranches(activeRepoPath);
   const { data: statusFiles = [] } = useStatus(activeRepoPath);
   const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
-  const sidebarWidth = useSidebarWidth();
-  const railMode = useUIStore((s) => s.railMode);
-  const { worktreeByBranch } = useWorktreeContext(activeRepoPath, worktrees);
+  const activeRepoName = useRepositoryStore((s) => s.activeRepo?.name ?? "");
+  const { mainWorktree } = useWorktreeContext(activeRepoPath, worktrees);
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pendingRename, setPendingRename] = useState<string | null>(null);
+  const [pendingMerge, setPendingMerge] = useState<string | null>(null);
 
   const headBranch = branches.find((b) => b.isHead);
   const currentBranch = headBranch?.name ?? null;
@@ -280,16 +279,17 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   };
 
   const handleCompare = (branchName: string) => {
-    // 비교는 히스토리 탭의 비교 뷰에서 보이므로 그 탭으로 전환한다.
-    useUIStore.getState().setCompareBranch(branchName);
-    useUIStore.getState().setActiveTab("history");
+    // 그래프를 「지금 브랜치..고른 브랜치」 범위 모드로 바꾼다(그래프 탭으로 전환).
+    if (!activeRepoPath || !currentBranch) return;
+    useBranchRangeStore.getState().setRange({ repoPath: activeRepoPath, base: currentBranch, target: branchName });
+    const { setCompareBranch, setActiveTab } = useUIStore.getState();
+    setCompareBranch(null);
+    setActiveTab("history");
     onClose();
   };
 
   const handleMerge = (branchName: string) => {
-    // 머지 의도의 비교도 동일하게 히스토리 탭의 비교 뷰로 이동한다.
-    useUIStore.getState().setCompareBranch(branchName);
-    useUIStore.getState().setActiveTab("history");
+    setPendingMerge(branchName);
     onClose();
   };
 
@@ -349,31 +349,23 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
       {isOpen && (
         <>
           {/* Backdrop — 전체 화면 (사이드바 포함) */}
-          <div
-            className="fixed inset-0 bg-black/20 z-40"
-            onClick={onClose}
+          <div className="fixed inset-0 bg-black/[0.08] z-40" onClick={onClose} />
+          <BranchPanel
+            repoName={mainWorktree?.path.split("/").filter(Boolean).pop() ?? activeRepoName}
+            activeRepoPath={activeRepoPath}
+            branches={branches}
+            worktrees={worktrees}
+            currentBranch={currentBranch}
+            onSwitch={handleSwitch}
+            onOpenWorktree={openWorktree}
+            onCompare={handleCompare}
+            onMerge={handleMerge}
+            onRename={setPendingRename}
+            onDelete={handleDelete}
+            onCopyName={handleCopyName}
+            onCreateBranch={() => setShowCreateDialog(true)}
+            onClose={onClose}
           />
-          {/* Full-height panel — 사이드바 오른쪽, 툴바 아래부터 하단까지 */}
-          <div
-            className="fixed z-50 flex flex-col bg-popover border-r border-border shadow-2xl"
-            style={{ left: mainColumnLeft(railMode, sidebarWidth), top: 52, bottom: 0, width: '28rem' }}
-          >
-            <BranchDropdown
-              branches={branches}
-              currentBranch={currentBranch}
-              recentBranchNames={recentBranchNames}
-              worktreeByBranch={worktreeByBranch}
-              onSwitch={handleSwitch}
-              onCreateBranch={() => setShowCreateDialog(true)}
-              onOpenWorktree={openWorktree}
-              onDelete={handleDelete}
-              onRename={setPendingRename}
-              onCompare={handleCompare}
-              onMerge={handleMerge}
-              onCopyName={handleCopyName}
-              onClose={onClose}
-            />
-          </div>
         </>
       )}
 
@@ -401,6 +393,16 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           branches={branches}
           onRename={(newName) => handleRenameConfirm(pendingRename, newName)}
           onClose={() => setPendingRename(null)}
+        />
+      )}
+
+      {pendingMerge && activeRepoPath && currentBranch && (
+        <BranchMergeDialog
+          repoPath={activeRepoPath}
+          currentBranch={currentBranch}
+          source={pendingMerge}
+          isDirty={isDirty}
+          onClose={() => setPendingMerge(null)}
         />
       )}
 

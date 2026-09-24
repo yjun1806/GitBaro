@@ -1003,3 +1003,14 @@ export async function getFileDiffVsDefault(
   });
   return fileDiffVsDefaultFromRaw(raw);
 }
+
+// W5-T3
+import type { BranchBaseInfo } from "@/types";
+
+/**
+ * 브랜치마다 기반 브랜치(어디서 갈라졌는지)와 기반보다 앞선·뒤처진 커밋 수.
+ * 기록이 없으면 가장 가까운 분기점으로 추정한 값이다. 비용 때문에 화면에 보이는 행만 넘긴다.
+ */
+export async function getBranchBases(repoPath: string, names: string[]): Promise<BranchBaseInfo[]> {
+  return invoke("branch_bases", { repoPath, names });
+}
