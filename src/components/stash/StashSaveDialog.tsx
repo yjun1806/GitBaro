@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useId } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Check } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useStatus } from "@/api/queries";
 import type { StatusEntry } from "@/types";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface StashSaveDialogProps {
   onSave: (message?: string, paths?: string[]) => void;
@@ -12,6 +13,7 @@ interface StashSaveDialogProps {
 
 export function StashSaveDialog({ onSave, onClose }: StashSaveDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
 
@@ -80,11 +82,15 @@ export function StashSaveDialog({ onSave, onClose }: StashSaveDialogProps) {
       : selectedPaths.size > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-popover border border-border rounded-xl shadow-2xl w-[440px] max-h-[80vh] flex flex-col">
+    <Dialog
+      onClose={onClose}
+      labelledBy={titleId}
+      overlayClassName="z-50 bg-black/50"
+      className="bg-popover border border-border rounded-xl shadow-2xl w-[440px] max-h-[80vh] flex flex-col"
+    >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="text-sm font-semibold">{t("stash.saveDialog.title")}</h2>
+          <h2 id={titleId} className="text-sm font-semibold">{t("stash.saveDialog.title")}</h2>
           <button
             onClick={onClose}
             className="p-1 rounded-md hover:bg-accent transition-colors"
@@ -159,12 +165,12 @@ export function StashSaveDialog({ onSave, onClose }: StashSaveDialogProps) {
                       }`}
                     >
                       {selectedPaths.has(file.path) && (
-                        <Check className="w-3 h-3 text-white" />
+                        <Check className="w-3 h-3 text-primary-foreground" />
                       )}
                     </div>
                     <span className="text-xs truncate flex-1">{file.path}</span>
                     <span className="text-[10px] text-muted-foreground shrink-0">
-                      {file.status}
+                      {t(`fileStatus.${file.status}`, { defaultValue: file.status })}
                     </span>
                   </label>
                 ))}
@@ -189,7 +195,6 @@ export function StashSaveDialog({ onSave, onClose }: StashSaveDialogProps) {
             {t("stash.saveDialog.save")}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

@@ -1,15 +1,15 @@
 import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
-import { applyTheme, watchSystemTheme } from "@/lib/theme";
+import { applyTheme, isTheme, watchSystemTheme } from "@/lib/theme";
 import { addLocalRepository, cloneRepository, getAccounts, getSettings, openRepository } from "@/api/commands";
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
 import i18n from "@/i18n/config";
-import { getErrorMessage } from "@/lib/utils";
+import { getErrorMessage, isAppErrorType, isSameFolder } from "@/lib/utils";
 import { onStorageFailure } from "@/lib/safe-storage";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { WelcomeScreen } from "@/components/welcome/WelcomeScreen";
@@ -85,6 +85,11 @@ function AppContent() {
 
       try {
         const settings = await getSettings();
+        // The settings file is the theme's source of truth — the settings
+        // screen shows it, so the running app must match it too.
+        if (isTheme(settings.theme)) {
+          useUIStore.getState().setTheme(settings.theme);
+        }
         if (settings.language && settings.language !== i18n.language) {
           i18n.changeLanguage(settings.language);
         }
@@ -124,9 +129,11 @@ function AppContent() {
     verifyWorktree(activeRepo.path, activeRepoPath);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // DEV: Cmd+Shift+W to preview welcome screen for testing (data preserved)
+  // DEV: Cmd+Shift+W to preview welcome screen for testing (data preserved).
+  // Dev builds only — in production it would hijack a real key combo.
   const [debugWelcome, setDebugWelcome] = useState(false);
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey && e.shiftKey && e.key === "w") {
         e.preventDefault();
@@ -189,6 +196,15 @@ function AppContent() {
       if (!selected) return;
       const dirPath = typeof selected === "string" ? selected : selected;
       const repoInfo = await addLocalRepository(dirPath);
+      // The folder may sit inside a repository further up (even one in the
+      // home folder). Adding that repository must be the user's choice.
+      if (!isSameFolder(dirPath, repoInfo.path)) {
+        const confirmed = await ask(
+          t("repo.addEnclosingConfirm", { picked: dirPath, root: repoInfo.path }),
+          { title: t("repo.addEnclosingTitle"), kind: "warning" },
+        );
+        if (!confirmed) return;
+      }
 
       const currentAccounts = useAccountStore.getState().accounts;
       if (currentAccounts.length >= 2) {
@@ -200,7 +216,12 @@ function AppContent() {
         setActiveRepo(repoInfo.path);
       }
     } catch (err) {
-      addToast(t("error.failedToOpenRepo", { error: getErrorMessage(err) }), "error");
+      addToast(
+        isAppErrorType(err, "BareRepository")
+          ? t("repo.bareNotSupported")
+          : t("error.failedToOpenRepo", { error: getErrorMessage(err) }),
+        "error",
+      );
     }
   }, [addRepo, setActiveRepo, addToast]);
 

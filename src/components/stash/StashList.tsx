@@ -1,8 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Archive } from "lucide-react";
 import { StashItem } from "./StashItem";
+import { cn } from "@/lib/utils";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
+import { useMenuKeyboard } from "@/hooks/useMenuKeyboard";
+import { Dialog } from "@/components/ui/Dialog";
 import type { StashEntry } from "@/types";
 
 interface StashListProps {
@@ -38,18 +41,7 @@ export function StashList({
     index: number;
   } | null>(null);
   const [confirmDrop, setConfirmDrop] = useState<number | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    };
-    window.addEventListener("mousedown", handleClick);
-    return () => window.removeEventListener("mousedown", handleClick);
-  }, [contextMenu]);
+  const dropTitleId = useId();
 
   if (stashes.length === 0) {
     return (
@@ -84,47 +76,24 @@ export function StashList({
 
       {/* Context Menu */}
       {contextMenu && (
-        <div
-          ref={menuRef}
-          className="fixed z-50 min-w-[160px] bg-popover border border-border rounded-lg shadow-lg py-1"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          <button
-            className="w-full px-3 py-1.5 text-xs text-left hover:bg-accent transition-colors"
-            onClick={() => {
-              onApply(contextMenu.index);
-              setContextMenu(null);
-            }}
-          >
-            {t("stash.apply")}
-          </button>
-          <button
-            className="w-full px-3 py-1.5 text-xs text-left hover:bg-accent transition-colors"
-            onClick={() => {
-              onPop(contextMenu.index);
-              setContextMenu(null);
-            }}
-          >
-            {t("stash.pop")}
-          </button>
-          <div className="border-t border-border my-1" />
-          <button
-            className="w-full px-3 py-1.5 text-xs text-left text-danger hover:bg-danger/10 transition-colors"
-            onClick={() => {
-              setConfirmDrop(contextMenu.index);
-              setContextMenu(null);
-            }}
-          >
-            {t("stash.drop")}
-          </button>
-        </div>
+        <StashContextMenu
+          position={contextMenu}
+          onApply={() => onApply(contextMenu.index)}
+          onPop={() => onPop(contextMenu.index)}
+          onDrop={() => setConfirmDrop(contextMenu.index)}
+          onClose={() => setContextMenu(null)}
+        />
       )}
 
       {/* Drop Confirmation Dialog */}
       {confirmDrop !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-popover border border-border rounded-xl shadow-2xl p-6 w-[360px]">
-            <h3 className="text-sm font-semibold">{t("stash.dropConfirm")}</h3>
+        <Dialog
+          onClose={() => setConfirmDrop(null)}
+          labelledBy={dropTitleId}
+          overlayClassName="z-50 bg-black/50"
+          className="bg-popover border border-border rounded-xl shadow-2xl p-6 w-[360px]"
+        >
+            <h3 id={dropTitleId} className="text-sm font-semibold">{t("stash.dropConfirm")}</h3>
             <p className="text-xs text-muted-foreground mt-2">
               {t("stash.dropConfirmDescription")}
             </p>
@@ -145,9 +114,66 @@ export function StashList({
                 {t("stash.drop")}
               </button>
             </div>
-          </div>
-        </div>
+        </Dialog>
       )}
+    </div>
+  );
+}
+
+interface StashContextMenuProps {
+  position: { x: number; y: number };
+  onApply: () => void;
+  onPop: () => void;
+  onDrop: () => void;
+  onClose: () => void;
+}
+
+function StashContextMenu({ position, onApply, onPop, onDrop, onClose }: StashContextMenuProps) {
+  const { t } = useTranslation();
+  const menuRef = useRef<HTMLDivElement>(null);
+  const { onKeyDown, restoreFocus } = useMenuKeyboard(menuRef, onClose);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    window.addEventListener("mousedown", handleClick);
+    return () => window.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  const run = (action: () => void) => () => {
+    restoreFocus();
+    action();
+    onClose();
+  };
+
+  const itemClass = "w-full px-3 py-1.5 text-xs text-left transition-colors outline-none";
+
+  return (
+    <div
+      ref={menuRef}
+      role="menu"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="fixed z-50 min-w-[160px] bg-popover border border-border rounded-lg shadow-lg py-1 outline-none"
+      style={{ left: position.x, top: position.y }}
+    >
+      <button role="menuitem" className={cn(itemClass, "hover:bg-accent focus-visible:bg-accent")} onClick={run(onApply)}>
+        {t("stash.apply")}
+      </button>
+      <button role="menuitem" className={cn(itemClass, "hover:bg-accent focus-visible:bg-accent")} onClick={run(onPop)}>
+        {t("stash.pop")}
+      </button>
+      <div role="separator" className="border-t border-border my-1" />
+      <button
+        role="menuitem"
+        className={cn(itemClass, "text-danger hover:bg-danger/10 focus-visible:bg-danger/10")}
+        onClick={run(onDrop)}
+      >
+        {t("stash.drop")}
+      </button>
     </div>
   );
 }

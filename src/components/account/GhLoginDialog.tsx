@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Loader2, CheckCircle, XCircle, Copy, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { startGhLogin } from "@/api/commands";
+import { cancelGhLogin, startGhLogin } from "@/api/commands";
+import { Dialog } from "@/components/ui/Dialog";
 
 type FlowState = "idle" | "code" | "waiting" | "success" | "error";
 
@@ -19,6 +20,8 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
   const [copied, setCopied] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successUsername, setSuccessUsername] = useState("");
+  // Id of the running `gh auth login`, so closing the dialog can stop it.
+  const loginIdRef = useRef<number | null>(null);
 
   const startLogin = useCallback(async () => {
     setFlowState("idle");
@@ -26,7 +29,7 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
     setCopied(false);
 
     try {
-      await startGhLogin();
+      loginIdRef.current = await startGhLogin();
       // Command returned — background task is running.
       // We wait for Tauri events to update the UI.
     } catch (err) {
@@ -82,6 +85,11 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
     return () => {
       mounted = false;
       cleanups.forEach((fn) => fn());
+      // Closing the dialog (Cancel, Escape, or after success) stops a login that
+      // is still waiting; the backend ignores ids that already finished.
+      if (loginIdRef.current !== null) {
+        void cancelGhLogin(loginIdRef.current).catch(() => {});
+      }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -96,9 +104,20 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
     await openUrl("https://github.com/login/device");
   };
 
+  // After sign-in, any way out (Continue or Escape) must run onSuccess so the
+  // caller refreshes accounts; closing alone would leave the new account unseen.
+  const handleDismiss = () => {
+    if (flowState === "success") onSuccess?.(successUsername);
+    onClose();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-5">
+    <Dialog
+      onClose={handleDismiss}
+      dismissible={flowState !== "idle"}
+      ariaLabel={t("account.signInToGitHub")}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-5"
+    >
         {/* Requesting code */}
         {flowState === "idle" && (
           <>
@@ -194,10 +213,7 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
               </p>
             </div>
             <button
-              onClick={() => {
-                onSuccess?.(successUsername);
-                onClose();
-              }}
+              onClick={handleDismiss}
               className="px-5 py-2.5 bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-medium rounded-lg transition-colors"
             >
               {t("account.continue", "Continue")}
@@ -231,7 +247,6 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
             </button>
           </>
         )}
-      </div>
-    </div>
+    </Dialog>
   );
 }

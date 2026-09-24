@@ -6,7 +6,6 @@ import {
   FolderOpen,
   GitFork,
   GitBranch,
-  FolderPlus,
   Circle,
   EllipsisVertical,
   Globe,
@@ -22,17 +21,19 @@ import {
   User,
   ShieldAlert,
   ShieldX,
+  RefreshCw,
 } from "lucide-react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useRepositoryStore, useRepoViewPath } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { addLocalRepository, cloneRepository, getRepoVisibility, getOwnerType, validateToken } from "@/api/commands";
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { AccountSelectDialog } from "@/components/account/AccountSelectDialog";
-import { cn, getErrorMessage } from "@/lib/utils";
+import { cn, getErrorMessage, isAppErrorType, isSameFolder } from "@/lib/utils";
 import { extractOwnerFromRemoteUrl, groupReposByOwner, type GroupedRepos } from "@/lib/group-repos";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
+import { useAutoSyncStore } from "@/stores/auto-sync";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import { RepoSyncIndicator } from "@/components/repository/RepoSyncIndicator";
 import { useRepoSyncStatuses } from "@/api/queries";
@@ -44,16 +45,20 @@ function RepoContextMenu({
   accounts,
   currentAccountId,
   isFavorite,
+  hasRemote,
   onSelect,
   onToggleFavorite,
+  onOpenAutoSync,
   onRemoveRepo,
   onClose,
 }: {
   accounts: GitHubAccount[];
   currentAccountId: string | null;
   isFavorite: boolean;
+  hasRemote: boolean;
   onSelect: (accountId: string | null) => void;
   onToggleFavorite: () => void;
+  onOpenAutoSync: () => void;
   onRemoveRepo: () => void;
   onClose: () => void;
 }) {
@@ -126,6 +131,18 @@ function RepoContextMenu({
       <button
         onClick={(e) => {
           e.stopPropagation();
+          onOpenAutoSync();
+          onClose();
+        }}
+        disabled={!hasRemote}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors text-left disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <RefreshCw className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+        {t("autoSync.menuItem")}
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
           onRemoveRepo();
         }}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-danger hover:bg-accent transition-colors text-left"
@@ -163,6 +180,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
   const repoVisibility = useRepositoryStore((s) => s.repoVisibility);
   const ownerTypes = useRepositoryStore((s) => s.ownerTypes);
   const accounts = useAccountStore((s) => s.accounts);
+  const openAutoSyncSettings = useAutoSyncStore((s) => s.openSettings);
   const [accountPickerRepo, setAccountPickerRepo] = useState<string | null>(null);
 
   const repoPermissions = useRepositoryStore((s) => s.repoPermissions);
@@ -195,6 +213,15 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
       if (!selected) return;
       const dirPath = typeof selected === "string" ? selected : selected;
       const repoInfo = await addLocalRepository(dirPath);
+      // The folder may sit inside a repository further up (even one in the
+      // home folder). Adding that repository must be the user's choice.
+      if (!isSameFolder(dirPath, repoInfo.path)) {
+        const confirmed = await ask(
+          t("repo.addEnclosingConfirm", { picked: dirPath, root: repoInfo.path }),
+          { title: t("repo.addEnclosingTitle"), kind: "warning" },
+        );
+        if (!confirmed) return;
+      }
 
       if (accounts.length >= 2) {
         setPendingLocalRepo({ path: dirPath, repoInfo });
@@ -205,7 +232,12 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
         onSelectRepo(repoInfo.path);
       }
     } catch (err) {
-      addToast(t("repo.failedToAdd", { error: getErrorMessage(err) }), "error");
+      addToast(
+        isAppErrorType(err, "BareRepository")
+          ? t("repo.bareNotSupported")
+          : t("repo.failedToAdd", { error: getErrorMessage(err) }),
+        "error",
+      );
     }
   }, [accounts, addRepo, onSelectRepo, addToast, t]);
 
@@ -338,13 +370,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                 <GitFork className="w-4 h-4 text-muted-foreground shrink-0" />
                 {t("repo.cloneRepo")}
               </button>
-              <button
-                onClick={() => setAddMenuOpen(false)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
-              >
-                <FolderPlus className="w-4 h-4 text-muted-foreground shrink-0" />
-                {t("repo.createNew")}
-              </button>
+              {/* "Create new repository" (git init) is hidden until it is implemented. */}
             </div>
           )}
         </div>
@@ -498,7 +524,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                                 </span>
                               </div>
                             )}
-                            {!isValidating && permission && permission.valid && !permission.canPush && (
+                            {!isValidating && permission && permission.valid && permission.canPush === false && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <ShieldAlert className={cn("w-3 h-3 shrink-0", "text-warning")} />
                                 <span className={cn("text-xs font-medium", "text-warning")}>
@@ -571,7 +597,9 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                             accounts={accounts}
                             currentAccountId={repo.accountId}
                             isFavorite={favoriteRepos.includes(repo.path)}
+                            hasRemote={repo.remotes.length > 0}
                             onToggleFavorite={() => toggleFavorite(repo.path)}
+                            onOpenAutoSync={() => openAutoSyncSettings(repo.path)}
                             onSelect={async (accountId: string | null) => {
                               updateRepoAccount(repo.path, accountId);
                               setAccountPickerRepo(null);

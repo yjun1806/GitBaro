@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useId } from "react";
 import { LogOut, Plus, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import type { GitHubAccount } from "@/types";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface AccountSettingsProps {
   accounts: GitHubAccount[];
@@ -19,6 +20,7 @@ export function AccountSettings({
   onSyncAccounts,
 }: AccountSettingsProps) {
   const { t } = useTranslation();
+  const logoutTitleId = useId();
   const [confirmLogoutId, setConfirmLogoutId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -86,11 +88,15 @@ export function AccountSettings({
 
       {/* 로그아웃 확인 모달 */}
       {confirmAccount && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-          <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col items-center gap-4">
+        <Dialog
+          onClose={() => setConfirmLogoutId(null)}
+          labelledBy={logoutTitleId}
+          overlayClassName="z-[60] bg-black/50"
+          className="bg-card rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col items-center gap-4"
+        >
             <AccountAvatar account={confirmAccount} size="lg" />
             <div className="text-center">
-              <p className="text-sm font-semibold text-foreground">
+              <p id={logoutTitleId} className="text-sm font-semibold text-foreground">
                 {t("account.logoutConfirm", { username: confirmAccount.username })}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
@@ -111,8 +117,7 @@ export function AccountSettings({
                 {t("account.logout")}
               </button>
             </div>
-          </div>
-        </div>
+        </Dialog>
       )}
     </div>
   );

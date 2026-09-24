@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::sync::OnceLock;
+use std::time::Duration;
 
 use crate::error::AppError;
 use serde_json::Value;
@@ -26,20 +28,43 @@ pub(crate) fn validate_path_segment(segment: &str) -> Result<(), AppError> {
     }
 }
 
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The process-wide HTTP client for GitHub REST calls (cheap to clone).
+fn shared_http_client() -> reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .user_agent("GitBaro/0.1.0")
+                .connect_timeout(CONNECT_TIMEOUT)
+                .timeout(REQUEST_TIMEOUT)
+                .build()
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to build GitHub HTTP client: {}", e);
+                    reqwest::Client::new()
+                })
+        })
+        .clone()
+}
+
+/// True for an HTTP 401 from the GitHub API — the token was revoked or rotated.
+pub(crate) fn is_unauthorized(err: &AppError) -> bool {
+    matches!(err, AppError::GithubApi { status: 401, .. })
+}
+
 pub struct GitHubClient {
     http: reqwest::Client,
     base_url: String,
 }
 
 impl GitHubClient {
+    /// All instances share one connection pool with connect/total timeouts, so
+    /// a stalled network surfaces as an error instead of hanging the UI.
     pub fn new() -> Self {
-        let http = reqwest::Client::builder()
-            .user_agent("GitBaro/0.1.0")
-            .build()
-            .expect("Failed to create HTTP client");
-
         GitHubClient {
-            http,
+            http: shared_http_client(),
             base_url: GITHUB_API_BASE.to_string(),
         }
     }

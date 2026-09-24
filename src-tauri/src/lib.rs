@@ -5,6 +5,7 @@ pub mod events;
 pub mod gh;
 pub mod git;
 pub mod github;
+mod shell_env;
 pub mod state;
 pub mod watcher;
 
@@ -14,6 +15,8 @@ use tracing_subscriber::EnvFilter;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
+    // Before any thread starts or any git/gh/hook process is spawned.
+    shell_env::apply_login_shell_path();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -28,12 +31,17 @@ pub fn run() {
             commands::git::create_commit,
             commands::git::get_diff,
             commands::git::discard_changes,
+            commands::git::find_conflict_markers,
             commands::git::git_fetch,
             commands::git::git_push,
+            commands::git::get_push_target,
             commands::git::git_pull,
             commands::git::list_remote_tags,
+            commands::auto_sync::get_auto_sync_snapshot,
+            commands::auto_sync::auto_fast_forward,
             commands::git::stash_push,
             commands::git::stash_pop,
+            commands::git::stash_pop_by_oid,
             commands::git::stash_list,
             commands::git::stash_apply,
             commands::git::stash_drop,
@@ -49,6 +57,7 @@ pub fn run() {
             commands::repo::get_repo_visibility,
             commands::repo::get_owner_type,
             commands::branch::get_branches,
+            commands::branch::is_head_detached,
             commands::branch::get_branch_divergence,
             commands::branch::repo_sync_status,
             commands::branch::create_branch,
@@ -74,6 +83,7 @@ pub fn run() {
             commands::history::cherry_pick_commit,
             commands::auth::check_gh_status,
             commands::auth::start_gh_login,
+            commands::auth::cancel_gh_login,
             commands::auth::get_accounts,
             commands::auth::remove_account,
             commands::auth::set_repo_account,
@@ -116,57 +126,17 @@ pub fn run() {
             );
 
             if let Some(bounds) = app_state.window_bounds {
-                let bounds = bounds.validated();
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.set_position(LogicalPosition::new(bounds.x, bounds.y));
-                    let _ = window.set_size(LogicalSize::new(bounds.width, bounds.height));
-                    if bounds.maximized {
-                        let _ = window.maximize();
-                    }
-                    tracing::info!(
-                        "Restored window: {}x{} at ({}, {}), maximized={}",
-                        bounds.width, bounds.height, bounds.x, bounds.y, bounds.maximized
-                    );
+                    restore_window_bounds(&window, bounds.validated());
                 }
             }
 
-            // close 이벤트에서 window bounds 저장
+            // 창을 닫을 때 window bounds 저장 (Cmd+Q 는 아래 RunEvent 에서 처리)
             let app_handle_for_close = app.handle().clone();
             if let Some(window) = app.get_webview_window("main") {
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { .. } = event {
-                        let handle = app_handle_for_close.clone();
-                        if let Some(win) = handle.get_webview_window("main") {
-                            let scale = win.scale_factor().unwrap_or(1.0);
-                            let is_maximized = win.is_maximized().unwrap_or(false);
-
-                            // 물리 픽셀 → 논리 픽셀로 변환
-                            let size = win.outer_size().unwrap_or_default();
-                            let pos = win.outer_position().unwrap_or_default();
-
-                            let bounds = state::app_state::WindowBounds {
-                                x: pos.x as f64 / scale,
-                                y: pos.y as f64 / scale,
-                                width: size.width as f64 / scale,
-                                height: size.height as f64 / scale,
-                                maximized: is_maximized,
-                            };
-
-                            tracing::info!(
-                                "Saving window state: {}x{} at ({}, {}), maximized={}, scale={}",
-                                bounds.width, bounds.height, bounds.x, bounds.y,
-                                bounds.maximized, scale
-                            );
-
-                            tauri::async_runtime::block_on(async {
-                                let mut state =
-                                    state::app_state::load_app_state(&handle).await;
-                                state.window_bounds = Some(bounds);
-                                if let Err(e) = state::app_state::save_app_state(&state).await {
-                                    tracing::error!("Failed to save window state: {}", e);
-                                }
-                            });
-                        }
+                        save_window_bounds(&app_handle_for_close);
                     }
                 });
             }
@@ -182,8 +152,114 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running GitBaro");
+        .build(tauri::generate_context!())
+        .expect("error while building GitBaro")
+        .run(|app_handle, event| {
+            // Cmd+Q (app menu Quit) exits without a window CloseRequested event,
+            // so save the bounds here while the window still exists. `Exit` is a
+            // fallback for quit paths that skip `ExitRequested`.
+            if matches!(
+                event,
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+            ) {
+                save_window_bounds(app_handle);
+            }
+        });
+}
+
+fn logical_screens(window: &tauri::WebviewWindow) -> Vec<state::app_state::ScreenRect> {
+    window
+        .available_monitors()
+        .unwrap_or_default()
+        .iter()
+        .map(screen_rect)
+        .collect()
+}
+
+fn screen_rect(monitor: &tauri::Monitor) -> state::app_state::ScreenRect {
+    let scale = monitor.scale_factor();
+    let pos = monitor.position();
+    let size = monitor.size();
+    state::app_state::ScreenRect {
+        x: pos.x as f64 / scale,
+        y: pos.y as f64 / scale,
+        width: size.width as f64 / scale,
+        height: size.height as f64 / scale,
+    }
+}
+
+/// Apply saved bounds. If they are no longer on any connected monitor (e.g. the
+/// external display it was on has been unplugged), center on the primary one.
+fn restore_window_bounds(
+    window: &tauri::WebviewWindow,
+    saved: state::app_state::WindowBounds,
+) {
+    let screens = logical_screens(window);
+    let bounds = if screens.is_empty() || saved.is_visible_on(&screens) {
+        saved
+    } else {
+        let primary = window
+            .primary_monitor()
+            .ok()
+            .flatten()
+            .map(|m| screen_rect(&m))
+            .unwrap_or(screens[0]);
+        tracing::info!(
+            "Saved window position ({}, {}) is off-screen, centering on the primary monitor",
+            saved.x, saved.y
+        );
+        saved.centered_on(&primary)
+    };
+
+    let _ = window.set_position(LogicalPosition::new(bounds.x, bounds.y));
+    let _ = window.set_size(LogicalSize::new(bounds.width, bounds.height));
+    if bounds.maximized {
+        let _ = window.maximize();
+    }
+    tracing::info!(
+        "Restored window: {}x{} at ({}, {}), maximized={}",
+        bounds.width, bounds.height, bounds.x, bounds.y, bounds.maximized
+    );
+}
+
+/// Persist the main window's position and size (logical pixels).
+fn save_window_bounds(handle: &tauri::AppHandle) {
+    let Some(win) = handle.get_webview_window("main") else {
+        return;
+    };
+    // A window that is already being torn down cannot report its geometry;
+    // saving zeros would overwrite the last good bounds.
+    let (Ok(size), Ok(pos)) = (win.outer_size(), win.outer_position()) else {
+        return;
+    };
+    if size.width == 0 || size.height == 0 {
+        return;
+    }
+    let scale = win.scale_factor().unwrap_or(1.0);
+    let is_maximized = win.is_maximized().unwrap_or(false);
+
+    // 물리 픽셀 → 논리 픽셀로 변환
+
+    let bounds = state::app_state::WindowBounds {
+        x: pos.x as f64 / scale,
+        y: pos.y as f64 / scale,
+        width: size.width as f64 / scale,
+        height: size.height as f64 / scale,
+        maximized: is_maximized,
+    };
+
+    tracing::info!(
+        "Saving window state: {}x{} at ({}, {}), maximized={}, scale={}",
+        bounds.width, bounds.height, bounds.x, bounds.y, bounds.maximized, scale
+    );
+
+    tauri::async_runtime::block_on(async {
+        let mut state = state::app_state::load_app_state(handle).await;
+        state.window_bounds = Some(bounds);
+        if let Err(e) = state::app_state::save_app_state(&state).await {
+            tracing::error!("Failed to save window state: {}", e);
+        }
+    });
 }
 
 fn init_logging() {

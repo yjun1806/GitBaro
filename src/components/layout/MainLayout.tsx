@@ -1,19 +1,18 @@
 import { useRef, useCallback } from "react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
-import { useBackgroundFetch } from "@/hooks/useBackgroundFetch";
+import { useAutoSync } from "@/hooks/useAutoSync";
+import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import "@/stores/selection"; // ensure cross-store subscriptions are registered
 import { RepoRail } from "./RepoRail";
 import { Sidebar } from "./Sidebar";
 import { ContentArea } from "./ContentArea";
 import { StatusBar } from "./StatusBar";
 import { ActivityLogPanel } from "./ActivityLogPanel";
-
-const MIN_SIDEBAR_WIDTH = 200;
-const MIN_RIGHT_PANEL_WIDTH = 700;
+import { AutoSyncSettingsDialogHost } from "@/components/repository/AutoSyncSettingsDialog";
+import { clampSidebarWidth } from "@/lib/sidebar-width";
 
 export function MainLayout() {
-  const sidebarWidth = useUIStore((s) => s.sidebarWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
   const activeTab = useUIStore((s) => s.activeTab);
   const repoListOpen = useUIStore((s) => s.repoListOpen);
@@ -21,8 +20,10 @@ export function MainLayout() {
 
   useRepositoryStore((s) => s.activeRepoPath);
 
-  // 열린 모든 레포를 주기적으로 fetch해 사이드바 push/pull 인디케이터를 최신화
-  useBackgroundFetch();
+  // 저장소별 설정에 따라 원격을 주기적으로 확인하고, 안전할 때만 자동으로 받는다
+  useAutoSync();
+
+  const sidebarWidth = useSidebarWidth();
 
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -37,12 +38,9 @@ export function MainLayout() {
       const onMouseMove = (ev: MouseEvent) => {
         if (!isDragging.current) return;
         const delta = ev.clientX - startX.current;
-        const maxWidth = window.innerWidth - MIN_RIGHT_PANEL_WIDTH;
-        const next = Math.min(
-          maxWidth,
-          Math.max(MIN_SIDEBAR_WIDTH, startWidth.current + delta),
+        setSidebarWidth(
+          clampSidebarWidth(startWidth.current + delta, window.innerWidth),
         );
-        setSidebarWidth(next);
       };
 
       const onMouseUp = () => {
@@ -97,6 +95,9 @@ export function MainLayout() {
 
       {/* Status bar */}
       <StatusBar />
+
+      {/* 저장소 메뉴에서 여는 원격 자동 최신화 설정 */}
+      <AutoSyncSettingsDialogHost />
     </div>
   );
 }

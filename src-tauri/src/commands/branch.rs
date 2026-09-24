@@ -1,13 +1,27 @@
 use crate::error::AppError;
 use crate::git::branch::validate_branch_name;
-use crate::git::cli::GitCliEngine;
+use crate::git::cli::{GitCliEngine, GitOperation};
 use crate::git::commit::commit_to_info;
 use crate::git::engine::{BranchCompareResult, MergePreCheckResult, MergeStrategy};
 use crate::git::libgit::is_working_tree_dirty;
+use crate::git::worktree_base::default_branch_name;
 use serde_json::{json, Value};
 
 fn is_fully_merged(repo: &git2::Repository, branch_oid: git2::Oid, default_oid: git2::Oid) -> bool {
     repo.graph_descendant_of(default_oid, branch_oid).unwrap_or(false)
+}
+
+/// Whether HEAD points at a commit instead of a branch. An unborn branch
+/// (`git checkout --orphan`) is not detached, although it has no local branch
+/// yet, so the frontend cannot infer this from the branch list.
+#[tauri::command]
+pub async fn is_head_detached(repo_path: String) -> Result<bool, AppError> {
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&repo_path)?;
+        Ok(repo.head_detached()?)
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
 }
 
 #[tauri::command]
@@ -17,11 +31,7 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
         let branches = repo.branches(None)?;
 
         // origin/HEAD로부터 default branch 이름 판별
-        let default_branch_name = repo
-            .find_reference("refs/remotes/origin/HEAD")
-            .ok()
-            .and_then(|r| r.symbolic_target().map(|s| s.to_string()))
-            .and_then(|s| s.strip_prefix("refs/remotes/origin/").map(|n| n.to_string()));
+        let default_branch_name = default_branch_name(&repo);
 
         // default branch OID (isFullyMerged 계산용)
         let default_oid = default_branch_name.as_deref().and_then(|name| {
@@ -33,6 +43,7 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
         // HEAD 이름 기준으로 is_head 판별 (워크트리에서도 올바르게 동작)
         let head_name = repo.head()
             .ok()
+            .filter(|h| h.is_branch())
             .and_then(|h| h.shorthand().map(|s| s.to_string()));
 
         let mut list: Vec<Value> = Vec::new();
@@ -393,7 +404,11 @@ pub async fn get_current_branch(repo_path: String) -> Result<Option<String>, App
             Ok(h) => h,
             Err(_) => return Ok::<_, AppError>(None),
         };
-        let name = head.shorthand().map(|s| s.to_string());
+        // Detached HEAD is not a branch — `shorthand()` would return "HEAD".
+        let name = head
+            .is_branch()
+            .then(|| head.shorthand().map(|s| s.to_string()))
+            .flatten();
         Ok::<_, AppError>(name)
     })
     .await
@@ -477,9 +492,12 @@ pub async fn merge_branch_into_current(
     repo_path: String,
     branch: String,
     strategy: MergeStrategy,
+    account_id: Option<String>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, AppError> {
-    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    let identity = crate::commands::git::resolve_commit_identity(account_id.as_deref()).await;
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
+        .with_identity(identity);
     let branch_name = branch.clone();
 
     match strategy {
@@ -487,15 +505,10 @@ pub async fn merge_branch_into_current(
             engine.merge_branch(&branch_name, true).await?;
         }
         MergeStrategy::Squash => {
-            engine.squash_merge(&branch_name).await?;
+            let message = format!("Squash merge branch '{}'", branch_name);
+            engine.squash_merge(&branch_name, &message).await?;
             // squash merge stages changes but doesn't commit; create the commit
-            engine
-                .commit(
-                    &format!("Squash merge branch '{}'", branch_name),
-                    false,
-                    None,
-                )
-                .await?;
+            engine.commit(&message, false, None).await?;
         }
         MergeStrategy::Rebase => {
             engine.rebase_onto(&branch_name).await?;
@@ -510,42 +523,52 @@ pub async fn merge_branch_into_current(
     Ok(format!("Successfully merged '{}' into current branch", branch))
 }
 
-/// Abort an in-progress merge or rebase, returning the working tree to its
-/// pre-operation state. Lets users escape a conflicted merge/rebase from the GUI.
+/// Abort the in-progress merge, rebase, cherry-pick, revert or squash,
+/// returning the working tree to its pre-operation state.
 #[tauri::command]
 pub async fn abort_merge_or_rebase(
     repo_path: String,
     app_handle: tauri::AppHandle,
 ) -> Result<(), AppError> {
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
-    match engine.operation_in_progress().await? {
-        Some("rebase") => engine.rebase_abort().await,
-        Some("merge") => engine.merge_abort().await,
-        _ => Ok(()),
-    }
+    let op = require_operation(&engine).await?;
+    engine.operation_abort(op).await
 }
 
-/// Continue an in-progress merge or rebase after the user has resolved and
-/// staged the conflicted files.
+/// Continue the in-progress operation after the user has resolved and staged
+/// the conflicted files.
 #[tauri::command]
 pub async fn continue_merge_or_rebase(
     repo_path: String,
+    account_id: Option<String>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), AppError> {
-    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
-    match engine.operation_in_progress().await? {
-        Some("rebase") => engine.rebase_continue().await,
-        Some("merge") => engine.merge_continue().await,
-        _ => Ok(()),
-    }
+    let identity = crate::commands::git::resolve_commit_identity(account_id.as_deref()).await;
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
+        .with_identity(identity);
+    let op = require_operation(&engine).await?;
+    engine.operation_continue(op).await
 }
 
-/// Report whether a merge or rebase is currently in progress (`"merge"`,
-/// `"rebase"`, or `null`), so the UI can show a conflict-resolution banner.
+/// The operation in progress, or an error so the UI never reports success
+/// for a button that did nothing.
+async fn require_operation(engine: &GitCliEngine) -> Result<GitOperation, AppError> {
+    engine
+        .operation_in_progress()
+        .await?
+        .ok_or_else(|| AppError::GitCli {
+            message: "No merge, rebase, cherry-pick or revert is in progress".to_string(),
+            exit_code: None,
+        })
+}
+
+/// Report which operation is in progress (`"merge"`, `"rebase"`,
+/// `"cherryPick"`, `"revert"`, `"squash"`, or `null`), so the UI can show a
+/// conflict-resolution banner.
 #[tauri::command]
-pub async fn get_merge_state(repo_path: String) -> Result<Option<String>, AppError> {
+pub async fn get_merge_state(repo_path: String) -> Result<Option<GitOperation>, AppError> {
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
-    Ok(engine.operation_in_progress().await?.map(|s| s.to_string()))
+    engine.operation_in_progress().await
 }
 
 #[tauri::command]
@@ -786,6 +809,28 @@ mod tests {
             args,
             String::from_utf8_lossy(&out.stderr)
         );
+    }
+
+    /// orphan 브랜치(unborn HEAD)는 detached가 아니고, `--detach`는 detached다.
+    #[tokio::test]
+    async fn tells_a_detached_head_from_an_unborn_branch() {
+        let dir = std::env::temp_dir().join(format!("gitbaro-head-state-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        git(&dir, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        let path = dir.to_string_lossy().to_string();
+
+        let on_branch = is_head_detached(path.clone()).await.unwrap();
+        git(&dir, &["checkout", "-q", "--orphan", "fresh"]);
+        let unborn = is_head_detached(path.clone()).await.unwrap();
+        git(&dir, &["checkout", "-q", "--detach", "main"]);
+        let detached = is_head_detached(path).await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert!(!on_branch);
+        assert!(!unborn, "unborn 브랜치를 detached로 판정함");
+        assert!(detached);
     }
 
     fn field<'a>(v: &'a Value, key: &str) -> &'a Value {

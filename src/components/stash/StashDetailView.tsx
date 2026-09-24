@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { FileText, Plus, Minus } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useToastStore } from "@/stores/toast";
-import { useSelectionStore } from "@/stores/selection";
 import { useStashShow, useCommitFileDiff, useStashMutations } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
@@ -15,6 +14,7 @@ interface StashDetailViewProps {
 }
 
 function FileStatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
   const colors: Record<string, string> = {
     added: "text-success bg-success/10",
     deleted: "text-danger bg-danger/10",
@@ -25,7 +25,7 @@ function FileStatusBadge({ status }: { status: string }) {
     <span
       className={`text-[10px] px-1.5 py-0.5 rounded ${colors[status] ?? "text-muted-foreground bg-muted"}`}
     >
-      {status}
+      {t(`fileStatus.${status}`, { defaultValue: status })}
     </span>
   );
 }
@@ -84,7 +84,6 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const addToast = useToastStore((s) => s.addToast);
-  const selectStash = useSelectionStore((s) => s.selectStash);
   const { data: showResult, isLoading } = useStashShow(activeRepoPath, stashIndex);
   const mutations = useStashMutations(activeRepoPath);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
@@ -117,8 +116,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
 
   const handlePop = async () => {
     try {
-      await mutations.pop.mutateAsync();
-      selectStash(null);
+      await mutations.pop.mutateAsync(stashIndex);
       addToast(t("stash.popped"), "success");
     } catch (err) {
       addToast(t("stash.failedToPop", { error: getErrorMessage(err) }), "error");
@@ -128,7 +126,6 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
   const handleDrop = async () => {
     try {
       await mutations.drop.mutateAsync(stashIndex);
-      selectStash(null);
       addToast(t("stash.dropped"), "success");
     } catch (err) {
       addToast(t("stash.failedToDrop", { error: getErrorMessage(err) }), "error");

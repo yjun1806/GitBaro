@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { X } from "lucide-react";
 import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { useTranslation } from "react-i18next";
@@ -10,6 +10,8 @@ import { useToastStore } from "@/stores/toast";
 import { getErrorMessage } from "@/lib/utils";
 import { BranchCombobox } from "@/components/ui/BranchCombobox";
 import type { BranchInfo, WorktreeInfo } from "@/types";
+import { Dialog } from "@/components/ui/Dialog";
+import { isSubmitEnter } from "@/lib/keyboard";
 
 interface CreateWorktreeDialogProps {
   repoPath: string;
@@ -40,6 +42,7 @@ export function CreateWorktreeDialog({
   onClose,
 }: CreateWorktreeDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
 
@@ -130,16 +133,21 @@ export function CreateWorktreeDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-md">
+    <Dialog
+      onClose={onClose}
+      dismissible={!creating}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-md"
+    >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 id={titleId} className="text-base font-semibold text-foreground">
             {t("worktree.create")}
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
+            disabled={creating}
+            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <X className="w-4 h-4" />
           </button>
@@ -210,7 +218,7 @@ export function CreateWorktreeDialog({
                         type="text"
                         value={newBranchName}
                         onChange={(e) => setNewBranchName(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                        onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
                         placeholder="feature/my-feature"
                         className={cn(
                           "w-full text-sm bg-background border rounded-md px-2 py-1.5 text-foreground outline-none focus:ring-1 focus:ring-ring",
@@ -262,7 +270,7 @@ export function CreateWorktreeDialog({
                   type="text"
                   value={worktreePath}
                   onChange={(e) => handlePathChange(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                  onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
                   placeholder={activeBranchName ? "/path/to/worktree" : t("worktree.selectBranch")}
                   disabled={!activeBranchName}
                   className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed"
@@ -283,7 +291,8 @@ export function CreateWorktreeDialog({
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            disabled={creating}
+            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t("common.cancel")}
           </button>
@@ -295,7 +304,6 @@ export function CreateWorktreeDialog({
             {creating ? t("common.loading") : t("worktree.create")}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

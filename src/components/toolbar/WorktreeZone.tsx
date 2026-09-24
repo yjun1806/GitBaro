@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import { ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -12,6 +13,7 @@ import { cn, getErrorMessage } from "@/lib/utils";
 import { useClickOutside } from "./useToolbarDropdown";
 import { WorktreeDropdown } from "./WorktreeDropdown";
 import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog";
+import { WorktreeBaseLabel } from "@/components/worktree/WorktreeBaseLabel";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { railFlowWidth } from "@/components/layout/RepoRail";
@@ -32,14 +34,16 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
   const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
-  const sidebarWidth = useUIStore((s) => s.sidebarWidth);
+  const sidebarWidth = useSidebarWidth();
   const railMode = useUIStore((s) => s.railMode);
   const previewBranch = useUIStore((s) => s.previewBranch);
   const { currentWorktree, isInWorktree, mainWorktree } = useWorktreeContext(activeRepoPath, worktrees);
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
-  // 마운트 시 잔여 미리보기 정리. 미리보기를 멈추면 메인 작업트리 상태가 복원되므로
+  // 마운트 시 잔여 미리보기 정리. checkPreviewActive는 GitBaro가 미리보기를 시작하며
+  // 남긴 표식 파일만 본다(사용자가 진행 중인 merge는 미리보기로 보지 않는다).
+  // 미리보기를 멈추면 메인 작업트리 상태가 복원되므로
   // status/branches/diff를 갱신하고, 미리보기 워크트리가 사라지므로 worktrees도 갱신한다.
   useEffect(() => {
     if (!activeRepoPath) return;
@@ -67,6 +71,9 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
     ? (currentWorktree.path.split("/").pop() ?? currentWorktree.path)
     : t("worktree.main");
 
+  // 링크된 워크트리 안에 있으면 그 브랜치가 어디서 갈라졌는지 값 옆에 붙인다.
+  const currentBase = isInWorktree ? currentWorktree?.base ?? null : null;
+
   const handleRemoveWorktree = async (path: string) => {
     if (!activeRepoPath) return;
     try {
@@ -91,7 +98,13 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
         <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground leading-tight">{t("worktree.title")}</p>
           <div className="flex items-center gap-1.5">
-            <p className={cn("text-sm font-semibold truncate max-w-[160px]", isInWorktree && "text-info")}>{currentLabel}</p>
+            <p className={cn("text-sm font-semibold truncate min-w-0", isInWorktree && "text-info")}>{currentLabel}</p>
+            {currentBase && (
+              <>
+                <span className="text-xs text-muted-foreground/50 shrink-0">{"·"}</span>
+                <WorktreeBaseLabel base={currentBase} variant="compact" />
+              </>
+            )}
             {linkedCount > 0 && (
               <span className="text-[10px] font-semibold text-info bg-info/10 px-1.5 py-0.5 rounded-full shrink-0 tabular-nums">
                 {linkedCount}

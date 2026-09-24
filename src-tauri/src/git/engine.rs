@@ -296,6 +296,7 @@ pub trait GitRemoteEngine {
         remote: &str,
         branch: &str,
         token: &str,
-        rebase: bool,
+        // `None`이면 방식 플래그 없이 사용자의 `pull.rebase` 설정을 따른다.
+        rebase: Option<bool>,
     ) -> impl std::future::Future<Output = Result<(), AppError>> + Send;
 }

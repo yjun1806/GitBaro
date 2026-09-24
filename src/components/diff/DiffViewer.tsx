@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { FileQuestion } from "lucide-react";
 import { DiffFile } from "@git-diff-view/core";
@@ -10,7 +10,7 @@ import { DiffHeader } from "./DiffHeader";
 import { BinaryDiffViewer } from "./BinaryDiffViewer";
 import { VirtualizedDiffView } from "./VirtualizedDiffView";
 import { MarkdownDiffView } from "./MarkdownDiffView";
-import { availableModes, defaultMode, type DiffViewMode } from "./view-mode";
+import { availableModes, defaultMode, diffResetKey, type DiffViewMode } from "./view-mode";
 import { useUIStore } from "@/stores/ui";
 import { useToastStore } from "@/stores/toast";
 
@@ -50,12 +50,16 @@ function hunksToUnifiedDiff(filePath: string, hunks: DiffHunk[]): string {
 interface DiffViewerProps {
   diff: DiffOutput | null;
   status?: FileStatus;
+  /** Working-tree diffs: whether this is the staged side. Part of the view reset key. */
+  staged?: boolean;
 }
 
-export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
+export function DiffViewer({ diff, status = "modified", staged = false }: DiffViewerProps) {
   const { t } = useTranslation();
+  const lineMode = useUIStore((s) => s.diffLineMode);
+  const setLineMode = useUIStore((s) => s.setDiffLineMode);
   const [viewMode, setViewMode] = useState<DiffViewMode>(() =>
-    defaultMode(diff?.filePath, diff?.binary ?? false),
+    defaultMode(diff?.filePath, diff?.binary ?? false, lineMode),
   );
   const theme = useUIStore((s) => s.theme);
   const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -65,27 +69,38 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
   const binary = diff?.binary ?? false;
   const modes = useMemo(() => availableModes(filePath ?? "", binary), [filePath, binary]);
 
-  // 파일이 바뀌면 그 파일의 기본 모드로 되돌린다 — md는 문서 보기, 나머지는 통합 보기.
-  // 같은 파일이 워처로 갱신될 때는 경로가 그대로라 사용자의 선택이 유지된다.
-  useEffect(() => {
-    setViewMode(defaultMode(filePath, binary));
-  }, [filePath, binary]);
+  // 큰 diff는 하이라이팅을 기본 off로 두되, 사용자가 켤 수 있다.
+  const [forceHighlight, setForceHighlight] = useState(false);
 
-  // 문서 모드가 실패하면(계산 오류·타임아웃) 빈 화면 대신 통합 보기로 물러선다.
+  // 파일(또는 staged 여부)이 바뀔 때만 보기 상태를 초기화한다 — md는 문서 보기, 나머지는
+  // 마지막으로 고른 줄 보기. 같은 파일이 디스크 변경으로 다시 조회되면 diff 객체만 새로
+  // 오므로 모드·하이라이팅·스크롤(아래 `key`)이 그대로 유지된다.
+  // 렌더 중에 맞춘다 — effect로 하면 새 파일이 한 프레임 동안 이전 모드로 그려진다.
+  const resetKey = diffResetKey(filePath, staged, binary);
+  const [prevResetKey, setPrevResetKey] = useState(resetKey);
+  if (prevResetKey !== resetKey) {
+    setPrevResetKey(resetKey);
+    setViewMode(defaultMode(filePath, binary, lineMode));
+    setForceHighlight(false);
+  }
+
+  const handleSelectMode = useCallback(
+    (mode: DiffViewMode) => {
+      setViewMode(mode);
+      if (mode !== "document") setLineMode(mode);
+    },
+    [setLineMode],
+  );
+
+  // 문서 모드가 실패하면(계산 오류·타임아웃) 빈 화면 대신 줄 보기로 물러선다.
   // 조용히 바꾸면 "왜 문서 보기가 안 뜨지"가 되므로 이유를 말한다.
   const handleDocError = useCallback(
     (reason: string) => {
       addToast(t(reason === "timeout" ? "mdDiff.timeout" : "mdDiff.failed"), "warning");
-      setViewMode("unified");
+      setViewMode(useUIStore.getState().diffLineMode);
     },
     [addToast, t],
   );
-
-  // 큰 diff는 하이라이팅을 기본 off로 두되, 사용자가 켤 수 있다 — diff가 바뀌면 초기화.
-  const [forceHighlight, setForceHighlight] = useState(false);
-  useEffect(() => {
-    setForceHighlight(false);
-  }, [diff]);
 
   const stats = useMemo(() => {
     if (!diff) return { added: 0, removed: 0, total: 0 };
@@ -182,7 +197,7 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
           removedLines={0}
           viewMode={viewMode}
           modes={modes}
-          onSelectMode={setViewMode}
+          onSelectMode={handleSelectMode}
         />
         <div className="flex-1 min-h-0 overflow-auto">
           {diff.binaryPreview ? (
@@ -210,7 +225,7 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
         removedLines={stats.removed}
         viewMode={viewMode}
         modes={modes}
-        onSelectMode={setViewMode}
+        onSelectMode={handleSelectMode}
       />
 
       {viewMode !== "document" && !wantHighlight && (
@@ -219,7 +234,7 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
           <button
             type="button"
             onClick={() => setForceHighlight(true)}
-            className="shrink-0 px-2 py-0.5 rounded text-accent hover:bg-accent/10"
+            className="shrink-0 px-2 py-0.5 rounded font-medium text-foreground underline underline-offset-2 hover:bg-accent"
           >
             {t("diff.enableHighlight")}
           </button>
@@ -236,7 +251,11 @@ export function DiffViewer({ diff, status = "modified" }: DiffViewerProps) {
           onError={handleDocError}
         />
       ) : diffFile ? (
+        // 파일·모드마다 새로 마운트한다. 행 키(`l3`, `h0`)는 파일·모드를 가리지 않아서,
+        // 같은 가상 스크롤러를 재사용하면 이전 파일의 행 높이가 새 파일에 남아 행이 겹친다.
+        // 같은 파일의 재조회(새 diffFile)에는 키가 그대로라 스크롤 위치가 유지된다.
         <VirtualizedDiffView
+          key={`${resetKey}\u0000${viewMode}`}
           diffFile={diffFile}
           viewMode={viewMode}
           isDark={isDark}

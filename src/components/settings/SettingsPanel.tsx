@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { X, Users, Palette, Code, Check, Loader2, Terminal, Bot } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/Select";
 import { detectInstalledEditors, detectInstalledTerminals, detectInstalledAiClis } from "@/api/commands";
 import { ThemeSelector } from "./ThemeSelector";
 import { AccountSettings } from "./AccountSettings";
+import { Dialog } from "@/components/ui/Dialog";
 
 const AI_CLI_ICONS: Record<string, { bg: string; svg: React.ReactNode }> = {
   claude: {
@@ -121,6 +122,7 @@ export function SettingsPanel({
   onClose,
 }: SettingsPanelProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const [activeSection, setActiveSection] = useState<Section>("accounts");
   const [editors, setEditors] = useState<EditorInfo[]>([]);
   const [editorsLoading, setEditorsLoading] = useState(false);
@@ -154,11 +156,14 @@ export function SettingsPanel({
   }, [activeSection]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-2xl h-[70vh] flex flex-col">
+    <Dialog
+      onClose={onClose}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-2xl h-[70vh] flex flex-col"
+    >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 id={titleId} className="text-base font-semibold text-foreground">
             {t("settings.title")}
           </h2>
           <button
@@ -380,7 +385,6 @@ export function SettingsPanel({
 
           </div>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
@@ -6,7 +6,17 @@ import { useAccountStore } from "@/stores/account";
 import { useSelectionStore } from "@/stores/selection";
 import { useStatus } from "@/api/queries";
 import { useCurrentBranch } from "@/hooks/useCurrentBranch";
-import { createCommit, stageFiles, unstageFiles, openInEditor, discardChanges, revealInFinder, addToGitignore } from "@/api/commands";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
+import {
+  createCommit,
+  stageFiles,
+  unstageFiles,
+  openInEditor,
+  discardChanges,
+  revealInFinder,
+  addToGitignore,
+  findConflictMarkers,
+} from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
 import { FileEntry } from "@/components/commit/FileEntry";
 import { FileContextMenu } from "@/components/commit/FileContextMenu";
@@ -16,45 +26,90 @@ import { cn, getErrorMessage } from "@/lib/utils";
 import { groupFilesByDirectory } from "@/lib/group-files";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
+import { Dialog } from "@/components/ui/Dialog";
+import { useCommitDraftStore, EMPTY_COMMIT_DRAFT } from "@/stores/commit-draft";
+import {
+  entryPaths,
+  isSelectedEntry,
+  resolveFileSelection,
+  stageableEntries,
+} from "@/lib/file-selection";
+import type { StatusEntry } from "@/types";
+
+/** Confirmation text for discarding `entry`, matching what the backend will do. */
+function discardMessageKey(entry: StatusEntry): string {
+  if (!entry.staged) {
+    // "added" on the unstaged side is an intent-to-add (`git add -N`) file,
+    // which the backend moves to the Trash like an untracked one.
+    return entry.status === "untracked" || entry.status === "added"
+      ? "changes.discardUntrackedMessage"
+      : "changes.discardUnstagedMessage";
+  }
+  return entry.status === "added" || entry.status === "copied"
+    ? "changes.discardAddedMessage"
+    : "changes.discardStagedMessage";
+}
 
 export function ChangesView() {
   const { t } = useTranslation();
+  const discardTitleId = useId();
+  const conflictStageTitleId = useId();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const currentBranch = useCurrentBranch();
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  // 커밋 작성자는 동기화·merge와 같은 저장소 계정이다.
+  const activeAccountId = useRepoAccountId();
   const accounts = useAccountStore((s) => s.accounts);
   const activeAccount = accounts.find((a) => a.id === activeAccountId);
-  const { data: statusEntries = [] } = useStatus(activeRepoPath);
+  const { data: statusData } = useStatus(activeRepoPath);
+  const statusEntries = useMemo(() => statusData ?? [], [statusData]);
   const queryClient = useQueryClient();
 
   const selectedFile = useSelectionStore((s) => s.selectedFile);
+  const selectedFileStaged = useSelectionStore((s) => s.selectedFileStaged);
   const selectFile = useSelectionStore((s) => s.selectFile);
   const clearFileSelection = useSelectionStore((s) => s.clearFileSelection);
+  const selection = useMemo(
+    () => (selectedFile ? { path: selectedFile, staged: selectedFileStaged } : null),
+    [selectedFile, selectedFileStaged],
+  );
 
   const addToast = useToastStore((s) => s.addToast);
 
-  // 외부(CLI 등)에서 커밋되어 파일이 사라지면 선택 초기화
+  // 스테이징·언스테이징으로 파일이 다른 섹션으로 옮겨 가면 선택도 따라가고,
+  // 외부(CLI 등)에서 커밋되어 파일이 사라지면 선택을 초기화한다.
   useEffect(() => {
-    if (selectedFile && statusEntries.length >= 0) {
-      const stillExists = statusEntries.some((e) => e.path === selectedFile);
-      if (!stillExists) {
-        clearFileSelection();
-      }
-    }
-  }, [statusEntries, selectedFile, clearFileSelection]);
+    if (!selection || !statusData) return;
+    const next = resolveFileSelection(statusData, selection);
+    if (!next) clearFileSelection();
+    else if (next !== selection) selectFile(next.path, next.staged);
+  }, [statusData, selection, selectFile, clearFileSelection]);
 
-  const [commitSummary, setCommitSummary] = useState("");
-  const [commitDescription, setCommitDescription] = useState("");
+  // 커밋 메시지 초안은 저장소별로 보관한다(탭을 옮겨도 남고, 다른 저장소로 새지 않는다).
+  const draft =
+    useCommitDraftStore((s) => (activeRepoPath ? s.drafts[activeRepoPath] : undefined)) ??
+    EMPTY_COMMIT_DRAFT;
+  const setDraft = useCommitDraftStore((s) => s.setDraft);
+  const clearDraft = useCommitDraftStore((s) => s.clearDraft);
+  const commitSummary = draft.summary;
+  const commitDescription = draft.description;
+  const setCommitSummary = (summary: string) => {
+    if (activeRepoPath) setDraft(activeRepoPath, { summary });
+  };
+  const setCommitDescription = (description: string) => {
+    if (activeRepoPath) setDraft(activeRepoPath, { description });
+  };
+
   const [isCommitting, setIsCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
-  const [discardTarget, setDiscardTarget] = useState<string | null>(null);
+  const [discardTarget, setDiscardTarget] = useState<StatusEntry | null>(null);
+  const [conflictStageTarget, setConflictStageTarget] = useState<StatusEntry | null>(null);
 
   const handleConfirmDiscard = useCallback(async () => {
     if (!activeRepoPath || !discardTarget) return;
-    const path = discardTarget;
+    const target = discardTarget;
     setDiscardTarget(null);
     try {
-      await discardChanges(activeRepoPath, [path]);
+      await discardChanges(activeRepoPath, entryPaths([target]), target.staged);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["status"] }),
         queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
@@ -92,12 +147,12 @@ export function ChangesView() {
     [queryClient],
   );
 
-  const handleToggleStage = useCallback(
-    async (entry: (typeof statusEntries)[number]) => {
+  const applyToggleStage = useCallback(
+    async (entry: StatusEntry) => {
       if (!activeRepoPath) return;
       try {
-        if (entry.staged) await unstageFiles(activeRepoPath, [entry.path]);
-        else await stageFiles(activeRepoPath, [entry.path]);
+        if (entry.staged) await unstageFiles(activeRepoPath, entryPaths([entry]));
+        else await stageFiles(activeRepoPath, entryPaths([entry]));
         await refreshStatus();
       } catch (err) {
         const key = entry.staged ? "commit.unstageFailed" : "commit.stageFailed";
@@ -106,6 +161,34 @@ export function ChangesView() {
     },
     [activeRepoPath, refreshStatus, addToast, t],
   );
+
+  // 충돌 파일을 스테이징하면 해결된 것으로 처리된다. 충돌 마커가 남아 있으면 먼저 확인한다.
+  const handleToggleStage = useCallback(
+    async (entry: StatusEntry) => {
+      if (!activeRepoPath) return;
+      if (!entry.staged && entry.status === "conflicted") {
+        try {
+          const marked = await findConflictMarkers(activeRepoPath, [entry.path]);
+          if (marked.length > 0) {
+            setConflictStageTarget(entry);
+            return;
+          }
+        } catch (err) {
+          addToast(t("commit.stageFailed", { error: getErrorMessage(err) }), "error");
+          return;
+        }
+      }
+      await applyToggleStage(entry);
+    },
+    [activeRepoPath, applyToggleStage, addToast, t],
+  );
+
+  const handleConfirmConflictStage = useCallback(async () => {
+    if (!conflictStageTarget) return;
+    const target = conflictStageTarget;
+    setConflictStageTarget(null);
+    await applyToggleStage(target);
+  }, [conflictStageTarget, applyToggleStage]);
 
   const handleRevealFile = useCallback(
     (path: string) => {
@@ -136,6 +219,7 @@ export function ChangesView() {
     () => statusEntries.filter((e) => !e.staged),
     [statusEntries],
   );
+  const stageableUnstagedFiles = useMemo(() => stageableEntries(unstagedFiles), [unstagedFiles]);
   const conflictCount = useMemo(
     () => statusEntries.filter((e) => e.status === "conflicted").length,
     [statusEntries],
@@ -186,8 +270,8 @@ export function ChangesView() {
     return map;
   }, [visibleFiles]);
 
-  const selectedVisibleIdx = visibleFiles.findIndex(
-    (item) => item.entry.path === selectedFile,
+  const selectedVisibleIdx = visibleFiles.findIndex((item) =>
+    isSelectedEntry(item.entry, selection),
   );
 
   const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
@@ -198,9 +282,10 @@ export function ChangesView() {
   });
 
   const handleStageAll = async () => {
-    if (!activeRepoPath || unstagedFiles.length === 0) return;
+    // 충돌 파일은 제외한다 — 스테이징하면 충돌 마커가 든 채 해결된 것으로 처리된다.
+    if (!activeRepoPath || stageableUnstagedFiles.length === 0) return;
     try {
-      await stageFiles(activeRepoPath, unstagedFiles.map((e) => e.path));
+      await stageFiles(activeRepoPath, entryPaths(stageableUnstagedFiles));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["status"] }),
         queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
@@ -213,7 +298,7 @@ export function ChangesView() {
   const handleUnstageAll = async () => {
     if (!activeRepoPath || stagedFiles.length === 0) return;
     try {
-      await unstageFiles(activeRepoPath, stagedFiles.map((e) => e.path));
+      await unstageFiles(activeRepoPath, entryPaths(stagedFiles));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["status"] }),
         queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
@@ -225,14 +310,14 @@ export function ChangesView() {
 
   const handleCommit = async () => {
     if (!activeRepoPath || !commitSummary.trim() || stagedFiles.length === 0) return;
+    const repoPath = activeRepoPath;
     setIsCommitting(true);
     try {
       const message = commitDescription.trim()
         ? `${commitSummary.trim()}\n\n${commitDescription.trim()}`
         : commitSummary.trim();
-      await createCommit(activeRepoPath, message, false, activeAccountId);
-      setCommitSummary("");
-      setCommitDescription("");
+      await createCommit(repoPath, message, false, activeAccountId);
+      clearDraft(repoPath);
       clearFileSelection();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["status"] }),
@@ -267,6 +352,7 @@ export function ChangesView() {
                   type="checkbox"
                   className="w-3.5 h-3.5 shrink-0 cursor-pointer"
                   checked={true}
+                  aria-label={t("changes.checkbox.unstageAll")}
                   onChange={handleUnstageAll}
                 />
                 <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex-1">
@@ -304,7 +390,7 @@ export function ChangesView() {
                         key={`${entry.path}-staged`}
                         ref={navIdx >= 0 ? itemRef(navIdx) : undefined}
                         entry={entry}
-                        isSelected={selectedFile === entry.path}
+                        isSelected={isSelectedEntry(entry, selection)}
                         isHighlighted={activeIndex === navIdx && navIdx >= 0}
                         onClick={() => selectFile(entry.path, entry.staged)}
                         onDoubleClick={() => handleOpenInEditor(entry.path)}
@@ -313,6 +399,7 @@ export function ChangesView() {
                           selectFile(entry.path, entry.staged);
                           setFileMenu({ entry, x: e.clientX, y: e.clientY });
                         }}
+                        onDiscard={() => setDiscardTarget(entry)}
                         onToggleStage={() => handleToggleStage(entry)}
                       />
                     );
@@ -331,6 +418,8 @@ export function ChangesView() {
                   type="checkbox"
                   className="w-3.5 h-3.5 shrink-0 cursor-pointer"
                   checked={false}
+                  disabled={stageableUnstagedFiles.length === 0}
+                  aria-label={t("changes.checkbox.stageAll")}
                   onChange={handleStageAll}
                 />
                 <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex-1">
@@ -368,7 +457,7 @@ export function ChangesView() {
                         key={`${entry.path}-unstaged`}
                         ref={navIdx >= 0 ? itemRef(navIdx) : undefined}
                         entry={entry}
-                        isSelected={selectedFile === entry.path}
+                        isSelected={isSelectedEntry(entry, selection)}
                         isHighlighted={activeIndex === navIdx && navIdx >= 0}
                         onClick={() => selectFile(entry.path, entry.staged)}
                         onDoubleClick={() => handleOpenInEditor(entry.path)}
@@ -380,7 +469,7 @@ export function ChangesView() {
                         onDiscard={
                           entry.status === "conflicted"
                             ? undefined
-                            : () => setDiscardTarget(entry.path)
+                            : () => setDiscardTarget(entry)
                         }
                         onToggleStage={() => handleToggleStage(entry)}
                       />
@@ -464,19 +553,17 @@ export function ChangesView() {
       </div>
 
       {discardTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setDiscardTarget(null)}
+        <Dialog
+          onClose={() => setDiscardTarget(null)}
+          closeOnBackdrop
+          labelledBy={discardTitleId}
+          className="w-[380px] max-w-[90vw] rounded-xl border border-border bg-card p-5 shadow-xl"
         >
-          <div
-            className="w-[380px] max-w-[90vw] rounded-xl border border-border bg-card p-5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-sm font-semibold text-foreground">
+            <h3 id={discardTitleId} className="text-sm font-semibold text-foreground">
               {t("changes.discardConfirmTitle")}
             </h3>
             <p className="mt-2 text-xs text-muted-foreground break-all">
-              {t("changes.discardConfirmMessage", { file: discardTarget })}
+              {t(discardMessageKey(discardTarget), { file: discardTarget.path })}
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -492,22 +579,51 @@ export function ChangesView() {
                 {t("changes.discardConfirm")}
               </button>
             </div>
+        </Dialog>
+      )}
+
+      {conflictStageTarget && (
+        <Dialog
+          onClose={() => setConflictStageTarget(null)}
+          closeOnBackdrop
+          labelledBy={conflictStageTitleId}
+          className="w-[380px] max-w-[90vw] rounded-xl border border-border bg-card p-5 shadow-xl"
+        >
+          <h3 id={conflictStageTitleId} className="text-sm font-semibold text-foreground">
+            {t("changes.conflictMarkersTitle")}
+          </h3>
+          <p className="mt-2 text-xs text-muted-foreground break-all">
+            {t("changes.conflictMarkersMessage", { file: conflictStageTarget.path })}
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              onClick={() => setConflictStageTarget(null)}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
+            >
+              {t("changes.cancel")}
+            </button>
+            <button
+              onClick={handleConfirmConflictStage}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
+            >
+              {t("changes.conflictMarkersConfirm")}
+            </button>
           </div>
-        </div>
+        </Dialog>
       )}
 
       {/* 파일 우클릭 메뉴 */}
       {fileMenu && (
         <FileContextMenu
           staged={fileMenu.entry.staged}
-          canDiscard={!fileMenu.entry.staged && fileMenu.entry.status !== "conflicted"}
+          canDiscard={fileMenu.entry.status !== "conflicted"}
           position={{ x: fileMenu.x, y: fileMenu.y }}
           onToggleStage={() => handleToggleStage(fileMenu.entry)}
           onOpenEditor={() => handleOpenInEditor(fileMenu.entry.path)}
           onReveal={() => handleRevealFile(fileMenu.entry.path)}
           onCopyPath={() => navigator.clipboard.writeText(fileMenu.entry.path)}
           onAddToGitignore={() => handleAddToGitignore(fileMenu.entry.path)}
-          onDiscard={() => setDiscardTarget(fileMenu.entry.path)}
+          onDiscard={() => setDiscardTarget(fileMenu.entry)}
           onClose={() => setFileMenu(null)}
         />
       )}

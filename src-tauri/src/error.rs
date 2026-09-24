@@ -11,6 +11,10 @@ pub enum AppError {
         exit_code: Option<i32>,
     },
 
+    /// merge·rebase·pull 등이 충돌로 멈췄다. 작업 트리에 충돌 파일이 남아 있다.
+    #[error("Merge conflict: {0}")]
+    MergeConflict(String),
+
     #[error("Authentication error: {0}")]
     Auth(String),
 
@@ -49,6 +53,9 @@ pub enum AppError {
 
     #[error("Repository not found: {0}")]
     RepoNotFound(String),
+
+    #[error("Bare repositories are not supported: {0}")]
+    BareRepository(String),
 }
 
 impl From<reqwest::Error> for AppError {
@@ -67,6 +74,7 @@ impl serde::Serialize for AppError {
         let (error_type, message) = match self {
             AppError::Git(e) => ("Git", e.to_string()),
             AppError::GitCli { message, .. } => ("GitCli", message.clone()),
+            AppError::MergeConflict(msg) => ("MergeConflict", msg.clone()),
             AppError::Auth(msg) => ("Auth", msg.clone()),
             AppError::TokenExpired { account_id } => {
                 ("TokenExpired", format!("Token expired for {}", account_id))
@@ -86,6 +94,7 @@ impl serde::Serialize for AppError {
             AppError::GhVersionTooOld(msg) => ("GhVersionTooOld", msg.clone()),
             AppError::Channel(msg) => ("Channel", msg.clone()),
             AppError::RepoNotFound(path) => ("RepoNotFound", path.clone()),
+            AppError::BareRepository(_) => ("BareRepository", self.to_string()),
         };
 
         let mut s = serializer.serialize_struct("AppError", 2)?;

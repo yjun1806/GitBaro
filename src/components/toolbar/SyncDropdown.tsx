@@ -127,7 +127,7 @@ export function SyncDropdown({
           badge={behind}
           highlighted={behind > 0}
           disabled={disabled || behind === 0}
-          onClick={() => exec(() => onPull(false))}
+          onClick={() => exec(() => onPull())}
         />
       </div>
 

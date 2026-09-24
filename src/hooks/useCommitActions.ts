@@ -9,7 +9,9 @@ import {
   type ResetMode,
 } from "@/api/commands";
 import { useToastStore } from "@/stores/toast";
-import { getErrorMessage } from "@/lib/utils";
+import { useUIStore } from "@/stores/ui";
+import { getErrorMessage, isMergeConflictError } from "@/lib/utils";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 
 /**
  * 커밋 대상 조작(checkout/reset/revert/cherry-pick)을 실행하고, 성공/실패 토스트와
@@ -19,6 +21,8 @@ export function useCommitActions(repoPath: string | null) {
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
   const { t } = useTranslation();
+  // revert·cherry-pick 커밋을 저장소 계정으로 기록한다.
+  const accountId = useRepoAccountId();
 
   const invalidateAll = useCallback(
     () =>
@@ -34,7 +38,7 @@ export function useCommitActions(repoPath: string | null) {
   );
 
   const run = useCallback(
-    async (op: () => Promise<void>, successKey: string) => {
+    async (op: () => Promise<void>, successKey: string, conflictKey?: string) => {
       if (!repoPath) return;
       try {
         await op();
@@ -42,7 +46,13 @@ export function useCommitActions(repoPath: string | null) {
       } catch (err) {
         // 충돌로 실패해도 워킹 트리·머지 상태가 이미 바뀌었으므로 아래 finally에서
         // 갱신한다 (충돌 복구 배너가 즉시 뜨도록).
-        addToast(getErrorMessage(err), "error");
+        if (conflictKey && isMergeConflictError(err)) {
+          // merge·pull 충돌과 같이 안내하고 해결할 Changes 탭으로 옮긴다.
+          addToast(t(conflictKey), "warning");
+          useUIStore.getState().setActiveTab("changes");
+        } else {
+          addToast(getErrorMessage(err), "error");
+        }
       } finally {
         await invalidateAll();
       }
@@ -62,13 +72,21 @@ export function useCommitActions(repoPath: string | null) {
   );
 
   const revert = useCallback(
-    (oid: string) => run(() => revertCommit(repoPath!, oid), "history.revertSuccess"),
-    [run, repoPath],
+    (oid: string) => run(
+        () => revertCommit(repoPath!, oid, accountId),
+        "history.revertSuccess",
+        "history.revertConflict",
+      ),
+    [run, repoPath, accountId],
   );
 
   const cherryPick = useCallback(
-    (oid: string) => run(() => cherryPickCommit(repoPath!, oid), "history.cherryPickSuccess"),
-    [run, repoPath],
+    (oid: string) => run(
+        () => cherryPickCommit(repoPath!, oid, accountId),
+        "history.cherryPickSuccess",
+        "history.cherryPickConflict",
+      ),
+    [run, repoPath, accountId],
   );
 
   return { checkout, reset, revert, cherryPick };

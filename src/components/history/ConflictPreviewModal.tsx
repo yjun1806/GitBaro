@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useId } from "react";
 import {
   X,
   Loader2,
@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { getConflictFileDiff } from "@/api/commands";
 import type { DiffOutput, DiffHunk } from "@/types";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface ConflictPreviewModalProps {
   repoPath: string;
@@ -192,6 +193,7 @@ export function ConflictPreviewModal({
   onClose,
 }: ConflictPreviewModalProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const [selectedFile, setSelectedFile] = useState<string>(
     conflictFiles[0] ?? "",
   );
@@ -222,14 +224,6 @@ export function ConflictPreviewModal({
     }
   }, [selectedFile, loadDiff]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
   const stats = useMemo(() => {
     if (!diff) return { regions: 0, added: 0, removed: 0 };
     let added = 0;
@@ -250,13 +244,16 @@ export function ConflictPreviewModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl max-w-7xl w-full mx-4 h-[92vh] flex flex-col overflow-hidden border border-border">
+    <Dialog
+      onClose={onClose}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl max-w-7xl w-full mx-4 h-[92vh] flex flex-col overflow-hidden border border-border"
+    >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <FileWarning className="w-4 h-4 text-warning" />
-            <h2 className="text-sm font-semibold text-foreground">
+            <h2 id={titleId} className="text-sm font-semibold text-foreground">
               {t("merge.preCheck.previewTitle")}
             </h2>
             <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
@@ -381,7 +378,6 @@ export function ConflictPreviewModal({
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

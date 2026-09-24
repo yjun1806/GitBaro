@@ -2,12 +2,13 @@ import { useCallback } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createSafeStorage } from "@/lib/safe-storage";
-import type { RepoInfo, StatusEntry } from "@/types";
+import type { AutoSyncSetting, RepoInfo, StatusEntry } from "@/types";
 import type { RepoVisibility } from "@/api/commands";
 
 export interface RepoPermission {
   valid: boolean;
-  canPush: boolean;
+  /** null when push access cannot be checked (the remote is not on github.com). */
+  canPush: boolean | null;
   reason?: string;
 }
 
@@ -46,6 +47,8 @@ interface RepositoryState {
   favoriteRepos: string[];
   /** 저장소별로 마지막에 보던 워크트리 경로 (메인 워크트리면 항목 없음) */
   activeWorktrees: Record<string, string>;
+  /** 저장소별 원격 자동 최신화 설정. 항목이 없으면 기본값(확인만, 3분)이다. */
+  autoSyncByRepo: Record<string, AutoSyncSetting>;
   /** 활성 경로를 그대로 설정한다. 워크트리라면 parentRepoPath로 소유 저장소를 알린다. */
   setActiveRepo: (path: string, parentRepoPath?: string) => void;
   /** 저장소에서 마지막으로 보던 워크트리를 기록한다. null이면 메인으로 되돌린다. */
@@ -61,6 +64,7 @@ interface RepositoryState {
   setRepoPermission: (repoPath: string, permission: RepoPermission | null) => void;
   toggleGroupCollapsed: (label: string) => void;
   toggleFavorite: (path: string) => void;
+  setAutoSync: (repoPath: string, setting: AutoSyncSetting) => void;
   setStatusEntries: (entries: StatusEntry[]) => void;
   setLoading: (loading: boolean) => void;
 }
@@ -113,6 +117,7 @@ export const useRepositoryStore = create<RepositoryState>()(
       collapsedGroups: [],
       favoriteRepos: [],
       activeWorktrees: {},
+      autoSyncByRepo: {},
 
       setActiveRepo: (path, parentRepoPath?) => {
         const ownerPath = parentRepoPath ?? path;
@@ -149,6 +154,7 @@ export const useRepositoryStore = create<RepositoryState>()(
         set((state) => {
           const repos = state.repos.filter((r) => r.path !== path);
           const { [path]: removedWorktree, ...activeWorktrees } = state.activeWorktrees;
+          const { [path]: _removedAutoSync, ...autoSyncByRepo } = state.autoSyncByRepo;
           // 그 저장소의 워크트리를 보던 중이었다면 activeRepoPath가 사라진 저장소를
           // 가리키게 되므로 함께 비운다.
           const wasActive =
@@ -159,6 +165,7 @@ export const useRepositoryStore = create<RepositoryState>()(
             activeRepoPath,
             activeRepo: findOwnerRepo(repos, activeRepoPath, activeWorktrees),
             activeWorktrees,
+            autoSyncByRepo,
           };
         }),
 
@@ -221,6 +228,11 @@ export const useRepositoryStore = create<RepositoryState>()(
           };
         }),
 
+      setAutoSync: (repoPath, setting) =>
+        set((state) => ({
+          autoSyncByRepo: { ...state.autoSyncByRepo, [repoPath]: setting },
+        })),
+
       setStatusEntries: (entries) => set({ statusEntries: entries }),
 
       setLoading: (loading) => set({ isLoading: loading }),
@@ -236,6 +248,7 @@ export const useRepositoryStore = create<RepositoryState>()(
         collapsedGroups: state.collapsedGroups,
         favoriteRepos: state.favoriteRepos,
         activeWorktrees: state.activeWorktrees,
+        autoSyncByRepo: state.autoSyncByRepo,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;

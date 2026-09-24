@@ -66,6 +66,13 @@ export interface DiffLayout {
  * 렌더 밖으로 뺀 이유는 이 조합이 깨지면 가로 스크롤이 조용히 되살아나기 때문이다 —
  * 테스트가 붙잡을 수 있는 자리에 둔다.
  */
+/**
+ * 스크롤 컨테이너 스타일. `scrollbar-gutter: stable`로 스크롤바 자리를 늘 비워 둔다 —
+ * globals.css가 스크롤바를 8px로 그리므로, 자리를 비워 두지 않으면 스크롤바가 나타나고
+ * 사라질 때마다 본문 폭이 바뀌어 모든 줄의 접힘과 높이가 다시 계산된다.
+ */
+export const DIFF_SCROLL_STYLE: React.CSSProperties = { scrollbarGutter: "stable" };
+
 export function contentStyleFor(rowHeight: number): React.CSSProperties {
   return {
     flex: 1,
@@ -308,10 +315,9 @@ export function VirtualizedDiffView({
 
   const rows = layout.rows;
 
-  // 파일이 바뀌면 이전 파일의 스크롤 오프셋이 남지 않도록 맨 위로 리셋.
-  useEffect(() => {
-    parentRef.current?.scrollTo({ top: 0 });
-  }, [diffFile]);
+  // 파일·모드가 바뀌면 DiffViewer가 이 컴포넌트를 새로 마운트한다(`key`). 그래서 스크롤
+  // 위치와 행 높이 캐시는 따로 초기화하지 않는다 — 같은 파일이 다시 조회돼 `diffFile`만
+  // 바뀔 때는 보던 자리를 지킨다.
 
   // 줄이 접히면 행 높이가 제각각이 된다 — 추정치로 자리를 잡고 실제 높이는 재서 채운다.
   // (`measureElement`가 `data-index`로 행을 식별하므로 각 행에 그 속성이 필요하다.)
@@ -339,29 +345,19 @@ export function VirtualizedDiffView({
   // (행 배열에서의 위치만 밀린다) 그걸 앵커로 삼는다.
   useEffect(() => {
     if (anchorLine === null) return;
-    // **먼저 측정을 버린다.** 높이 캐시는 행 인덱스 기준인데 펼치면 같은 인덱스에 다른 행이
-    // 온다. 그대로 두면 짧은 줄의 높이가 긴 줄에 적용돼 다음 행이 그 위를 덮어 그린다.
-    virtualizer.measure();
+    // 측정을 버리지 않는다. 높이 캐시는 행 **내용** 키(`getItemKey`)로 묶여 있어 펼친 뒤에도
+    // 각 행의 높이가 그 행에 그대로 남는다. `measure()`로 캐시를 비우면 이미 화면에 있는
+    // 행은 크기가 그대로라 ResizeObserver가 다시 보고하지 않고, 추정 높이로 남은 채
+    // 다음 행이 그 위를 덮어 그린다.
     const at = rows.findIndex((r) => r.kind === "line" && r.index === anchorLine);
     if (at >= 0) virtualizer.scrollToIndex(at, { align: "start" });
     setAnchorLine(null);
   }, [anchorLine, rows, virtualizer]);
 
-  // 창 너비가 바뀌면 접히는 지점이 달라져 모든 행 높이가 무효가 된다.
-  // **폭이 실제로 달라졌을 때만** 다시 잰다 — 높이 변화에도 반응하면 재측정이 스크롤바를
-  // 만들고 그게 다시 재측정을 부르는 진동에 빠질 수 있다.
-  useEffect(() => {
-    const el = parentRef.current;
-    if (!el) return;
-    let lastWidth = el.clientWidth;
-    const ro = new ResizeObserver(() => {
-      if (el.clientWidth === lastWidth) return;
-      lastWidth = el.clientWidth;
-      virtualizer.measure();
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [virtualizer]);
+  // 창 너비가 바뀌어 접히는 지점이 달라져도 따로 다시 재지 않는다 — 각 행에 붙은
+  // `measureElement`의 ResizeObserver가 높이 변화를 행마다 보고한다. 뷰포트 폭 변화에
+  // `measure()`(캐시 전체 비우기)를 걸면 스크롤바가 생겼다 사라지며 폭이 8px씩 오가는
+  // 되먹임에 빠져 화면이 떨린다. 스크롤바 자리는 `DIFF_SCROLL_STYLE`로 고정한다.
 
   // 눈금자는 실제로 넘칠 때만 띄운다.
   // 뷰포트와 **콘텐츠를 함께** 관찰한다. 총 높이를 의존성에 넣어 재구독하는 방법도 있지만,
@@ -557,6 +553,7 @@ export function VirtualizedDiffView({
       <div
         ref={parentRef}
         className="absolute inset-0 overflow-y-auto overflow-x-hidden diff-tailwindcss-wrapper"
+        style={DIFF_SCROLL_STYLE}
         data-theme={isDark ? "dark" : "light"}
       >
         <div

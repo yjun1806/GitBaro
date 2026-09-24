@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { startRepoWatch, stopRepoWatch } from "@/api/commands";
+import { useAutoSyncStore } from "@/stores/auto-sync";
 
 interface FsChangePayload {
   repoPath: string;
@@ -14,10 +15,33 @@ interface FsChangePayload {
  */
 let watchGeneration = 0;
 
+const GIT_DIR_DEBOUNCE_MS = 250;
+
 /**
- * Watches the active repository's working tree via the backend FS watcher and
- * invalidates the status query when files change. Replaces tight status polling
- * with event-driven refresh; the query keeps a slow poll as a safety net.
+ * Per-repo queries that depend on HEAD, the index, refs, merge/rebase state or
+ * linked worktrees. recentBranches reads the reflog, which git writes together
+ * with HEAD, so a HEAD change covers it. fileDiff is here because a staged diff
+ * changes with the index. stashShow is keyed by stash position, so a stash
+ * pushed or dropped elsewhere changes which entry each index points at.
+ */
+const GIT_DIR_QUERY_KEYS = [
+  "status",
+  "branches",
+  "branchDivergence",
+  "commitHistory",
+  "mergeState",
+  "stashList",
+  "stashShow",
+  "recentBranches",
+  "fileDiff",
+] as const;
+
+/**
+ * Watches the active repository via the backend FS watcher. Working-tree
+ * changes invalidate the status and open file-diff queries; git-dir changes
+ * (commit, checkout, stage, merge/rebase, worktree add/remove made anywhere)
+ * also refresh branches, recent branches, history, merge state, stashes,
+ * worktrees and diffs. Replaces tight status polling with event-driven refresh; the query keeps a slow poll as a safety net.
  */
 export function useRepoWatcher(repoPath: string | null) {
   const queryClient = useQueryClient();
@@ -41,26 +65,62 @@ export function useRepoWatcher(repoPath: string | null) {
   // Listen for debounced FS change events and refresh the affected repo's status.
   useEffect(() => {
     let mounted = true;
-    let unlisten: (() => void) | undefined;
+    const unlisteners: (() => void)[] = [];
+    // A commit or rebase touches the git dir many times; refetch history and
+    // branches once the burst settles instead of on every step.
+    let gitDirTimer: ReturnType<typeof setTimeout> | undefined;
 
-    listen<FsChangePayload>("fs:change", (event) => {
-      if (!mounted) return;
-      queryClient.invalidateQueries({
-        queryKey: ["status", event.payload.repoPath],
+    const track = (promise: Promise<() => void>) => {
+      promise.then((fn) => {
+        if (mounted) {
+          unlisteners.push(fn);
+        } else {
+          fn();
+        }
       });
-      // rail/목록의 dirty·ahead/behind 인디케이터도 함께 갱신 (오프라인 계산)
-      queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
-    }).then((fn) => {
-      if (mounted) {
-        unlisten = fn;
-      } else {
-        fn();
-      }
-    });
+    };
+
+    track(
+      listen<FsChangePayload>("fs:change", (event) => {
+        if (!mounted) return;
+        // 원격 자동 최신화는 최근에 파일이 바뀐 작업 트리를 자동으로 받지 않는다.
+        useAutoSyncStore.getState().markActivity(event.payload.repoPath, Date.now());
+        queryClient.invalidateQueries({
+          queryKey: ["status", event.payload.repoPath],
+        });
+        // 열려 있는 diff도 디스크 내용을 따라가야 한다. 이벤트는 백엔드에서 이미 디바운스돼
+        // 오고, 화면에 붙은 쿼리만 다시 조회된다(나머지는 stale 표시만).
+        queryClient.invalidateQueries({
+          queryKey: ["fileDiff", event.payload.repoPath],
+        });
+        // rail/목록의 dirty·ahead/behind 인디케이터도 함께 갱신 (오프라인 계산)
+        queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
+      }),
+    );
+
+    // HEAD, index, refs, or merge/rebase state changed — e.g. a commit, `git add`
+    // or checkout made in a terminal.
+    track(
+      listen<FsChangePayload>("fs:git-dir-change", (event) => {
+        if (!mounted) return;
+        const { repoPath: changedPath } = event.payload;
+        clearTimeout(gitDirTimer);
+        gitDirTimer = setTimeout(() => {
+          for (const key of GIT_DIR_QUERY_KEYS) {
+            queryClient.invalidateQueries({ queryKey: [key, changedPath] });
+          }
+          // The worktree list is keyed by the owning repository, not by the
+          // linked worktree being watched, so refresh it for every path.
+          queryClient.invalidateQueries({ queryKey: ["worktrees"] });
+          queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
+        }, GIT_DIR_DEBOUNCE_MS);
+      }),
+    );
 
     return () => {
       mounted = false;
-      unlisten?.();
+      clearTimeout(gitDirTimer);
+      unlisteners.forEach((fn) => fn());
     };
   }, [queryClient]);
 }

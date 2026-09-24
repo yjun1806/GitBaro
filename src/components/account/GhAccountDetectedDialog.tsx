@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useId } from "react";
 import { UserCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import type { GitHubAccount } from "@/types";
 import { AccountAvatar } from "./AccountAvatar";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface GhAccountDetectedDialogProps {
   accounts: GitHubAccount[];
@@ -17,6 +18,7 @@ export function GhAccountDetectedDialog({
   onSignInNew,
 }: GhAccountDetectedDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     () => new Set(accounts.map((a) => a.id)),
   );
@@ -39,15 +41,18 @@ export function GhAccountDetectedDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-5">
+    <Dialog
+      labelledBy={titleId}
+      overlayClassName="z-[60] bg-black/50"
+      className="bg-card rounded-xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-5"
+    >
         {/* Header */}
         <div className="flex flex-col items-center gap-3">
           <div className="p-3 rounded-xl bg-primary/10">
             <UserCheck className="w-8 h-8 text-primary" />
           </div>
           <div className="text-center">
-            <h2 className="text-lg font-semibold text-foreground">
+            <h2 id={titleId} className="text-lg font-semibold text-foreground">
               {t("ghSync.detected.title")}
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
@@ -128,7 +133,6 @@ export function GhAccountDetectedDialog({
             {t("ghSync.detected.signInNew")}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

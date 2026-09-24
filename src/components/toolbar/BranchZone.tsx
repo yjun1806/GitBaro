@@ -1,10 +1,18 @@
 import { useState, useRef } from "react";
+import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import { GitBranch, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
-import { useBranches, useRecentBranches, useStatus, useWorktrees } from "@/api/queries";
-import { switchBranch, createBranch, deleteBranch, renameBranch, stashPush, stashPop } from "@/api/commands";
+import { useBranches, useHeadDetached, useRecentBranches, useStatus, useWorktrees } from "@/api/queries";
+import {
+  switchBranch,
+  createBranch,
+  deleteBranch,
+  renameBranch,
+  stashPush,
+  stashPopByOid,
+} from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { useSelectionStore } from "@/stores/selection";
@@ -14,6 +22,9 @@ import { BranchDropdown } from "./BranchDropdown";
 import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
 import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
 import { DeleteBranchDialog } from "@/components/branch/DeleteBranchDialog";
+import { RenameBranchDialog } from "@/components/branch/RenameBranchDialog";
+import { selectionAfterStashPushed } from "@/lib/stash-selection";
+import { runWithStashedChanges } from "./run-with-stashed-changes";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { railFlowWidth } from "@/components/layout/RepoRail";
@@ -31,18 +42,20 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const ownerRepoPath = useOwnerRepoPath();
   const { data: branches = [] } = useBranches(activeRepoPath);
+  const { data: isDetached = false } = useHeadDetached(activeRepoPath);
   const { data: recentBranchNames = [] } = useRecentBranches(activeRepoPath);
   const { data: statusFiles = [] } = useStatus(activeRepoPath);
   const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
-  const sidebarWidth = useUIStore((s) => s.sidebarWidth);
+  const sidebarWidth = useSidebarWidth();
   const railMode = useUIStore((s) => s.railMode);
   const { worktreeByBranch } = useWorktreeContext(activeRepoPath, worktrees);
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [pendingRename, setPendingRename] = useState<string | null>(null);
 
   const headBranch = branches.find((b) => b.isHead);
   const currentBranch = headBranch?.name ?? null;
@@ -52,14 +65,22 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const hasChanges = ahead > 0 || behind > 0;
   const isDirty = statusFiles.length > 0;
 
+  // Branch switches touch the working tree, the stash list and the reflog, so
+  // everything derived from them is refetched — after failures too.
   const invalidateAll = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["branches"] }),
-      queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] }),
-      queryClient.invalidateQueries({ queryKey: ["status"] }),
-      queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
-      queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-    ]);
+    Promise.all(
+      [
+        "branches",
+        "repoSyncStatus",
+        "status",
+        "commitHistory",
+        "fileDiff",
+        "stashList",
+        "stashShow",
+        "recentBranches",
+        "worktrees",
+      ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+    );
 
   // 브랜치가 바뀌면 이전 브랜치 기준의 파일·커밋 선택은 무효이므로 초기화한다.
   const clearBranchScopedSelection = () => {
@@ -68,16 +89,80 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     clearCommitSelection();
   };
 
-  const doSwitch = async (branchName: string) => {
-    if (!activeRepoPath) return;
+  /**
+   * Runs `action` with the changes (untracked files included) stashed and
+   * pops that same stash afterwards — on success only when `popOnSuccess`.
+   * Reports failures as toasts and returns true when the action succeeded.
+   */
+  const runStashed = async (
+    repoPath: string,
+    action: () => Promise<void>,
+    options: { popOnSuccess: boolean; failureKey: "branch.failedToSwitch" | "branch.failedToCreate" },
+  ): Promise<boolean> => {
+    const outcome = await runWithStashedChanges({
+      stash: () => stashPush(repoPath),
+      restore: (oid) => stashPopByOid(repoPath, oid),
+      action,
+      popOnSuccess: options.popOnSuccess,
+    });
+    const leftInStash = outcome.status === "restoreFailed" || ("leftInStash" in outcome && outcome.leftInStash);
+    if (leftInStash) {
+      // The new entry is stash@{0}; keep the stash tab on the entry it showed.
+      const { selectedStashIndex, selectStash } = useSelectionStore.getState();
+      selectStash(selectionAfterStashPushed(selectedStashIndex));
+    }
+    switch (outcome.status) {
+      case "done":
+        return true;
+      case "stashFailed":
+        addToast(t("branch.failedToStash", { error: getErrorMessage(outcome.error) }), "error");
+        return false;
+      case "actionFailed": {
+        const message = t(options.failureKey, { error: getErrorMessage(outcome.error) });
+        addToast(
+          outcome.leftInStash ? `${message} ${t("branch.changesKeptInStash")}` : message,
+          "error",
+        );
+        return false;
+      }
+      case "restoreFailed":
+        addToast(
+          t("branch.changesRestoreFailed", { error: getErrorMessage(outcome.error) }),
+          "warning",
+        );
+        return true;
+    }
+  };
+
+  /**
+   * "leave": stash the changes (they stay behind in the stash list) and
+   * switch; if the switch fails, pop them back. "bring": git carries them over.
+   */
+  const switchTo = async (repoPath: string, branchName: string, mode: "leave" | "bring") => {
     const { setSwitchingBranch } = useUIStore.getState();
     setSwitchingBranch(true);
     try {
-      await switchBranch(activeRepoPath, branchName);
-      clearBranchScopedSelection();
-      await invalidateAll();
-      addToast(t("branch.switchedTo", { name: branchName }), "success");
+      let switched: boolean;
+      if (mode === "leave") {
+        switched = await runStashed(repoPath, () => switchBranch(repoPath, branchName), {
+          popOnSuccess: false,
+          failureKey: "branch.failedToSwitch",
+        });
+      } else {
+        try {
+          await switchBranch(repoPath, branchName);
+          switched = true;
+        } catch (err) {
+          addToast(t("branch.failedToSwitch", { error: getErrorMessage(err) }), "error");
+          switched = false;
+        }
+      }
+      if (switched) {
+        clearBranchScopedSelection();
+        addToast(t("branch.switchedTo", { name: branchName }), "success");
+      }
     } finally {
+      await invalidateAll();
       setSwitchingBranch(false);
     }
   };
@@ -90,51 +175,49 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
       return;
     }
 
-    try {
-      await doSwitch(branchName);
-    } catch (err) {
-      addToast(t("branch.failedToSwitch", { error: getErrorMessage(err) }), "error");
-    }
+    await switchTo(activeRepoPath, branchName, "bring");
   };
 
   const handleSwitchConfirm = async (action: "leave" | "bring") => {
     if (!activeRepoPath || !pendingSwitch) return;
+    const target = pendingSwitch;
     setPendingSwitch(null);
-
-    try {
-      if (action === "leave") {
-        await stashPush(activeRepoPath);
-      }
-      await doSwitch(pendingSwitch);
-    } catch (err) {
-      // stash 후 switch 실패 시 stash 복원 시도
-      if (action === "leave") {
-        try { await stashPop(activeRepoPath); } catch { /* ignore */ }
-      }
-      addToast(t("branch.failedToSwitch", { error: getErrorMessage(err) }), "error");
-    }
+    await switchTo(activeRepoPath, target, action);
   };
 
   const handleCreate = async (name: string, fromBranch: string) => {
     if (!activeRepoPath) return;
+    const repoPath = activeRepoPath;
     const { setSwitchingBranch } = useUIStore.getState();
     setSwitchingBranch(true);
     try {
+      const createAndSwitch = async () => {
+        await createBranch(repoPath, name, fromBranch);
+        await switchBranch(repoPath, name);
+      };
+      // A clean tree needs no stash round-trip.
+      let created: boolean;
       if (isDirty) {
-        await stashPush(activeRepoPath);
+        created = await runStashed(repoPath, createAndSwitch, {
+          popOnSuccess: true,
+          failureKey: "branch.failedToCreate",
+        });
+      } else {
+        try {
+          await createAndSwitch();
+          created = true;
+        } catch (err) {
+          addToast(t("branch.failedToCreate", { error: getErrorMessage(err) }), "error");
+          created = false;
+        }
       }
-      await createBranch(activeRepoPath, name, fromBranch);
-      await switchBranch(activeRepoPath, name);
-      if (isDirty) {
-        await stashPop(activeRepoPath);
+      if (created) {
+        clearBranchScopedSelection();
+        addToast(t("branch.createdAndSwitched", { name }), "success");
+        setShowCreateDialog(false);
       }
-      clearBranchScopedSelection();
-      await invalidateAll();
-      addToast(t("branch.createdAndSwitched", { name }), "success");
-      setShowCreateDialog(false);
-    } catch (err) {
-      addToast(t("branch.failedToCreate", { error: getErrorMessage(err) }), "error");
     } finally {
+      await invalidateAll();
       setSwitchingBranch(false);
     }
   };
@@ -156,15 +239,16 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     }
   };
 
-  const handleRename = async (branchName: string) => {
-    const newName = window.prompt(t("branch.contextMenu.rename"), branchName);
-    if (!newName || newName === branchName || !activeRepoPath) return;
+  const handleRenameConfirm = async (oldName: string, newName: string) => {
+    if (!activeRepoPath) return;
     try {
-      await renameBranch(activeRepoPath, branchName, newName);
-      await invalidateAll();
-      addToast(t("branch.renamed", { old: branchName, new: newName }), "success");
+      await renameBranch(activeRepoPath, oldName, newName);
+      addToast(t("branch.renamed", { old: oldName, new: newName }), "success");
+      setPendingRename(null);
     } catch (err) {
       addToast(t("branch.failedToRename", { error: getErrorMessage(err) }), "error");
+    } finally {
+      await invalidateAll();
     }
   };
 
@@ -205,7 +289,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           <p className="text-xs text-muted-foreground leading-tight">{t("branch.current")}</p>
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-semibold truncate max-w-[200px]">
-              {currentBranch ?? t("branch.noBranch")}
+              {currentBranch ?? (isDetached ? t("branch.detachedHead") : t("branch.noBranch"))}
             </p>
             {hasChanges && (
               <div className="flex items-center gap-0.5">
@@ -251,7 +335,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
               onCreateBranch={() => setShowCreateDialog(true)}
               onOpenWorktree={openWorktree}
               onDelete={handleDelete}
-              onRename={handleRename}
+              onRename={setPendingRename}
               onCompare={handleCompare}
               onMerge={handleMerge}
               onCopyName={handleCopyName}
@@ -270,12 +354,21 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         />
       )}
 
-      {pendingSwitch && currentBranch && (
+      {pendingSwitch && (
         <SwitchBranchDialog
-          currentBranch={currentBranch}
+          currentBranch={currentBranch ?? t("branch.detachedHead")}
           targetBranch={pendingSwitch}
           onConfirm={handleSwitchConfirm}
           onClose={() => setPendingSwitch(null)}
+        />
+      )}
+
+      {pendingRename && (
+        <RenameBranchDialog
+          branchName={pendingRename}
+          branches={branches}
+          onRename={(newName) => handleRenameConfirm(pendingRename, newName)}
+          onClose={() => setPendingRename(null)}
         />
       )}
 

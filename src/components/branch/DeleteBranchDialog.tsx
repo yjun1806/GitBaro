@@ -1,5 +1,7 @@
+import { useId } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface DeleteBranchDialogProps {
   branchName: string;
@@ -15,12 +17,16 @@ export function DeleteBranchDialog({
   onClose,
 }: DeleteBranchDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm">
+    <Dialog
+      onClose={onClose}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-sm"
+    >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 id={titleId} className="text-base font-semibold text-foreground">
             {t("branch.contextMenu.delete")}
           </h2>
           <button
@@ -64,7 +70,6 @@ export function DeleteBranchDialog({
             {t("common.delete")}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import type { KeyboardEvent } from "react";
 import { GitBranch, ChevronDown, Check, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -24,6 +25,7 @@ export function BranchCombobox({
   const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -61,10 +63,20 @@ export function BranchCombobox({
     setQuery("");
   };
 
+  // Escape closes only the dropdown; preventDefault keeps an enclosing Dialog open.
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Escape" || !open || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    setOpen(false);
+    setQuery("");
+    triggerRef.current?.focus();
+  };
+
   return (
-    <div ref={ref} className={cn("relative", className)}>
+    <div ref={ref} className={cn("relative", className)} onKeyDown={handleKeyDown}>
       {/* Trigger */}
       <button
+        ref={triggerRef}
         type="button"
         onClick={handleOpen}
         className={cn(

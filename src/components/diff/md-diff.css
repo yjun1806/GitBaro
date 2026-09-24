@@ -23,6 +23,11 @@
   font-size: 14px;
   line-height: 1.7;
   overflow-wrap: break-word;
+  /* 문서 안의 어떤 요소도 이 상자 밖에 그려지지 않게 가둔다. `transform`은 안쪽
+     `position: fixed`의 기준을 뷰포트가 아니라 이 상자로 바꾸고, `contain: paint`는
+     그리기를 상자 경계에서 자른다 — 살균을 빠져나간 마크업이 있어도 앱을 덮지 못한다. */
+  contain: paint;
+  transform: translateZ(0);
 }
 
 .dark .md-diff {

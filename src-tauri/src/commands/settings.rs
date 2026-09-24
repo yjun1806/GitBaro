@@ -1,5 +1,6 @@
 use base64::Engine as _;
 use crate::error::AppError;
+use crate::state::json_file;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -9,7 +10,6 @@ pub struct AppSettings {
     pub default_editor: String,
     pub default_shell: String,
     pub default_ai_cli: String,
-    pub auto_fetch_interval: u64,
     pub language: String,
 }
 
@@ -49,7 +49,6 @@ impl Default for AppSettings {
             default_editor: "vscode".to_string(),
             default_shell: "terminal".to_string(),
             default_ai_cli: "claude".to_string(),
-            auto_fetch_interval: 0,
             language: "en".to_string(),
         }
     }
@@ -62,26 +61,28 @@ fn settings_path() -> std::path::PathBuf {
         .join("settings.json")
 }
 
+/// Load settings. A missing file means defaults. A file that cannot be parsed
+/// also falls back to defaults (with a warning) so editor/terminal actions keep
+/// working; the damaged file is left alone until the user saves settings again.
 async fn load_settings() -> Result<AppSettings, AppError> {
     let path = settings_path();
     match tokio::fs::read_to_string(&path).await {
-        Ok(contents) => {
-            let settings: AppSettings = serde_json::from_str(&contents)?;
-            Ok(settings)
-        }
+        Ok(contents) => Ok(parse_settings(&contents)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(AppSettings::default()),
         Err(e) => Err(AppError::Io(e)),
     }
 }
 
+fn parse_settings(contents: &str) -> AppSettings {
+    serde_json::from_str(contents).unwrap_or_else(|e| {
+        tracing::warn!("settings.json could not be parsed ({}); using defaults", e);
+        AppSettings::default()
+    })
+}
+
+/// Callers must hold `json_file::lock()`.
 async fn save_settings(settings: &AppSettings) -> Result<(), AppError> {
-    let path = settings_path();
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-    let contents = serde_json::to_string_pretty(settings)?;
-    tokio::fs::write(&path, contents).await?;
-    Ok(())
+    json_file::write_json_atomic(&settings_path(), settings).await
 }
 
 #[tauri::command]
@@ -91,6 +92,7 @@ pub async fn get_settings() -> Result<AppSettings, AppError> {
 
 #[tauri::command]
 pub async fn update_settings(settings: AppSettings) -> Result<(), AppError> {
+    let _guard = json_file::lock().await;
     save_settings(&settings).await?;
     tracing::info!("Settings updated: theme={}", settings.theme);
     Ok(())
@@ -104,8 +106,11 @@ pub async fn get_theme() -> Result<String, AppError> {
 
 #[tauri::command]
 pub async fn set_theme(theme: String) -> Result<(), AppError> {
-    let mut settings = load_settings().await?;
-    settings.theme = theme.clone();
+    let _guard = json_file::lock().await;
+    let settings = AppSettings {
+        theme: theme.clone(),
+        ..load_settings().await?
+    };
     save_settings(&settings).await?;
     tracing::info!("Theme set to: {}", theme);
     Ok(())
@@ -486,6 +491,17 @@ fn terminal_binary_path(shell_id: &str) -> Option<&'static str> {
     }
 }
 
+/// [`terminal_binary_path`] for a terminal that must be launched by binary;
+/// an unknown ID is an error rather than a panic.
+fn require_terminal_binary(shell_id: &str) -> Result<&'static str, AppError> {
+    terminal_binary_path(shell_id).ok_or_else(|| {
+        AppError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("No launcher binary known for terminal '{}'", shell_id),
+        ))
+    })
+}
+
 /// Build a unique temp file path in the per-user temp dir (not the shared,
 /// world-writable `/tmp`) to avoid predictable-path symlink races.
 fn unique_temp_path(prefix: &str, ext: &str) -> std::path::PathBuf {
@@ -580,7 +596,7 @@ end tell"#,
         }
         "ghostty" | "alacritty" | "rio" => {
             // 바이너리 직접 실행 + -e 플래그
-            let binary = terminal_binary_path(shell_id).unwrap();
+            let binary = require_terminal_binary(shell_id)?;
             tokio::process::Command::new(binary)
                 .args(["-e", "/bin/zsh", "-l", "-i", "-c", &script_cmd])
                 .spawn()
@@ -588,7 +604,7 @@ end tell"#,
         }
         "kitty" => {
             // kitty는 위치 인수로 명령 전달
-            let binary = terminal_binary_path("kitty").unwrap();
+            let binary = require_terminal_binary("kitty")?;
             tokio::process::Command::new(binary)
                 .args(["/bin/zsh", "-l", "-i", "-c", &script_cmd])
                 .spawn()
@@ -630,6 +646,28 @@ end repeat"#,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn damaged_settings_fall_back_to_defaults() {
+        let settings = parse_settings("{\"theme\": ");
+        assert_eq!(settings.theme, AppSettings::default().theme);
+    }
+
+    #[test]
+    fn partial_settings_keep_known_fields() {
+        let settings = parse_settings("{\"theme\": \"dark\"}");
+        assert_eq!(settings.theme, "dark");
+        assert_eq!(settings.language, AppSettings::default().language);
+    }
+
+    #[test]
+    fn unknown_terminal_binary_is_an_error_not_a_panic() {
+        assert!(require_terminal_binary("kitty").is_ok());
+        assert!(matches!(
+            require_terminal_binary("no-such-terminal"),
+            Err(AppError::Io(_))
+        ));
+    }
 
     #[test]
     fn applescript_escape_escapes_backslash_before_quote() {

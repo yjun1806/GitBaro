@@ -2,6 +2,7 @@ export interface AppError {
   type:
     | "Git"
     | "GitCli"
+    | "MergeConflict"
     | "Auth"
     | "TokenExpired"
     | "Keychain"
@@ -15,8 +16,15 @@ export interface AppError {
     | "GhCli"
     | "GhVersionTooOld"
     | "Channel"
-    | "RepoNotFound";
+    | "RepoNotFound"
+    | "BareRepository";
   message: string;
+}
+
+/** push가 실제로 올릴 곳 (`git push <remote> <refspec>`). */
+export interface PushTarget {
+  remote: string;
+  refspec: string;
 }
 
 export interface GitHubAccount {
@@ -44,6 +52,8 @@ export interface RepoAccountMapping {
 
 export interface StatusEntry {
   path: string;
+  /** Previous path when the entry is a rename or copy (`git mv`). */
+  origPath?: string | null;
   status: FileStatus;
   staged: boolean;
   modifiedAt?: number | null;
@@ -181,6 +191,39 @@ export interface RepoSyncStatus {
   isDirty: boolean;
 }
 
+/**
+ * 저장소별 "원격 자동 최신화" 방식.
+ * - off: 자동으로 아무것도 하지 않는다
+ * - fetch: 원격을 확인(fetch)해 앞섬·뒤처짐만 갱신한다
+ * - pull: 확인한 뒤, 안전할 때만 현재 브랜치를 fast-forward한다
+ */
+export type AutoSyncMode = "off" | "fetch" | "pull";
+
+/** 자동 최신화 주기(분). */
+export type AutoSyncIntervalMinutes = 1 | 3 | 5 | 10 | 30;
+
+export interface AutoSyncSetting {
+  mode: AutoSyncMode;
+  intervalMinutes: AutoSyncIntervalMinutes;
+}
+
+/** 자동 fast-forward 판단에 쓰는 저장소 상태 (fetch 직후 기준). */
+export interface AutoSyncSnapshot {
+  detached: boolean;
+  hasUpstream: boolean;
+  ahead: number;
+  behind: number;
+  /** 스테이징·수정·추적되지 않은 파일이 하나도 없다. */
+  isClean: boolean;
+  /** merge·rebase·cherry-pick·revert 등이 진행 중이다. */
+  operationInProgress: boolean;
+}
+
+/** 자동 fast-forward 결과. commits가 0이면 조건이 맞지 않아 건너뛰었다. */
+export interface AutoFastForwardResult {
+  commits: number;
+}
+
 export interface RemoteInfo {
   name: string;
   url: string;
@@ -191,7 +234,6 @@ export interface AppSettings {
   defaultEditor: string;
   defaultShell: string;
   defaultAiCli: string;
-  autoFetchInterval: number;
   language: string;
 }
 
@@ -243,6 +285,21 @@ export interface MergePreCheckResult {
   conflictFiles: string[];
 }
 
+/**
+ * 워크트리 브랜치가 갈라져 나온 브랜치.
+ * - `recorded`: GitBaro가 워크트리를 만들 때 기록한 값
+ * - `reflog`: git이 브랜치를 만들 때 남긴 기록(`branch: Created from X`)
+ * - `inferred`: 기록이 없어 분기점이 가장 가까운 브랜치로 추정한 값
+ */
+export type WorktreeBaseSource = "recorded" | "reflog" | "inferred";
+
+export interface WorktreeBase {
+  name: string;
+  source: WorktreeBaseSource;
+  aheadOfBase: number;
+  behindBase: number;
+}
+
 export interface WorktreeInfo {
   path: string;
   head: string;
@@ -257,6 +314,8 @@ export interface WorktreeInfo {
    * 남겨두므로 목록에는 계속 나타나지만 실제로는 열 수 없다.
    */
   isPrunable: boolean;
+  /** 메인·detached 워크트리는 null. */
+  base: WorktreeBase | null;
 }
 
 // ── Stash ────────────────────────────────────────────────────────────────────
@@ -377,3 +436,6 @@ export interface BranchUpdate {
   oldOid: string;
   newOid: string;
 }
+
+/** A multi-step git operation that stops for conflict resolution. */
+export type GitOperation = "merge" | "rebase" | "cherryPick" | "revert" | "squash";

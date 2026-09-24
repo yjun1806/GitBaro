@@ -1,10 +1,11 @@
+import { useId } from "react";
 import type { ReactNode } from "react";
-import { Download, FolderOpen, Plus, X } from "lucide-react";
+import { Download, FolderOpen, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface AddRepoDialogProps {
   onClone: () => void;
-  onCreate: () => void;
   onAddExisting: () => void;
   onClose: () => void;
 }
@@ -35,17 +36,20 @@ function OptionCard({ icon, title, description, onClick }: OptionCardProps) {
 
 export function AddRepoDialog({
   onClone,
-  onCreate,
   onAddExisting,
   onClose,
 }: AddRepoDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-md">
+    <Dialog
+      onClose={onClose}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-md"
+    >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 id={titleId} className="text-base font-semibold text-foreground">
             {t("repo.addRepository")}
           </h2>
           <button
@@ -63,12 +67,7 @@ export function AddRepoDialog({
             description={t("repo.cloneDescription")}
             onClick={onClone}
           />
-          <OptionCard
-            icon={<Plus className="w-5 h-5" />}
-            title={t("repo.create")}
-            description={t("repo.initDescription")}
-            onClick={onCreate}
-          />
+          {/* "Create new repository" (git init) is hidden until it is implemented. */}
           <OptionCard
             icon={<FolderOpen className="w-5 h-5" />}
             title={t("repo.add")}
@@ -76,7 +75,6 @@ export function AddRepoDialog({
             onClick={onAddExisting}
           />
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

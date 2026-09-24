@@ -23,6 +23,9 @@ import type {
   WorktreeInfo,
   StashEntry,
   StashShowResult,
+  PushTarget,
+  AutoSyncSnapshot,
+  AutoFastForwardResult,
 } from "@/types";
 
 // Git operations — backend returns indexStatus/worktreeStatus separately,
@@ -30,6 +33,8 @@ import type {
 
 interface RawStatusEntry {
   path: string;
+  /** Source path of a rename/copy detected by `git status`. */
+  origPath: string | null;
   staged: boolean;
   unstaged: boolean;
   conflicted: boolean;
@@ -60,9 +65,14 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
       });
       continue;
     }
+    // Only renames carry origPath: a copy's source is a separate file with its
+    // own row, and acting on it from the copy row would touch its changes.
+    const indexRenamed = entry.indexStatus === "renamed";
+    const worktreeRenamed = entry.worktreeStatus === "renamed";
     if (entry.staged && entry.indexStatus !== "unchanged") {
       entries.push({
         path: entry.path,
+        origPath: indexRenamed ? entry.origPath : null,
         status: entry.indexStatus as FileStatus,
         staged: true,
         modifiedAt: entry.modifiedAt,
@@ -74,6 +84,7 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
     if (entry.unstaged && entry.worktreeStatus !== "unchanged") {
       entries.push({
         path: entry.path,
+        origPath: !indexRenamed && worktreeRenamed ? entry.origPath : null,
         status: entry.worktreeStatus as FileStatus,
         staged: false,
         modifiedAt: entry.modifiedAt,
@@ -108,8 +119,22 @@ export async function getDiff(repoPath: string, staged: boolean): Promise<DiffOu
   return invoke("get_diff", { repoPath, staged });
 }
 
-export async function discardChanges(repoPath: string, paths: string[]): Promise<void> {
-  return invoke("discard_changes", { repoPath, paths });
+/**
+ * Discard changes to `paths`. With `staged` false only the unstaged changes are
+ * dropped (restored from the index); with `staged` true the files return to
+ * their HEAD state. Untracked and index-only files are moved to the Trash.
+ */
+export async function discardChanges(
+  repoPath: string,
+  paths: string[],
+  staged: boolean,
+): Promise<void> {
+  return invoke("discard_changes", { repoPath, paths, staged });
+}
+
+/** Paths among `paths` whose file still contains `<<<<<<<`/`>>>>>>>` conflict markers. */
+export async function findConflictMarkers(repoPath: string, paths: string[]): Promise<string[]> {
+  return invoke("find_conflict_markers", { repoPath, paths });
 }
 
 export async function addToGitignore(repoPath: string, pattern: string): Promise<void> {
@@ -128,12 +153,20 @@ export async function resetToCommit(repoPath: string, oid: string, mode: ResetMo
   return invoke("reset_to_commit", { repoPath, oid, mode });
 }
 
-export async function revertCommit(repoPath: string, oid: string): Promise<void> {
-  return invoke("revert_commit", { repoPath, oid });
+export async function revertCommit(
+  repoPath: string,
+  oid: string,
+  accountId: string | null,
+): Promise<void> {
+  return invoke("revert_commit", { repoPath, oid, accountId });
 }
 
-export async function cherryPickCommit(repoPath: string, oid: string): Promise<void> {
-  return invoke("cherry_pick_commit", { repoPath, oid });
+export async function cherryPickCommit(
+  repoPath: string,
+  oid: string,
+  accountId: string | null,
+): Promise<void> {
+  return invoke("cherry_pick_commit", { repoPath, oid, accountId });
 }
 
 /**
@@ -156,12 +189,31 @@ export async function gitPush(
   return invoke("git_push", { repoPath, accountId, force });
 }
 
+/** `rebase`를 생략하면 사용자의 `pull.rebase` 설정을 따른다(없으면 merge). */
+/** push가 실제로 올릴 원격과 refspec. force push 확인 창에 보여준다. */
+export async function getPushTarget(repoPath: string): Promise<PushTarget> {
+  return invoke("get_push_target", { repoPath });
+}
+
 export async function gitPull(
   repoPath: string,
   accountId: string,
-  rebase = false,
+  rebase?: boolean,
 ): Promise<void> {
   return invoke("git_pull", { repoPath, accountId, rebase });
+}
+
+/** 자동 fast-forward 판단용 저장소 상태. fetch가 끝난 뒤 호출한다. */
+export async function getAutoSyncSnapshot(repoPath: string): Promise<AutoSyncSnapshot> {
+  return invoke("get_auto_sync_snapshot", { repoPath });
+}
+
+/**
+ * 현재 브랜치를 upstream으로 fast-forward한다(`git merge --ff-only`, 훅 실행).
+ * 백엔드가 조건을 한 번 더 확인하고, 맞지 않으면 commits 0으로 건너뛴다.
+ */
+export async function autoFastForward(repoPath: string): Promise<AutoFastForwardResult> {
+  return invoke("auto_fast_forward", { repoPath });
 }
 
 /** Tag names that exist on origin — used to flag local-only tags in history. */
@@ -241,6 +293,11 @@ export async function getBranches(repoPath: string): Promise<BranchInfo[]> {
   return invoke("get_branches", { repoPath });
 }
 
+/** HEAD points at a commit, not a branch. An unborn (orphan) branch is not detached. */
+export async function isHeadDetached(repoPath: string): Promise<boolean> {
+  return invoke("is_head_detached", { repoPath });
+}
+
 export async function getBranchDivergence(repoPath: string): Promise<BranchDivergence[]> {
   return invoke("get_branch_divergence", { repoPath });
 }
@@ -289,8 +346,9 @@ export async function mergeBranch(
   repoPath: string,
   branch: string,
   strategy: MergeStrategy,
+  accountId: string | null,
 ): Promise<string> {
-  return invoke("merge_branch_into_current", { repoPath, branch, strategy });
+  return invoke("merge_branch_into_current", { repoPath, branch, strategy, accountId });
 }
 
 export async function checkMergeConflicts(
@@ -300,8 +358,10 @@ export async function checkMergeConflicts(
   return invoke("check_merge_conflicts", { repoPath, branch });
 }
 
-/** "merge" | "rebase" | null — the operation currently in progress, if any. */
-export async function getMergeState(repoPath: string): Promise<string | null> {
+import type { GitOperation } from "@/types";
+
+/** The operation currently in progress, if any. */
+export async function getMergeState(repoPath: string): Promise<GitOperation | null> {
   return invoke("get_merge_state", { repoPath });
 }
 
@@ -309,8 +369,11 @@ export async function abortMergeOrRebase(repoPath: string): Promise<void> {
   return invoke("abort_merge_or_rebase", { repoPath });
 }
 
-export async function continueMergeOrRebase(repoPath: string): Promise<void> {
-  return invoke("continue_merge_or_rebase", { repoPath });
+export async function continueMergeOrRebase(
+  repoPath: string,
+  accountId: string | null,
+): Promise<void> {
+  return invoke("continue_merge_or_rebase", { repoPath, accountId });
 }
 
 export async function getConflictFileDiff(
@@ -342,12 +405,18 @@ export async function getConflictFileDiff(
 }
 
 // Stash
-export async function stashPush(repoPath: string, message?: string): Promise<void> {
+/** Stashes all changes, untracked files included. Resolves to the created stash's oid, or null when there was nothing to stash. */
+export async function stashPush(repoPath: string, message?: string): Promise<string | null> {
   return invoke("stash_push", { repoPath, message });
 }
 
-export async function stashPop(repoPath: string): Promise<void> {
-  return invoke("stash_pop", { repoPath });
+export async function stashPop(repoPath: string, index: number): Promise<void> {
+  return invoke("stash_pop", { repoPath, index });
+}
+
+/** Pops the stash a `stashPush` returned, wherever it now sits in the list. */
+export async function stashPopByOid(repoPath: string, oid: string): Promise<void> {
+  return invoke("stash_pop_by_oid", { repoPath, oid });
 }
 
 export async function stashList(repoPath: string): Promise<StashEntry[]> {
@@ -366,7 +435,7 @@ export async function stashShow(repoPath: string, index: number): Promise<StashS
   return invoke("stash_show", { repoPath, index });
 }
 
-export async function stashPushPartial(repoPath: string, paths: string[], message?: string): Promise<void> {
+export async function stashPushPartial(repoPath: string, paths: string[], message?: string): Promise<string | null> {
   return invoke("stash_push_partial", { repoPath, paths, message });
 }
 
@@ -531,8 +600,14 @@ export async function checkGhStatus(): Promise<GhStatus> {
   return invoke("check_gh_status");
 }
 
-export async function startGhLogin(): Promise<void> {
+/** Starts `gh auth login` in the background. Resolves to the login id for `cancelGhLogin`. */
+export async function startGhLogin(): Promise<number> {
   return invoke("start_gh_login");
+}
+
+/** Kills the `gh auth login` process started with `loginId`, if it is still running. */
+export async function cancelGhLogin(loginId: number): Promise<void> {
+  return invoke("cancel_gh_login", { loginId });
 }
 
 interface RawAccount {
@@ -583,7 +658,8 @@ export async function getRepoAccount(
 
 export interface TokenValidation {
   valid: boolean;
-  canPush: boolean;
+  /** null when push access cannot be checked (the remote is not on github.com). */
+  canPush: boolean | null;
   reason?: string;
 }
 
@@ -737,7 +813,8 @@ export async function removeWorktree(
 }
 
 // Preview
-export async function startWorktreePreview(repoPath: string, branch: string): Promise<void> {
+/** Resolves false when there was nothing to preview (already up to date). */
+export async function startWorktreePreview(repoPath: string, branch: string): Promise<boolean> {
   return invoke("start_worktree_preview", { repoPath, branch });
 }
 

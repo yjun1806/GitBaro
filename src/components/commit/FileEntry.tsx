@@ -8,6 +8,7 @@ import type { FileStatus } from "@/types";
 export interface FileEntryProps {
   entry: {
     path: string;
+    origPath?: string | null;
     status: string;
     staged: boolean;
     insertions?: number | null;
@@ -20,9 +21,17 @@ export interface FileEntryProps {
   onDoubleClick?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   onToggleStage: () => void;
-  /** Discard working-tree changes for this file (unstaged files only). */
+  /** Discard this row's changes (unstaged row: working tree only; staged row: back to HEAD). */
   onDiscard?: () => void;
   ref?: React.Ref<HTMLDivElement>;
+}
+
+function baseName(path: string): string {
+  return path.includes("/") ? path.substring(path.lastIndexOf("/") + 1) : path;
+}
+
+function dirName(path: string): string {
+  return path.includes("/") ? path.substring(0, path.lastIndexOf("/")) : "";
 }
 
 function FileEntryComponent({
@@ -37,9 +46,13 @@ function FileEntryComponent({
   ref,
 }: FileEntryProps) {
   const { t } = useTranslation();
-  const filename = entry.path.includes("/")
-    ? entry.path.substring(entry.path.lastIndexOf("/") + 1)
-    : entry.path;
+  const filename = baseName(entry.path);
+  // Rename: show "old → new". Keep the old directory when the file moved folders.
+  const previousName = entry.origPath
+    ? dirName(entry.origPath) === dirName(entry.path)
+      ? baseName(entry.origPath)
+      : entry.origPath
+    : null;
 
   return (
     <div
@@ -66,13 +79,20 @@ function FileEntryComponent({
         type="checkbox"
         className="w-3.5 h-3.5 shrink-0 cursor-pointer"
         checked={entry.staged}
+        aria-label={t(entry.staged ? "changes.checkbox.unstageFile" : "changes.checkbox.stageFile", { file: entry.path })}
         onChange={(e) => {
           e.stopPropagation();
           onToggleStage();
         }}
       />
       <FileStatusBadge status={entry.status as FileStatus} />
-      <span className="text-xs font-medium text-foreground truncate">{filename}</span>
+      <span
+        className="text-xs font-medium text-foreground truncate"
+        title={entry.origPath ? `${entry.origPath} → ${entry.path}` : undefined}
+      >
+        {previousName && <span className="text-muted-foreground">{previousName} → </span>}
+        {filename}
+      </span>
       {(entry.insertions != null || entry.deletions != null) && (
         <span className="text-xs shrink-0">
           {entry.insertions != null && <span className="text-success">+{entry.insertions}</span>}

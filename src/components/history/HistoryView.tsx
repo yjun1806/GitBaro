@@ -10,9 +10,11 @@ import { useSelectionStore } from "@/stores/selection";
 import { useCommitHistoryInfinite, useCommitAvatars, useBranches, useBranchComparison, useStatus, useRemoteTags } from "@/api/queries";
 import { createBranch, type ResetMode } from "@/api/commands";
 import { useCommitActions } from "@/hooks/useCommitActions";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useToastStore } from "@/stores/toast";
 import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
 import { BranchCompareView } from "@/components/history/BranchCompareView";
+import { isStaleCompareBranch } from "@/components/history/compare-branch";
 import { MergeActionPanel } from "@/components/history/MergeActionPanel";
 import { CommitItem } from "@/components/history/CommitItem";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
@@ -26,7 +28,7 @@ export function HistoryView() {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const accounts = useAccountStore((s) => s.accounts);
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  const repoAccountId = useRepoAccountId();
   const {
     data: historyData,
     isLoading,
@@ -38,8 +40,9 @@ export function HistoryView() {
     () => historyData?.pages.flat() ?? [],
     [historyData],
   );
-  const { data: branches = [] } = useBranches(activeRepoPath);
-  const { data: remoteTagNames } = useRemoteTags(activeRepoPath, activeAccountId);
+  const { data: branchesData } = useBranches(activeRepoPath);
+  const branches = useMemo(() => branchesData ?? [], [branchesData]);
+  const { data: remoteTagNames } = useRemoteTags(activeRepoPath, repoAccountId);
   // null while the remote list is unknown (loading / no account) so tags aren't
   // falsely flagged as local-only; a Set once origin's tags are known.
   const remoteTags = useMemo(
@@ -52,6 +55,12 @@ export function HistoryView() {
   const { data: statusEntries = [] } = useStatus(activeRepoPath);
   const headBranch = branches.find((b) => b.isHead);
   const currentBranchName = headBranch?.name ?? null;
+  // Leave compare mode when the compared branch disappears (e.g. deleted after
+  // a merge). Otherwise the selector, which holds the only clear button, can
+  // be hidden (single branch left) and the user is stuck in compare mode.
+  useEffect(() => {
+    if (isStaleCompareBranch(compareBranch, branchesData)) setCompareBranch(null);
+  }, [compareBranch, branchesData, setCompareBranch]);
   const { data: comparisonData } = useBranchComparison(
     activeRepoPath,
     currentBranchName,
@@ -103,7 +112,9 @@ export function HistoryView() {
   };
 
   const handleRevert = async (commit: CommitInfo) => {
-    const ok = await ask(t("history.revertConfirm", { shortId: commit.shortId }), {
+    // 병합 커밋은 첫 번째 부모(병합받은 브랜치) 기준으로 되돌린다 (백엔드가 -m 1 사용).
+    const message = commit.parentIds.length > 1 ? "history.revertMergeConfirm" : "history.revertConfirm";
+    const ok = await ask(t(message, { shortId: commit.shortId }), {
       title: t("history.contextMenu.revert"),
       kind: "warning",
     });
@@ -273,6 +284,7 @@ export function HistoryView() {
           onReset={() => setResetTarget(menu.commit)}
           onRevert={() => handleRevert(menu.commit)}
           onCherryPick={() => handleCherryPick(menu.commit)}
+          isMergeCommit={menu.commit.parentIds.length > 1}
           onClose={() => setMenu(null)}
         />
       )}

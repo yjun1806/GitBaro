@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useId } from "react";
 import { X, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { Dialog } from "@/components/ui/Dialog";
+import { isSubmitEnter } from "@/lib/keyboard";
 
 interface CommitBranchDialogProps {
   shortId: string;
@@ -19,6 +21,7 @@ function isValidBranchName(name: string): boolean {
  */
 export function CommitBranchDialog({ shortId, onCreate, onClose }: CommitBranchDialogProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const [name, setName] = useState("");
 
   const valid = name.length > 0 && isValidBranchName(name);
@@ -29,10 +32,13 @@ export function CommitBranchDialog({ shortId, onCreate, onClose }: CommitBranchD
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-md">
+    <Dialog
+      onClose={onClose}
+      labelledBy={titleId}
+      className="bg-card rounded-xl shadow-2xl w-full max-w-md"
+    >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 id={titleId} className="text-base font-semibold text-foreground">
             {t("history.createBranchFrom", { shortId })}
           </h2>
           <button
@@ -61,7 +67,7 @@ export function CommitBranchDialog({ shortId, onCreate, onClose }: CommitBranchD
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
               placeholder="feature/my-feature"
               className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
             />
@@ -84,7 +90,6 @@ export function CommitBranchDialog({ shortId, onCreate, onClose }: CommitBranchD
             {t("branch.createBranch")}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

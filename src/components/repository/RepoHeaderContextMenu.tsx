@@ -7,6 +7,7 @@ import {
   Code2,
   Bot,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -14,6 +15,7 @@ import { ContextMenu } from "@/components/ui/ContextMenu";
 import type { ContextMenuSection } from "@/components/ui/ContextMenu";
 import { revealInFinder, openInTerminal, openRepoInEditor, openAiCliInTerminal } from "@/api/commands";
 import { getGitHubWebUrl } from "@/lib/utils";
+import { useAutoSyncStore } from "@/stores/auto-sync";
 import type { RepoInfo, AppSettings } from "@/types";
 
 const AI_CLI_DISPLAY_NAMES: Record<string, string> = {
@@ -60,6 +62,7 @@ export function RepoHeaderContextMenu({
   onClose,
 }: RepoHeaderContextMenuProps) {
   const { t } = useTranslation();
+  const openAutoSyncSettings = useAutoSyncStore((s) => s.openSettings);
 
   const gitHubUrl = repo.remotes
     .map((r) => getGitHubWebUrl(r.url))
@@ -137,6 +140,17 @@ export function RepoHeaderContextMenu({
             openAiCliInTerminal(repo.path, aiCliId);
           },
           disabled: !hasAiCli,
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          label: t("autoSync.menuItem"),
+          icon: <RefreshCw className="w-3.5 h-3.5" />,
+          onClick: () => openAutoSyncSettings(repo.path),
+          // 계정이나 원격이 없으면 자동으로 확인할 수 없다.
+          disabled: repo.remotes.length === 0,
         },
       ],
     },

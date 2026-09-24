@@ -30,10 +30,9 @@ export function StashView() {
     }
   };
 
-  const handlePop = async (_index: number) => {
+  const handlePop = async (index: number) => {
     try {
-      await mutations.pop.mutateAsync();
-      selectStash(null);
+      await mutations.pop.mutateAsync(index);
       addToast(t("stash.popped"), "success");
     } catch (err) {
       addToast(t("stash.failedToPop", { error: getErrorMessage(err) }), "error");
@@ -43,9 +42,6 @@ export function StashView() {
   const handleDrop = async (index: number) => {
     try {
       await mutations.drop.mutateAsync(index);
-      if (selectedStashIndex === index) {
-        selectStash(null);
-      }
       addToast(t("stash.dropped"), "success");
     } catch (err) {
       addToast(t("stash.failedToDrop", { error: getErrorMessage(err) }), "error");
@@ -54,12 +50,14 @@ export function StashView() {
 
   const handleSave = async (message?: string, paths?: string[]) => {
     try {
-      if (paths) {
-        await mutations.pushPartial.mutateAsync({ paths, message });
-      } else {
-        await mutations.push.mutateAsync(message);
-      }
+      const oid = paths
+        ? await mutations.pushPartial.mutateAsync({ paths, message })
+        : await mutations.push.mutateAsync(message);
       setShowSaveDialog(false);
+      if (oid === null) {
+        addToast(t("stash.nothingToSave"), "info");
+        return;
+      }
       clearFileSelection();
       addToast(t("stash.saved"), "success");
     } catch (err) {
