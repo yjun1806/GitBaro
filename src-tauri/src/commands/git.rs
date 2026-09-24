@@ -1,166 +1,86 @@
 // ── Git operation strategy ──────────────────────────────────────────────────
-// 읽기 전용 (status, diff): git2 (libgit2) — 성능 우선
-// 쓰기 + hooks (commit, stash): GitCliEngine — hooks 실행 보장
+// 읽기 전용 (diff): git2 (libgit2) — 성능 우선
+// status: git CLI porcelain v2 — sparse checkout·rename 감지를 git과 일치시킴
+// 쓰기 (stage, unstage, discard, commit, stash): GitCliEngine — git과 같은 동작·hooks 보장
 // 리모트 (fetch, push, pull): GitCliEngine + AskpassScript — 인증
 
 use crate::commands::auth::resolve_token;
 use crate::error::AppError;
-use crate::events::{
-    GitCommandCompleteEvent, GitCommandStartEvent, GIT_COMMAND_COMPLETE, GIT_COMMAND_START,
-};
 use crate::git::cli::GitCliEngine;
 use crate::git::engine::{GitEngine, GitRemoteEngine};
 use crate::state::TokenStore;
 use serde_json::{json, Value};
-use tauri::Emitter;
 
 #[tauri::command]
 pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
     let result = tokio::task::spawn_blocking(move || {
-        let repo = git2::Repository::open(&repo_path)?;
-        let mut opts = git2::StatusOptions::new();
-        opts.include_untracked(true).recurse_untracked_dirs(true);
-        let statuses = repo.statuses(Some(&mut opts))?;
+        // Paths and their states come from the git CLI so sparse checkout,
+        // skip-worktree and rename detection behave exactly like git.
+        let porcelain = crate::git::status::read_status(std::path::Path::new(&repo_path))?;
 
+        let repo = git2::Repository::open(&repo_path)?;
         let workdir = repo.workdir()
             .map(|p| p.to_path_buf())
             .unwrap_or_default();
 
-        let file_count = statuses.iter().count();
+        let file_count = porcelain.len();
         const DIFF_STATS_THRESHOLD: usize = 300;
 
         // Build per-file diff stats if file count is within threshold
-        let mut diff_stats: std::collections::HashMap<String, (usize, usize)> =
-            std::collections::HashMap::new();
+        let diff_stats = if file_count <= DIFF_STATS_THRESHOLD {
+            collect_diff_stats(&repo)?
+        } else {
+            std::collections::HashMap::new()
+        };
 
-        if file_count <= DIFF_STATS_THRESHOLD {
-            // Staged diff: tree-to-index
-            let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
-            let staged_diff = repo.diff_tree_to_index(head_tree.as_ref(), None, None)?;
-
-            for idx in 0..staged_diff.deltas().count() {
-                if let Ok(Some(patch)) = git2::Patch::from_diff(&staged_diff, idx) {
-                    let path = patch.delta().new_file().path()
-                        .or_else(|| patch.delta().old_file().path())
-                        .map(|p| p.to_string_lossy().to_string());
-                    if let (Some(path), Ok((_, ins, del))) = (path, patch.line_stats()) {
-                        let entry = diff_stats.entry(path).or_insert((0, 0));
-                        entry.0 += ins;
-                        entry.1 += del;
-                    }
-                }
-            }
-
-            // Unstaged diff: index-to-workdir
-            let mut unstaged_opts = git2::DiffOptions::new();
-            unstaged_opts.include_untracked(true);
-            let unstaged_diff = repo.diff_index_to_workdir(None, Some(&mut unstaged_opts))?;
-
-            for idx in 0..unstaged_diff.deltas().count() {
-                if let Ok(Some(patch)) = git2::Patch::from_diff(&unstaged_diff, idx) {
-                    let path = patch.delta().new_file().path()
-                        .or_else(|| patch.delta().old_file().path())
-                        .map(|p| p.to_string_lossy().to_string());
-                    if let (Some(path), Ok((_, ins, del))) = (path, patch.line_stats()) {
-                        let entry = diff_stats.entry(path).or_insert((0, 0));
-                        entry.0 += ins;
-                        entry.1 += del;
-                    }
-                }
-            }
-        }
-
-        let entries: Vec<Value> = statuses
+        let entries: Vec<Value> = porcelain
             .iter()
-            .filter_map(|entry| {
-                let path = entry.path()?.to_string();
-                let status = entry.status();
-
-                let conflicted = status.contains(git2::Status::CONFLICTED);
-
-                let staged = status.intersects(
-                    git2::Status::INDEX_NEW
-                        | git2::Status::INDEX_MODIFIED
-                        | git2::Status::INDEX_DELETED
-                        | git2::Status::INDEX_RENAMED
-                        | git2::Status::INDEX_TYPECHANGE,
-                );
-                let unstaged = status.intersects(
-                    git2::Status::WT_MODIFIED
-                        | git2::Status::WT_DELETED
-                        | git2::Status::WT_RENAMED
-                        | git2::Status::WT_TYPECHANGE
-                        | git2::Status::WT_NEW,
-                );
-
-                let index_status = if status.contains(git2::Status::INDEX_NEW) {
-                    "added"
-                } else if status.contains(git2::Status::INDEX_MODIFIED) {
-                    "modified"
-                } else if status.contains(git2::Status::INDEX_DELETED) {
-                    "deleted"
-                } else if status.contains(git2::Status::INDEX_RENAMED) {
-                    "renamed"
-                } else {
-                    "unchanged"
-                };
-
-                let wt_status = if status.contains(git2::Status::WT_NEW) {
-                    "untracked"
-                } else if status.contains(git2::Status::WT_MODIFIED) {
-                    "modified"
-                } else if status.contains(git2::Status::WT_DELETED) {
-                    "deleted"
-                } else if status.contains(git2::Status::WT_RENAMED) {
-                    "renamed"
-                } else {
-                    "unchanged"
-                };
+            .map(|entry| {
+                let path = &entry.path;
 
                 // Filesystem metadata (null for deleted files)
-                let is_deleted = status.contains(git2::Status::WT_DELETED)
-                    || (status.contains(git2::Status::INDEX_DELETED) && !unstaged);
-                let full_path = workdir.join(&path);
-                let (modified_at, size_bytes) = if is_deleted || !full_path.exists() {
-                    (Value::Null, Value::Null)
-                } else {
-                    match std::fs::metadata(&full_path) {
-                        Ok(meta) => {
-                            let mtime = meta.modified().ok().and_then(|t| {
-                                t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs())
-                            });
-                            let size = meta.len();
-                            (
-                                mtime.map(|s| json!(s)).unwrap_or(Value::Null),
-                                json!(size),
-                            )
+                let full_path = workdir.join(path);
+                let (modified_at, size_bytes) =
+                    if entry.is_deleted_in_worktree() || !full_path.exists() {
+                        (Value::Null, Value::Null)
+                    } else {
+                        match std::fs::symlink_metadata(&full_path) {
+                            Ok(meta) => {
+                                let mtime = meta.modified().ok().and_then(|t| {
+                                    t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs())
+                                });
+                                (
+                                    mtime.map(|s| json!(s)).unwrap_or(Value::Null),
+                                    json!(meta.len()),
+                                )
+                            }
+                            Err(_) => (Value::Null, Value::Null),
                         }
-                        Err(_) => (Value::Null, Value::Null),
-                    }
-                };
+                    };
 
                 // Diff stats (null if over threshold)
                 let (insertions, deletions) = if file_count > DIFF_STATS_THRESHOLD {
                     (Value::Null, Value::Null)
                 } else {
-                    match diff_stats.get(&path) {
+                    match diff_stats.get(path) {
                         Some((ins, del)) => (json!(ins), json!(del)),
                         None => (json!(0), json!(0)),
                     }
                 };
 
-                Some(json!({
+                json!({
                     "path": path,
-                    "staged": staged,
-                    "unstaged": unstaged,
-                    "conflicted": conflicted,
-                    "indexStatus": index_status,
-                    "worktreeStatus": wt_status,
+                    "origPath": entry.orig_path,
+                    "staged": entry.is_staged(),
+                    "unstaged": entry.is_unstaged(),
+                    "conflicted": entry.conflicted,
+                    "indexStatus": entry.index_status(),
+                    "worktreeStatus": entry.worktree_status(),
                     "modifiedAt": modified_at,
                     "insertions": insertions,
                     "deletions": deletions,
                     "sizeBytes": size_bytes,
-                }))
+                })
             })
             .collect();
 
@@ -172,72 +92,50 @@ pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
     Ok(result)
 }
 
+/// Insertions/deletions per path, summed over the staged (HEAD → index) and
+/// unstaged (index → worktree) diffs. Renames are detected on the staged side
+/// so a moved file is counted against its new path, not as a whole new file.
+fn collect_diff_stats(
+    repo: &git2::Repository,
+) -> Result<std::collections::HashMap<String, (usize, usize)>, AppError> {
+    let mut diff_stats: std::collections::HashMap<String, (usize, usize)> =
+        std::collections::HashMap::new();
+
+    let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
+    let mut staged_diff = repo.diff_tree_to_index(head_tree.as_ref(), None, None)?;
+    let mut find_opts = git2::DiffFindOptions::new();
+    find_opts.renames(true);
+    staged_diff.find_similar(Some(&mut find_opts))?;
+
+    let mut unstaged_opts = git2::DiffOptions::new();
+    unstaged_opts.include_untracked(true);
+    let unstaged_diff = repo.diff_index_to_workdir(None, Some(&mut unstaged_opts))?;
+
+    for diff in [&staged_diff, &unstaged_diff] {
+        for idx in 0..diff.deltas().count() {
+            if let Ok(Some(patch)) = git2::Patch::from_diff(diff, idx) {
+                let path = patch.delta().new_file().path()
+                    .or_else(|| patch.delta().old_file().path())
+                    .map(|p| p.to_string_lossy().to_string());
+                if let (Some(path), Ok((_, ins, del))) = (path, patch.line_stats()) {
+                    let entry = diff_stats.entry(path).or_insert((0, 0));
+                    entry.0 += ins;
+                    entry.1 += del;
+                }
+            }
+        }
+    }
+    Ok(diff_stats)
+}
+
 #[tauri::command]
 pub async fn stage_files(
     app_handle: tauri::AppHandle,
     repo_path: String,
     paths: Vec<String>,
 ) -> Result<(), AppError> {
-    let id = uuid::Uuid::new_v4().to_string();
-    let started_at = chrono::Utc::now().timestamp_millis();
-    let path_list = paths.join(", ");
-    let _ = app_handle.emit(
-        GIT_COMMAND_START,
-        GitCommandStartEvent {
-            id: id.clone(),
-            command: format!("git add {}", path_list),
-            operation: "stage".to_string(),
-            repo_path: repo_path.clone(),
-            started_at,
-            automatic: false,
-        },
-    );
-
-    tokio::task::spawn_blocking(move || {
-        let repo = git2::Repository::open(&repo_path)?;
-        let mut index = repo.index()?;
-        let workdir = repo.workdir()
-            .ok_or_else(|| AppError::Channel("bare repository".to_string()))?;
-
-        for path in &paths {
-            let full = workdir.join(path);
-            if full.exists() {
-                if full.is_dir() {
-                    index.add_all(
-                        [format!("{}/*", path)],
-                        git2::IndexAddOption::DEFAULT,
-                        None,
-                    )?;
-                } else {
-                    index.add_path(std::path::Path::new(path))?;
-                }
-            } else {
-                index.remove_path(std::path::Path::new(path))?;
-            }
-        }
-
-        index.write()?;
-        Ok::<_, AppError>(())
-    })
-    .await
-    .map_err(|e| AppError::Channel(e.to_string()))??;
-
-    let duration_ms = (chrono::Utc::now().timestamp_millis() - started_at) as u64;
-    let _ = app_handle.emit(
-        GIT_COMMAND_COMPLETE,
-        GitCommandCompleteEvent {
-            id,
-            operation: "stage".to_string(),
-            success: true,
-            duration_ms,
-            stdout: String::new(),
-            stderr: String::new(),
-            exit_code: Some(0),
-            result_summary: None,
-        },
-    );
-
-    Ok(())
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    engine.stage_paths(&paths).await
 }
 
 #[tauri::command]
@@ -246,65 +144,37 @@ pub async fn unstage_files(
     repo_path: String,
     paths: Vec<String>,
 ) -> Result<(), AppError> {
-    let id = uuid::Uuid::new_v4().to_string();
-    let started_at = chrono::Utc::now().timestamp_millis();
-    let path_list = paths.join(", ");
-    let _ = app_handle.emit(
-        GIT_COMMAND_START,
-        GitCommandStartEvent {
-            id: id.clone(),
-            command: format!("git reset HEAD {}", path_list),
-            operation: "unstage".to_string(),
-            repo_path: repo_path.clone(),
-            started_at,
-            automatic: false,
-        },
-    );
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    engine.unstage_paths(&paths).await
+}
 
+/// Paths among `paths` whose working-tree file still contains merge conflict
+/// markers (a line starting with `<<<<<<<` or `>>>>>>>`). Staging such a file
+/// marks the conflict resolved, so the UI asks before doing it.
+#[tauri::command]
+pub async fn find_conflict_markers(
+    repo_path: String,
+    paths: Vec<String>,
+) -> Result<Vec<String>, AppError> {
     tokio::task::spawn_blocking(move || {
-        let repo = git2::Repository::open(&repo_path)?;
-
-        // Try to get HEAD commit for resetting; if no commits yet, remove from index directly
-        let head_result = repo.head();
-        match head_result {
-            Ok(head) => {
-                let head_commit = head.peel_to_commit()?;
-                repo.reset_default(
-                    Some(head_commit.as_object()),
-                    paths.iter().map(|s| s.as_str()),
-                )?;
-            }
-            Err(_) => {
-                // No commits yet — remove from index
-                let mut index = repo.index()?;
-                for path in &paths {
-                    index.remove_path(std::path::Path::new(path))?;
-                }
-                index.write()?;
-            }
-        }
-
-        Ok::<_, AppError>(())
+        let root = std::path::Path::new(&repo_path);
+        Ok(paths
+            .into_iter()
+            .filter(|p| {
+                std::fs::read(root.join(p))
+                    .map(|bytes| has_conflict_markers(&bytes))
+                    .unwrap_or(false)
+            })
+            .collect())
     })
     .await
-    .map_err(|e| AppError::Channel(e.to_string()))??;
+    .map_err(|e| AppError::Channel(e.to_string()))?
+}
 
-    let duration_ms = (chrono::Utc::now().timestamp_millis() - started_at) as u64;
-    let _ = app_handle.emit(
-        GIT_COMMAND_COMPLETE,
-        GitCommandCompleteEvent {
-            id,
-            operation: "unstage".to_string(),
-            success: true,
-            duration_ms,
-            stdout: String::new(),
-            stderr: String::new(),
-            exit_code: Some(0),
-            result_summary: None,
-        },
-    );
-
-    Ok(())
+fn has_conflict_markers(content: &[u8]) -> bool {
+    content
+        .split(|b| *b == b'\n')
+        .any(|line| line.starts_with(b"<<<<<<<") || line.starts_with(b">>>>>>>"))
 }
 
 #[tauri::command]
@@ -389,12 +259,121 @@ pub async fn get_diff(repo_path: String, staged: bool) -> Result<Value, AppError
     Ok(result)
 }
 
+/// How each path of a discard request is brought back to its clean state.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct DiscardPlan {
+    /// Tracked paths restored from the index (`git checkout -- <path>`).
+    from_index: Vec<String>,
+    /// Paths restored in both index and worktree from HEAD.
+    from_head: Vec<String>,
+    /// Paths that exist only in the index and are dropped from it.
+    remove_from_index: Vec<String>,
+    /// Working-tree files moved to the Trash (untracked or index-only files).
+    trash: Vec<std::path::PathBuf>,
+}
+
+/// `GIT_INDEX_ENTRY_INTENT_TO_ADD` (libgit2 `index.h`): set by `git add -N`.
+const INDEX_ENTRY_INTENT_TO_ADD: u16 = 1 << 13;
+
+/// Decide how to discard `paths`. `staged == false` discards the unstaged
+/// changes only (the staged part is kept); `staged == true` discards every
+/// change to the file, returning it to its HEAD state.
+fn plan_discard(
+    repo: &git2::Repository,
+    paths: &[String],
+    staged: bool,
+) -> Result<DiscardPlan, AppError> {
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| AppError::Channel("bare repository".to_string()))?
+        .to_path_buf();
+    let index = repo.index()?;
+    let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
+    let mut plan = DiscardPlan::default();
+
+    for path in paths {
+        let rel = std::path::Path::new(path);
+        let full = workdir.join(rel);
+        let on_disk = std::fs::symlink_metadata(&full).is_ok();
+        let index_entry = index.get_path(rel, 0);
+        let in_index = index_entry.is_some();
+        let in_head = head_tree
+            .as_ref()
+            .is_some_and(|tree| tree.get_path(rel).is_ok());
+        // `git add -N` leaves an empty placeholder entry: the file is still new,
+        // and restoring it from the index would truncate it to nothing.
+        let intent_to_add = index_entry
+            .is_some_and(|e| e.flags_extended & INDEX_ENTRY_INTENT_TO_ADD != 0);
+
+        if !staged && intent_to_add {
+            plan.remove_from_index.push(path.clone());
+            if on_disk {
+                plan.trash.push(full);
+            }
+        } else if !staged {
+            if in_index {
+                plan.from_index.push(path.clone());
+            } else if on_disk {
+                plan.trash.push(full);
+            }
+        } else if in_head {
+            plan.from_head.push(path.clone());
+        } else if in_index {
+            plan.remove_from_index.push(path.clone());
+            if on_disk {
+                plan.trash.push(full);
+            }
+        }
+    }
+    Ok(plan)
+}
+
+fn move_to_trash(paths: &[std::path::PathBuf]) -> Result<(), AppError> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let mut ctx = trash::TrashContext::default();
+    #[cfg(target_os = "macos")]
+    {
+        use trash::macos::{DeleteMethod, TrashContextExtMacos};
+        // NSFileManager needs no Finder automation permission prompt.
+        ctx.set_delete_method(DeleteMethod::NsFileManager);
+    }
+    ctx.delete_all(paths).map_err(|e| AppError::Io(std::io::Error::other(e.to_string())))
+}
+
+/// Discard changes to `paths`. Untracked and index-only files are moved to
+/// the Trash rather than deleted, so a mistaken discard can be recovered.
 #[tauri::command]
-pub async fn discard_changes(repo_path: String, paths: Vec<String>) -> Result<(), AppError> {
-    // Discarding is a write op → go through git CLI (hybrid strategy) instead of
-    // git2 checkout_index, keeping hook behaviour consistent with other writes.
+pub async fn discard_changes(
+    repo_path: String,
+    paths: Vec<String>,
+    staged: Option<bool>,
+) -> Result<(), AppError> {
+    let staged = staged.unwrap_or(false);
+    let rp = repo_path.clone();
+    let plan = tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&rp)?;
+        plan_discard(&repo, &paths, staged)
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+
+    // Discarding is a write op → git CLI (hybrid strategy).
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
-    engine.discard_paths(&paths).await?;
+    if !plan.from_index.is_empty() {
+        engine.discard_paths(&plan.from_index).await?;
+    }
+    if !plan.from_head.is_empty() {
+        engine.restore_paths_from_head(&plan.from_head).await?;
+    }
+    if !plan.remove_from_index.is_empty() {
+        engine.remove_paths_from_index(&plan.remove_from_index).await?;
+    }
+    let trash = plan.trash;
+    tokio::task::spawn_blocking(move || move_to_trash(&trash))
+        .await
+        .map_err(|e| AppError::Channel(e.to_string()))??;
     Ok(())
 }
 
@@ -515,18 +494,32 @@ async fn fast_forward_local_branches(engine: &GitCliEngine, repo_path: &str) {
     }
 }
 
+/// Error for remote operations attempted while HEAD is detached. Without
+/// this, `HEAD` would be passed to git as if it were a branch name.
+fn detached_head_error() -> AppError {
+    AppError::GitCli {
+        message: "HEAD is detached (not on a branch). Create or switch to a branch first."
+            .to_string(),
+        exit_code: None,
+    }
+}
+
+/// Name of the branch HEAD points to, or `None` when HEAD is detached.
+/// (`shorthand()` alone returns "HEAD" for a detached HEAD.)
+fn head_branch_name(repo: &git2::Repository) -> Result<Option<String>, AppError> {
+    let head = repo.head()?;
+    Ok(head
+        .is_branch()
+        .then(|| head.shorthand().map(|s| s.to_string()))
+        .flatten())
+}
+
 /// Resolve the current HEAD branch name. Returns error if HEAD is detached.
 async fn resolve_head_branch(repo_path: &str) -> Result<String, AppError> {
     let rp = repo_path.to_string();
     tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&rp)?;
-        let head = repo.head()?;
-        head.shorthand()
-            .map(|s| s.to_string())
-            .ok_or_else(|| AppError::GitCli {
-                message: "HEAD is detached".to_string(),
-                exit_code: None,
-            })
+        head_branch_name(&repo)?.ok_or_else(detached_head_error)
     })
     .await
     .map_err(|e| AppError::Channel(e.to_string()))?
@@ -538,14 +531,7 @@ async fn resolve_upstream_branch(repo_path: &str) -> Result<String, AppError> {
     let rp = repo_path.to_string();
     tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&rp)?;
-        let head = repo.head()?;
-        let local_name = head
-            .shorthand()
-            .ok_or_else(|| AppError::GitCli {
-                message: "HEAD is detached".to_string(),
-                exit_code: None,
-            })?
-            .to_string();
+        let local_name = head_branch_name(&repo)?.ok_or_else(detached_head_error)?;
         let branch = repo.find_branch(&local_name, git2::BranchType::Local)?;
         let upstream = branch.upstream().map_err(|_| AppError::GitCli {
             message: format!("no_upstream:{}", local_name),
@@ -812,6 +798,222 @@ mod tests {
             .output()
             .expect("git 실행 실패");
         assert!(out.status.success(), "git {:?}: {}", args, String::from_utf8_lossy(&out.stderr));
+    }
+
+    /// 커밋 하나가 있는 임시 저장소를 만든다. 테스트마다 다른 이름을 쓴다.
+    fn temp_repo(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("gitbaro-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        git(&dir, &["config", "user.email", "t@t"]);
+        git(&dir, &["config", "user.name", "t"]);
+        std::fs::write(dir.join("README.md"), "hello\n").unwrap();
+        std::fs::write(dir.join("-dash.txt"), "dash\n").unwrap();
+        std::fs::write(dir.join("a b.txt"), "space\n").unwrap();
+        git(&dir, &["add", "-A"]);
+        git(&dir, &["commit", "-qm", "init"]);
+        dir
+    }
+
+    fn entry<'a>(entries: &'a [Value], path: &str) -> Option<&'a Value> {
+        entries.iter().find(|e| e["path"] == path)
+    }
+
+    fn staged_paths(dir: &std::path::Path) -> Vec<String> {
+        let out = Command::new("git")
+            .args(["diff", "--cached", "--name-only", "-z"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout)
+            .split('\0')
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect()
+    }
+
+    /// `git mv`는 삭제+추가가 아니라 이름 변경 하나로 보고되어야 한다.
+    #[tokio::test]
+    async fn status_reports_staged_rename_with_original_path() {
+        let dir = temp_repo("status-rename");
+        git(&dir, &["mv", "a b.txt", "c d.txt"]);
+
+        let entries = get_status(dir.to_string_lossy().to_string()).await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(entries.len(), 1, "{:?}", entries);
+        let e = &entries[0];
+        assert_eq!(e["path"], "c d.txt");
+        assert_eq!(e["origPath"], "a b.txt");
+        assert_eq!(e["indexStatus"], "renamed");
+        assert_eq!(e["staged"], true);
+    }
+
+    /// diff.renames=copies 설정이 있어도 복사본은 원본 경로 없이 추가로만 보여야 한다.
+    /// 복사 행에서 stage/unstage/discard 할 때 원본 파일의 변경을 건드리지 않게 하기 위함.
+    #[tokio::test]
+    async fn status_never_reports_copies() {
+        let dir = temp_repo("status-copies");
+        git(&dir, &["config", "diff.renames", "copies"]);
+        git(&dir, &["config", "status.renames", "copies"]);
+        let original = std::fs::read(dir.join("README.md")).unwrap();
+        std::fs::write(dir.join("copy.md"), &original).unwrap();
+        let mut changed = original.clone();
+        changed.extend_from_slice(b"more\n");
+        std::fs::write(dir.join("README.md"), &changed).unwrap();
+        git(&dir, &["add", "-A"]);
+
+        let entries = get_status(dir.to_string_lossy().to_string()).await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let copy = entries.iter().find(|e| e["path"] == "copy.md").expect("copy row");
+        assert_eq!(copy["indexStatus"], "added", "{:?}", entries);
+        assert!(copy["origPath"].is_null(), "{:?}", entries);
+    }
+
+    /// skip-worktree(sparse checkout) 파일은 디스크에 없어도 삭제로 보이면 안 된다.
+    #[tokio::test]
+    async fn status_ignores_skip_worktree_files() {
+        let dir = temp_repo("status-sparse");
+        git(&dir, &["update-index", "--skip-worktree", "README.md"]);
+        std::fs::remove_file(dir.join("README.md")).unwrap();
+
+        let entries = get_status(dir.to_string_lossy().to_string()).await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert!(entries.is_empty(), "sparse 파일이 변경으로 보임: {:?}", entries);
+    }
+
+    #[tokio::test]
+    async fn stage_and_unstage_handle_special_paths_and_deletions() {
+        let dir = temp_repo("stage-cli");
+        std::fs::write(dir.join("-dash.txt"), "changed\n").unwrap();
+        std::fs::remove_file(dir.join("a b.txt")).unwrap();
+        std::fs::write(dir.join("*.txt"), "literal\n").unwrap();
+        std::fs::write(dir.join("other.txt"), "must stay unstaged\n").unwrap();
+        let engine = GitCliEngine::new(&dir);
+
+        engine
+            .stage_paths(&["-dash.txt".into(), "a b.txt".into(), "*.txt".into()])
+            .await
+            .unwrap();
+        let mut staged = staged_paths(&dir);
+        staged.sort();
+        assert_eq!(staged, vec!["*.txt", "-dash.txt", "a b.txt"]);
+
+        engine.unstage_paths(&["-dash.txt".into(), "*.txt".into()]).await.unwrap();
+        assert_eq!(staged_paths(&dir), vec!["a b.txt"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 첫 커밋 전(unborn HEAD)에도 언스테이징이 되어야 한다.
+    #[tokio::test]
+    async fn unstage_works_before_the_first_commit() {
+        let dir = std::env::temp_dir().join(format!("gitbaro-unborn-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q"]);
+        std::fs::write(dir.join("new.txt"), "x\n").unwrap();
+        let engine = GitCliEngine::new(&dir);
+        engine.stage_paths(&["new.txt".into()]).await.unwrap();
+        assert_eq!(staged_paths(&dir), vec!["new.txt"]);
+        engine.unstage_paths(&["new.txt".into()]).await.unwrap();
+        let entries = get_status(dir.to_string_lossy().to_string()).await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(entry(&entries, "new.txt").unwrap()["worktreeStatus"], "untracked");
+    }
+
+    #[test]
+    fn plans_discard_per_file_state() {
+        let dir = temp_repo("discard-plan");
+        std::fs::write(dir.join("untracked.txt"), "u\n").unwrap();
+        std::fs::write(dir.join("added.txt"), "a\n").unwrap();
+        git(&dir, &["add", "added.txt"]);
+        std::fs::write(dir.join("README.md"), "changed\n").unwrap();
+        let repo = git2::Repository::open(&dir).unwrap();
+        let workdir = repo.workdir().unwrap().to_path_buf();
+        let paths: Vec<String> =
+            vec!["untracked.txt".into(), "added.txt".into(), "README.md".into()];
+
+        let unstaged = plan_discard(&repo, &paths, false).unwrap();
+        assert_eq!(unstaged.from_index, vec!["added.txt", "README.md"]);
+        assert_eq!(unstaged.trash, vec![workdir.join("untracked.txt")]);
+        assert!(unstaged.from_head.is_empty() && unstaged.remove_from_index.is_empty());
+
+        let staged = plan_discard(&repo, &paths[1..], true).unwrap();
+        assert_eq!(staged.from_head, vec!["README.md"]);
+        assert_eq!(staged.remove_from_index, vec!["added.txt"]);
+        assert_eq!(staged.trash, vec![workdir.join("added.txt")]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `git add -N` 파일은 새 파일이다. 버리면 빈 파일로 덮지 말고 휴지통으로 보내야 한다.
+    #[test]
+    fn plans_discard_of_an_intent_to_add_file_as_a_new_file() {
+        let dir = temp_repo("discard-ita");
+        std::fs::write(dir.join("ita.txt"), "hi\n").unwrap();
+        git(&dir, &["add", "-N", "ita.txt"]);
+        let repo = git2::Repository::open(&dir).unwrap();
+        let workdir = repo.workdir().unwrap().to_path_buf();
+
+        let plan = plan_discard(&repo, &["ita.txt".into()], false).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(plan.from_index.is_empty(), "{:?}", plan);
+        assert_eq!(plan.remove_from_index, vec!["ita.txt"]);
+        assert_eq!(plan.trash, vec![workdir.join("ita.txt")]);
+    }
+
+    /// 스테이징된 변경을 버리면 HEAD 상태로 돌아가야 한다(인덱스·작업 트리 모두).
+    #[tokio::test]
+    async fn discarding_a_staged_change_restores_head() {
+        let dir = temp_repo("discard-staged");
+        std::fs::write(dir.join("a b.txt"), "staged\n").unwrap();
+        git(&dir, &["add", "a b.txt"]);
+        std::fs::write(dir.join("a b.txt"), "staged\nand unstaged\n").unwrap();
+
+        discard_changes(dir.to_string_lossy().to_string(), vec!["a b.txt".into()], Some(true))
+            .await
+            .unwrap();
+
+        let content = std::fs::read_to_string(dir.join("a b.txt")).unwrap();
+        let entries = get_status(dir.to_string_lossy().to_string()).await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(content, "space\n");
+        assert!(entries.is_empty(), "{:?}", entries);
+    }
+
+    /// 스테이징 안 된 변경만 버리면 스테이징된 부분은 남아야 한다.
+    #[tokio::test]
+    async fn discarding_unstaged_changes_keeps_the_staged_part() {
+        let dir = temp_repo("discard-unstaged");
+        std::fs::write(dir.join("README.md"), "staged\n").unwrap();
+        git(&dir, &["add", "README.md"]);
+        std::fs::write(dir.join("README.md"), "staged\nunstaged\n").unwrap();
+
+        discard_changes(dir.to_string_lossy().to_string(), vec!["README.md".into()], Some(false))
+            .await
+            .unwrap();
+
+        let content = std::fs::read_to_string(dir.join("README.md")).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(content, "staged\n");
+    }
+
+    #[test]
+    fn detects_conflict_markers() {
+        assert!(has_conflict_markers(b"a\n<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> b\n"));
+        assert!(!has_conflict_markers(b"title\n=======\nbody\n"));
+    }
+
+    #[test]
+    fn detached_head_has_no_branch_name() {
+        let dir = temp_repo("detached");
+        git(&dir, &["checkout", "-q", "--detach"]);
+        let repo = git2::Repository::open(&dir).unwrap();
+        let name = head_branch_name(&repo).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(name, None);
     }
 
     /// 링크된 워크트리에서도 작업 트리 변경이 보고되어야 한다.

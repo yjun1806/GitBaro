@@ -115,3 +115,22 @@ pub fn diff_to_string(diff: &git2::Diff<'_>) -> Result<String, AppError> {
     })?;
     Ok(output)
 }
+
+/// Run rename detection on `diff` (like `git diff -M`).
+pub fn detect_renames(diff: &mut git2::Diff<'_>) -> Result<(), AppError> {
+    let mut opts = git2::DiffFindOptions::new();
+    opts.renames(true);
+    diff.find_similar(Some(&mut opts))?;
+    Ok(())
+}
+
+/// Old path of the entry in `diff` that was renamed to `new_path`, if any.
+/// Runs rename detection on `diff` first.
+pub fn rename_source(diff: &mut git2::Diff<'_>, new_path: &str) -> Result<Option<String>, AppError> {
+    detect_renames(diff)?;
+    let target = std::path::Path::new(new_path);
+    Ok(diff
+        .deltas()
+        .find(|d| d.status() == git2::Delta::Renamed && d.new_file().path() == Some(target))
+        .and_then(|d| path_from_delta_old(&d)))
+}

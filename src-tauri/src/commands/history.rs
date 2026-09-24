@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::error::AppError;
 use crate::gh::cli;
 use crate::git::binary::{detect_file_type, extension_to_mime, is_previewable, MAX_PREVIEW_SIZE};
+use crate::git::diff::{detect_renames, rename_source};
 use crate::git::remote::parse_github_url;
 use crate::github::client::GitHubClient;
 use crate::state::TokenStore;
@@ -137,7 +138,7 @@ pub async fn get_commit_detail(repo_path: String, oid: String) -> Result<Value, 
         let committer_email = committer.email().unwrap_or("").to_string();
 
         // Build diff against first parent
-        let diff = if commit.parent_count() > 0 {
+        let mut diff = if commit.parent_count() > 0 {
             let parent = commit.parent(0)?;
             let parent_tree = parent.tree()?;
             let commit_tree = commit.tree()?;
@@ -146,6 +147,8 @@ pub async fn get_commit_detail(repo_path: String, oid: String) -> Result<Value, 
             let commit_tree = commit.tree()?;
             repo.diff_tree_to_tree(None, Some(&commit_tree), None)?
         };
+        // Show `git mv` as a rename rather than a deletion plus an addition.
+        detect_renames(&mut diff)?;
 
         let stats = diff.stats()?;
         let mut files: Vec<Value> = Vec::new();
@@ -236,14 +239,34 @@ pub async fn get_commit_file_diff(
             None
         };
 
-        let mut diff_opts = git2::DiffOptions::new();
-        diff_opts.pathspec(&file_path);
+        // If the file was renamed in this commit, diff it against its old
+        // path instead of showing the whole file as added.
+        let rename_from = if commit_tree.get_path(std::path::Path::new(&file_path)).is_ok()
+            && parent_tree
+                .as_ref()
+                .is_some_and(|t| t.get_path(std::path::Path::new(&file_path)).is_err())
+        {
+            let mut full = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&commit_tree), None)?;
+            rename_source(&mut full, &file_path)?
+        } else {
+            None
+        };
+        let old_path = rename_from.clone().unwrap_or_else(|| file_path.clone());
 
-        let diff = repo.diff_tree_to_tree(
+        let mut diff_opts = git2::DiffOptions::new();
+        diff_opts.pathspec(&file_path).disable_pathspec_match(true);
+        if let Some(src) = &rename_from {
+            diff_opts.pathspec(src);
+        }
+
+        let mut diff = repo.diff_tree_to_tree(
             parent_tree.as_ref(),
             Some(&commit_tree),
             Some(&mut diff_opts),
         )?;
+        if rename_from.is_some() {
+            detect_renames(&mut diff)?;
+        }
 
         let mut hunks: Vec<Value> = Vec::new();
         let mut current_hunk_lines: Vec<Value> = Vec::new();
@@ -314,7 +337,7 @@ pub async fn get_commit_file_diff(
 
                 let old_bytes: Option<Vec<u8>> = parent_tree
                     .as_ref()
-                    .and_then(|tree| tree.get_path(std::path::Path::new(&file_path)).ok())
+                    .and_then(|tree| tree.get_path(std::path::Path::new(&old_path)).ok())
                     .and_then(|entry| repo.find_blob(entry.id()).ok())
                     .map(|blob| blob.content().to_vec());
 
@@ -364,7 +387,7 @@ pub async fn get_commit_file_diff(
 
         // Read old content from parent tree
         let old_content = parent_tree
-            .and_then(|tree| tree.get_path(std::path::Path::new(&file_path)).ok())
+            .and_then(|tree| tree.get_path(std::path::Path::new(&old_path)).ok())
             .and_then(|entry| repo.find_blob(entry.id()).ok())
             .map(|blob| String::from_utf8_lossy(blob.content()).to_string())
             .unwrap_or_default();
@@ -676,5 +699,36 @@ mod tests {
 
         // 리모트가 없으므로 모든 커밋이 unpushed(true)로 표시된다
         assert!(commits.iter().all(|v| v["isUnpushed"].as_bool().unwrap()));
+    }
+
+    /// `git mv`로 옮긴 파일은 삭제+추가가 아니라 이름 변경으로 보여야 한다.
+    #[tokio::test]
+    async fn commit_detail_and_file_diff_detect_renames() {
+        let tmp = TempRepo::new();
+        let repo_path = tmp.path.to_str().unwrap().to_string();
+        let content = "line 1\nline 2\nline 3\nline 4\n";
+        let oid = {
+            let repo = tmp.open();
+            commit(&repo, "old.txt", content);
+            let workdir = repo.workdir().unwrap().to_path_buf();
+            std::fs::rename(workdir.join("old.txt"), workdir.join("new.txt")).unwrap();
+            let mut index = repo.index().unwrap();
+            index.remove_path(Path::new("old.txt")).unwrap();
+            index.write().unwrap();
+            commit(&repo, "new.txt", content)
+        };
+
+        let detail = get_commit_detail(repo_path.clone(), oid.to_string()).await.unwrap();
+        let files = detail["diff"]["files"].as_array().unwrap();
+        assert_eq!(files.len(), 1, "{:?}", files);
+        assert_eq!(files[0]["status"], "Renamed");
+        assert_eq!(files[0]["oldPath"], "old.txt");
+        assert_eq!(files[0]["newPath"], "new.txt");
+
+        let diff = get_commit_file_diff(repo_path, oid.to_string(), "new.txt".to_string())
+            .await
+            .unwrap();
+        assert_eq!(diff["oldContent"], content);
+        assert_eq!(diff["hunks"].as_array().unwrap().len(), 0, "{}", diff["hunks"]);
     }
 }

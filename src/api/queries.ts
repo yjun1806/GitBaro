@@ -2,6 +2,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tansta
 import {
   getStatus,
   getBranches,
+  isHeadDetached,
   getBranchDivergence,
   getRepoSyncStatus,
   getRecentBranches,
@@ -54,6 +55,15 @@ export function useBranches(repoPath: string | null) {
   return useQuery({
     queryKey: ["branches", repoPath],
     queryFn: () => getBranches(repoPath!),
+    enabled: repoPath !== null,
+  });
+}
+
+/** Keyed under "branches" so every branch-list invalidation refreshes it too. */
+export function useHeadDetached(repoPath: string | null) {
+  return useQuery({
+    queryKey: ["branches", repoPath, "headDetached"],
+    queryFn: () => isHeadDetached(repoPath!),
     enabled: repoPath !== null,
   });
 }

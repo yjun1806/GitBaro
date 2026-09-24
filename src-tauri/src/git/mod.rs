@@ -9,6 +9,7 @@ pub mod merge;
 pub mod output_parser;
 pub mod remote;
 pub mod stash;
+pub mod status;
 
 // Convenient re-exports for callers
 pub use engine::{

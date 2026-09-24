@@ -30,6 +30,8 @@ import type {
 
 interface RawStatusEntry {
   path: string;
+  /** Source path of a rename/copy detected by `git status`. */
+  origPath: string | null;
   staged: boolean;
   unstaged: boolean;
   conflicted: boolean;
@@ -60,9 +62,14 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
       });
       continue;
     }
+    // Only renames carry origPath: a copy's source is a separate file with its
+    // own row, and acting on it from the copy row would touch its changes.
+    const indexRenamed = entry.indexStatus === "renamed";
+    const worktreeRenamed = entry.worktreeStatus === "renamed";
     if (entry.staged && entry.indexStatus !== "unchanged") {
       entries.push({
         path: entry.path,
+        origPath: indexRenamed ? entry.origPath : null,
         status: entry.indexStatus as FileStatus,
         staged: true,
         modifiedAt: entry.modifiedAt,
@@ -74,6 +81,7 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
     if (entry.unstaged && entry.worktreeStatus !== "unchanged") {
       entries.push({
         path: entry.path,
+        origPath: !indexRenamed && worktreeRenamed ? entry.origPath : null,
         status: entry.worktreeStatus as FileStatus,
         staged: false,
         modifiedAt: entry.modifiedAt,
@@ -108,8 +116,22 @@ export async function getDiff(repoPath: string, staged: boolean): Promise<DiffOu
   return invoke("get_diff", { repoPath, staged });
 }
 
-export async function discardChanges(repoPath: string, paths: string[]): Promise<void> {
-  return invoke("discard_changes", { repoPath, paths });
+/**
+ * Discard changes to `paths`. With `staged` false only the unstaged changes are
+ * dropped (restored from the index); with `staged` true the files return to
+ * their HEAD state. Untracked and index-only files are moved to the Trash.
+ */
+export async function discardChanges(
+  repoPath: string,
+  paths: string[],
+  staged: boolean,
+): Promise<void> {
+  return invoke("discard_changes", { repoPath, paths, staged });
+}
+
+/** Paths among `paths` whose file still contains `<<<<<<<`/`>>>>>>>` conflict markers. */
+export async function findConflictMarkers(repoPath: string, paths: string[]): Promise<string[]> {
+  return invoke("find_conflict_markers", { repoPath, paths });
 }
 
 export async function addToGitignore(repoPath: string, pattern: string): Promise<void> {
@@ -239,6 +261,11 @@ export async function getOwnerType(
 // Branches
 export async function getBranches(repoPath: string): Promise<BranchInfo[]> {
   return invoke("get_branches", { repoPath });
+}
+
+/** HEAD points at a commit, not a branch. An unborn (orphan) branch is not detached. */
+export async function isHeadDetached(repoPath: string): Promise<boolean> {
+  return invoke("is_head_detached", { repoPath });
 }
 
 export async function getBranchDivergence(repoPath: string): Promise<BranchDivergence[]> {

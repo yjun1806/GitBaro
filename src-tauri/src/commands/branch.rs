@@ -10,6 +10,19 @@ fn is_fully_merged(repo: &git2::Repository, branch_oid: git2::Oid, default_oid: 
     repo.graph_descendant_of(default_oid, branch_oid).unwrap_or(false)
 }
 
+/// Whether HEAD points at a commit instead of a branch. An unborn branch
+/// (`git checkout --orphan`) is not detached, although it has no local branch
+/// yet, so the frontend cannot infer this from the branch list.
+#[tauri::command]
+pub async fn is_head_detached(repo_path: String) -> Result<bool, AppError> {
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&repo_path)?;
+        Ok(repo.head_detached()?)
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
+}
+
 #[tauri::command]
 pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
     let result = tokio::task::spawn_blocking(move || {
@@ -33,6 +46,7 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
         // HEAD 이름 기준으로 is_head 판별 (워크트리에서도 올바르게 동작)
         let head_name = repo.head()
             .ok()
+            .filter(|h| h.is_branch())
             .and_then(|h| h.shorthand().map(|s| s.to_string()));
 
         let mut list: Vec<Value> = Vec::new();
@@ -393,7 +407,11 @@ pub async fn get_current_branch(repo_path: String) -> Result<Option<String>, App
             Ok(h) => h,
             Err(_) => return Ok::<_, AppError>(None),
         };
-        let name = head.shorthand().map(|s| s.to_string());
+        // Detached HEAD is not a branch — `shorthand()` would return "HEAD".
+        let name = head
+            .is_branch()
+            .then(|| head.shorthand().map(|s| s.to_string()))
+            .flatten();
         Ok::<_, AppError>(name)
     })
     .await
@@ -788,6 +806,28 @@ mod tests {
             args,
             String::from_utf8_lossy(&out.stderr)
         );
+    }
+
+    /// orphan 브랜치(unborn HEAD)는 detached가 아니고, `--detach`는 detached다.
+    #[tokio::test]
+    async fn tells_a_detached_head_from_an_unborn_branch() {
+        let dir = std::env::temp_dir().join(format!("gitbaro-head-state-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        git(&dir, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        let path = dir.to_string_lossy().to_string();
+
+        let on_branch = is_head_detached(path.clone()).await.unwrap();
+        git(&dir, &["checkout", "-q", "--orphan", "fresh"]);
+        let unborn = is_head_detached(path.clone()).await.unwrap();
+        git(&dir, &["checkout", "-q", "--detach", "main"]);
+        let detached = is_head_detached(path).await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert!(!on_branch);
+        assert!(!unborn, "unborn 브랜치를 detached로 판정함");
+        assert!(detached);
     }
 
     fn field<'a>(v: &'a Value, key: &str) -> &'a Value {
