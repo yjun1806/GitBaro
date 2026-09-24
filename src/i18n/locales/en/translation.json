@@ -1072,7 +1072,11 @@
       "failed": "Failed"
     },
     "summary": "{{ok}} succeeded · {{failed}} failed",
-    "preparingFetch": "Checking what will run in each repository…"
+    "preparingFetch": "Checking what will run in each repository…",
+    "unpushedList_one": "{{count}} commit to push",
+    "unpushedList_other": "{{count}} commits to push",
+    "unpushedMore_one": "and {{count}} more",
+    "unpushedMore_other": "and {{count}} more"
   },
   "branchPanel": {
     "title": "Branches",
@@ -1231,7 +1235,6 @@
     "checkout": "Checked out ⎇ {{branch}}",
     "detached": "No branch · {{sha}}",
     "detachedUnknown": "No branch",
-    "upstream": "↑{{ahead}} ↓{{behind}} vs {{upstream}}",
     "noUpstream": "No remote branch",
     "clean": "No uncommitted changes",
     "uncommitted_one": "{{count}} uncommitted change",
@@ -1249,7 +1252,13 @@
       "cherryPick": "Cherry-pick",
       "revert": "Revert",
       "squash": "Squash"
-    }
+    },
+    "unpushed_one": "{{count}} commit not on any remote",
+    "unpushed_other": "{{count}} commits not on any remote",
+    "notPublished": "not published",
+    "behind_one": "{{count}} to pull",
+    "behind_other": "{{count}} to pull",
+    "inSync": "Up to date with remote"
   },
   "workSwitcher": {
     "label": "What the lower area shows",

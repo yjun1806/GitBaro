@@ -8,6 +8,7 @@ import {
   useCommitHistoryInfinite,
   useMergeState,
   useStatus,
+  useUnpushedCommits,
   useWorktrees,
 } from "@/api/queries";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
@@ -133,12 +134,15 @@ export function GitStatusLineView({
               <button
                 type="button"
                 onClick={onRemote}
+                title={model.upstream.title}
                 className="shrink-0 px-1.5 -mx-1.5 h-6 rounded-(--radius-chip) tabular-nums hover:bg-accent hover:text-foreground transition-colors"
               >
                 {model.upstream.text}
               </button>
             ) : (
-              <span className="shrink-0 tabular-nums">{model.upstream.text}</span>
+              <span className="shrink-0 tabular-nums" title={model.upstream.title}>
+                {model.upstream.text}
+              </span>
             )}
           </>
         )}
@@ -167,6 +171,7 @@ export function GitStatusLine() {
   const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
   const { currentWorktree } = useWorktreeContext(activeRepoPath, worktrees);
   const { data: history } = useCommitHistoryInfinite(activeRepoPath);
+  const { data: unpushed } = useUnpushedCommits(activeRepoPath);
   const { target } = useHistoryView();
   const setView = useSetHistoryView();
   const { checkout, element: checkoutDialog } = useCheckoutBranch();
@@ -187,6 +192,7 @@ export function GitStatusLine() {
             behind: head.aheadBehind?.behind ?? 0,
           }
         : null,
+      unpushed: unpushed?.count ?? head?.aheadBehind?.ahead ?? 0,
       hasRemote,
       uncommitted,
       operation,

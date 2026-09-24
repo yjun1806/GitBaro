@@ -33,6 +33,7 @@ function sync(path: string, over: Partial<RepoSyncStatus> = {}): RepoSyncStatus 
     ahead: 0,
     behind: 0,
     hasUpstream: true,
+    unpushed: 0,
     isDirty: false,
     dirtyCount: 0,
     dirtyLatestMtime: null,
@@ -67,13 +68,18 @@ function tree(signals = {}) {
 describe("buildSignals", () => {
   it("merges sync status, new commit counts and change times per path", () => {
     const signals = buildSignals(
-      { [API]: sync(API, { dirtyCount: 2, ahead: 1 }) },
+      { [API]: sync(API, { dirtyCount: 2, ahead: 1, unpushed: 1 }) },
       { [WT]: review(WT, 3) },
       { [WEB]: NOW - 1000 },
     );
     expect(signals[API]).toEqual({ dirtyCount: 2, newCommits: 0, ahead: 1, behind: 0, lastChangedAt: null });
     expect(signals[WT]).toMatchObject({ dirtyCount: 0, newCommits: 3 });
     expect(signals[WEB]).toMatchObject({ lastChangedAt: NOW - 1000 });
+  });
+
+  it("counts commits on no remote as commits to push, even without an upstream", () => {
+    const signals = buildSignals({ [API]: sync(API, { hasUpstream: false, ahead: 0, unpushed: 4 }) }, {}, {});
+    expect(signals[API].ahead).toBe(4);
   });
 
   it("treats a count that is not known yet as zero", () => {

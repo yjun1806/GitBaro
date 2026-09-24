@@ -24,6 +24,7 @@ vi.mock("@/api/queries", () => ({
   useStashList: () => ({ data: [] }),
   useStashMutations: () => ({ push: {}, pushPartial: {} }),
   useRepoSyncStatuses: () => ({ data: undefined }),
+  useUnpushedCommits: () => ({ data: undefined }),
   invalidateAfterSync: () => Promise.resolve(),
 }));
 

@@ -33,7 +33,8 @@ export function buildSignals(
     out[path] = {
       dirtyCount: sync?.dirtyCount ?? 0,
       newCommits: reviewByPath[path]?.newCount ?? 0,
-      ahead: sync?.ahead ?? 0,
+      // 「올릴 커밋」은 원격에 없는 커밋이다(추적 브랜치가 없어도 센다).
+      ahead: sync?.unpushed ?? 0,
       behind: sync?.behind ?? 0,
       lastChangedAt: lastChangedAt[path] ?? null,
     };

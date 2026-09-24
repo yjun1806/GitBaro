@@ -88,7 +88,7 @@ export function remoteLineOf(
   if (!isUnpushed) return { kind: "pushed", remote };
   if (!sync) return null;
   if (!sync.hasUpstream) return { kind: "noUpstream" };
-  return { kind: "unpushed", remote, ahead: sync.ahead };
+  return { kind: "unpushed", remote, ahead: sync.unpushed };
 }
 
 export type CiState = "running" | "failed" | "passed" | "cancelled" | "other";

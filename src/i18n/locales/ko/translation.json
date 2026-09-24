@@ -1063,7 +1063,9 @@
       "failed": "실패"
     },
     "summary": "성공 {{ok}}곳 · 실패 {{failed}}곳",
-    "preparingFetch": "저장소마다 실행할 내용을 확인하는 중…"
+    "preparingFetch": "저장소마다 실행할 내용을 확인하는 중…",
+    "unpushedList_other": "올라갈 커밋 {{count}}개",
+    "unpushedMore_other": "외 {{count}}개"
   },
   "branchPanel": {
     "title": "브랜치",
@@ -1214,7 +1216,6 @@
     "checkout": "체크아웃 ⎇ {{branch}}",
     "detached": "브랜치 없음 · {{sha}}",
     "detachedUnknown": "브랜치 없음",
-    "upstream": "{{upstream}}보다 ↑{{ahead}} ↓{{behind}}",
     "noUpstream": "원격 브랜치 없음",
     "clean": "커밋 안 한 변경 없음",
     "uncommitted_other": "커밋 안 한 변경 {{count}}개",
@@ -1229,7 +1230,11 @@
       "cherryPick": "cherry-pick",
       "revert": "revert",
       "squash": "squash"
-    }
+    },
+    "unpushed_other": "원격에 없는 커밋 {{count}}개",
+    "notPublished": "publish 전",
+    "behind_other": "받을 커밋 {{count}}개",
+    "inSync": "원격과 같음"
   },
   "workSwitcher": {
     "label": "아래 칸에 보일 것",

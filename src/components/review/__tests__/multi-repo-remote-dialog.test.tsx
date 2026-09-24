@@ -12,7 +12,11 @@ const commands = vi.hoisted(() => ({
   planRemoteOp: vi.fn((_paths: string[], _op: string) => Promise.resolve([] as unknown[])),
 }));
 vi.mock("@/api/commands", () => commands);
-vi.mock("@/api/queries", () => ({ invalidateAfterSync: () => Promise.resolve() }));
+const unpushed = vi.hoisted(() => ({ byPath: {} as Record<string, unknown> }));
+vi.mock("@/api/queries", () => ({
+  invalidateAfterSync: () => Promise.resolve(),
+  useUnpushedCommitList: (path: string) => ({ data: unpushed.byPath[path] }),
+}));
 
 import { useRepositoryStore } from "@/stores/repository";
 import { useSyncStore } from "@/stores/sync";
@@ -67,6 +71,7 @@ beforeEach(async () => {
   commands.planRemoteOp.mockImplementation(() => Promise.resolve(PUSH_PLANS));
   useRepositoryStore.setState({ repos, activeRepoPath: null, activeRepo: null });
   useSyncStore.setState({ syncingByRepo: {}, lastFetchedByRepo: {} });
+  unpushed.byPath = {};
 });
 
 afterEach(cleanup);
@@ -82,6 +87,26 @@ describe("MultiRepoRemoteDialog", () => {
     expect(screen.getByRole("heading", { name: "Push in each of 3 repositories" })).toBeTruthy();
     // 아직 아무것도 올리지 않았다.
     expect(commands.gitPush).not.toHaveBeenCalled();
+  });
+
+  it("lists the commits each repository will push", async () => {
+    const commit = (n: number) => ({ id: `c${n}`.padEnd(40, "0"), shortId: `c${n}`.padEnd(8, "0"), summary: `commit ${n}` });
+    unpushed.byPath = {
+      "/repos/xames-backend": {
+        count: 7,
+        hasUpstream: true,
+        hasRemote: true,
+        commits: [1, 2, 3, 4, 5, 6, 7].map(commit),
+      },
+    };
+    renderDialog();
+    const list = await screen.findByRole("list", { name: "7 commits to push" });
+    expect(within(list).getByText("commit 1")).toBeTruthy();
+    expect(within(list).getByText("commit 5")).toBeTruthy();
+    expect(within(list).queryByText("commit 6")).toBeNull();
+    expect(within(list).getByText("and 2 more")).toBeTruthy();
+    // 올릴 것이 없는 저장소에는 목록이 없다.
+    expect(screen.queryByTestId("unpushed-/repos/xames-design")).toBeNull();
   });
 
   it("unchecks and dims a repository with nothing to push", async () => {

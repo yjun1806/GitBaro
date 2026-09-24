@@ -125,6 +125,7 @@ describe("getRepoSyncStatus contract", () => {
       ahead: 1,
       behind: 0,
       hasUpstream: true,
+      unpushed: 1,
       isDirty: true,
       dirtyCount: 4,
       dirtyLatestMtime: 1_700_000_005_250,

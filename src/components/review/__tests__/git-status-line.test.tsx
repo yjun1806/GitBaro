@@ -14,6 +14,7 @@ function input(extra: Partial<GitStatusInput> = {}): GitStatusInput {
     branch: "main",
     headSha: "abc1234def",
     upstream: { name: "origin/main", ahead: 2, behind: 1 },
+    unpushed: 2,
     hasRemote: true,
     uncommitted: { total: 3, staged: 1, conflicts: 0 },
     operation: null,
@@ -50,9 +51,11 @@ describe("git status line", () => {
     const line = renderLine(input());
     expect(line.dataset.tone).toBe("normal");
     expect(line.textContent).toBe(
-      "기본 폴더·체크아웃 ⎇ main·origin/main보다 ↑2 ↓1·커밋 안 한 변경 3개 (스테이징 1)작업 중인 변경 3",
+      "기본 폴더·체크아웃 ⎇ main·원격에 없는 커밋 2개 · 받을 커밋 1개·커밋 안 한 변경 3개 (스테이징 1)작업 중인 변경 3",
     );
-    fireEvent.click(screen.getByRole("button", { name: "origin/main보다 ↑2 ↓1" }));
+    const remote = screen.getByRole("button", { name: "원격에 없는 커밋 2개 · 받을 커밋 1개" });
+    expect(remote.getAttribute("title")).toBe("origin/main");
+    fireEvent.click(remote);
     expect(handlers.onRemote).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "작업 중인 변경 3" })).toBeTruthy();
   });
@@ -63,10 +66,11 @@ describe("git status line", () => {
         worktree: { isMain: false, name: "app-feat" },
         branch: "feat/x",
         upstream: null,
+        unpushed: 0,
         uncommitted: { total: 0, staged: 0, conflicts: 0 },
       }),
     );
-    expect(line.textContent).toBe("작업 트리 app-feat·체크아웃 ⎇ feat/x·원격 브랜치 없음·커밋 안 한 변경 없음");
+    expect(line.textContent).toBe("작업 트리 app-feat·체크아웃 ⎇ feat/x·publish 전·커밋 안 한 변경 없음");
     expect(screen.queryByRole("button", { name: /^작업 중인 변경/ })).toBeNull();
   });
 
@@ -76,7 +80,17 @@ describe("git status line", () => {
     expect(line.textContent).toContain("분리된 HEAD");
     expect(line.textContent).toContain("브랜치 없음 · abc1234");
     // 브랜치가 없으니 upstream도 없다.
-    expect(line.textContent).not.toContain("origin/main");
+    expect(line.textContent).not.toContain("원격에 없는 커밋");
+  });
+
+  it("counts commits on no remote before the branch is published", () => {
+    const line = renderLine(input({ branch: "feat/x", upstream: null, unpushed: 3 }));
+    expect(line.textContent).toContain("원격에 없는 커밋 3개 · publish 전");
+  });
+
+  it("says the branch matches the remote when there is nothing to push or pull", () => {
+    const line = renderLine(input({ upstream: { name: "origin/main", ahead: 0, behind: 0 }, unpushed: 0 }));
+    expect(line.textContent).toContain("원격과 같음");
   });
 
   it("merging: says what is in progress and how many conflicts are left", () => {
@@ -91,7 +105,7 @@ describe("git status line", () => {
     expect(line.textContent).toContain("merge 진행 중 · 충돌 2개");
     expect(line.textContent).toContain("커밋 안 한 변경 3개 (스테이징 1)");
     // 진행 중에는 push/pull을 권하지 않는다.
-    expect(line.textContent).not.toContain("origin/main보다");
+    expect(line.textContent).not.toContain("원격에 없는 커밋");
 
     cleanup();
     expect(renderLine(input({ operation: "rebase" })).textContent).toContain("rebase 진행 중");
@@ -123,7 +137,7 @@ describe("git status line", () => {
     const line = renderLine(input());
     expect(line.textContent).toContain("Primary folder");
     expect(line.textContent).toContain("Checked out ⎇ main");
-    expect(line.textContent).toContain("↑2 ↓1 vs origin/main");
+    expect(line.textContent).toContain("2 commits not on any remote · 1 to pull");
     expect(line.textContent).toContain("3 uncommitted changes (1 staged)");
   });
 });
@@ -153,7 +167,7 @@ describe("status line helpers", () => {
   });
 
   it("opens pull when behind, push when ahead or unpublished, nothing when in sync", () => {
-    const up = (ahead: number, behind: number, hasUpstream = true) => ({ text: "", ahead, behind, hasUpstream });
+    const up = (ahead: number, behind: number, hasUpstream = true) => ({ text: "", title: "", ahead, behind, hasUpstream });
     expect(remoteOpFor(up(1, 2))).toBe("pull");
     expect(remoteOpFor(up(1, 0))).toBe("push");
     expect(remoteOpFor(up(0, 0, false))).toBe("push");

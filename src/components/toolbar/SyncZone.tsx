@@ -11,6 +11,7 @@ import {
   useHeadDetached,
   useRepoSyncStatuses,
   useTokenValidation,
+  useUnpushedCommits,
 } from "@/api/queries";
 import { gitFetch, gitPush, gitPull, getPushTarget } from "@/api/commands";
 import type { PushTarget, RemoteOp } from "@/types";
@@ -28,7 +29,7 @@ import { MultiRepoRemoteDialog } from "@/components/review/MultiRepoRemoteDialog
 
 type SyncZoneProps = { mode: "repo" } | { mode: "workspace"; paths: string[] };
 
-/** 시안 `toolbar()`의 첫 묶음: Fetch · Pull · Push(↑ 배지). */
+/** 시안 `toolbar()`의 첫 묶음: Fetch · Pull(↓ 배지) · Push(원격에 없는 커밋 수). */
 export function SyncZone(props: SyncZoneProps) {
   return props.mode === "workspace" ? <WorkspaceSyncZone paths={props.paths} /> : <RepoSyncGroup />;
 }
@@ -57,7 +58,7 @@ function WorkspaceSyncZone({ paths }: { paths: string[] }) {
 
 /**
  * 워크스페이스 모드의 세 버튼. 누르면 `onMultiRepo(op)`를 부르고, 저장소마다 명령을 확인하는 창은
- * 그쪽이 띄운다. 배지는 워크스페이스 저장소들의 ↑·↓ 합계다(마지막 fetch 기준, 사이드바와 같은 값).
+ * 그쪽이 띄운다. 배지는 워크스페이스 저장소들의 원격에 없는 커밋·↓ 합계다(사이드바와 같은 값).
  */
 export function WorkspaceSyncGroup({
   paths,
@@ -72,7 +73,7 @@ export function WorkspaceSyncGroup({
     (acc, path) => {
       const status = syncByPath?.[path];
       return status
-        ? { ahead: acc.ahead + status.ahead, behind: acc.behind + status.behind }
+        ? { ahead: acc.ahead + status.unpushed, behind: acc.behind + status.behind }
         : acc;
     },
     { ahead: 0, behind: 0 },
@@ -80,7 +81,7 @@ export function WorkspaceSyncGroup({
   const badges: Record<RemoteOp, { badge?: number; badgePrefix?: string }> = {
     fetch: {},
     pull: { badge: totals.behind, badgePrefix: "↓" },
-    push: { badge: totals.ahead, badgePrefix: "↑" },
+    push: { badge: totals.ahead },
   };
   const hint = onMultiRepo ? undefined : t("activeScope.pickRepo");
   return (
@@ -144,7 +145,10 @@ function RepoSyncGroup() {
   const isSyncing = syncingAction !== null;
 
   const headBranch = branches.find((b) => b.isHead);
-  const ahead = headBranch?.aheadBehind?.ahead ?? 0;
+  // 올릴 커밋 = 원격에 없는 커밋. 추적 브랜치가 없어도(publish 전) 센다. 모르는 동안은 추적 브랜치 기준 값.
+  const { data: unpushed } = useUnpushedCommits(activeRepoPath);
+  const upstreamAhead = headBranch?.aheadBehind?.ahead ?? 0;
+  const ahead = unpushed?.count ?? upstreamAhead;
   const behind = headBranch?.aheadBehind?.behind ?? 0;
   const hasUpstream = headBranch?.upstream != null;
   // A detached HEAD has no branch to publish (the backend refuses to push or
@@ -282,7 +286,8 @@ function RepoSyncGroup() {
   const branchOpsDisabled = syncDisabled || isDetached;
   const pushLabel = needsPublish ? t("gitActions.publish") : t("gitActions.push");
   // 올릴 커밋이 없으면 Push를 끈다. 추적 브랜치가 없으면 첫 push(publish)는 연다.
-  const pushDisabled = branchOpsDisabled || (!needsPublish && ahead === 0);
+  // 커밋이 모두 다른 원격 브랜치에 있어도 추적 브랜치가 뒤처져 있으면 push할 것이 있다.
+  const pushDisabled = branchOpsDisabled || (!needsPublish && ahead === 0 && upstreamAhead === 0);
   const pullDisabled = branchOpsDisabled || needsPublish;
   const toggleMenu = (id: "fetch" | "pull" | "push") => setOpenMenu((prev) => (prev === id ? null : id));
 
@@ -346,8 +351,8 @@ function RepoSyncGroup() {
           }
           busy={syncingAction === "push" || syncingAction === "publish"}
           disabled={pushDisabled}
+          // 「Push 3」·「Publish 3」: 원격에 없는 커밋 수를 이름 뒤에 붙인다.
           badge={ahead}
-          badgePrefix="↑"
           highlighted={ahead > 0 || needsPublish}
           onClick={() => handlePush(false)}
           menu={{
