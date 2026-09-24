@@ -574,3 +574,29 @@ export interface WorkspaceRepoHistory {
   truncated: boolean;
   error: string | null;
 }
+
+// W5-T4 — 커밋하지 않은 변경(WIP) 파일
+
+/** HEAD와 비교한 작업 트리 파일 상태. 스테이징 여부는 나누지 않는다. */
+export type WipFileStatus =
+  | "added"
+  | "modified"
+  | "deleted"
+  | "renamed"
+  | "untracked"
+  | "conflicted";
+
+/** `get_wip_files`의 파일 하나. 목록은 수정 시각이 늦은 순서이고, 삭제된 파일은 맨 뒤에 온다. */
+export interface WipFile {
+  /** 저장소 루트 기준 경로. 이름을 바꾼 파일은 새 경로. */
+  path: string;
+  /** 이름을 바꾼 파일의 옛 경로. */
+  origPath: string | null;
+  status: WipFileStatus;
+  /** 마지막 수정 시각(유닉스 초, `StatusEntry.modifiedAt`과 같은 단위). 삭제된 파일은 null. */
+  modifiedAt: number | null;
+  /** HEAD 대비 추가된 줄 수(스테이징 여부 무관). 파일이 300개를 넘어 세지 않았으면 null. */
+  insertions: number | null;
+  /** HEAD 대비 지운 줄 수. 파일이 300개를 넘어 세지 않았으면 null. */
+  deletions: number | null;
+}

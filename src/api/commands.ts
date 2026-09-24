@@ -936,3 +936,12 @@ export async function getWorkspaceHistory(
     mergeBaseCommit: repo.mergeBaseCommit && workspaceCommitFromRaw(repo.mergeBaseCommit),
   }));
 }
+
+// W5-T4 — 커밋하지 않은 변경(WIP) 파일
+
+import type { WipFile } from "@/types";
+
+/** 저장소(또는 워크트리) 하나의 커밋하지 않은 변경 파일. 수정 시각이 늦은 순서, 삭제된 파일은 맨 뒤. */
+export async function getWipFiles(path: string): Promise<WipFile[]> {
+  return invoke("get_wip_files", { path });
+}
