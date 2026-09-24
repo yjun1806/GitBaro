@@ -18,6 +18,7 @@ fn repo_info_from_path(repo_path: &str) -> Result<Value, AppError> {
     let current_branch = repo
         .head()
         .ok()
+        .filter(|h| h.is_branch())
         .and_then(|h| h.shorthand().map(|s| s.to_string()));
 
     let is_dirty = is_working_tree_dirty(&repo);

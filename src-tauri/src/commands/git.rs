@@ -481,18 +481,32 @@ async fn fast_forward_local_branches(engine: &GitCliEngine, repo_path: &str) {
     }
 }
 
+/// Error for remote operations attempted while HEAD is detached. Without
+/// this, `HEAD` would be passed to git as if it were a branch name.
+fn detached_head_error() -> AppError {
+    AppError::GitCli {
+        message: "HEAD is detached (not on a branch). Create or switch to a branch first."
+            .to_string(),
+        exit_code: None,
+    }
+}
+
+/// Name of the branch HEAD points to, or `None` when HEAD is detached.
+/// (`shorthand()` alone returns "HEAD" for a detached HEAD.)
+fn head_branch_name(repo: &git2::Repository) -> Result<Option<String>, AppError> {
+    let head = repo.head()?;
+    Ok(head
+        .is_branch()
+        .then(|| head.shorthand().map(|s| s.to_string()))
+        .flatten())
+}
+
 /// Resolve the current HEAD branch name. Returns error if HEAD is detached.
 async fn resolve_head_branch(repo_path: &str) -> Result<String, AppError> {
     let rp = repo_path.to_string();
     tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&rp)?;
-        let head = repo.head()?;
-        head.shorthand()
-            .map(|s| s.to_string())
-            .ok_or_else(|| AppError::GitCli {
-                message: "HEAD is detached".to_string(),
-                exit_code: None,
-            })
+        head_branch_name(&repo)?.ok_or_else(detached_head_error)
     })
     .await
     .map_err(|e| AppError::Channel(e.to_string()))?
@@ -504,14 +518,7 @@ async fn resolve_upstream_branch(repo_path: &str) -> Result<String, AppError> {
     let rp = repo_path.to_string();
     tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&rp)?;
-        let head = repo.head()?;
-        let local_name = head
-            .shorthand()
-            .ok_or_else(|| AppError::GitCli {
-                message: "HEAD is detached".to_string(),
-                exit_code: None,
-            })?
-            .to_string();
+        let local_name = head_branch_name(&repo)?.ok_or_else(detached_head_error)?;
         let branch = repo.find_branch(&local_name, git2::BranchType::Local)?;
         let upstream = branch.upstream().map_err(|_| AppError::GitCli {
             message: format!("no_upstream:{}", local_name),
@@ -931,6 +938,16 @@ mod tests {
     fn detects_conflict_markers() {
         assert!(has_conflict_markers(b"a\n<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> b\n"));
         assert!(!has_conflict_markers(b"title\n=======\nbody\n"));
+    }
+
+    #[test]
+    fn detached_head_has_no_branch_name() {
+        let dir = temp_repo("detached");
+        git(&dir, &["checkout", "-q", "--detach"]);
+        let repo = git2::Repository::open(&dir).unwrap();
+        let name = head_branch_name(&repo).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(name, None);
     }
 
     /// 링크된 워크트리에서도 작업 트리 변경이 보고되어야 한다.

@@ -205,7 +205,9 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           <p className="text-xs text-muted-foreground leading-tight">{t("branch.current")}</p>
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-semibold truncate max-w-[200px]">
-              {currentBranch ?? t("branch.noBranch")}
+              {currentBranch ??
+                // 로컬 브랜치가 있는데 HEAD인 브랜치가 없으면 detached HEAD다.
+                (branches.some((b) => !b.isRemote) ? t("branch.detachedHead") : t("branch.noBranch"))}
             </p>
             {hasChanges && (
               <div className="flex items-center gap-0.5">

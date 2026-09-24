@@ -33,6 +33,7 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
         // HEAD 이름 기준으로 is_head 판별 (워크트리에서도 올바르게 동작)
         let head_name = repo.head()
             .ok()
+            .filter(|h| h.is_branch())
             .and_then(|h| h.shorthand().map(|s| s.to_string()));
 
         let mut list: Vec<Value> = Vec::new();
@@ -393,7 +394,11 @@ pub async fn get_current_branch(repo_path: String) -> Result<Option<String>, App
             Ok(h) => h,
             Err(_) => return Ok::<_, AppError>(None),
         };
-        let name = head.shorthand().map(|s| s.to_string());
+        // Detached HEAD is not a branch — `shorthand()` would return "HEAD".
+        let name = head
+            .is_branch()
+            .then(|| head.shorthand().map(|s| s.to_string()))
+            .flatten();
         Ok::<_, AppError>(name)
     })
     .await

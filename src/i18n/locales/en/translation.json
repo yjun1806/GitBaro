@@ -140,6 +140,7 @@
     "createdAndSwitched": "Created and switched to {{name}}",
     "failedToCreate": "Failed to create branch: {{error}}",
     "noBranch": "No branch",
+    "detachedHead": "Detached HEAD",
     "createBranch": "Create Branch",
     "defaultBranch": "Default Branch",
     "recentBranches": "Recent",

@@ -140,6 +140,7 @@
     "createdAndSwitched": "{{name}} 생성 및 전환 완료",
     "failedToCreate": "Branch 생성 실패: {{error}}",
     "noBranch": "Branch 없음",
+    "detachedHead": "Detached HEAD",
     "createBranch": "Branch 생성",
     "defaultBranch": "기본 Branch",
     "recentBranches": "최근",
