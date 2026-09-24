@@ -2,6 +2,7 @@ export interface AppError {
   type:
     | "Git"
     | "GitCli"
+    | "MergeConflict"
     | "Auth"
     | "TokenExpired"
     | "Keychain"
@@ -17,6 +18,12 @@ export interface AppError {
     | "Channel"
     | "RepoNotFound";
   message: string;
+}
+
+/** push가 실제로 올릴 곳 (`git push <remote> <refspec>`). */
+export interface PushTarget {
+  remote: string;
+  refspec: string;
 }
 
 export interface GitHubAccount {

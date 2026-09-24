@@ -15,11 +15,12 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { cn, getErrorMessage } from "@/lib/utils";
+import { cn, getErrorMessage, isMergeConflictError } from "@/lib/utils";
 import { mergeBranch } from "@/api/commands";
 import { useMergeConflictCheck } from "@/api/queries";
 import { useUIStore } from "@/stores/ui";
 import { useToastStore } from "@/stores/toast";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import type { MergeStrategy } from "@/types";
 import { ConflictPreviewModal } from "./ConflictPreviewModal";
 import { ConfirmCommandDialog } from "@/components/ui/ConfirmCommandDialog";
@@ -55,6 +56,7 @@ export function MergeActionPanel({
   const setCompareBranch = useUIStore((s) => s.setCompareBranch);
   const setActiveTab = useUIStore((s) => s.setActiveTab);
   const addToast = useToastStore((s) => s.addToast);
+  const accountId = useRepoAccountId();
 
   const [strategy, setStrategy] = useState<MergeStrategy>("merge");
   const [isLoading, setIsLoading] = useState(false);
@@ -66,26 +68,32 @@ export function MergeActionPanel({
     behindCount > 0 ? compareBranch : null,
   );
 
+  const invalidateAfterMerge = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["branches"] }),
+      queryClient.invalidateQueries({ queryKey: ["status"] }),
+      queryClient.invalidateQueries({ queryKey: ["mergeState"] }),
+      queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
+      queryClient.invalidateQueries({ queryKey: ["branchComparison"] }),
+      queryClient.invalidateQueries({ queryKey: ["mergeConflictCheck"] }),
+    ]);
+
   const handleMerge = async () => {
     setIsLoading(true);
     try {
-      await mergeBranch(repoPath, compareBranch, strategy);
+      await mergeBranch(repoPath, compareBranch, strategy, accountId);
       addToast(t("merge.success", { source: compareBranch, target: currentBranch }), "success");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["branches"] }),
-        queryClient.invalidateQueries({ queryKey: ["status"] }),
-        queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
-        queryClient.invalidateQueries({ queryKey: ["branchComparison"] }),
-        queryClient.invalidateQueries({ queryKey: ["mergeConflictCheck"] }),
-      ]);
+      await invalidateAfterMerge();
       setCompareBranch(null);
     } catch (error) {
-      const message = getErrorMessage(error);
-      if (message.toLowerCase().includes("conflict")) {
-        addToast(t("merge.conflictDetected"), "warning");
+      if (isMergeConflictError(error)) {
+        // 충돌 파일과 merge 진행 상태가 이미 바뀌었다. 목록을 갱신해야 Changes 탭에
+        // 충돌 해결 배너가 뜬다.
+        await invalidateAfterMerge();
+        addToast(t("merge.conflictStopped"), "warning");
         setActiveTab("changes");
       } else {
-        addToast(t("merge.failed", { error: message }), "error");
+        addToast(t("merge.failed", { error: getErrorMessage(error) }), "error");
       }
     } finally {
       setIsLoading(false);

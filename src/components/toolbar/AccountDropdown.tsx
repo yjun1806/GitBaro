@@ -2,6 +2,7 @@ import { Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAccountStore } from "@/stores/account";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
+import { useRepoAccountId, useAssignRepoAccount } from "@/hooks/useRepoAccountId";
 interface AccountDropdownProps {
   onClose: () => void;
   onSignIn: () => void;
@@ -15,8 +16,9 @@ export function AccountDropdown({
 }: AccountDropdownProps) {
   const { t } = useTranslation();
   const accounts = useAccountStore((s) => s.accounts);
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
-  const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
+  // 열린 저장소의 계정을 보여주고, 고르면 그 저장소에 지정한다.
+  const repoAccountId = useRepoAccountId();
+  const assignAccount = useAssignRepoAccount();
   return (
     <div
       className="absolute right-0 top-full mt-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50 py-1"
@@ -40,14 +42,14 @@ export function AccountDropdown({
             <button
               key={account.id}
               onClick={() => {
-                setActiveAccount(account.id);
+                assignAccount(account.id);
                 onClose();
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent transition-colors text-left"
             >
               <AccountAvatar account={account} size="sm" />
               <span className="text-sm truncate flex-1">{account.username}</span>
-              {account.id === activeAccountId && (
+              {account.id === repoAccountId && (
                 <Check className="w-4 h-4 text-primary shrink-0" />
               )}
             </button>

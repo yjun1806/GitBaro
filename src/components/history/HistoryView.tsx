@@ -10,6 +10,7 @@ import { useSelectionStore } from "@/stores/selection";
 import { useCommitHistoryInfinite, useCommitAvatars, useBranches, useBranchComparison, useStatus, useRemoteTags } from "@/api/queries";
 import { createBranch, type ResetMode } from "@/api/commands";
 import { useCommitActions } from "@/hooks/useCommitActions";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useToastStore } from "@/stores/toast";
 import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
 import { BranchCompareView } from "@/components/history/BranchCompareView";
@@ -26,7 +27,7 @@ export function HistoryView() {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const accounts = useAccountStore((s) => s.accounts);
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  const repoAccountId = useRepoAccountId();
   const {
     data: historyData,
     isLoading,
@@ -39,7 +40,7 @@ export function HistoryView() {
     [historyData],
   );
   const { data: branches = [] } = useBranches(activeRepoPath);
-  const { data: remoteTagNames } = useRemoteTags(activeRepoPath, activeAccountId);
+  const { data: remoteTagNames } = useRemoteTags(activeRepoPath, repoAccountId);
   // null while the remote list is unknown (loading / no account) so tags aren't
   // falsely flagged as local-only; a Set once origin's tags are known.
   const remoteTags = useMemo(

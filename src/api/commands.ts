@@ -23,6 +23,7 @@ import type {
   WorktreeInfo,
   StashEntry,
   StashShowResult,
+  PushTarget,
 } from "@/types";
 
 // Git operations — backend returns indexStatus/worktreeStatus separately,
@@ -150,12 +151,20 @@ export async function resetToCommit(repoPath: string, oid: string, mode: ResetMo
   return invoke("reset_to_commit", { repoPath, oid, mode });
 }
 
-export async function revertCommit(repoPath: string, oid: string): Promise<void> {
-  return invoke("revert_commit", { repoPath, oid });
+export async function revertCommit(
+  repoPath: string,
+  oid: string,
+  accountId: string | null,
+): Promise<void> {
+  return invoke("revert_commit", { repoPath, oid, accountId });
 }
 
-export async function cherryPickCommit(repoPath: string, oid: string): Promise<void> {
-  return invoke("cherry_pick_commit", { repoPath, oid });
+export async function cherryPickCommit(
+  repoPath: string,
+  oid: string,
+  accountId: string | null,
+): Promise<void> {
+  return invoke("cherry_pick_commit", { repoPath, oid, accountId });
 }
 
 /**
@@ -178,10 +187,16 @@ export async function gitPush(
   return invoke("git_push", { repoPath, accountId, force });
 }
 
+/** `rebase`를 생략하면 사용자의 `pull.rebase` 설정을 따른다(없으면 merge). */
+/** push가 실제로 올릴 원격과 refspec. force push 확인 창에 보여준다. */
+export async function getPushTarget(repoPath: string): Promise<PushTarget> {
+  return invoke("get_push_target", { repoPath });
+}
+
 export async function gitPull(
   repoPath: string,
   accountId: string,
-  rebase = false,
+  rebase?: boolean,
 ): Promise<void> {
   return invoke("git_pull", { repoPath, accountId, rebase });
 }
@@ -316,8 +331,9 @@ export async function mergeBranch(
   repoPath: string,
   branch: string,
   strategy: MergeStrategy,
+  accountId: string | null,
 ): Promise<string> {
-  return invoke("merge_branch_into_current", { repoPath, branch, strategy });
+  return invoke("merge_branch_into_current", { repoPath, branch, strategy, accountId });
 }
 
 export async function checkMergeConflicts(
@@ -338,8 +354,11 @@ export async function abortMergeOrRebase(repoPath: string): Promise<void> {
   return invoke("abort_merge_or_rebase", { repoPath });
 }
 
-export async function continueMergeOrRebase(repoPath: string): Promise<void> {
-  return invoke("continue_merge_or_rebase", { repoPath });
+export async function continueMergeOrRebase(
+  repoPath: string,
+  accountId: string | null,
+): Promise<void> {
+  return invoke("continue_merge_or_rebase", { repoPath, accountId });
 }
 
 export async function getConflictFileDiff(

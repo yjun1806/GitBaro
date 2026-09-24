@@ -10,6 +10,7 @@ import {
 } from "@/api/commands";
 import { useToastStore } from "@/stores/toast";
 import { getErrorMessage } from "@/lib/utils";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 
 /**
  * 커밋 대상 조작(checkout/reset/revert/cherry-pick)을 실행하고, 성공/실패 토스트와
@@ -19,6 +20,8 @@ export function useCommitActions(repoPath: string | null) {
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
   const { t } = useTranslation();
+  // revert·cherry-pick 커밋을 저장소 계정으로 기록한다.
+  const accountId = useRepoAccountId();
 
   const invalidateAll = useCallback(
     () =>
@@ -62,13 +65,13 @@ export function useCommitActions(repoPath: string | null) {
   );
 
   const revert = useCallback(
-    (oid: string) => run(() => revertCommit(repoPath!, oid), "history.revertSuccess"),
-    [run, repoPath],
+    (oid: string) => run(() => revertCommit(repoPath!, oid, accountId), "history.revertSuccess"),
+    [run, repoPath, accountId],
   );
 
   const cherryPick = useCallback(
-    (oid: string) => run(() => cherryPickCommit(repoPath!, oid), "history.cherryPickSuccess"),
-    [run, repoPath],
+    (oid: string) => run(() => cherryPickCommit(repoPath!, oid, accountId), "history.cherryPickSuccess"),
+    [run, repoPath, accountId],
   );
 
   return { checkout, reset, revert, cherryPick };
