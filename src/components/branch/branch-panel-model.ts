@@ -9,8 +9,15 @@ import type { BranchInfo, WorktreeInfo } from "@/types";
  */
 export type BranchRowAction = "current" | "openWorktree" | "switch";
 
+export type BranchPanelSection = "inWorktree" | "local" | "remote";
+
+/** 로컬 칸 정렬. `recent`는 최근에 전환한 브랜치 → 최근 커밋순, `name`은 이름순. */
+export type BranchPanelSort = "recent" | "name";
+
 export interface BranchPanelRow {
   branch: BranchInfo;
+  /** 이 행이 놓인 칸. 둘째 줄에 무엇을 보일지가 칸마다 다르다(시안 D6). */
+  section: BranchPanelSection;
   /** 이 브랜치를 체크아웃한 워크트리. 없으면 null. */
   worktree: WorktreeInfo | null;
   action: BranchRowAction;
@@ -39,14 +46,17 @@ const byRecent = (a: BranchPanelRow, b: BranchPanelRow) =>
  * - `branch.isHead`는 `activePath`(지금 연 워크트리)의 HEAD 기준이다.
  * - 다른 워크트리(메인 워크트리 포함)가 체크아웃한 브랜치는 「이동」이다.
  * - 원격 칸에는 로컬 브랜치가 추적하지 않는 원격 브랜치만 둔다(`origin/HEAD` 제외).
- * - 정렬: 워크트리 칸은 지금 브랜치 → 메인 워크트리 → 이름순, 로컬 칸은 기본 브랜치 → 최근 커밋순,
- *   원격 칸은 최근 커밋순. 검색어가 있으면 칸 안에서 일치도 순으로 둔다.
+ * - 정렬: 워크트리 칸은 지금 브랜치 → 메인 워크트리 → 이름순, 원격 칸은 최근 커밋순.
+ *   로컬 칸은 기본 브랜치를 맨 위에 두고, `sortBy`가 `recent`면 최근에 전환한 브랜치
+ *   (`recentNames` 순서) → 최근 커밋순, `name`이면 이름순이다.
+ *   검색어가 있으면 칸 안에서 일치도 순으로 둔다.
  */
 export function classifyBranches(
   branches: readonly BranchInfo[],
   worktrees: readonly WorktreeInfo[],
   activePath: string | null,
   query = "",
+  { sortBy = "recent", recentNames = [] }: { sortBy?: BranchPanelSort; recentNames?: readonly string[] } = {},
 ): BranchPanelSections {
   const active = activePath ? trimSlash(activePath) : null;
   const worktreeByBranch = new Map<string, WorktreeInfo>();
@@ -64,20 +74,26 @@ export function classifyBranches(
   for (const branch of branches) {
     if (branch.isRemote) {
       if (branch.name.endsWith("/HEAD") || trackedRemotes.has(branch.name)) continue;
-      remote.push({ branch, worktree: null, action: "switch" });
+      remote.push({ branch, section: "remote", worktree: null, action: "switch" });
       continue;
     }
     const worktree = worktreeByBranch.get(branch.name) ?? null;
     const elsewhere = worktree !== null && trimSlash(worktree.path) !== active;
     const action: BranchRowAction = branch.isHead ? "current" : elsewhere ? "openWorktree" : "switch";
-    const row = { branch, worktree, action };
-    if (branch.isHead || worktree !== null) inWorktree.push(row);
-    else local.push(row);
+    if (branch.isHead || worktree !== null) inWorktree.push({ branch, section: "inWorktree", worktree, action });
+    else local.push({ branch, section: "local", worktree, action });
   }
 
   const worktreeRank = (r: BranchPanelRow) => (r.action === "current" ? 0 : r.worktree?.isMain ? 1 : 2);
   inWorktree.sort((a, b) => worktreeRank(a) - worktreeRank(b) || byName(a, b));
-  local.sort((a, b) => Number(b.branch.isDefault) - Number(a.branch.isDefault) || byRecent(a, b));
+  const recentRank = new Map(recentNames.map((name, i) => [name, i]));
+  const byRecentSwitch = (a: BranchPanelRow, b: BranchPanelRow) =>
+    (recentRank.get(a.branch.name) ?? Infinity) - (recentRank.get(b.branch.name) ?? Infinity) || byRecent(a, b);
+  local.sort(
+    (a, b) =>
+      Number(b.branch.isDefault) - Number(a.branch.isDefault) ||
+      (sortBy === "name" ? byName(a, b) : byRecentSwitch(a, b)),
+  );
   remote.sort(byRecent);
 
   const filter = (rows: BranchPanelRow[]) => fuzzyFilter(rows, query.trim(), (r) => r.branch.name);

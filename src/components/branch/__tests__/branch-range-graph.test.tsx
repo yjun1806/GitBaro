@@ -49,6 +49,8 @@ function branch(name: string, extra: Partial<BranchInfo> = {}): BranchInfo {
 }
 
 const comparisons: [string, string][] = [];
+const DEFAULT_BRANCHES = [branch("main", { isHead: true, isDefault: true }), branch("feat/x")];
+let branchList: BranchInfo[] = DEFAULT_BRANCHES;
 const comparison: BranchCompareResult = {
   baseBranch: "main",
   compareBranch: "feat/x",
@@ -64,7 +66,7 @@ vi.mock("@/api/queries", () => ({
     if (base && target) comparisons.push([base, target]);
     return { data: comparison, isLoading: false, error: null };
   },
-  useBranches: () => ({ data: [branch("main", { isHead: true, isDefault: true }), branch("feat/x")] }),
+  useBranches: () => ({ data: branchList }),
   useStatus: () => ({ data: [] }),
   useWorktrees: () => ({ data: [] }),
   useCommitHistoryInfinite: () => ({
@@ -98,6 +100,7 @@ function commitRows(): string[] {
 beforeEach(async () => {
   await i18n.changeLanguage("en");
   comparisons.length = 0;
+  branchList = DEFAULT_BRANCHES;
   useUIStore.setState({ activeTab: "history", compareBranch: null });
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
@@ -110,7 +113,7 @@ describe("CommitGraph range mode", () => {
     renderGraph();
     expect(commitRows()).toEqual(["h1", "h2"]);
 
-    act(() => useBranchRangeStore.getState().setRange({ repoPath: REPO, base: "main", target: "feat/x" }));
+    act(() => useBranchRangeStore.getState().setRange({ repoPath: REPO, base: "main", target: "feat/x", head: "main" }));
     expect(commitRows()).toEqual(["f1", "f2"]);
     expect(screen.getByText("main..feat/x")).toBeTruthy();
     expect(screen.getByText("2 commits")).toBeTruthy();
@@ -127,16 +130,39 @@ describe("CommitGraph range mode", () => {
   });
 
   it("selects a commit from the range", () => {
-    useBranchRangeStore.getState().setRange({ repoPath: REPO, base: "main", target: "feat/x" });
+    useBranchRangeStore.getState().setRange({ repoPath: REPO, base: "main", target: "feat/x", head: "main" });
     renderGraph();
     fireEvent.click(document.querySelector('[data-commit-id="f2"]')!);
     expect(useSelectionStore.getState().selectedCommitId).toBe("f2");
   });
 
   it("drops the range when another repository is opened", () => {
-    useBranchRangeStore.getState().setRange({ repoPath: REPO, base: "main", target: "feat/x" });
+    useBranchRangeStore.getState().setRange({ repoPath: REPO, base: "main", target: "feat/x", head: "main" });
     renderGraph();
     act(() => useRepositoryStore.setState({ activeRepoPath: "/work/other" }));
     expect(useBranchRangeStore.getState().range).toBeNull();
+  });
+
+  it("drops the range when its branch is renamed away instead of showing the compare error", () => {
+    useBranchRangeStore.getState().setRange({ repoPath: REPO, base: "main", target: "feat/x", head: "main" });
+    const { rerender } = renderGraph();
+    expect(commitRows()).toEqual(["f1", "f2"]);
+
+    branchList = [branch("main", { isHead: true, isDefault: true }), branch("feat/z")];
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <CommitGraph wips={[]} newCommits={null} seenAt={null} />
+      </QueryClientProvider>,
+    );
+    expect(useBranchRangeStore.getState().range).toBeNull();
+    expect(commitRows()).toEqual(["h1", "h2"]);
+  });
+
+  it("drops the range when the worktree switches to another branch", () => {
+    useBranchRangeStore.getState().setRange({ repoPath: REPO, base: "main", target: "feat/x", head: "main" });
+    branchList = [branch("main", { isDefault: true }), branch("feat/x", { isHead: true })];
+    renderGraph();
+    expect(useBranchRangeStore.getState().range).toBeNull();
+    expect(screen.queryByText("main..feat/x")).toBeNull();
   });
 });

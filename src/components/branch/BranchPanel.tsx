@@ -1,13 +1,20 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, X } from "lucide-react";
-import { useBranchBases } from "@/api/queries";
+import { ArrowDownUp, ChevronDown, ChevronRight, Search, X } from "lucide-react";
+import { useBranchBases, useRecentBranches } from "@/api/queries";
 import { isImeComposing } from "@/lib/keyboard";
 import type { BranchInfo, WorktreeInfo } from "@/types";
 import { BranchContextMenu } from "./BranchContextMenu";
 import { BranchPanelRowView } from "./BranchPanelRow";
-import { classifyBranches, flattenSections, type BranchPanelRow } from "./branch-panel-model";
+import {
+  classifyBranches,
+  flattenSections,
+  type BranchPanelRow,
+  type BranchPanelSection,
+  type BranchPanelSections,
+  type BranchPanelSort,
+} from "./branch-panel-model";
 import { nextActiveName } from "./visible-branches";
 
 /** 관찰자를 쓸 수 없는 환경(테스트 등)에서 기반 브랜치를 계산할 앞쪽 행 수. */
@@ -59,12 +66,19 @@ export function BranchPanel({
   const [query, setQuery] = useState("");
   const [activeName, setActiveName] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ row: BranchPanelRow; x: number; y: number } | null>(null);
+  const [sortBy, setSortBy] = useState<BranchPanelSort>("recent");
+  const [collapsed, setCollapsed] = useState<ReadonlySet<BranchPanelSection>>(new Set());
+  const { data: recentNames } = useRecentBranches(activeRepoPath);
 
   const sections = useMemo(
-    () => classifyBranches(branches, worktrees, activeRepoPath, query),
-    [branches, worktrees, activeRepoPath, query],
+    () => classifyBranches(branches, worktrees, activeRepoPath, query, { sortBy, recentNames }),
+    [branches, worktrees, activeRepoPath, query, sortBy, recentNames],
   );
-  const rows = useMemo(() => flattenSections(sections), [sections]);
+  // 접은 칸의 행은 화살표 이동·기반 브랜치 조회에서 뺀다.
+  const rows = useMemo(
+    () => flattenSections(sections).filter((r) => !collapsed.has(r.section)),
+    [sections, collapsed],
+  );
   const rowNames = useMemo(() => rows.map((r) => r.branch.name), [rows]);
 
   const { rootRef, visibleNames } = useVisibleRowNames(rowNames);
@@ -123,17 +137,54 @@ export function BranchPanel({
     el?.scrollIntoView?.({ block: "nearest" });
   }, [activeName, rootRef]);
 
-  const renderSection = (title: string, sectionRows: BranchPanelRow[]) =>
-    sectionRows.length === 0 ? null : (
+  const toggleSection = (section: BranchPanelSection) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(section)) next.delete(section);
+      else next.add(section);
+      return next;
+    });
+
+  const renderSection = (section: keyof BranchPanelSections, title: string) => {
+    const sectionRows = sections[section];
+    if (sectionRows.length === 0) return null;
+    const isCollapsed = collapsed.has(section);
+    return (
       <section aria-label={title}>
-        <h3 className="px-3.5 pt-2.5 pb-1 text-[11px] font-bold text-(--muted) bg-(--acc-faint) border-b border-(--line)">
-          {title}
+        <h3 className="flex items-center gap-1 pl-2 pr-3.5 pt-1.5 pb-0.5 text-[11px] font-bold text-(--muted) bg-(--acc-faint) border-b border-(--line)">
+          <button
+            type="button"
+            onClick={() => toggleSection(section)}
+            aria-expanded={!isCollapsed}
+            aria-label={t(isCollapsed ? "branchPanel.expand" : "branchPanel.collapse", { section: title })}
+            className="flex items-center gap-1 h-6 px-1.5 rounded-[6px] hover:bg-accent transition-colors"
+          >
+            {isCollapsed ? (
+              <ChevronRight className="w-3 h-3" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="w-3 h-3" aria-hidden="true" />
+            )}
+            {title}
+            {isCollapsed && <span className="font-medium text-(--faint) tabular-nums">{sectionRows.length}</span>}
+          </button>
+          <span className="flex-1" />
+          {section === "local" && !isCollapsed && (
+            <button
+              type="button"
+              onClick={() => setSortBy((s) => (s === "recent" ? "name" : "recent"))}
+              title={t("branchPanel.sortHint")}
+              className="flex items-center gap-1 h-5 px-1.5 rounded-[5px] bg-(--chip) text-[10.5px] font-medium text-(--muted) hover:bg-accent transition-colors"
+            >
+              <ArrowDownUp className="w-3 h-3" aria-hidden="true" />
+              {t(sortBy === "recent" ? "branchPanel.sortRecent" : "branchPanel.sortName")}
+            </button>
+          )}
         </h3>
-        {sectionRows.map((row) => (
+        {!isCollapsed && sectionRows.map((row) => (
           <BranchPanelRowView
             key={row.branch.name}
             row={row}
-            base={bases.get(row.branch.name)}
+            baseInfo={bases.get(row.branch.name)}
             isActive={activeName === row.branch.name}
             canCompare={canCompare(row)}
             onPrimary={() => runPrimary(row)}
@@ -153,6 +204,7 @@ export function BranchPanel({
         ))}
       </section>
     );
+  };
 
   return (
     <aside
@@ -175,7 +227,7 @@ export function BranchPanel({
           }}
           className="h-[26px] px-2.5 rounded-[7px] bg-primary text-primary-foreground text-xs font-bold hover:bg-primary-hover transition-colors shrink-0"
         >
-          {t("branch.newBranch")}
+          {t("branchPanel.newBranch")}
         </button>
         <button
           type="button"
@@ -204,15 +256,15 @@ export function BranchPanel({
       </label>
 
       <div ref={rootRef} className="flex-1 min-h-0 overflow-y-auto border-t border-(--line)">
-        {rows.length === 0 ? (
+        {flattenSections(sections).length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-muted-foreground">
             {query ? t("branchPanel.noMatch") : t("branch.noBranches")}
           </p>
         ) : (
           <>
-            {renderSection(t("branchPanel.inWorktree"), sections.inWorktree)}
-            {renderSection(t("branchPanel.local"), sections.local)}
-            {renderSection(remoteTitle, sections.remote)}
+            {renderSection("inWorktree", t("branchPanel.inWorktree"))}
+            {renderSection("local", t("branchPanel.local"))}
+            {renderSection("remote", remoteTitle)}
           </>
         )}
       </div>

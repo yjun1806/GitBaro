@@ -281,7 +281,12 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const handleCompare = (branchName: string) => {
     // 그래프를 「지금 브랜치..고른 브랜치」 범위 모드로 바꾼다(그래프 탭으로 전환).
     if (!activeRepoPath || !currentBranch) return;
-    useBranchRangeStore.getState().setRange({ repoPath: activeRepoPath, base: currentBranch, target: branchName });
+    useBranchRangeStore.getState().setRange({
+      repoPath: activeRepoPath,
+      base: currentBranch,
+      target: branchName,
+      head: currentBranch,
+    });
     const { setCompareBranch, setActiveTab } = useUIStore.getState();
     setCompareBranch(null);
     setActiveTab("history");

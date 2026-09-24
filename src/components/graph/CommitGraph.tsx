@@ -41,7 +41,7 @@ import {
 } from "./graph-model";
 import { repoLaneColor, type LaneWip, type RepoLaneGraph } from "./repo-lanes";
 import { BranchRangeGraph } from "@/components/branch/BranchRangeGraph";
-import { activeRange, useBranchRangeStore } from "@/components/branch/branch-range";
+import { activeRange, isStaleRange, useBranchRangeStore } from "@/components/branch/branch-range";
 
 export interface CommitGraphProps {
   /** 맨 위 WIP 행(`useGraphReview`가 순서까지 정한 목록). */
@@ -87,17 +87,21 @@ export function CommitGraph(props: CommitGraphProps) {
 
 type GraphSelection = ReturnType<typeof useGraphSelection>;
 
-/** 지금 연 저장소의 범위 모드. 다른 저장소로 옮기면 범위를 지운다. */
+/**
+ * 지금 연 저장소의 범위 모드. 다른 저장소로 옮기거나, base·target 브랜치가 없어지거나,
+ * 워크트리가 다른 브랜치로 바뀌면 범위를 지운다(`isStaleRange`).
+ */
 function useActiveBranchRange() {
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const stored = useBranchRangeStore((s) => s.range);
   const clearRange = useBranchRangeStore((s) => s.clear);
   const { data: branches } = useBranches(stored ? activeRepoPath : null);
-  useEffect(() => {
-    if (stored && stored.repoPath !== activeRepoPath) clearRange();
-  }, [stored, activeRepoPath, clearRange]);
   const range = activeRange(stored, activeRepoPath);
-  if (!range) return null;
+  const stale = range !== null && isStaleRange(range, branches);
+  useEffect(() => {
+    if (stored && (stored.repoPath !== activeRepoPath || stale)) clearRange();
+  }, [stored, activeRepoPath, stale, clearRange]);
+  if (!range || stale) return null;
   const currentBranch = branches?.find((b) => b.isHead && !b.isRemote)?.name ?? null;
   return { range, currentBranch };
 }

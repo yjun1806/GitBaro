@@ -42,6 +42,7 @@ vi.mock("@/api/queries", () => ({
   useStatus: () => ({ data: [] }),
   useWorktrees: () => ({ data: worktrees }),
   useBranchBases: () => new Map(),
+  useRecentBranches: () => ({ data: [] }),
   useBranchComparison: () => ({ data: { behindCount: 1 }, isLoading: false, error: null }),
 }));
 
@@ -81,7 +82,7 @@ describe("BranchZone — branch panel wiring", () => {
   it("turns Compare into the graph range current..branch", () => {
     renderZone();
     fireEvent.click(row("docs/y").getByRole("button", { name: "Compare" }));
-    expect(useBranchRangeStore.getState().range).toEqual({ repoPath: REPO, base: "main", target: "docs/y" });
+    expect(useBranchRangeStore.getState().range).toEqual({ repoPath: REPO, base: "main", target: "docs/y", head: "main" });
     // 그래프 탭으로 가고, 예전 비교 화면은 끈다.
     expect(useUIStore.getState().activeTab).toBe("history");
     expect(useUIStore.getState().compareBranch).toBeNull();

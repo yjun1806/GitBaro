@@ -1,20 +1,26 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import i18n from "@/i18n/config";
-import type { BranchInfo, WorktreeBase, WorktreeInfo } from "@/types";
+import type { BranchBaseInfo, BranchInfo, WorktreeBase, WorktreeInfo } from "@/types";
 
 const baseCalls: string[][] = [];
 const BASES: Record<string, WorktreeBase> = {
   "feat/review-stream": { name: "fix/audit-bugs", source: "reflog", aheadOfBase: 4, behindBase: 0 },
   "docs/readme": { name: "main", source: "inferred", aheadOfBase: 1, behindBase: 2 },
-  "fix/merged": { name: "main", source: "reflog", aheadOfBase: 0, behindBase: 3 },
+  "fix/merged": { name: "fix/audit-bugs", source: "reflog", aheadOfBase: 0, behindBase: 3 },
+  "fix/idle": { name: "main", source: "reflog", aheadOfBase: 0, behindBase: 5 },
 };
+const MERGED = new Set(["fix/merged"]);
+let recentNames: string[] = [];
 vi.mock("@/api/queries", () => ({
   useBranchBases: (_path: string | null, names: readonly string[]) => {
     baseCalls.push([...names]);
-    return new Map(names.map((n) => [n, BASES[n] ?? null]));
+    return new Map<string, BranchBaseInfo>(
+      names.map((n) => [n, { name: n, base: BASES[n] ?? null, mergedIntoBase: MERGED.has(n) }]),
+    );
   },
+  useRecentBranches: () => ({ data: recentNames }),
 }));
 vi.mock("@/hooks/use-avatar-resolver", () => ({ useAvatarResolver: () => () => undefined }));
 
@@ -50,6 +56,7 @@ function worktree(path: string, branchName: string, isMain = false): WorktreeInf
   };
 }
 
+const NOW = Math.floor(Date.now() / 1000);
 const MAIN = "/work/GitBaro";
 const AUDIT = "/work/GitBaro/.claude/worktrees/audit-bugs";
 const REVIEW = "/work/GitBaro/.claude/worktrees/review-stream";
@@ -75,11 +82,12 @@ function renderPanel(currentBranch: string | null = "fix/audit-bugs") {
       branches={[
         branch("main", { isDefault: true, upstream: "origin/main", aheadBehind: { ahead: 0, behind: 0 } }),
         branch("fix/audit-bugs", { isHead: currentBranch !== null }),
-        branch("feat/review-stream"),
-        branch("docs/readme"),
-        branch("fix/merged"),
+        branch("feat/review-stream", { lastCommitAuthor: { name: "Claude", email: "c@x" }, lastCommitTime: NOW - 60 }),
+        branch("docs/readme", { lastCommitTime: NOW - 26 * 60 }),
+        branch("fix/merged", { lastCommitTime: NOW - 3600 }),
+        branch("fix/idle", { lastCommitTime: NOW - 7200 }),
         branch("origin/main", { isRemote: true }),
-        branch("origin/feature/ai-commit", { isRemote: true }),
+        branch("origin/feature/ai-commit", { isRemote: true, lastCommitTime: NOW - 14 * 86400 }),
       ]}
       worktrees={[worktree(MAIN, "main", true), worktree(AUDIT, "fix/audit-bugs"), worktree(REVIEW, "feat/review-stream")]}
       {...handlers}
@@ -96,6 +104,7 @@ function row(name: string): HTMLElement {
 beforeEach(async () => {
   await i18n.changeLanguage("ko");
   baseCalls.length = 0;
+  recentNames = [];
   Object.values(handlers).forEach((h) => h.mockReset());
 });
 afterEach(cleanup);
@@ -140,19 +149,93 @@ describe("BranchPanel", () => {
     expect(within(row("fix/audit-bugs")).getByRole("button", { name: "비교" })).toHaveProperty("disabled", true);
   });
 
-  it("shows the base branch, ↑ and the estimate mark for visible local rows only", () => {
+  it("shows the second line the mockup gives each section", () => {
     renderPanel();
-    expect(row("feat/review-stream").textContent).toContain("fix/audit-bugs에서 갈라짐");
+    // 워크트리 칸: 기반 · 작성자
+    expect(row("feat/review-stream").textContent).toContain("fix/audit-bugs에서 갈라짐 · Claude");
     expect(row("feat/review-stream").textContent).toContain("↑4");
-    expect(row("docs/readme").textContent).toContain("main에서 갈라짐 (추정)");
-    expect(row("fix/merged").textContent).toContain("main에 모두 들어 있음");
     expect(row("main").textContent).toContain("기본 브랜치 · origin/main과 같음");
-    expect(row("origin/feature/ai-commit").textContent).toContain("원격에만 있음");
-    // 기본·원격 브랜치의 기반은 묻지 않는다.
+    // 로컬 칸: 기반 · 시각
+    expect(row("docs/readme").textContent).toContain("main에서 갈라짐 (추정) · 26분 전");
+    // merge로 들어간 브랜치는 시안 문구, 커밋 없이 뒤처지기만 한 브랜치는 그냥 갈라짐
+    expect(row("fix/merged").textContent).toContain("fix/audit-bugs에 merge됨 · 정리 가능");
+    expect(row("fix/idle").textContent).toContain("main에서 갈라짐 · 2시간 전");
+    expect(row("fix/idle").textContent).not.toContain("merge됨");
+    // 원격 칸: 원격에만 있음 · 시각
+    expect(row("origin/feature/ai-commit").textContent).toContain("원격에만 있음 · 2주 전");
+  });
+
+  it("uses the mockup's 새 브랜치 label", () => {
+    renderPanel();
+    expect(screen.getByRole("button", { name: "새 브랜치" })).toBeTruthy();
+  });
+
+  it("asks bases only for local, non-default rows (no observer: the first rows)", () => {
+    renderPanel();
     const asked = new Set(baseCalls.flat());
     expect(asked.has("main")).toBe(false);
     expect(asked.has("origin/feature/ai-commit")).toBe(false);
     expect(asked.has("docs/readme")).toBe(true);
+  });
+
+  it("asks bases only for rows the IntersectionObserver reports on screen", () => {
+    const observed: Element[] = [];
+    let report: ((entries: IntersectionObserverEntry[]) => void) | null = null;
+    class FakeObserver {
+      constructor(cb: (entries: IntersectionObserverEntry[]) => void) {
+        report = cb;
+      }
+      observe(el: Element) {
+        observed.push(el);
+      }
+      disconnect() {}
+      unobserve() {}
+      takeRecords() {
+        return [];
+      }
+    }
+    vi.stubGlobal("IntersectionObserver", FakeObserver);
+    try {
+      renderPanel();
+      // 아직 아무 행도 보이지 않았다.
+      expect(baseCalls.flat()).toEqual([]);
+      const visible = new Set(["feat/review-stream", "docs/readme"]);
+      act(() =>
+        report!(
+          observed.map(
+            (target) =>
+              ({
+                target,
+                isIntersecting: visible.has((target as HTMLElement).dataset.branchName ?? ""),
+              }) as unknown as IntersectionObserverEntry,
+          ),
+        ),
+      );
+      const asked = new Set(baseCalls.flat());
+      expect([...asked].sort()).toEqual(["docs/readme", "feat/review-stream"]);
+      expect(asked.has("fix/merged")).toBe(false);
+      expect(asked.has("fix/idle")).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("sorts local branches by recent switch or by name, and collapses a section", () => {
+    recentNames = ["fix/idle"];
+    renderPanel();
+    const localRows = () =>
+      [...screen.getByRole("region", { name: "로컬" }).querySelectorAll("[data-branch-name]")].map((el) =>
+        el.getAttribute("data-branch-name"),
+      );
+    // 최근에 전환한 브랜치 → 최근 커밋순
+    expect(localRows()).toEqual(["fix/idle", "docs/readme", "fix/merged"]);
+    fireEvent.click(screen.getByRole("button", { name: /최근순/ }));
+    expect(localRows()).toEqual(["docs/readme", "fix/idle", "fix/merged"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "원격 · origin 접기" }));
+    expect(document.querySelector('[data-branch-name="origin/feature/ai-commit"]')).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "원격 · origin 펼치기" }));
+    expect(document.querySelector('[data-branch-name="origin/feature/ai-commit"]')).not.toBeNull();
   });
 
   it("turns compare and merge off on a detached HEAD", () => {

@@ -807,6 +807,9 @@ pub struct BranchBaseInfo {
     pub name: String,
     /// 원격 브랜치, 기본 브랜치, 없는 브랜치, 기반을 찾지 못한 브랜치는 null.
     pub base: Option<WorktreeBase>,
+    /// 이 브랜치의 커밋이 merge로 기반 브랜치에 들어갔다(지워도 잃는 커밋이 없다).
+    /// 커밋 없이 기반보다 뒤처지기만 한 브랜치는 false다.
+    pub merged_into_base: bool,
 }
 
 /// 로컬 브랜치마다 어느 브랜치에서 갈라졌는지(기반 브랜치)와 기반보다 앞선·뒤처진 커밋 수.
@@ -837,9 +840,41 @@ fn branch_bases_in(repo: &git2::Repository, names: &[String]) -> Vec<BranchBaseI
             } else {
                 None
             };
-            BranchBaseInfo { name: name.clone(), base }
+            let merged_into_base = base.as_ref().is_some_and(|b| is_merged_into_base(repo, name, b));
+            BranchBaseInfo { name: name.clone(), base, merged_into_base }
         })
         .collect()
+}
+
+/// 앞선 커밋이 없고 뒤처진 브랜치 가운데, 끝 커밋이 기반 브랜치의 첫째 부모 줄에 없는 것.
+/// 첫째 부모 줄에 있으면 기반 브랜치가 원래 지나온 커밋이다. 즉 커밋 없이 만든 뒤 기반만
+/// 앞으로 간 브랜치다. 줄 밖(merge 커밋의 둘째 부모 쪽)이면 그 브랜치의 커밋이 merge로 들어갔다.
+/// fast-forward로 들어간 브랜치는 구별할 수 없어 false로 둔다.
+fn is_merged_into_base(repo: &git2::Repository, branch: &str, base: &WorktreeBase) -> bool {
+    if base.ahead_of_base != 0 || base.behind_base == 0 {
+        return false;
+    }
+    let tip = match repo.find_branch(branch, git2::BranchType::Local).ok().and_then(|b| b.get().target()) {
+        Some(oid) => oid,
+        None => return false,
+    };
+    let base_tip = repo
+        .find_branch(&base.name, git2::BranchType::Local)
+        .or_else(|_| repo.find_branch(&base.name, git2::BranchType::Remote))
+        .ok()
+        .and_then(|b| b.get().target());
+    let Some(mut oid) = base_tip else { return false };
+    // 첫째 부모 줄에서 tip까지의 거리는 behind_base를 넘지 않는다.
+    for _ in 0..=base.behind_base {
+        if oid == tip {
+            return false;
+        }
+        match repo.find_commit(oid).ok().and_then(|c| c.parent_id(0).ok()) {
+            Some(parent) => oid = parent,
+            None => break,
+        }
+    }
+    true
 }
 
 #[cfg(test)]
@@ -1083,15 +1118,19 @@ mod tests {
         git(&dir, &["commit", "-q", "--allow-empty", "-m", "done 1"]);
         git(&dir, &["checkout", "-q", "main"]);
         git(&dir, &["merge", "-q", "--no-ff", "-m", "merge done", "done"]);
+        // idle 은 main 에서 커밋 없이 만들었고, 그 뒤 main 만 앞으로 갔다.
+        git(&dir, &["branch", "idle", "main~1"]);
+        git(&dir, &["config", "branch.idle.gitbaroBase", "main"]);
 
-        let names = ["feat/x", "main", "done", "origin/nope", "missing"].map(String::from).to_vec();
+        let names = ["feat/x", "main", "done", "idle", "origin/nope", "missing"].map(String::from).to_vec();
         let bases = branch_bases(dir.to_string_lossy().to_string(), names)
             .await
             .expect("branch_bases 실패");
         let _ = std::fs::remove_dir_all(&dir);
 
         let by_name = |n: &str| bases.iter().find(|b| b.name == n).unwrap().base.clone();
-        assert_eq!(bases.len(), 5);
+        let merged = |n: &str| bases.iter().find(|b| b.name == n).unwrap().merged_into_base;
+        assert_eq!(bases.len(), 6);
         let feat = by_name("feat/x").expect("feat/x 기반 있음");
         assert_eq!(feat.name, "dev");
         assert_eq!((feat.ahead_of_base, feat.behind_base), (2, 0));
@@ -1100,6 +1139,12 @@ mod tests {
         assert_eq!(done.name, "main");
         assert_eq!(done.ahead_of_base, 0, "병합된 브랜치는 앞선 커밋이 없음");
         assert!(done.behind_base > 0);
+        assert!(merged("done"), "merge 로 들어간 브랜치");
+        let idle = by_name("idle").expect("idle 기반 있음");
+        assert_eq!((idle.name.as_str(), idle.ahead_of_base), ("main", 0));
+        assert!(idle.behind_base > 0);
+        assert!(!merged("idle"), "커밋 없이 뒤처지기만 한 브랜치는 merge 된 게 아님");
+        assert!(!merged("feat/x"));
         assert_eq!(by_name("origin/nope"), None);
         assert_eq!(by_name("missing"), None);
     }

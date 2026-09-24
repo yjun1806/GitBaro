@@ -720,25 +720,42 @@ export function useNewCommitIdsMany(
 
 // W5-T3
 import { getBranchBases } from "./commands";
-import type { WorktreeBase } from "@/types";
+import { createBatchLoader } from "@/lib/batch-loader";
+import type { BranchBaseInfo } from "@/types";
+
+/** 백엔드 `branch_bases`가 한 번에 계산하는 브랜치 수(`MAX_BRANCH_BASES`)와 맞춘다. */
+const BRANCH_BASE_BATCH = 60;
+
+/**
+ * 같은 순간에 시작된 행들의 기반 브랜치 조회를 저장소별로 한 번의 `branch_bases` 호출로 묶는다.
+ * 그래야 저장소 열기·기본 브랜치 찾기를 행마다 되풀이하지 않는다.
+ */
+const loadBranchBase = createBatchLoader<BranchBaseInfo>(async (repoPath, names) => {
+  const infos = await getBranchBases(repoPath, names);
+  return new Map(infos.map((info) => [info.name, info]));
+}, BRANCH_BASE_BATCH);
 
 /**
  * 브랜치 패널에 보이는 행의 기반 브랜치. 브랜치마다 따로 캐시해 스크롤해도 이미 받은
- * 값은 다시 묻지 않는다. 결과는 브랜치 이름 → 기반(모르면 null)이고, 아직 못 받은 이름은 빠진다.
+ * 값은 다시 묻지 않고, 한꺼번에 필요한 행은 한 번의 호출로 묻는다.
+ * 키를 "branches" 아래에 두어 브랜치 목록을 무효화하는 곳(전환·커밋·merge·fetch·파일 감시)이
+ * 기반 브랜치도 함께 새로 받게 한다.
+ * 결과는 브랜치 이름 → 기반 정보(기반을 모르면 `base`가 null)이고, 아직 못 받은 이름은 빠진다.
  */
 export function useBranchBases(
   repoPath: string | null,
   names: readonly string[],
-): ReadonlyMap<string, WorktreeBase | null> {
+): ReadonlyMap<string, BranchBaseInfo> {
   return useQueries({
     queries: names.map((name) => ({
-      queryKey: ["branchBase", repoPath, name],
-      queryFn: async () => (await getBranchBases(repoPath!, [name]))[0]?.base ?? null,
+      queryKey: ["branches", repoPath, "base", name],
+      queryFn: async (): Promise<BranchBaseInfo> =>
+        (await loadBranchBase(repoPath!, name)) ?? { name, base: null, mergedIntoBase: false },
       enabled: repoPath !== null,
       staleTime: 30_000,
     })),
     combine: (results) => {
-      const out = new Map<string, WorktreeBase | null>();
+      const out = new Map<string, BranchBaseInfo>();
       results.forEach((r, i) => {
         if (r.data !== undefined) out.set(names[i], r.data);
       });

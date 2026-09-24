@@ -6,14 +6,14 @@ import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { laneColor } from "@/components/graph/graph-model";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { worktreeBaseTitle } from "@/lib/worktree-base";
-import type { WorktreeBase } from "@/types";
+import type { BranchBaseInfo } from "@/types";
 import type { BranchPanelRow } from "./branch-panel-model";
 import { BranchStatusBadge } from "./BranchStatusBadge";
 
 interface BranchPanelRowViewProps {
   row: BranchPanelRow;
-  /** 기반 브랜치. 아직 모르면 undefined, 계산했는데 없으면 null. */
-  base: WorktreeBase | null | undefined;
+  /** 기반 브랜치 정보. 아직 못 받았거나 묻지 않는 행(기본·원격)이면 undefined. */
+  baseInfo: BranchBaseInfo | undefined;
   /** 화살표 키로 고른 행. */
   isActive: boolean;
   canCompare: boolean;
@@ -23,40 +23,49 @@ interface BranchPanelRowViewProps {
   onContextMenu: (e: ReactMouseEvent) => void;
 }
 
+// 시안 D6 `chip_btn`: 높이 24px, 좌우 10px, 테두리 없음, --chip 배경, 11.5px/600, 모서리 6px.
 const CHIP_BUTTON =
-  "h-[22px] px-2 rounded-(--radius-chip) bg-card border border-(--line2) text-[11px] font-semibold text-(--fg2) hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card";
+  "h-6 px-2.5 rounded-[6px] bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-(--chip)";
 
-/** 행 둘째 줄: 기반 브랜치(또는 기본·원격 표시) · 마지막 커밋 시각 · 작성자. */
-export function branchSubtitle(row: BranchPanelRow, base: WorktreeBase | null | undefined, t: TFunction): string {
-  const { branch } = row;
-  const parts: string[] = [];
-  if (branch.isRemote) {
-    parts.push(t("branchPanel.remoteOnly"));
-  } else if (branch.isDefault) {
-    parts.push(t("branchPanel.defaultBranch"));
+/**
+ * 행 둘째 줄(시안 D6). 칸마다 보이는 것이 다르다.
+ * - 기본 브랜치: 「기본 브랜치 · origin/main과 같음」
+ * - 워크트리 칸: 기반 브랜치 · 작성자 (누가 그 워크트리에서 일하는지)
+ * - 로컬 칸: 기반 브랜치 · 마지막 커밋 시각. merge된 브랜치는 「X에 merge됨 · 정리 가능」
+ * - 원격 칸: 「원격에만 있음 · 마지막 커밋 시각」
+ */
+export function branchSubtitle(row: BranchPanelRow, baseInfo: BranchBaseInfo | undefined, t: TFunction): string {
+  const { branch, section } = row;
+  const time = branch.lastCommitTime != null ? formatRelativeTime(branch.lastCommitTime) : null;
+  const join = (...parts: (string | null | undefined)[]) => parts.filter(Boolean).join(" · ");
+
+  if (branch.isRemote) return join(t("branchPanel.remoteOnly"), time);
+  if (branch.isDefault) {
     const synced = branch.aheadBehind && branch.aheadBehind.ahead === 0 && branch.aheadBehind.behind === 0;
-    if (branch.upstream && synced) parts.push(t("branchPanel.sameAsUpstream", { upstream: branch.upstream }));
-  } else if (base) {
-    const merged = base.aheadOfBase === 0 && base.behindBase > 0;
-    const text = merged
-      ? t("branchPanel.containedIn", { base: base.name })
-      : t("worktree.base.from", { base: base.name });
-    parts.push(base.source === "inferred" ? `${text} (${t("worktree.base.inferred")})` : text);
+    return join(
+      t("branchPanel.defaultBranch"),
+      branch.upstream && synced ? t("branchPanel.sameAsUpstream", { upstream: branch.upstream }) : null,
+    );
   }
-  if (branch.lastCommitTime != null) parts.push(formatRelativeTime(branch.lastCommitTime));
-  if (branch.lastCommitAuthor?.name) parts.push(branch.lastCommitAuthor.name);
-  return parts.join(" · ");
+  const base = baseInfo?.base ?? null;
+  if (base && baseInfo?.mergedIntoBase) {
+    return join(t("branchPanel.mergedInto", { base: base.name }), t("branchPanel.canCleanUp"));
+  }
+  const from = base ? t("worktree.base.from", { base: base.name }) : null;
+  const baseText = base && base.source === "inferred" ? `${from} (${t("worktree.base.inferred")})` : from;
+  if (section === "inWorktree") return join(baseText, branch.lastCommitAuthor?.name);
+  return join(baseText, time);
 }
 
 /** 오른쪽 ↑: 기반 브랜치보다 앞선 커밋 수. 기본 브랜치는 원격보다 앞선 커밋 수. */
-function aheadCount(row: BranchPanelRow, base: WorktreeBase | null | undefined): number {
+function aheadCount(row: BranchPanelRow, baseInfo: BranchBaseInfo | undefined): number {
   if (row.branch.isDefault) return row.branch.aheadBehind?.ahead ?? 0;
-  return base?.aheadOfBase ?? 0;
+  return baseInfo?.base?.aheadOfBase ?? 0;
 }
 
 export function BranchPanelRowView({
   row,
-  base,
+  baseInfo,
   isActive,
   canCompare,
   onPrimary,
@@ -67,7 +76,8 @@ export function BranchPanelRowView({
   const { t } = useTranslation();
   const { branch, worktree, action } = row;
   const isCurrent = action === "current";
-  const ahead = aheadCount(row, base);
+  const ahead = aheadCount(row, baseInfo);
+  const base = baseInfo?.base ?? null;
   const worktreeLabel = worktree
     ? worktree.isMain
       ? t("branchPanel.mainWorktree")
@@ -105,7 +115,7 @@ export function BranchPanelRowView({
           )}
         </span>
         <span className="text-[11px] text-(--faint) truncate" title={base ? worktreeBaseTitle(base, t) : undefined}>
-          {branchSubtitle(row, base, t)}
+          {branchSubtitle(row, baseInfo, t)}
         </span>
       </span>
 

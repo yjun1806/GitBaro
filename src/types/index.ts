@@ -668,4 +668,9 @@ export interface FileDiffVsDefault extends DiffOutput {
 export interface BranchBaseInfo {
   name: string;
   base: WorktreeBase | null;
+  /**
+   * 이 브랜치의 커밋이 merge로 기반 브랜치에 들어갔다(지워도 잃는 커밋이 없다). 커밋 없이
+   * 기반보다 뒤처지기만 한 브랜치나 fast-forward로 들어간 브랜치는 false.
+   */
+  mergedIntoBase: boolean;
 }
