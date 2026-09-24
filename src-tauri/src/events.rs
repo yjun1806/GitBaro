@@ -6,7 +6,7 @@ pub const GIT_COMMAND_COMPLETE: &str = "git:command-complete";
 pub const GIT_COMMAND_PROGRESS: &str = "git:command-progress";
 pub const FS_CHANGE: &str = "fs:change";
 /// Emitted when git metadata of a watched repository changes (HEAD, index,
-/// refs, merge/rebase state) — e.g. after a commit or checkout made outside
+/// refs, merge/rebase state, linked worktrees) — e.g. after a commit or checkout made outside
 /// the app. Carries the same payload as `fs:change`.
 pub const GIT_DIR_CHANGE: &str = "fs:git-dir-change";
 

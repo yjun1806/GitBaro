@@ -19,7 +19,8 @@ pub enum ChangeKind {
 const IGNORED_DIRS: [&str; 6] = [".git", "node_modules", "target", "dist", ".next", "build"];
 
 /// Top-level entries of a git dir whose changes matter to the UI. Everything
-/// else (objects/, logs/, hooks/, config, FETCH_HEAD, ...) is ignored.
+/// else (objects/, logs/, hooks/, config, FETCH_HEAD, ...) is ignored, except
+/// the linked-worktree entries handled in `is_relevant_git_path`.
 const RELEVANT_GIT_ENTRIES: [&str; 9] = [
     "HEAD",
     "index",
@@ -109,8 +110,17 @@ fn is_relevant_git_path(rel: &Path) -> bool {
     if is_lock {
         return false;
     }
-    match rel.components().next() {
-        Some(Component::Normal(first)) => {
+    let parts: Vec<_> = rel.components().collect();
+    match parts.as_slice() {
+        // A linked worktree was added or removed, or one switched branch.
+        // Other files in there (index, logs, ...) change on every status
+        // refresh in that worktree and are noise here.
+        [Component::Normal(first), ..] if *first == "worktrees" => match parts.len() {
+            1 | 2 => true,
+            3 => parts[2] == Component::Normal("HEAD".as_ref()),
+            _ => false,
+        },
+        [Component::Normal(first), ..] => {
             RELEVANT_GIT_ENTRIES.contains(&first.to_string_lossy().as_ref())
         }
         _ => false,
@@ -249,6 +259,22 @@ mod tests {
     }
 
     #[test]
+    fn adding_or_removing_a_linked_worktree_is_reported() {
+        let targets = plain_repo("/repo");
+        for p in ["/repo/.git/worktrees", "/repo/.git/worktrees/feature", "/repo/.git/worktrees/feature/HEAD"] {
+            assert_eq!(targets.classify(Path::new(p)), Some(ChangeKind::GitDir), "{p}");
+        }
+        for p in [
+            "/repo/.git/worktrees/feature/index",
+            "/repo/.git/worktrees/feature/index.lock",
+            "/repo/.git/worktrees/feature/logs/HEAD",
+            "/repo/.git/worktrees/feature/HEAD.lock",
+        ] {
+            assert_eq!(targets.classify(Path::new(p)), None, "{p}");
+        }
+    }
+
+    #[test]
     fn git_noise_is_ignored() {
         let targets = plain_repo("/repo");
         for p in [
@@ -285,8 +311,14 @@ mod tests {
             targets.classify(Path::new("/repo/.git/refs/heads/feature")),
             Some(ChangeKind::GitDir)
         );
-        // Another worktree's HEAD is not ours.
-        assert_eq!(targets.classify(Path::new("/repo/.git/worktrees/other/HEAD")), None);
+        // Another worktree switching branch changes the worktree list.
+        assert_eq!(
+            targets.classify(Path::new("/repo/.git/worktrees/other/HEAD")),
+            Some(ChangeKind::GitDir)
+        );
+        // Its index or logs are not ours.
+        assert_eq!(targets.classify(Path::new("/repo/.git/worktrees/other/index")), None);
+        assert_eq!(targets.classify(Path::new("/repo/.git/worktrees/other/logs/HEAD")), None);
         // The `.git` file in the worktree root is not a working-tree change.
         assert_eq!(targets.classify(Path::new("/wt/feature/.git")), None);
         assert_eq!(

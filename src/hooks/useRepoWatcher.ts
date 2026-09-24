@@ -16,7 +16,11 @@ let watchGeneration = 0;
 
 const GIT_DIR_DEBOUNCE_MS = 250;
 
-/** Per-repo queries that depend on HEAD, the index, refs or merge/rebase state. */
+/**
+ * Per-repo queries that depend on HEAD, the index, refs, merge/rebase state or
+ * linked worktrees. recentBranches reads the reflog, which git writes together
+ * with HEAD, so a HEAD change covers it.
+ */
 const GIT_DIR_QUERY_KEYS = [
   "status",
   "branches",
@@ -24,13 +28,15 @@ const GIT_DIR_QUERY_KEYS = [
   "commitHistory",
   "mergeState",
   "stashList",
+  "recentBranches",
+  "worktrees",
 ] as const;
 
 /**
  * Watches the active repository via the backend FS watcher. Working-tree
  * changes invalidate the status query; git-dir changes (commit, checkout,
- * stage, merge/rebase made anywhere) also refresh branches, history, merge
- * state and stashes. Replaces tight status polling
+ * stage, merge/rebase, worktree add/remove made anywhere) also refresh
+ * branches, recent branches, history, merge state, stashes and worktrees. Replaces tight status polling
  * with event-driven refresh; the query keeps a slow poll as a safety net.
  */
 export function useRepoWatcher(repoPath: string | null) {
