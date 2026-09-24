@@ -487,15 +487,10 @@ pub async fn merge_branch_into_current(
             engine.merge_branch(&branch_name, true).await?;
         }
         MergeStrategy::Squash => {
-            engine.squash_merge(&branch_name).await?;
+            let message = format!("Squash merge branch '{}'", branch_name);
+            engine.squash_merge(&branch_name, &message).await?;
             // squash merge stages changes but doesn't commit; create the commit
-            engine
-                .commit(
-                    &format!("Squash merge branch '{}'", branch_name),
-                    false,
-                    None,
-                )
-                .await?;
+            engine.commit(&message, false, None).await?;
         }
         MergeStrategy::Rebase => {
             engine.rebase_onto(&branch_name).await?;

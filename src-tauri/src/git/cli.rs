@@ -501,9 +501,18 @@ impl GitCliEngine {
 
     /// Squash-merge a branch into the current branch via git CLI.
     /// This stages the squashed changes but does NOT create a commit.
-    pub async fn squash_merge(&self, branch: &str) -> Result<(), AppError> {
-        self.run_local_checked(&["merge", "--squash", "--", branch]).await?;
-        Ok(())
+    /// If the squash stops on conflicts, `message` replaces git's SQUASH_MSG so
+    /// that continuing after the conflicts commits with the same message a
+    /// conflict-free squash would get.
+    pub async fn squash_merge(&self, branch: &str, message: &str) -> Result<(), AppError> {
+        let result = self.run_local_checked(&["merge", "--squash", "--", branch]).await;
+        if result.is_err() {
+            let squash_msg = self.git_dir().await?.join("SQUASH_MSG");
+            if squash_msg.exists() {
+                std::fs::write(&squash_msg, format!("{}\n", message))?;
+            }
+        }
+        result.map(|_| ())
     }
 
     /// Rebase the current branch onto the given base via git CLI.
@@ -529,8 +538,24 @@ impl GitCliEngine {
     /// Continue an in-progress merge after conflicts are resolved and staged.
     /// Commits the merge without opening an editor.
     pub async fn merge_continue(&self) -> Result<(), AppError> {
-        self.run_local_checked(&["commit", "--no-edit"]).await?;
+        // Without an editor git keeps `#` lines, so the "# Conflicts:" list it
+        // appends to the prepared message would end up in the commit.
+        self.run_local_checked(&["commit", "--no-edit", "--cleanup=strip"]).await?;
         Ok(())
+    }
+
+    /// Whether the index has nothing staged relative to HEAD. Unmerged
+    /// (conflicted) entries count as staged changes.
+    async fn index_matches_head(&self) -> Result<bool, AppError> {
+        let output = self.run_local(&["diff", "--cached", "--quiet"]).await?;
+        match output.status.code() {
+            Some(0) => Ok(true),
+            Some(1) => Ok(false),
+            code => Err(AppError::GitCli {
+                message: parse_git_error(&String::from_utf8_lossy(&output.stderr)),
+                exit_code: code,
+            }),
+        }
     }
 
     /// Abort an in-progress rebase (`git rebase --abort`).
@@ -557,7 +582,17 @@ impl GitCliEngine {
     /// Report which multi-step operation is in progress by checking for the
     /// marker files git creates in the git dir.
     pub async fn operation_in_progress(&self) -> Result<Option<GitOperation>, AppError> {
-        Ok(detect_operation(&self.git_dir().await?))
+        self.operation_in(&self.git_dir().await?).await
+    }
+
+    async fn operation_in(&self, git_dir: &Path) -> Result<Option<GitOperation>, AppError> {
+        match detect_operation(git_dir) {
+            // git leaves SQUASH_MSG behind when a squash is undone by some
+            // commands (e.g. `restore --staged`). With nothing staged there is
+            // no squash left to continue or abort.
+            Some(GitOperation::Squash) if self.index_matches_head().await? => Ok(None),
+            op => Ok(op),
+        }
     }
 
     /// Abort the given operation, restoring the pre-operation state.
@@ -590,17 +625,18 @@ impl GitCliEngine {
             // prepared message (SQUASH_MSG).
             GitOperation::Merge | GitOperation::Squash => self.merge_continue().await,
             GitOperation::Rebase => self.rebase_continue().await,
-            GitOperation::CherryPick => {
-                self.run_local_checked(&["-c", "core.editor=true", "cherry-pick", "--continue"])
-                    .await?;
-                Ok(())
-            }
-            GitOperation::Revert => {
-                self.run_local_checked(&["-c", "core.editor=true", "revert", "--continue"])
-                    .await?;
-                Ok(())
-            }
+            GitOperation::CherryPick => self.sequencer_continue("cherry-pick").await,
+            GitOperation::Revert => self.sequencer_continue("revert").await,
         }
+    }
+
+    /// Continue a cherry-pick or revert. When the resolution left nothing to
+    /// commit (the change is already on this branch), git refuses `--continue`
+    /// and the commit is skipped instead, as GitHub Desktop does.
+    async fn sequencer_continue(&self, command: &str) -> Result<(), AppError> {
+        let step = if self.index_matches_head().await? { "--skip" } else { "--continue" };
+        self.run_local_checked(&["-c", "core.editor=true", command, step]).await?;
+        Ok(())
     }
 
     /// Get recently checked-out branches from reflog.
@@ -781,8 +817,9 @@ fn detect_operation(git_dir: &Path) -> Option<GitOperation> {
     } else if has("REVERT_HEAD") {
         Some(GitOperation::Revert)
     } else if has("SQUASH_MSG") {
-        // `merge --squash` writes SQUASH_MSG and no MERGE_HEAD; git removes
-        // it when the squash is committed or reset away.
+        // `merge --squash` writes SQUASH_MSG and no MERGE_HEAD. git does not
+        // always remove it when the squash is undone, so callers also check
+        // that something is staged (see `operation_in`).
         Some(GitOperation::Squash)
     } else {
         None
@@ -851,7 +888,7 @@ impl GitCliEngine {
     /// in that case the working tree is left as it was.
     pub async fn start_preview(&self, branch: &str) -> Result<bool, AppError> {
         let git_dir = self.git_dir().await?;
-        if detect_operation(&git_dir).is_some() || git_dir.join(PREVIEW_MARKER).exists() {
+        if self.operation_in(&git_dir).await?.is_some() || git_dir.join(PREVIEW_MARKER).exists() {
             return Err(AppError::GitCli {
                 message: "Another operation is in progress".to_string(),
                 exit_code: None,
@@ -942,7 +979,7 @@ impl GitCliEngine {
         }
 
         if let Some(oid) = &marker.stash_oid {
-            if detect_operation(&git_dir).is_none() {
+            if self.operation_in(&git_dir).await?.is_none() {
                 self.stash_pop_oid(oid).await?;
             }
         }
@@ -1146,6 +1183,77 @@ mod operation_tests {
         assert_eq!(engine.operation_in_progress().await.unwrap(), None);
         assert_eq!(head(&repo.0), before);
         assert_eq!(std::fs::read_to_string(repo.0.join("a.txt")).unwrap(), "main\n");
+    }
+
+    #[tokio::test]
+    async fn undone_squash_is_not_reported_as_in_progress() {
+        let repo = conflicting_repo();
+        git(&repo.0, &["checkout", "-qb", "clean", "main~1"]);
+        write(&repo.0, "b.txt", "b\n");
+        git(&repo.0, &["add", "b.txt"]);
+        git(&repo.0, &["commit", "-qm", "add b"]);
+        git(&repo.0, &["checkout", "-q", "main"]);
+        git(&repo.0, &["merge", "--squash", "clean"]);
+        let engine = GitCliEngine::new(&repo.0);
+        assert_eq!(
+            engine.operation_in_progress().await.unwrap(),
+            Some(GitOperation::Squash)
+        );
+
+        // `restore --staged` undoes the squash but leaves SQUASH_MSG behind.
+        git(&repo.0, &["restore", "--staged", "."]);
+        assert!(repo.0.join(".git/SQUASH_MSG").exists());
+        assert_eq!(engine.operation_in_progress().await.unwrap(), None);
+        std::fs::remove_file(repo.0.join("b.txt")).unwrap();
+        assert!(engine.start_preview("clean").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn squash_conflict_continues_with_the_app_message() {
+        let repo = conflicting_repo();
+        let engine = GitCliEngine::new(&repo.0);
+        let message = "Squash merge branch 'feature'";
+        assert!(engine.squash_merge("feature", message).await.is_err());
+        assert_eq!(
+            engine.operation_in_progress().await.unwrap(),
+            Some(GitOperation::Squash)
+        );
+
+        write(&repo.0, "a.txt", "resolved\n");
+        git(&repo.0, &["add", "a.txt"]);
+        engine.operation_continue(GitOperation::Squash).await.unwrap();
+        assert_eq!(engine.operation_in_progress().await.unwrap(), None);
+        assert_eq!(git(&repo.0, &["log", "-1", "--format=%B"]), message);
+    }
+
+    #[tokio::test]
+    async fn merge_conflict_continue_leaves_no_conflict_comments() {
+        let repo = conflicting_repo();
+        git_may_fail(&repo.0, &["merge", "feature"]);
+        write(&repo.0, "a.txt", "resolved\n");
+        git(&repo.0, &["add", "a.txt"]);
+        let engine = GitCliEngine::new(&repo.0);
+        engine.operation_continue(GitOperation::Merge).await.unwrap();
+        assert_eq!(git(&repo.0, &["log", "-1", "--format=%B"]), "Merge branch 'feature'");
+    }
+
+    #[tokio::test]
+    async fn empty_cherry_pick_is_skipped_on_continue() {
+        let repo = conflicting_repo();
+        let before = head(&repo.0);
+        git_may_fail(&repo.0, &["cherry-pick", "feature"]);
+        // 충돌을 main 쪽으로 해결해 커밋할 변경이 남지 않는다.
+        write(&repo.0, "a.txt", "main\n");
+        git(&repo.0, &["add", "a.txt"]);
+        let engine = GitCliEngine::new(&repo.0);
+        assert_eq!(
+            engine.operation_in_progress().await.unwrap(),
+            Some(GitOperation::CherryPick)
+        );
+
+        engine.operation_continue(GitOperation::CherryPick).await.unwrap();
+        assert_eq!(engine.operation_in_progress().await.unwrap(), None);
+        assert_eq!(head(&repo.0), before);
     }
 
     #[tokio::test]
