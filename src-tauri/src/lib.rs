@@ -5,6 +5,7 @@ pub mod events;
 pub mod gh;
 pub mod git;
 pub mod github;
+mod shell_env;
 pub mod state;
 pub mod watcher;
 
@@ -14,6 +15,8 @@ use tracing_subscriber::EnvFilter;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
+    // Before any thread starts or any git/gh/hook process is spawned.
+    shell_env::apply_login_shell_path();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
