@@ -389,6 +389,10 @@
     "htmlChanged": "HTML block changed"
   },
   "sync": {
+    "publishFailed": "Publish failed: {{error}}",
+    "noRemoteError": "This repository has no remote to sync with. Add a remote first.",
+    "multipleRemotesError": "This branch has no upstream and there is no origin remote, so GitBaro can't tell which remote to use. Set the branch's upstream first.",
+    "pullConflict": "Pull stopped on conflicts. Resolve them in the Changes tab.",
     "fetchOrigin": "Fetch origin",
     "fetchDescription": "Download objects and refs from remote",
     "pullOrigin": "Pull origin",
@@ -533,6 +537,7 @@
     "kindRemote": "Remote-only branch"
   },
   "merge": {
+    "conflictStopped": "Merge stopped on conflicts. Resolve them in the Changes tab.",
     "title": "Merge",
     "mergeInto": "Merge {{source}} into {{target}}",
     "strategy": "Strategy",

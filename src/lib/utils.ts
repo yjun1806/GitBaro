@@ -79,3 +79,16 @@ export function getErrorMessage(error: unknown): string {
   }
   return String(error);
 }
+
+/**
+ * merge·rebase·pull이 충돌로 멈췄는지. 백엔드가 `{ type: "MergeConflict" }`로 보낸다.
+ * 오류 문구에 "conflict"가 있는지로 판단하지 않는다(문구는 git 버전·언어마다 다르다).
+ */
+export function isMergeConflictError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "type" in error &&
+    (error as { type: unknown }).type === "MergeConflict"
+  );
+}

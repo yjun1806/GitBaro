@@ -389,6 +389,10 @@
     "htmlChanged": "HTML 블록 변경됨"
   },
   "sync": {
+    "publishFailed": "Branch 게시 실패: {{error}}",
+    "noRemoteError": "이 저장소에는 동기화할 Remote가 없습니다. Remote를 먼저 추가하세요.",
+    "multipleRemotesError": "이 브랜치에 추적 브랜치가 없고 origin Remote도 없어서 어느 Remote를 쓸지 정할 수 없습니다. 브랜치의 추적 브랜치를 먼저 설정하세요.",
+    "pullConflict": "충돌이 나서 Pull이 멈췄습니다. Changes 탭에서 충돌을 해결하세요.",
     "fetchOrigin": "Fetch origin",
     "fetchDescription": "Remote에서 객체 및 참조를 다운로드합니다",
     "pullOrigin": "Pull origin",
@@ -533,6 +537,7 @@
     "kindRemote": "리모트 전용 Branch"
   },
   "merge": {
+    "conflictStopped": "충돌이 나서 Merge가 멈췄습니다. Changes 탭에서 충돌을 해결하세요.",
     "title": "Merge",
     "mergeInto": "{{source}}을(를) {{target}}에 Merge",
     "strategy": "전략",
