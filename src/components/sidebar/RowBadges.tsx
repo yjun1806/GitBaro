@@ -1,66 +1,78 @@
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { rowMetaItems, syncText } from "./row-meta";
 
 interface RowBadgesProps {
   /** 커밋하지 않은 파일 수 — 주황 점과 숫자 */
   dirty?: number;
-  /** 마지막 확인 뒤 새 커밋 수 — 진한 배지 */
+  /** 마지막 확인 뒤 새 커밋 수 — 브랜드 색 배지 */
   newCommits?: number;
   ahead?: number;
   behind?: number;
 }
 
 /**
- * 트리 행 오른쪽 표시 세 가지(D2 시안): ↑↓, 커밋하지 않은 파일 수(주황 점), 새 커밋 수(진한 배지).
- * 값이 0이면 그 표시는 그리지 않는다.
+ * 행 오른쪽 메타 칸. 순서는 늘 [커밋 안 한 파일(주황 점 + 숫자)] [새 커밋(브랜드 색 배지)] [↑↓(작은 회색)]이고
+ * 0인 항목은 빼고 그린다(`rowMetaItems`). 칸마다 최소 폭을 둬서 행끼리 오른쪽 끝과 숫자 자리가 맞는다.
  */
-export function RowBadges({ dirty = 0, newCommits = 0, ahead = 0, behind = 0 }: RowBadgesProps) {
+export function RowBadges(props: RowBadgesProps) {
   const { t } = useTranslation();
-  const hasSync = ahead > 0 || behind > 0;
-  if (!hasSync && dirty <= 0 && newCommits <= 0) return null;
-
-  const syncLabel = [
-    ahead > 0 ? t("sidebarTree.badge.ahead", { count: ahead }) : null,
-    behind > 0 ? t("sidebarTree.badge.behind", { count: behind }) : null,
-  ]
-    .filter(Boolean)
-    .join(", ");
+  const items = rowMetaItems(props);
+  if (items.length === 0) return null;
 
   return (
-    <span className="flex items-center gap-1.5 shrink-0">
-      {hasSync && (
-        <span
-          role="img"
-          aria-label={syncLabel}
-          title={syncLabel}
-          className="text-[11px] text-[var(--faint)] tabular-nums whitespace-nowrap"
-        >
-          {ahead > 0 && `↑${ahead}`}
-          {ahead > 0 && behind > 0 && " "}
-          {behind > 0 && `↓${behind}`}
-        </span>
-      )}
-      {dirty > 0 && (
-        <span
-          role="img"
-          aria-label={t("sidebarTree.badge.uncommitted", { count: dirty })}
-          title={t("sidebarTree.badge.uncommitted", { count: dirty })}
-          className="flex items-center gap-[3px] text-[11px] font-bold text-[var(--live)] tabular-nums"
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--live)]" />
-          {dirty}
-        </span>
-      )}
-      {newCommits > 0 && (
-        <span
-          role="img"
-          aria-label={t("sidebarTree.badge.newCommits", { count: newCommits })}
-          title={t("sidebarTree.badge.newCommits", { count: newCommits })}
-          className="h-[17px] min-w-[17px] px-[5px] rounded-full bg-primary text-primary-foreground text-[10.5px] font-bold flex items-center justify-center tabular-nums"
-        >
-          {newCommits}
-        </span>
-      )}
+    <span className="flex items-center justify-end gap-1.5 shrink-0 tabular-nums" data-testid="row-meta">
+      {items.map((item) => {
+        if (item.kind === "dirty") {
+          const label = t("sidebarTree.badge.uncommitted", { count: item.count });
+          return (
+            <span
+              key="dirty"
+              role="img"
+              aria-label={label}
+              title={label}
+              data-meta="dirty"
+              className="min-w-[26px] flex items-center justify-end gap-[3px] text-[11px] font-bold text-[var(--live)]"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--live)] shrink-0" />
+              {item.count}
+            </span>
+          );
+        }
+        if (item.kind === "newCommits") {
+          const label = t("sidebarTree.badge.newCommits", { count: item.count });
+          return (
+            <span
+              key="newCommits"
+              role="img"
+              aria-label={label}
+              title={label}
+              data-meta="newCommits"
+              className="h-4 min-w-[18px] px-[5px] rounded-full bg-primary text-primary-foreground text-[10.5px] font-bold flex items-center justify-center"
+            >
+              {item.count}
+            </span>
+          );
+        }
+        const label = [
+          item.ahead > 0 ? t("sidebarTree.badge.ahead", { count: item.ahead }) : null,
+          item.behind > 0 ? t("sidebarTree.badge.behind", { count: item.behind }) : null,
+        ]
+          .filter(Boolean)
+          .join(" / ");
+        return (
+          <span
+            key="sync"
+            role="img"
+            aria-label={label}
+            title={label}
+            data-meta="sync"
+            className="min-w-[22px] text-right text-[10.5px] text-muted-foreground whitespace-nowrap"
+          >
+            {syncText(item.ahead, item.behind)}
+          </span>
+        );
+      })}
     </span>
   );
 }

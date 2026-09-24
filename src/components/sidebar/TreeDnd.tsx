@@ -20,14 +20,17 @@ import {
   type DragStartEvent,
   type Announcements,
 } from "@dnd-kit/core";
-import { Ban, Folder, GitBranch, GripVertical } from "lucide-react";
+import { Ban, Folder, GripVertical } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AccountNode } from "@/lib/repo-tree";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import { cn } from "@/lib/utils";
 import { useToastStore } from "@/stores/toast";
 import type { WorkspaceError } from "@/stores/workspace";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
+import { BranchLine } from "./BranchLine";
 import { INDENT_PX } from "./TreeRowFrame";
+import { LEADING_TILE, NEUTRAL_TILE, ROW_TITLE, TILE_ICON } from "./row-style";
 import {
   applyDrop,
   planDrop,
@@ -201,8 +204,8 @@ function DragPreview({ data, blocked }: { data: RowDragData; blocked: boolean })
   return (
     <div
       className={cn(
-        "flex flex-col gap-0.5 px-2 py-1.5 rounded-[var(--radius-item)] bg-card -rotate-[1.5deg]",
-        "shadow-[0_10px_24px_rgba(0,0,0,0.16)]",
+        "flex flex-col gap-0.5 px-2 py-1.5 rounded-[var(--radius-item)] -rotate-[1.5deg]",
+        FLOATING_SURFACE,
         blocked && "cursor-not-allowed",
       )}
     >
@@ -210,7 +213,7 @@ function DragPreview({ data, blocked }: { data: RowDragData; blocked: boolean })
         {color ? (
           <span
             aria-hidden="true"
-            className="w-5 h-5 shrink-0 rounded-[var(--radius-chip)] flex items-center justify-center text-[10px] font-extrabold"
+            className={`${LEADING_TILE} text-[10px] font-extrabold`}
             style={{
               backgroundColor: color.background,
               color: color.foreground,
@@ -219,18 +222,13 @@ function DragPreview({ data, blocked }: { data: RowDragData; blocked: boolean })
             {avatarInitial(data.label)}
           </span>
         ) : (
-          <span className="w-5 h-5 shrink-0 rounded-[var(--radius-chip)] bg-muted flex items-center justify-center">
-            <Folder className="w-[13px] h-[13px] text-[var(--fg2)]" aria-hidden="true" />
+          <span className={NEUTRAL_TILE}>
+            <Folder className={TILE_ICON} aria-hidden="true" />
           </span>
         )}
         <span className="flex-1 min-w-0 flex flex-col gap-px">
-          <span className="text-[12.5px] font-bold text-foreground truncate">{data.label}</span>
-          {data.branch && (
-            <span className="flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground min-w-0">
-              <GitBranch className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{data.branch}</span>
-            </span>
-          )}
+          <span className={`${ROW_TITLE} font-bold`}>{data.label}</span>
+          <BranchLine branch={data.branch ?? null} />
         </span>
         {data.badges}
       </span>

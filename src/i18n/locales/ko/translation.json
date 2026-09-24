@@ -796,6 +796,7 @@
     "quietRepos_other": "조용한 저장소 {{count}}개 ({{names}})",
     "worktree": "워크트리",
     "favorite": "즐겨찾기",
+    "baseSuffix": "{{base}}에서",
     "badge": {
       "uncommitted_one": "커밋하지 않은 파일 {{count}}개",
       "uncommitted_other": "커밋하지 않은 파일 {{count}}개",

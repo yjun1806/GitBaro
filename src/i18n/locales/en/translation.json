@@ -796,6 +796,7 @@
     "quietRepos_other": "{{count}} quiet repositories ({{names}})",
     "worktree": "Worktree",
     "favorite": "Favorite",
+    "baseSuffix": "from {{base}}",
     "badge": {
       "uncommitted_one": "{{count}} uncommitted file",
       "uncommitted_other": "{{count}} uncommitted files",

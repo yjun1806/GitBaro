@@ -305,7 +305,7 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
         </div>
 
         {isExpanded ? (
-          <div className="flex-1 min-h-0 px-[var(--g)] pt-2.5 pb-1">
+          <div className="flex-1 min-h-0 px-2.5 pt-2.5 pb-1">
             <RepoTree
               data={treeData}
               fetchingPath={fetchingPath}

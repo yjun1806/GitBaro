@@ -70,14 +70,15 @@ export function LiveNowSection({
   return (
     <section
       aria-label={t("sidebarTree.live.title")}
-      className="shrink-0 mx-0.5 mb-2 rounded-(--radius-item) border border-(--line2) overflow-hidden"
+      className="shrink-0 mb-2 rounded-(--radius-item) border border-(--line2) overflow-hidden"
     >
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
         aria-controls={listId}
-        className="w-full flex items-center gap-2 h-8 px-2 text-left hover:bg-(--frame-hover)"
+        // 접힌 카드 높이는 검색 칸(h-7 = 28px)과 같다: 26px + 위아래 테두리 1px.
+        className="w-full flex items-center gap-2 h-[26px] px-2 text-left hover:bg-(--frame-hover)"
       >
         <span
           aria-hidden="true"
@@ -91,14 +92,14 @@ export function LiveNowSection({
         </span>
         {!expanded && hasActivity && (
           <>
-            <span className="flex items-center shrink-0 -space-x-1.5 ml-0.5">
+            <span className="flex items-center shrink-0 -space-x-1 ml-0.5 py-0.5">
               {stack.shown.map((repo) =>
-                repoAvatar(repo.path, repo.name, repo.path, 16, "ring-2 ring-(--frame) text-[9px]"),
+                repoAvatar(repo.path, repo.name, repo.path, 16, "ring-[1.5px] ring-(--frame) text-[9px]"),
               )}
               {stack.overflow > 0 && (
                 <span
                   aria-hidden="true"
-                  className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold bg-(--frame-sel) text-muted-foreground ring-2 ring-(--frame)"
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold bg-(--frame-sel) text-muted-foreground ring-[1.5px] ring-(--frame)"
                 >
                   {t("sidebarTree.live.overflow", { count: stack.overflow })}
                 </span>

@@ -1,10 +1,13 @@
 import { FolderGit2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { WorktreeBaseLabel } from "@/components/worktree/WorktreeBaseLabel";
+import { middleEllipsis } from "@/lib/middle-ellipsis";
 import type { PathSignals } from "@/lib/repo-tree";
+import { worktreeBaseTitle } from "@/lib/worktree-base";
 import type { WorktreeBase } from "@/types";
+import { BranchLine } from "./BranchLine";
 import { LiveDot, RowBadges } from "./RowBadges";
 import { TreeRowFrame } from "./TreeRowFrame";
+import { BASE_MAX_CHARS, NEUTRAL_TILE, ROW_TITLE, TILE_ICON } from "./row-style";
 
 interface WorktreeRowProps {
   path: string;
@@ -21,8 +24,8 @@ interface WorktreeRowProps {
 }
 
 /**
- * 워크트리 행: 브랜치 이름과 「어디서 갈라졌는지」(`WorktreeBaseLabel`), 오른쪽 표시.
- * 시안(`gen_d.py`의 `wt_row`)대로 커밋하지 않은 파일 수와 새 커밋 수만 보이고 ↑↓는 그리지 않는다.
+ * 워크트리 행: 첫 줄은 폴더 이름, 둘째 줄은 저장소 행과 같은 브랜치 줄(브랜치 + 「· main에서」).
+ * 오른쪽 표시는 시안(`gen_d.py`의 `wt_row`)대로 커밋하지 않은 파일 수와 새 커밋 수만 보이고 ↑↓는 그리지 않는다.
  */
 export function WorktreeRow({
   path,
@@ -37,7 +40,10 @@ export function WorktreeRow({
   onSelect,
 }: WorktreeRowProps) {
   const { t } = useTranslation();
-  const name = branch ?? path.split("/").pop() ?? path;
+  const folder = path.split("/").filter(Boolean).pop() ?? path;
+  const name = branch ?? folder;
+  const baseSuffix = base ? t("sidebarTree.baseSuffix", { base: middleEllipsis(base.name, BASE_MAX_CHARS) }) : undefined;
+  const subTitle = [branch, base ? worktreeBaseTitle(base, t) : null].filter(Boolean).join("\n");
   return (
     <TreeRowFrame
       level={level}
@@ -46,14 +52,19 @@ export function WorktreeRow({
       label={name}
       selected={selected}
       onSelect={onSelect}
+      tall
     >
-      <span className="relative w-5 flex justify-center shrink-0" title={t("sidebarTree.worktree")}>
-        <FolderGit2 className="w-[13px] h-[13px] text-muted-foreground" aria-hidden="true" />
+      <span className="relative flex shrink-0" title={t("sidebarTree.worktree")}>
+        <span className={NEUTRAL_TILE}>
+          <FolderGit2 className={TILE_ICON} aria-hidden="true" />
+        </span>
         {live && <LiveDot watched={watched} className="absolute -left-0.5 -top-0.5" />}
       </span>
-      <span className="flex-1 min-w-0 flex flex-col gap-px" title={path}>
-        <span className="font-mono text-[11.5px] text-[var(--fg2)] truncate">{name}</span>
-        {base && <WorktreeBaseLabel base={base} maxBaseNameLength={16} />}
+      <span className="flex-1 min-w-0 flex flex-col gap-px">
+        <span className={`${ROW_TITLE} ${selected ? "font-bold" : "font-medium"}`} title={path}>
+          {folder}
+        </span>
+        <BranchLine branch={branch} suffix={baseSuffix} title={subTitle || undefined} />
       </span>
       <RowBadges dirty={signals?.dirtyCount} newCommits={signals?.newCommits} />
     </TreeRowFrame>

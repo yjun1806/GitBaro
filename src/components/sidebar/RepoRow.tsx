@@ -1,11 +1,13 @@
 import type { MouseEvent } from "react";
-import { GitBranch, Loader2, Star } from "lucide-react";
+import { Loader2, Star } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import type { PathSignals, RepoNode } from "@/lib/repo-tree";
 import { cn } from "@/lib/utils";
 import type { RepoInfo } from "@/types";
+import { BranchLine } from "./BranchLine";
 import { LiveDot, RowBadges } from "./RowBadges";
+import { LEADING_TILE, ROW_TITLE } from "./row-style";
 import { DraggableRow, DropAfterLine } from "./TreeDnd";
 import { TreeRowFrame } from "./TreeRowFrame";
 import { WorktreeRow } from "./WorktreeRow";
@@ -126,6 +128,7 @@ export function RepoRow({
           selected={selected}
           onSelect={() => onSelectRepo(repo)}
           onToggle={onToggle}
+          tall={branch !== null}
           onContextMenu={(e) => {
             e.preventDefault();
             onContextMenu(repo, e);
@@ -134,7 +137,7 @@ export function RepoRow({
           <span className="relative flex shrink-0">
             <span
               aria-hidden="true"
-              className="w-5 h-5 rounded-[var(--radius-chip)] flex items-center justify-center text-[10px] font-extrabold"
+              className={`${LEADING_TILE} text-[10px] font-extrabold`}
               style={{
                 backgroundColor: color.background,
                 color: color.foreground,
@@ -146,10 +149,8 @@ export function RepoRow({
           </span>
           <span className="flex-1 min-w-0 flex flex-col gap-px">
             <span
-              className={cn(
-                "text-[12.5px] text-foreground truncate",
-                selected ? "font-bold" : "font-medium",
-              )}
+              className={cn(ROW_TITLE, selected ? "font-bold" : "font-medium")}
+              title={repo.name}
             >
               {repo.name}
               {favorite && (
@@ -160,12 +161,7 @@ export function RepoRow({
                 />
               )}
             </span>
-            {branch && (
-              <span className="flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground min-w-0">
-                <GitBranch className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{branch}</span>
-              </span>
-            )}
+            <BranchLine branch={branch} />
           </span>
           {fetching && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
           {rowBadges}

@@ -6,6 +6,7 @@ import { useMenuKeyboard } from "@/hooks/useMenuKeyboard";
 import { SORT_MODES, type SortMode } from "@/lib/repo-tree";
 import { cn } from "@/lib/utils";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
+import { SIDEBAR_ICON_BUTTON, TILE_ICON } from "./row-style";
 
 interface SortMenuProps {
   mode: SortMode;
@@ -65,9 +66,9 @@ export function SortMenu({ mode, onChange, onOpenChange }: SortMenuProps) {
           else open();
         }}
         onKeyDown={(e) => e.stopPropagation()}
-        className="ml-auto w-5 h-5 shrink-0 flex items-center justify-center rounded-[var(--radius-chip)] text-[var(--faint)] hover:text-foreground hover:bg-(--frame-hover) outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className={cn("ml-auto", SIDEBAR_ICON_BUTTON)}
       >
-        <ArrowDownUp className="w-3 h-3" aria-hidden="true" />
+        <ArrowDownUp className={TILE_ICON} aria-hidden="true" />
       </button>
       {anchor &&
         createPortal(
