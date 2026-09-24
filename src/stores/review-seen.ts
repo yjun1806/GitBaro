@@ -7,11 +7,17 @@ import type { RepoReviewStatus, SeenRecordInput } from "@/types";
  * 워크트리마다 「마지막으로 확인한 커밋」(기준선)을 기억한다. 새 커밋 수는 백엔드
  * `count_new_commits`가 이 기준선으로 센다(`src-tauri/src/git/new_commits.rs`).
  *
- * 기준선을 잡는 규칙:
- * - 첫 실행(`initialScanDone = false`): 그때 있는 모든 워크트리의 HEAD를 기준선으로 잡는다.
- * - 그 뒤 처음 나타난 링크된 워크트리: 기준선을 비워 둔다. 백엔드가 기반 브랜치에서
- *   갈라진 지점부터 센다. 에이전트가 워크트리를 만들고 커밋을 쌓은 뒤에 봐도 새 커밋이 보인다.
- * - 그 뒤 새로 추가된 저장소의 메인 작업 트리: 현재 HEAD를 기준선으로 잡는다.
+ * 기준선을 잡는 규칙. 「첫 실행」은 저장소마다 따로 센다(`scannedRepos`):
+ * - 저장소가 스캔에 처음 나타날 때(앱의 첫 실행, 첫 실행 때 열 수 없던 저장소가 돌아왔을 때,
+ *   나중에 추가된 저장소): 그 저장소에 그때 있는 모든 워크트리의 HEAD를 기준선으로 잡는다.
+ *   사용자가 이미 알던 커밋을 새 커밋으로 보이지 않게 한다. 나중에 추가된 저장소의 메인
+ *   작업 트리가 현재 HEAD를 기준선으로 잡는 것도 이 규칙에 들어간다.
+ * - 그 저장소를 한 번 스캔한 뒤 처음 나타난 링크된 워크트리: 기준선을 비워 둔다. 백엔드가
+ *   기반 브랜치에서 갈라진 지점부터 센다. 에이전트가 워크트리를 만들고 커밋을 쌓은 뒤에 봐도
+ *   새 커밋이 보인다.
+ * - 그 저장소의 메인 작업 트리에 기준선이 없으면(그때는 커밋이 없었음 등) 현재 HEAD로 잡는다.
+ *
+ * `initialScanDone`은 저장소가 하나라도 스캔된 뒤 true다. 개수 세기는 이 값이 true일 때부터 한다.
  */
 
 export const REVIEW_SEEN_STORAGE_KEY = "gitbaro-review-seen";
@@ -31,6 +37,8 @@ export interface PersistedReviewSeen {
   /** 워크트리 경로 → 기준선. */
   entries: Record<string, SeenEntry>;
   initialScanDone: boolean;
+  /** 한 번이라도 스캔된 저장소 경로(`review_status`의 `repoPath`). */
+  scannedRepos: string[];
 }
 
 interface ReviewSeenState extends PersistedReviewSeen {
@@ -42,33 +50,50 @@ interface ReviewSeenState extends PersistedReviewSeen {
 
 /**
  * 스캔 결과로 기준선을 잡은 새 상태. 바뀐 게 없으면 null.
- * 워크트리가 하나도 없는 스캔은 첫 실행으로 치지 않는다(저장소를 추가하기 전 첫 실행).
+ * 저장소가 하나도 없는 스캔은 첫 실행으로 치지 않는다(저장소를 추가하기 전 첫 실행).
  */
 export function baselinesFromScan(
   state: PersistedReviewSeen,
   repos: RepoReviewStatus[],
   now: number,
 ): PersistedReviewSeen | null {
-  const worktrees = repos.flatMap((r) => r.worktrees);
-  if (worktrees.length === 0) return null;
+  if (repos.length === 0) return null;
 
+  const known = new Set(state.scannedRepos);
+  const firstSeenRepos = repos.map((r) => r.repoPath).filter((p) => !known.has(p));
   const additions: Record<string, SeenEntry> = {};
-  for (const wt of worktrees) {
-    if (wt.headOid === null || state.entries[wt.path] !== undefined) continue;
-    if (state.initialScanDone && !wt.isMain) continue;
-    additions[wt.path] = { branch: wt.branch, oid: wt.headOid, seenAt: now };
+  for (const repo of repos) {
+    const firstScan = !known.has(repo.repoPath);
+    for (const wt of repo.worktrees) {
+      if (wt.headOid === null || state.entries[wt.path] !== undefined) continue;
+      if (!firstScan && !wt.isMain) continue;
+      additions[wt.path] = { branch: wt.branch, oid: wt.headOid, seenAt: now };
+    }
   }
 
-  if (state.initialScanDone && Object.keys(additions).length === 0) return null;
-  return { entries: { ...state.entries, ...additions }, initialScanDone: true };
+  const unchanged =
+    state.initialScanDone && firstSeenRepos.length === 0 && Object.keys(additions).length === 0;
+  if (unchanged) return null;
+  return {
+    entries: { ...state.entries, ...additions },
+    initialScanDone: true,
+    scannedRepos: [...state.scannedRepos, ...new Set(firstSeenRepos)],
+  };
 }
 
-/** `count_new_commits`에 넘길 입력. HEAD가 없는 워크트리는 셀 게 없어 뺀다. */
+/**
+ * `count_new_commits`에 넘길 입력. HEAD가 없는 워크트리는 셀 게 없어 뺀다.
+ * 아직 스캔 기록이 없는 저장소도 뺀다. 기준선을 잡기 전에 세면 기존 워크트리가 잠깐
+ * 갈라진 지점부터 센 큰 숫자로 보인다.
+ */
 export function buildCountInputs(
   repos: RepoReviewStatus[],
   entries: Record<string, SeenEntry>,
+  scannedRepos: string[],
 ): SeenRecordInput[] {
+  const scanned = new Set(scannedRepos);
   return repos
+    .filter((r) => scanned.has(r.repoPath))
     .flatMap((r) => r.worktrees)
     .filter((wt) => wt.headOid !== null)
     .map((wt) => {
@@ -106,6 +131,9 @@ export function sanitizePersistedReviewSeen(persisted: unknown): Partial<Persist
     out.entries = entries;
   }
   if (typeof p.initialScanDone === "boolean") out.initialScanDone = p.initialScanDone;
+  if (Array.isArray(p.scannedRepos)) {
+    out.scannedRepos = p.scannedRepos.filter((r): r is string => typeof r === "string");
+  }
   return out;
 }
 
@@ -115,7 +143,11 @@ export function sanitizePersistedReviewSeen(persisted: unknown): Partial<Persist
  */
 export function migrateReviewSeen(persisted: unknown, _version: number): PersistedReviewSeen {
   const clean = sanitizePersistedReviewSeen(persisted);
-  return { entries: clean.entries ?? {}, initialScanDone: clean.initialScanDone ?? false };
+  return {
+    entries: clean.entries ?? {},
+    initialScanDone: clean.initialScanDone ?? false,
+    scannedRepos: clean.scannedRepos ?? [],
+  };
 }
 
 export const useReviewSeenStore = create<ReviewSeenState>()(
@@ -123,6 +155,7 @@ export const useReviewSeenStore = create<ReviewSeenState>()(
     (set) => ({
       entries: {},
       initialScanDone: false,
+      scannedRepos: [],
 
       applyScan: (repos, now = Date.now()) =>
         set((state) => baselinesFromScan(state, repos, now) ?? state),
@@ -139,6 +172,7 @@ export const useReviewSeenStore = create<ReviewSeenState>()(
       partialize: (state): PersistedReviewSeen => ({
         entries: state.entries,
         initialScanDone: state.initialScanDone,
+        scannedRepos: state.scannedRepos,
       }),
       migrate: migrateReviewSeen,
       merge: (persisted, current) => ({ ...current, ...sanitizePersistedReviewSeen(persisted) }),

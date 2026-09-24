@@ -5,12 +5,14 @@
 //! 넘겨받은 기록으로 개수만 계산한다.
 //!
 //! 세는 방법(`CountBasis`):
-//! 1. `oid` — 기준 SHA 가 HEAD 에서 닿으면 `oid..HEAD` 의 커밋 수.
-//! 2. `authorTime` — rebase·amend 로 기준 SHA 가 HEAD 에서 닿지 않으면, 분기점..HEAD 범위에서
-//!    author 시각이 `seenAt` 보다 늦은 커밋만 센다. rebase 는 author 시각을 보존하므로
-//!    이미 본 커밋이 다시 새 커밋이 되지 않는다.
-//! 3. `mergeBase` — 기록이 없거나 기록된 브랜치와 지금 브랜치가 다르면, 기반 브랜치에서
-//!    갈라진 지점(merge-base)..HEAD 를 센다. 기반 브랜치는 `worktree_base` 로 판별한다.
+//! 1. `oid` — 기준 SHA 가 HEAD 에서 닿으면 `oid..HEAD` 의 커밋 수. 단, 기반 브랜치에서 병합해
+//!    들어온 커밋은 빼서 rebase 로 받은 경우(2번)와 같은 결과가 나오게 한다.
+//! 2. `authorTime` — rebase·amend 로 기준 SHA 가 HEAD 에서 닿지 않으면, 기반 브랜치에 없는
+//!    HEAD 쪽 커밋 중 author 시각이 `seenAt` 과 같은 초이거나 더 늦은 커밋만 센다. rebase 는
+//!    author 시각을 보존하므로 이미 본 커밋이 다시 새 커밋이 되지 않는다.
+//! 3. `mergeBase` — 기록이 없거나 기록된 브랜치와 지금 브랜치가 다르면, 기반 브랜치에 없는
+//!    HEAD 쪽 커밋(`base..HEAD`, 갈라진 지점부터)을 센다. 기반 브랜치는 `worktree_base` 로
+//!    판별한다. 판별 규칙과 못 찾았을 때의 처리는 `base_branch`·`merge_base_count` 에 적었다.
 
 use std::path::Path;
 
@@ -34,7 +36,9 @@ pub struct RepoReviewStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewWorktree {
-    /// 작업 트리 경로(끝의 `/` 없음). 기준선 스토어의 키로 쓴다.
+    /// 작업 트리 경로(끝의 `/` 없음). 기준선 스토어의 키로 쓴다. 메인 작업 트리는 요청한
+    /// 저장소 경로를 그대로 쓴다(심볼릭 링크를 풀지 않는다). 링크된 워크트리로 요청했으면
+    /// libgit2 가 돌려준 경로다.
     pub path: String,
     /// 체크아웃한 로컬 브랜치. detached HEAD 면 `None`.
     pub branch: Option<String>,
@@ -76,19 +80,21 @@ pub struct NewCommitCount {
 /// `repo_path`(메인 작업 트리든 링크된 워크트리든)가 속한 저장소의 모든 워크트리.
 /// 메인 작업 트리가 맨 앞이다. bare 저장소는 메인 작업 트리가 없어 링크된 것만 돌려준다.
 /// 작업 디렉토리가 사라진(prune 대기) 워크트리는 뺀다.
+///
+/// `repo_path` 가 메인 작업 트리면 그 경로를 그대로 메인 작업 트리의 `path` 로 쓴다. libgit2 의
+/// `workdir()` 는 심볼릭 링크를 풀어 버려서(`/tmp` → `/private/tmp`), 앱이 저장한 저장소 경로와
+/// 달라진다. 기준선과 화면의 조회 키가 저장소 목록의 경로와 같아야 한다.
 pub fn list_review_worktrees(repo_path: &str) -> Result<RepoReviewStatus, git2::Error> {
     let opened = Repository::open(repo_path)?;
-    let main = if opened.is_worktree() {
-        Repository::open(common_git_dir(&opened))?
-    } else {
-        opened
-    };
+    let opened_main = !opened.is_worktree();
+    let main = if opened_main { opened } else { Repository::open(common_git_dir(&opened))? };
 
     let mut worktrees = Vec::new();
     if let Some(workdir) = main.workdir() {
         let (branch, head_oid) = head_info(&main);
+        let path = if opened_main { normalize_path(Path::new(repo_path)) } else { normalize_path(workdir) };
         worktrees.push(ReviewWorktree {
-            path: normalize_path(workdir),
+            path,
             branch,
             head_oid,
             is_main: true,
@@ -159,52 +165,106 @@ fn count_for(
     branch: Option<&str>,
     record: &SeenRecord,
 ) -> Result<(u32, CountBasis), git2::Error> {
+    let base = base_branch(repo, branch);
     let seen_oid = record.oid.as_deref().and_then(|s| Oid::from_str(s).ok());
     let same_branch = record.branch.as_deref() == branch;
     let Some(seen_oid) = seen_oid.filter(|_| same_branch) else {
-        return merge_base_count(repo, head, branch);
+        return merge_base_count(repo, head, branch, base.as_ref());
     };
 
     if seen_oid == head || repo.graph_descendant_of(head, seen_oid).unwrap_or(false) {
-        let n = count_range(repo, head, Some(seen_oid), |_| true)?;
+        // 기반 브랜치를 병합해 들어온 커밋은 이 브랜치의 새 작업이 아니다. rebase 로 같은 커밋을
+        // 받은 경우(authorTime)와 같은 결과가 나오게 기반 브랜치 쪽 커밋을 뺀다. 기본 브랜치와
+        // 자기 원격 추적 브랜치는 이 브랜치 자신의 줄기라 빼지 않는다(pull 로 받은 커밋은 새 커밋).
+        let other_base = base.filter(|b| !is_own_line(repo, branch, &b.name)).map(|b| b.tip);
+        let hide: Vec<Oid> = std::iter::once(seen_oid).chain(other_base).collect();
+        let n = count_range(repo, head, &hide, |_| true)?;
         return Ok((n, CountBasis::Oid));
     }
 
     let Some(seen_at) = record.seen_at else {
-        return merge_base_count(repo, head, branch);
+        return merge_base_count(repo, head, branch, base.as_ref());
     };
-    // 분기점을 못 찾으면 옛 기준 커밋(아직 객체가 남아 있으면)과의 공통 조상을 쓴다.
-    let lower = fork_point(repo, head, branch).or_else(|| repo.merge_base(head, seen_oid).ok());
-    let n = count_range(repo, head, lower, |c| c.author().when().seconds().saturating_mul(1000) > seen_at)?;
+    // 기반 브랜치를 못 찾으면 옛 기준 커밋(아직 객체가 남아 있으면)과의 공통 조상을 쓴다.
+    let lower = base.map(|b| b.tip).or_else(|| repo.merge_base(head, seen_oid).ok());
+    // author 시각은 초 단위라, 확인한 그 초에 만든 커밋도 새 커밋으로 친다.
+    let seen_sec = seen_at.div_euclid(1000);
+    let hide: Vec<Oid> = lower.into_iter().collect();
+    let n = count_range(repo, head, &hide, |c| c.author().when().seconds() >= seen_sec)?;
     Ok((n, CountBasis::AuthorTime))
 }
 
+/// 기반 브랜치에 없는, HEAD 쪽 커밋 수.
+/// 기반 브랜치를 못 찾으면:
+/// - 기본 브랜치(갈라져 나온 곳이 없는 줄기)는 0.
+/// - 그 밖(다른 브랜치와 이력을 공유하지 않는 브랜치 등)은 HEAD 의 전체 이력을 이 브랜치의
+///   커밋으로 센다(`MAX_WALK` 까지). 에이전트가 쌓은 커밋이 0 으로 숨지 않게 한다.
 fn merge_base_count(
     repo: &Repository,
     head: Oid,
     branch: Option<&str>,
+    base: Option<&BaseBranch>,
 ) -> Result<(u32, CountBasis), git2::Error> {
-    // 기반 브랜치를 모르면 셀 범위가 없다. 전체 이력을 새 커밋이라 부르지 않도록 0 으로 둔다.
-    let n = match fork_point(repo, head, branch) {
-        Some(lower) => count_range(repo, head, Some(lower), |_| true)?,
-        None => 0,
+    let n = match base {
+        Some(b) => count_range(repo, head, &[b.tip], |_| true)?,
+        None if is_default_branch(repo, branch) => 0,
+        None => count_range(repo, head, &[], |_| true)?,
     };
     Ok((n, CountBasis::MergeBase))
 }
 
-/// HEAD 가 기반 브랜치에서 갈라진 지점. detached HEAD 면 기본 브랜치를 기반으로 본다.
-fn fork_point(repo: &Repository, head: Oid, branch: Option<&str>) -> Option<Oid> {
-    let base_name = match branch {
-        Some(b) => resolve_worktree_base_cached(repo, b)?.name,
-        None => default_branch_name(repo).or_else(|| {
-            ["main", "master"]
-                .into_iter()
-                .find(|n| repo.find_branch(n, BranchType::Local).is_ok())
-                .map(str::to_string)
-        })?,
+/// 이 브랜치가 갈라져 나온 기반 브랜치.
+struct BaseBranch {
+    name: String,
+    tip: Oid,
+}
+
+/// 이 브랜치가 갈라져 나온 기반 브랜치.
+/// - 기본 브랜치: 자기 원격 추적 브랜치(없으면 `None`). 푸시하지 않은 커밋만 자기 커밋이다.
+/// - 그 밖의 브랜치: `worktree_base` 로 판별하고, 못 하면 기본 브랜치를 쓴다.
+/// - detached HEAD: 기본 브랜치.
+fn base_branch(repo: &Repository, branch: Option<&str>) -> Option<BaseBranch> {
+    let default = local_default_branch(repo);
+    let name = match branch {
+        Some(b) if default.as_deref() == Some(b) => upstream_name(repo, b)?,
+        Some(b) => resolve_worktree_base_cached(repo, b)
+            .map(|base| base.name)
+            .or_else(|| default.filter(|d| d != b))?,
+        None => default?,
     };
-    let base_oid = branch_oid(repo, &base_name)?;
-    repo.merge_base(head, base_oid).ok()
+    let tip = branch_oid(repo, &name)?;
+    Some(BaseBranch { name, tip })
+}
+
+/// origin/HEAD 가 가리키는 기본 브랜치. 없으면 로컬 `main`·`master` 중 있는 것.
+fn local_default_branch(repo: &Repository) -> Option<String> {
+    default_branch_name(repo).or_else(|| {
+        ["main", "master"]
+            .into_iter()
+            .find(|n| repo.find_branch(n, BranchType::Local).is_ok())
+            .map(str::to_string)
+    })
+}
+
+fn upstream_name(repo: &Repository, branch: &str) -> Option<String> {
+    let local = repo.find_branch(branch, BranchType::Local).ok()?;
+    let upstream = local.upstream().ok()?;
+    upstream.name().ok().flatten().map(str::to_string)
+}
+
+fn is_default_branch(repo: &Repository, branch: Option<&str>) -> bool {
+    branch.is_some() && local_default_branch(repo).as_deref() == branch
+}
+
+/// `base` 가 `branch` 자신의 줄기인지: `branch` 가 기본 브랜치이거나, `base` 가 `branch` 의
+/// 원격 추적 브랜치(`origin/<branch>` 등)면 참.
+fn is_own_line(repo: &Repository, branch: Option<&str>, base: &str) -> bool {
+    let Some(branch) = branch else { return false };
+    if is_default_branch(repo, Some(branch)) {
+        return true;
+    }
+    repo.find_branch(base, BranchType::Remote).is_ok()
+        && base.split_once('/').is_some_and(|(_, rest)| rest == branch)
 }
 
 fn branch_oid(repo: &Repository, name: &str) -> Option<Oid> {
@@ -215,17 +275,18 @@ fn branch_oid(repo: &Repository, name: &str) -> Option<Oid> {
         .target()
 }
 
-/// `hide..head` 범위에서 `keep` 을 만족하는 커밋 수. 최대 `MAX_WALK` 개까지 걷는다.
+/// `head` 에서 닿되 `hide` 의 어느 것에서도 닿지 않는 커밋 중 `keep` 을 만족하는 것의 수.
+/// 최대 `MAX_WALK` 개까지 걷는다.
 fn count_range(
     repo: &Repository,
     head: Oid,
-    hide: Option<Oid>,
+    hide: &[Oid],
     keep: impl Fn(&git2::Commit) -> bool,
 ) -> Result<u32, git2::Error> {
     let mut walk = repo.revwalk()?;
     walk.push(head)?;
-    if let Some(hide) = hide {
-        walk.hide(hide)?;
+    for oid in hide {
+        walk.hide(*oid)?;
     }
     let mut n: u32 = 0;
     for oid in walk.take(MAX_WALK) {
@@ -387,6 +448,90 @@ mod tests {
 
         commit_at(&wt, "a3", 7);
         assert_eq!(count(&r), (1, CountBasis::AuthorTime));
+    }
+
+    #[test]
+    fn a_commit_in_the_same_second_as_mark_seen_counts_as_new() {
+        let main = init_repo("samesec");
+        let wt = add_worktree(&main, "wt-samesec", "feat/s", "main");
+        commit_at(&wt, "s1", 1);
+        let r = record(&wt, Some(&head(&wt)), Some(ms(5) + 400), Some("feat/s"));
+        // 확인한 그 초(.400 뒤)에 만든 커밋. author 시각은 초 단위라 .000 으로 남는다.
+        commit_at(&wt, "s2", 5);
+        // 기준 커밋 s1 이 사라지게 앞서 나간 main 위로 rebase 한다.
+        commit_at(&main, "m1", 3);
+        git_env(&wt, &["rebase", "-q", "main"], None, Some(T0 + 6 * 60));
+        assert_eq!(count(&r), (1, CountBasis::AuthorTime));
+    }
+
+    #[test]
+    fn merging_the_base_branch_counts_like_a_rebase() {
+        let main = init_repo("mergebase-in");
+        let wt = add_worktree(&main, "wt-merge", "feat/m", "main");
+        commit_at(&wt, "f1", 1);
+        let r = record(&wt, Some(&head(&wt)), Some(ms(2)), Some("feat/m"));
+        for i in 0..5 {
+            commit_at(&main, &format!("m{}", i), 10 + i);
+        }
+        git_env(&wt, &["merge", "-q", "--no-ff", "-m", "merge main", "main"], Some(T0 + 20 * 60), Some(T0 + 20 * 60));
+        // 병합 커밋 하나만 이 브랜치의 새 커밋이다. main 의 5개는 빼야 한다.
+        assert_eq!(count(&r), (1, CountBasis::Oid));
+    }
+
+    #[test]
+    fn the_default_branch_counts_commits_merged_into_it() {
+        let main = init_repo("trunk-merge");
+        git(&main, &["branch", "feat/x"]);
+        let seen = head(&main);
+        let r = record(&main, Some(&seen), Some(ms(0)), Some("main"));
+        git(&main, &["checkout", "-q", "feat/x"]);
+        commit_at(&main, "x1", 1);
+        commit_at(&main, "x2", 2);
+        git(&main, &["checkout", "-q", "main"]);
+        git_env(&main, &["merge", "-q", "--no-ff", "-m", "merge x", "feat/x"], Some(T0 + 180), Some(T0 + 180));
+        // 기본 브랜치는 줄기라 다른 브랜치를 기반으로 빼지 않는다.
+        assert_eq!(count(&r), (3, CountBasis::Oid));
+    }
+
+    #[test]
+    fn switching_to_the_default_branch_without_upstream_counts_zero() {
+        let main = init_repo("to-trunk");
+        git(&main, &["checkout", "-q", "-b", "feat/a"]);
+        commit_at(&main, "a1", 1);
+        let r = record(&main, Some(&head(&main)), Some(ms(5)), Some("feat/a"));
+        git(&main, &["checkout", "-q", "main"]);
+        commit_at(&main, "m1", 2);
+        // 기본 브랜치는 갈라져 나온 곳이 없다. 전체 이력을 새 커밋이라 부르지 않는다.
+        assert_eq!(count(&r), (0, CountBasis::MergeBase));
+    }
+
+    #[test]
+    fn a_branch_without_a_known_base_counts_its_own_history() {
+        let main = init_repo("orphan");
+        let wt = add_worktree(&main, "wt-orphan", "feat/tmp", "main");
+        git(&wt, &["checkout", "-q", "--orphan", "agent/o"]);
+        commit_at(&wt, "o1", 1);
+        commit_at(&wt, "o2", 2);
+        // 어느 브랜치와도 이력을 공유하지 않아 기반 브랜치를 판별하지 못한다.
+        assert!(resolve_worktree_base_cached(&Repository::open(&wt).unwrap(), "agent/o").is_none());
+        let r = record(&wt, None, None, None);
+        assert_eq!(count(&r), (2, CountBasis::MergeBase));
+    }
+
+    #[test]
+    fn the_main_worktree_keeps_the_requested_path_through_a_symlink() {
+        let main = init_repo("symlink");
+        let link = main.parent().unwrap().join("link");
+        std::os::unix::fs::symlink(&main, &link).unwrap();
+        let requested = link.to_str().unwrap();
+
+        let status = list_review_worktrees(requested).unwrap();
+        assert_eq!(status.repo_path, requested);
+        assert_eq!(status.worktrees[0].path, requested);
+
+        // 같은 경로로 셀 수 있다.
+        let r = record(&link, Some(&head(&main)), Some(ms(0)), Some("main"));
+        assert_eq!(count_new_commits(&r).unwrap().path, requested);
     }
 
     #[test]

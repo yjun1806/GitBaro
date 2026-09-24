@@ -444,7 +444,10 @@ export type GitOperation = "merge" | "rebase" | "cherryPick" | "revert" | "squas
 
 /** `review_status`가 돌려주는 워크트리 하나. `path`는 기준선 스토어의 키다. */
 export interface ReviewWorktree {
-  /** 작업 트리 경로(끝의 `/` 없음). */
+  /**
+   * 작업 트리 경로(끝의 `/` 없음). 메인 작업 트리는 요청한 저장소 경로를 그대로 쓴다
+   * (심볼릭 링크를 풀지 않아 저장소 목록의 경로와 같다).
+   */
   path: string;
   /** 체크아웃한 로컬 브랜치. detached HEAD면 null. */
   branch: string | null;
@@ -471,8 +474,9 @@ export interface SeenRecordInput {
 
 /**
  * 새 커밋을 센 방법.
- * - `oid`: 기준 커밋..HEAD
- * - `authorTime`: rebase·amend로 기준 커밋이 사라져, 분기점..HEAD 중 author 시각이 확인 시각보다 늦은 커밋
+ * - `oid`: 기준 커밋..HEAD. 기반 브랜치를 병합해 들어온 커밋은 뺀다(기본 브랜치 제외)
+ * - `authorTime`: rebase·amend로 기준 커밋이 사라져, 기반 브랜치에 없는 커밋 중 author 시각이
+ *   확인 시각과 같은 초이거나 더 늦은 커밋
  * - `mergeBase`: 기준선이 없거나 브랜치가 바뀌어, 기반 브랜치에서 갈라진 지점..HEAD
  */
 export type NewCommitBasis = "oid" | "authorTime" | "mergeBase";

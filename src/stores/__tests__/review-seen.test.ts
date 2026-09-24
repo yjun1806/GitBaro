@@ -31,7 +31,7 @@ function state() {
 describe("useReviewSeenStore", () => {
   beforeEach(() => {
     localStorage.clear();
-    useReviewSeenStore.setState({ entries: {}, initialScanDone: false });
+    useReviewSeenStore.setState({ entries: {}, initialScanDone: false, scannedRepos: [] });
   });
 
   it("첫 실행 스캔은 그때 있는 모든 워크트리의 HEAD를 기준선으로 잡는다", () => {
@@ -41,10 +41,27 @@ describe("useReviewSeenStore", () => {
     );
 
     expect(state().initialScanDone).toBe(true);
+    expect(state().scannedRepos).toEqual([ALPHA]);
     expect(state().entries).toEqual({
       [ALPHA]: { branch: "main", oid: "a1", seenAt: 1000 },
       [ALPHA_WT]: { branch: "feature", oid: "f1", seenAt: 1000 },
     });
+  });
+
+  it("첫 실행 때 빠진 저장소가 돌아오면 그 저장소의 기존 워크트리도 모두 기준선을 잡는다", () => {
+    // BETA는 외장 디스크가 빠져 있어 첫 스캔 응답에 없었다.
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1")])], 1000);
+    state().applyScan(
+      [
+        repo(ALPHA, [wt(ALPHA, true, "a1")]),
+        repo(BETA, [wt(BETA, true, "b1"), wt(BETA_WT, false, "x1", "agent")]),
+      ],
+      2000,
+    );
+
+    expect(state().entries[BETA]).toEqual({ branch: "main", oid: "b1", seenAt: 2000 });
+    expect(state().entries[BETA_WT]).toEqual({ branch: "agent", oid: "x1", seenAt: 2000 });
+    expect(state().scannedRepos).toEqual([ALPHA, BETA]);
   });
 
   it("워크트리가 하나도 없는 스캔은 첫 실행으로 치지 않는다", () => {
@@ -64,18 +81,26 @@ describe("useReviewSeenStore", () => {
     expect(state().entries[ALPHA]).toEqual({ branch: "main", oid: "a1", seenAt: 1000 });
   });
 
-  it("첫 실행 뒤 추가된 저장소는 메인 작업 트리만 현재 HEAD를 기준선으로 잡는다", () => {
+  it("추가된 저장소를 한 번 스캔한 뒤 생긴 링크된 워크트리는 기준선 없이 남는다", () => {
     state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1")])], 1000);
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1")]), repo(BETA, [wt(BETA, true, "b1")])], 2000);
     state().applyScan(
       [
         repo(ALPHA, [wt(ALPHA, true, "a1")]),
-        repo(BETA, [wt(BETA, true, "b1"), wt(BETA_WT, false, "x1", "agent")]),
+        repo(BETA, [wt(BETA, true, "b2"), wt(BETA_WT, false, "x1", "agent")]),
       ],
-      2000,
+      3000,
     );
 
     expect(state().entries[BETA]).toEqual({ branch: "main", oid: "b1", seenAt: 2000 });
     expect(state().entries[BETA_WT]).toBeUndefined();
+  });
+
+  it("기준선이 없던 메인 작업 트리는 커밋이 생기면 현재 HEAD로 잡는다", () => {
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, null)])], 1000);
+    state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1"), wt(ALPHA_WT, false, "f1")])], 2000);
+    expect(state().entries[ALPHA]).toEqual({ branch: "main", oid: "a1", seenAt: 2000 });
+    expect(state().entries[ALPHA_WT]).toBeUndefined();
   });
 
   it("HEAD가 없는 워크트리(커밋 없는 저장소)는 기준선을 잡지 않는다", () => {
@@ -91,7 +116,9 @@ describe("useReviewSeenStore", () => {
     const before = state().entries;
     state().applyScan(scan, 2000);
     expect(state().entries).toBe(before);
-    expect(baselinesFromScan({ entries: before, initialScanDone: true }, scan, 3000)).toBeNull();
+    expect(
+      baselinesFromScan({ entries: before, initialScanDone: true, scannedRepos: [ALPHA] }, scan, 3000),
+    ).toBeNull();
   });
 
   it("markSeen은 기준선을 지금 HEAD와 브랜치로 옮긴다", () => {
@@ -109,6 +136,7 @@ describe("useReviewSeenStore", () => {
         state: {
           entries: { [ALPHA]: { branch: "main", oid: "a1", seenAt: 1000 } },
           initialScanDone: true,
+          scannedRepos: [ALPHA],
         },
         version: 1,
       }),
@@ -117,6 +145,7 @@ describe("useReviewSeenStore", () => {
     await useReviewSeenStore.persist.rehydrate();
 
     expect(state().initialScanDone).toBe(true);
+    expect(state().scannedRepos).toEqual([ALPHA]);
     expect(state().entries).toEqual({ [ALPHA]: { branch: "main", oid: "a1", seenAt: 1000 } });
   });
 
@@ -124,7 +153,7 @@ describe("useReviewSeenStore", () => {
     state().markSeen(ALPHA, "a1", null);
     const saved = JSON.parse(localStorage.getItem(REVIEW_SEEN_STORAGE_KEY) ?? "{}");
     expect(saved.version).toBe(REVIEW_SEEN_VERSION);
-    expect(Object.keys(saved.state).sort()).toEqual(["entries", "initialScanDone"]);
+    expect(Object.keys(saved.state).sort()).toEqual(["entries", "initialScanDone", "scannedRepos"]);
     expect(saved.state.entries[ALPHA]).toMatchObject({ branch: null, oid: "a1" });
   });
 
@@ -139,6 +168,7 @@ describe("useReviewSeenStore", () => {
             [BETA_WT]: { branch: "x", oid: "", seenAt: 1000 },
           },
           initialScanDone: "yes",
+          scannedRepos: [ALPHA, 7],
         },
         version: 1,
       }),
@@ -148,6 +178,7 @@ describe("useReviewSeenStore", () => {
 
     expect(Object.keys(state().entries)).toEqual([ALPHA]);
     expect(state().initialScanDone).toBe(false);
+    expect(state().scannedRepos).toEqual([ALPHA]);
   });
 });
 
@@ -158,8 +189,12 @@ describe("migrateReviewSeen", () => {
         { entries: { [ALPHA]: { branch: null, oid: "a1", seenAt: 5 } }, initialScanDone: true },
         0,
       ),
-    ).toEqual({ entries: { [ALPHA]: { branch: null, oid: "a1", seenAt: 5 } }, initialScanDone: true });
-    expect(migrateReviewSeen(null, 0)).toEqual({ entries: {}, initialScanDone: false });
+    ).toEqual({
+      entries: { [ALPHA]: { branch: null, oid: "a1", seenAt: 5 } },
+      initialScanDone: true,
+      scannedRepos: [],
+    });
+    expect(migrateReviewSeen(null, 0)).toEqual({ entries: {}, initialScanDone: false, scannedRepos: [] });
   });
 });
 
@@ -169,11 +204,16 @@ describe("buildCountInputs", () => {
       repo(ALPHA, [wt(ALPHA, true, "a2"), wt(ALPHA_WT, false, "f1", "feature"), wt("/empty", false, null)]),
     ];
     expect(
-      buildCountInputs(repos, { [ALPHA]: { branch: "main", oid: "a1", seenAt: 1000 } }),
+      buildCountInputs(repos, { [ALPHA]: { branch: "main", oid: "a1", seenAt: 1000 } }, [ALPHA]),
     ).toEqual([
       { path: ALPHA, oid: "a1", seenAt: 1000, branch: "main" },
       { path: ALPHA_WT },
     ]);
+  });
+
+  it("아직 스캔 기록이 없는 저장소는 기준선을 잡기 전이라 세지 않는다", () => {
+    const repos = [repo(ALPHA, [wt(ALPHA, true, "a1")]), repo(BETA, [wt(BETA, true, "b1")])];
+    expect(buildCountInputs(repos, {}, [ALPHA])).toEqual([{ path: ALPHA }]);
   });
 });
 

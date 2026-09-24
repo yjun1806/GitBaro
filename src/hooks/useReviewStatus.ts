@@ -39,6 +39,7 @@ export function useReviewStatus(repoPaths: string[]) {
   const scan = useReviewStatusQuery(repoPaths);
   const entries = useReviewSeenStore((s) => s.entries);
   const initialScanDone = useReviewSeenStore((s) => s.initialScanDone);
+  const scannedRepos = useReviewSeenStore((s) => s.scannedRepos);
   const applyScan = useReviewSeenStore((s) => s.applyScan);
   const markSeenInStore = useReviewSeenStore((s) => s.markSeen);
 
@@ -48,8 +49,9 @@ export function useReviewStatus(repoPaths: string[]) {
 
   const repos = useMemo(() => scan.data ?? [], [scan.data]);
   const inputs = useMemo(
-    () => (initialScanDone && scan.data ? buildCountInputs(scan.data, entries) : null),
-    [initialScanDone, scan.data, entries],
+    () =>
+      initialScanDone && scan.data ? buildCountInputs(scan.data, entries, scannedRepos) : null,
+    [initialScanDone, scan.data, entries, scannedRepos],
   );
   const headsKey = useMemo(
     () =>
