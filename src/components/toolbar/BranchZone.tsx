@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import { GitBranch, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
@@ -47,7 +48,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
-  const sidebarWidth = useUIStore((s) => s.sidebarWidth);
+  const sidebarWidth = useSidebarWidth();
   const railMode = useUIStore((s) => s.railMode);
   const { worktreeByBranch } = useWorktreeContext(activeRepoPath, worktrees);
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);

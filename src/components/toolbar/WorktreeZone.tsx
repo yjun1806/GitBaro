@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import { ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -32,7 +33,7 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
   const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
-  const sidebarWidth = useUIStore((s) => s.sidebarWidth);
+  const sidebarWidth = useSidebarWidth();
   const railMode = useUIStore((s) => s.railMode);
   const previewBranch = useUIStore((s) => s.previewBranch);
   const { currentWorktree, isInWorktree, mainWorktree } = useWorktreeContext(activeRepoPath, worktrees);

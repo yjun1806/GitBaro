@@ -1,7 +1,8 @@
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback } from "react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useBackgroundFetch } from "@/hooks/useBackgroundFetch";
+import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import "@/stores/selection"; // ensure cross-store subscriptions are registered
 import { RepoRail } from "./RepoRail";
 import { Sidebar } from "./Sidebar";
@@ -11,7 +12,6 @@ import { ActivityLogPanel } from "./ActivityLogPanel";
 import { clampSidebarWidth } from "@/lib/sidebar-width";
 
 export function MainLayout() {
-  const storedSidebarWidth = useUIStore((s) => s.sidebarWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
   const activeTab = useUIStore((s) => s.activeTab);
   const repoListOpen = useUIStore((s) => s.repoListOpen);
@@ -22,16 +22,7 @@ export function MainLayout() {
   // 열린 모든 레포를 주기적으로 fetch해 사이드바 push/pull 인디케이터를 최신화
   useBackgroundFetch();
 
-  // The stored width may come from a wider screen, so fit it to the window on
-  // every render and on resize. The stored value itself is left alone, so the
-  // wider layout comes back when the window grows again.
-  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
-  useEffect(() => {
-    const onResize = () => setViewportWidth(window.innerWidth);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-  const sidebarWidth = clampSidebarWidth(storedSidebarWidth, viewportWidth);
+  const sidebarWidth = useSidebarWidth();
 
   const isDragging = useRef(false);
   const startX = useRef(0);
