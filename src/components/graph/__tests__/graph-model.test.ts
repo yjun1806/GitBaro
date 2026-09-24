@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { avatarColor } from "@/lib/avatar-color";
 import {
+  forkPointIndex,
+  visibleWipRows,
   edgesThroughBottom,
   formatSeenClock,
   graphColumnWidth,
@@ -144,5 +146,52 @@ describe("lane geometry and colour", () => {
       { lane: 0, chain: 0 },
       { lane: 2, chain: 4 },
     ]);
+  });
+});
+
+describe("visibleWipRows", () => {
+  const wip = (path: string, count: number | null, isCurrent = false) => ({
+    path,
+    branch: null,
+    count,
+    changedAt: null,
+    isCurrent,
+    isMain: false,
+  });
+
+  it("hides a worktree row with no uncommitted files", () => {
+    const rows = [wip("/a", 0), wip("/b", 2), wip("/c", 0, true)];
+    expect(visibleWipRows(rows, null).map((r) => r.path)).toEqual(["/b"]);
+  });
+
+  it("keeps a row whose count is still unknown", () => {
+    expect(visibleWipRows([wip("/a", null, true)], null)).toHaveLength(1);
+  });
+
+  it("keeps the followed worktree even at zero (the panel below still shows it)", () => {
+    expect(visibleWipRows([wip("/a", 0)], "/a/").map((r) => r.path)).toEqual(["/a"]);
+  });
+});
+
+describe("forkPointIndex", () => {
+  const commits = [{ id: "c3" }, { id: "c2" }, { id: "base" }, { id: "old" }];
+  const changes = { baseStatus: "found", mergeBaseOid: "base", branch: "feat/x", defaultBranch: "main" };
+
+  it("puts the row right above the merge-base commit", () => {
+    expect(forkPointIndex(commits, changes)).toBe(2);
+  });
+
+  it("shows nothing on the default branch itself", () => {
+    expect(forkPointIndex(commits, { ...changes, branch: "main" })).toBeNull();
+  });
+
+  it("shows nothing when the base is unknown or not loaded yet", () => {
+    expect(forkPointIndex(commits, undefined)).toBeNull();
+    expect(forkPointIndex(commits, { ...changes, baseStatus: "noSharedHistory" })).toBeNull();
+    expect(forkPointIndex(commits, { ...changes, mergeBaseOid: "deep" })).toBeNull();
+  });
+
+  it("works for a detached HEAD", () => {
+    expect(forkPointIndex(commits, { ...changes, branch: null })).toBe(2);
   });
 });

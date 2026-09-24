@@ -4,6 +4,7 @@ import { FileText, Plus, Minus } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useToastStore } from "@/stores/toast";
 import { useStashShow, useCommitFileDiff, useStashMutations } from "@/api/queries";
+import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
@@ -191,9 +192,10 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
       </div>
 
       {/* Content: file list + diff */}
-      <div className="flex-1 flex min-h-0">
-        {/* File list panel */}
-        <div className="w-[260px] shrink-0 border-r border-border overflow-y-auto" {...containerProps}>
+      <ListDiffSplit
+        variant="inline"
+        list={
+          <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
           <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
             {t("stash.detail.files")} ({files.length})
           </div>
@@ -213,20 +215,21 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
               />
             ))
           )}
-        </div>
-
-        {/* Diff viewer */}
-        <div className="flex-1 overflow-hidden">
+          </div>
+        }
+        detail={
+          <>
           {selectedFilePath && fileDiff ? (
-            <DiffViewer diff={fileDiff} status="modified" />
+            <DiffViewer diff={fileDiff} status="modified" maximizable />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
               <FileText className="w-8 h-8" />
               <p className="text-xs">{t("stash.selectStash")}</p>
             </div>
           )}
-        </div>
-      </div>
+          </>
+        }
+      />
     </div>
   );
 }

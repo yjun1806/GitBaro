@@ -4,6 +4,7 @@ import { buildCountInputs, useReviewSeenStore } from "@/stores/review-seen";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { useReviewStatus } from "@/hooks/useReviewStatus";
+import { useCurrentBranch } from "@/hooks/useCurrentBranch";
 import {
   useCommitHistoryInfinite,
   useNewCommitIdsQuery,
@@ -50,6 +51,7 @@ export function useGraphReview(): GraphReview {
   const review = useReviewStatus(repoPaths);
   const { data: statusEntries } = useStatus(activeRepoPath);
   const lastChangedAt = useLiveChangesStore((s) => s.lastChangedAt);
+  const currentBranch = useCurrentBranch();
 
   const worktrees = useMemo(
     () => review.repos.find((r) => r.repoPath === ownerPath)?.worktrees ?? [],
@@ -84,6 +86,7 @@ export function useGraphReview(): GraphReview {
         changedAt: changedAtOf(w.path),
         isCurrent,
         isMain: w.isMain,
+        headOid: w.headOid,
       };
     });
     // 워크트리 목록을 아직 못 읽었거나 지금 연 경로가 목록에 없으면(막 만든 워크트리 등)
@@ -91,15 +94,16 @@ export function useGraphReview(): GraphReview {
     if (!rows.some((r) => r.isCurrent)) {
       rows.push({
         path: activeRepoPath,
-        branch: null,
+        branch: currentBranch,
         count: currentCount,
         changedAt: changedAtOf(activeRepoPath),
         isCurrent: true,
-        isMain: false,
+        isMain: ownerPath !== null && normalizePath(ownerPath) === normalizePath(activeRepoPath),
+        headOid: null,
       });
     }
     return orderWipRows(rows);
-  }, [activeRepoPath, worktrees, currentKey, currentCount, syncByPath, lastChangedAt]);
+  }, [activeRepoPath, ownerPath, currentBranch, worktrees, currentKey, currentCount, syncByPath, lastChangedAt]);
 
   // 새 커밋: 사이드바의 개수와 같은 입력(`buildCountInputs`)으로 지금 연 워크트리 하나만 센다.
   // 첫 기준선을 잡기 전에는 세지 않는다(잡힐 기준선 대신 갈라진 지점부터 세어 버리지 않게).

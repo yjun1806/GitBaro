@@ -16,6 +16,8 @@ import { WorkspaceReview } from "@/components/review/WorkspaceReview";
 import { FilesByRepo } from "@/components/review/FilesByRepo";
 import { useFilesViewStore } from "@/components/review/files-view";
 import { Card, ContentArea, EmptyState } from "./ContentArea";
+import { GraphSplit } from "./GraphSplit";
+import { useDiffMaximizeReset } from "./useDiffMaximize";
 
 /** "All repositories" list, opened from the sidebar. Takes over the main column. */
 function RepoListCard() {
@@ -61,6 +63,8 @@ export function MainColumn() {
   const scope = useActiveScope();
   const addToast = useToastStore((s) => s.addToast);
   const queryClient = useQueryClient();
+  // 다른 저장소·워크스페이스로 옮기거나 목록을 열면 diff 크게 보기를 끝낸다(숨긴 목록으로 돌아올 길이 없어진다).
+  useDiffMaximizeReset(`${scope?.kind === "workspace" ? scope.id : ""}:${activeRepoPath ?? ""}:${repoListOpen}`);
 
   const handleStopPreview = async () => {
     if (!activeRepoPath) return;
@@ -91,19 +95,22 @@ export function MainColumn() {
           <RepoListCard />
         ) : scope?.kind === "repo" ? (
           // 저장소 전용 화면은 저장소를 골랐을 때만 마운트한다. 안쪽 파일은 null 경로를 보지 않는다.
-          <>
-            <GraphPanel />
-            {filesOpen && activeRepoPath ? (
-              // 저장소(워크트리)를 바꾸면 고른 파일·접힌 그룹을 새로 시작한다.
-              <FilesByRepo
-                key={activeRepoPath}
-                repos={[{ path: activeRepoPath, name: activeRepoName ?? activeRepoPath }]}
-                groupBy={groupBy}
-              />
-            ) : (
-              <ContentArea activeTab={activeTab} />
-            )}
-          </>
+          <GraphSplit
+            topCollapsed={filesOpen}
+            top={<GraphPanel />}
+            bottom={
+              filesOpen && activeRepoPath ? (
+                // 저장소(워크트리)를 바꾸면 고른 파일·접힌 그룹을 새로 시작한다.
+                <FilesByRepo
+                  key={activeRepoPath}
+                  repos={[{ path: activeRepoPath, name: activeRepoName ?? activeRepoPath }]}
+                  groupBy={groupBy}
+                />
+              ) : (
+                <ContentArea activeTab={activeTab} />
+              )
+            }
+          />
         ) : scope?.kind === "workspace" ? (
           <WorkspaceReview key={scope.id} workspaceId={scope.id} paths={scope.paths} />
         ) : (

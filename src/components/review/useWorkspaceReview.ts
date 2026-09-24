@@ -175,6 +175,7 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
         path: w.path,
         branch: w.branch,
         isMain: w.isMain,
+        headOid: w.headOid,
         count: new Set((statuses[w.path] ?? []).map((e) => e.path)).size,
         changedAt: lastChangedAt[w.path] ?? null,
       })),

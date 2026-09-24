@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { clsx } from "clsx";
+import { Maximize2, Minimize2 } from "lucide-react";
+import { useUIStore } from "@/stores/ui";
 import { FileStatusBadge } from "@/lib/file-status";
 import type { FileStatus } from "@/types";
 import type { DiffViewMode } from "./view-mode";
@@ -22,6 +24,8 @@ interface DiffHeaderProps {
   onSelectMode: (mode: DiffViewMode) => void;
   /** 줄 수 앞에 둘 것(따라가기의 「4초 전 수정」 등). */
   extra?: ReactNode;
+  /** diff를 메인 칸 전체로 키우는 버튼을 둘지(목록 + diff 화면에서만 켠다). */
+  maximizable?: boolean;
 }
 
 export function DiffHeader({
@@ -33,6 +37,7 @@ export function DiffHeader({
   modes,
   onSelectMode,
   extra,
+  maximizable = false,
 }: DiffHeaderProps) {
   const { t } = useTranslation();
 
@@ -44,7 +49,7 @@ export function DiffHeader({
     : filePath;
 
   return (
-    <div className="flex items-center gap-3 px-4 h-[36px] bg-surface border-b border-border min-w-0">
+    <div className="flex items-center gap-3 px-4 h-[36px] bg-card border-b border-(--line) min-w-0">
       <FileStatusBadge status={status} size="md" />
 
       <div className="flex-1 min-w-0 flex items-center gap-0.5">
@@ -85,7 +90,28 @@ export function DiffHeader({
             </button>
           ))}
         </div>
+        {maximizable && <MaximizeButton />}
       </div>
     </div>
+  );
+}
+
+/** diff 크게 보기 켜기·끄기. 켜면 그래프 패널과 파일 목록을 숨긴다(Escape로도 되돌린다). */
+function MaximizeButton() {
+  const { t } = useTranslation();
+  const maximized = useUIStore((s) => s.isDiffMaximized);
+  const setMaximized = useUIStore((s) => s.setDiffMaximized);
+  const label = maximized ? t("diff.restoreSize") : t("diff.maximize");
+  return (
+    <button
+      type="button"
+      onClick={() => setMaximized(!maximized)}
+      aria-label={label}
+      aria-pressed={maximized}
+      title={label}
+      className="flex items-center justify-center w-6 h-6 rounded-(--radius-chip) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+    >
+      {maximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+    </button>
   );
 }

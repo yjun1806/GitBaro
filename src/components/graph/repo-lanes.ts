@@ -29,6 +29,8 @@ export interface LaneWip {
   count: number;
   /** 마지막으로 바뀐 시각(epoch ms). 모르면 null. */
   changedAt: number | null;
+  /** 그 워크트리의 HEAD. 브랜치가 없을 때 「HEAD <sha>」로 보여 준다. */
+  headOid?: string | null;
 }
 
 export type RepoLaneRow =

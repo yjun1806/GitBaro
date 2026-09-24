@@ -1,11 +1,12 @@
 import type { MouseEvent, ReactNode, Ref } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Bot, FolderGit2 } from "lucide-react";
+import type { TFunction } from "i18next";
+import { ArrowUp, Bot, FolderGit2, GitBranch } from "lucide-react";
 import { RefBadge } from "@/components/history/CommitItem";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { GraphEdge, GraphRowLayout } from "@/lib/graph-lanes";
 import type { CommitInfo } from "@/types";
-import { formatSeenClock, GRAPH_ROW_HEIGHT, laneX } from "./graph-model";
+import { formatSeenClock, GRAPH_ROW_HEIGHT, laneX, type WipTarget } from "./graph-model";
 
 const H = GRAPH_ROW_HEIGHT;
 const MID = H / 2;
@@ -198,9 +199,12 @@ export function GraphRow({
 }
 
 interface GraphWipRowProps {
+  /** 설명 칸 앞부분(스크린 리더용 이름에도 쓴다). 파일 수는 이 컴포넌트가 붙인다. */
   wipLabel: string;
-  /** 다른 워크트리의 WIP 행이면 그 브랜치(또는 폴더) 이름. 지금 연 워크트리면 null. */
-  worktreeName: string | null;
+  /** 변경이 쌓인 브랜치와 워크트리. 행마다 늘 보여 준다(여러 워크트리가 있어도 헷갈리지 않게). */
+  target: WipTarget;
+  /** 스크린 리더용 이름 맨 앞에 붙일 것(워크스페이스 그래프의 저장소 이름). */
+  ariaContext?: string;
   count: number | null;
   /** 커밋하지 않은 파일이 마지막으로 바뀐 시각(epoch ms). */
   changedAt: number | null;
@@ -219,6 +223,8 @@ interface GraphWipRowProps {
   leading?: ReactNode;
   /** 파일 수 뒤에 둘 것(따라가기의 「따라가는 중」 알약, 시안 D4). */
   trailing?: ReactNode;
+  /** 행 오른쪽 끝의 버튼(「커밋하기 (N)」). 행 버튼 밖에 둔다(버튼 안에 버튼을 넣지 않는다). */
+  action?: ReactNode;
   onSelect: () => void;
 }
 
@@ -228,7 +234,8 @@ interface GraphWipRowProps {
  */
 export function GraphWipRow({
   wipLabel,
-  worktreeName,
+  target,
+  ariaContext,
   count,
   changedAt,
   color,
@@ -239,22 +246,30 @@ export function GraphWipRow({
   colorOf,
   leading,
   trailing,
+  action,
   onSelect,
 }: GraphWipRowProps) {
   const { t } = useTranslation();
   const x = laneX(layout?.lane ?? 0);
   const active = (count ?? 0) > 0;
+  const branchText = wipBranchText(t, target);
+  const worktreeText = target.worktree ?? t("graph.wipMainWorktree");
+  const countText = count === null ? "…" : t("graph.fileCount", { count });
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      aria-label={wipLabel}
-      onClick={onSelect}
+    <div
       className={cn(
-        "flex items-center w-full text-left shrink-0 border-b border-(--line) transition-colors",
+        "flex items-center w-full shrink-0 border-b border-(--line) transition-colors",
         selected ? "bg-(--acc-sel)" : "hover:bg-accent",
       )}
       style={{ height: H }}
+      data-testid="wip-row"
+    >
+    <button
+      type="button"
+      aria-pressed={selected}
+      aria-label={[ariaContext, wipLabel, branchText, worktreeText, countText].filter(Boolean).join(" · ")}
+      onClick={onSelect}
+      className="flex items-center flex-1 min-w-0 h-full text-left"
     >
       <svg width={graphWidth} height={H} viewBox={`0 0 ${graphWidth} ${H}`} aria-hidden="true" className="shrink-0">
         {layout?.edges.map((edge, i) => (
@@ -285,19 +300,30 @@ export function GraphWipRow({
         <span className="flex items-center gap-2 min-w-0">
           <span className="w-1.5 shrink-0" />
           {leading}
-          {worktreeName && (
+          <span className="italic text-(--fg2) truncate">{wipLabel}</span>
+          {/* 이 변경이 쌓인 브랜치(그 브랜치 최신 커밋 위)와 워크트리. */}
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 max-w-[200px] shrink-0 px-[7px] py-px rounded-[6px] text-[10.5px] font-bold",
+              target.branch === null ? "bg-(--chip) text-muted-foreground" : "bg-(--chip) text-(--fg2)",
+            )}
+            title={branchText}
+          >
+            <GitBranch className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+            <span className="truncate font-mono">{branchText}</span>
+          </span>
+          {target.worktree !== null ? (
             <span
               className="inline-flex items-center gap-1 max-w-[180px] shrink-0 px-[7px] py-px rounded-[6px] border border-(--line2) text-[10.5px] font-bold text-(--fg2)"
               title={t("graph.worktree")}
             >
               <FolderGit2 className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
-              <span className="truncate font-mono">{worktreeName}</span>
+              <span className="truncate font-mono">{target.worktree}</span>
             </span>
+          ) : (
+            <span className="shrink-0 text-[11px] text-muted-foreground">{worktreeText}</span>
           )}
-          <span className="italic text-(--fg2) truncate">{t("shell.uncommitted")}</span>
-          <span className="text-[11.5px] text-muted-foreground shrink-0">
-            {count === null ? "…" : t("graph.fileCount", { count })}
-          </span>
+          <span className="text-[11.5px] text-muted-foreground shrink-0">{countText}</span>
           {trailing}
         </span>
         <span />
@@ -309,7 +335,17 @@ export function GraphWipRow({
         <span />
       </span>
     </button>
+    {action && <span className="shrink-0 pr-3 pl-1">{action}</span>}
+    </div>
   );
+}
+
+/** WIP 행의 브랜치 표시: 「feat/x 브랜치」, 브랜치가 없으면 「브랜치 없음 (HEAD 1a2b3c4)」. */
+export function wipBranchText(t: TFunction, target: WipTarget): string {
+  if (target.branch !== null) return t("graph.wipBranch", { branch: target.branch });
+  return target.shortSha
+    ? t("graph.wipDetached", { sha: target.shortSha })
+    : t("graph.wipDetachedUnknown");
 }
 
 interface SeenDividerProps {
@@ -360,6 +396,57 @@ export function SeenDivider({ seenAt, graphWidth, through, colorOf }: SeenDivide
         </span>
         <span className="flex-1 h-px bg-(--acc-line)" />
         <span className="shrink-0 text-[11px] text-muted-foreground truncate">{t("graph.seenHint")}</span>
+      </span>
+    </div>
+  );
+}
+
+interface ForkPointRowProps {
+  /** 기본 브랜치 이름(`main`). */
+  branch: string;
+  /** 갈라진 지점 커밋의 시각(epoch s). */
+  timestamp: number | null;
+  graphWidth: number;
+  /** 이 행을 지나 아래로 이어지는 선(바로 위 행의 아래 가장자리 선). */
+  through: readonly { lane: number; chain: number }[];
+  colorOf: (chain: number) => string;
+}
+
+/**
+ * 저장소 그래프의 「main에서 갈라진 지점」 행(D4). 갈라진 지점 커밋 바로 위에 끼며, 이 행 위가
+ * 이 브랜치에서 새로 만든 커밋이다. 그래프 선은 끊기지 않고 지나간다.
+ */
+export function ForkPointRow({ branch, timestamp, graphWidth, through, colorOf }: ForkPointRowProps) {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="separator"
+      aria-label={t("graph.forkPoint", { branch })}
+      className="flex items-center border-b border-(--line)"
+      style={{ height: H }}
+      data-testid="fork-point-row"
+    >
+      <svg width={graphWidth} height={H} viewBox={`0 0 ${graphWidth} ${H}`} aria-hidden="true" className="shrink-0">
+        {through.map(({ lane, chain }) => (
+          <path
+            key={`${lane}:${chain}`}
+            d={`M${laneX(lane)} 0 V${H}`}
+            stroke={colorOf(chain)}
+            strokeWidth={2}
+            strokeOpacity={0.9}
+            fill="none"
+          />
+        ))}
+      </svg>
+      <span className="flex items-center gap-2 flex-1 min-w-0 pl-2 pr-3 text-[12.5px]">
+        <span className="w-1.5 shrink-0" />
+        <span className="shrink-0 px-[7px] py-px rounded-[6px] bg-(--chip) text-[10.5px] font-bold text-(--fg2)">
+          {branch}
+        </span>
+        <span className="flex-1 truncate text-(--fg2)">{t("graph.forkPoint", { branch })}</span>
+        {timestamp !== null && (
+          <span className="shrink-0 text-[12px] text-muted-foreground">{formatRelativeTime(timestamp)}</span>
+        )}
       </span>
     </div>
   );

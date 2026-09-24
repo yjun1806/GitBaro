@@ -61,7 +61,13 @@ const comparison: BranchCompareResult = {
   behindCommits: [commit("f1", ["f2"]), commit("f2", ["base"])],
 };
 
+/** main 대비 변경(탭 배지·갈라진 지점 행). 테스트마다 채운다. */
+const changesVsDefaultByPath: Record<string, unknown> = {};
+
 vi.mock("@/api/queries", () => ({
+  useChangesVsDefaultOnHead: (entries: readonly { path: string }[]) =>
+    entries.map((e) => ({ data: changesVsDefaultByPath[e.path] })),
+  useStatusMany: () => ({}),
   useBranchComparison: (_path: string, base: string | null, target: string | null) => {
     if (base && target) comparisons.push([base, target]);
     return { data: comparison, isLoading: false, error: null };

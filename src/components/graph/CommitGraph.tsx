@@ -10,9 +10,11 @@ import { useSelectionStore } from "@/stores/selection";
 import { useToastStore } from "@/stores/toast";
 import { useFollowStore, type FollowMode } from "@/stores/follow";
 import { FollowBadge } from "@/components/live/FollowPanel";
+import { CommitNowButton } from "@/components/commit/CommitNowButton";
 import {
   useBranches,
   useCommitAvatars,
+  useChangesVsDefaultOnHead,
   useCommitHistoryInfinite,
   useRemoteTags,
   useWorktreeHeadHistories,
@@ -23,22 +25,24 @@ import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { computeGraphLanes } from "@/lib/graph-lanes";
 import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
-import { BranchCompareSelector } from "@/components/history/BranchCompareSelector";
 import { HistoryView } from "@/components/history/HistoryView";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
 import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
 import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
 import type { CommitInfo } from "@/types";
 import type { GraphRowLayout } from "@/lib/graph-lanes";
-import { edgePath, GRAPH_COLUMNS, GraphRow, GraphWipRow, SeenDivider } from "./GraphRow";
+import { edgePath, ForkPointRow, GRAPH_COLUMNS, GraphRow, GraphWipRow, SeenDivider } from "./GraphRow";
 import {
   edgesThroughBottom,
+  forkPointIndex,
   GRAPH_ROW_HEIGHT,
   graphColumnWidth,
   laneColor,
   laneX,
   markNewCommits,
   normalizePath,
+  visibleWipRows,
+  wipTarget,
   type GraphWip,
 } from "./graph-model";
 import { repoLaneColor, type LaneWip, type RepoLaneGraph } from "./repo-lanes";
@@ -74,8 +78,12 @@ const NO_WORKTREE_HEADS: readonly WorktreeHead[] = [];
  * 맨 위에 워크트리마다 WIP 행, 새 커밋 점, 「여기까지 확인함」 구분선을 둔다.
  * 브랜치 비교를 켜면 WIP 행 아래가 기존 비교 화면(`HistoryView`)으로 바뀐다.
  */
-export function CommitGraph(props: CommitGraphProps) {
+export function CommitGraph({ wips: allWips, ...rest }: CommitGraphProps) {
   const compareBranch = useUIStore((s) => s.compareBranch);
+  const followTarget = useFollowStore((s) => s.target);
+  // 커밋하지 않은 파일이 없는 워크트리의 「커밋하지 않은 변경 · 파일 0」 행은 숨긴다.
+  const wips = useMemo(() => visibleWipRows(allWips, followTarget), [allWips, followTarget]);
+  const props = { ...rest, wips };
   const selection = useGraphSelection();
   const range = useActiveBranchRange();
   // 범위 모드(브랜치 패널의 「비교」): `base..target` 커밋만 그린다. WIP 행은 남긴다.
@@ -164,10 +172,12 @@ interface WipRowsProps {
    */
   lanes?: ReadonlyMap<string, GraphRowLayout>;
   colorOf?: (chain: number) => string;
+  /** 그래프에 그린 지금 연 워크트리의 HEAD(스캔보다 새 값). 브랜치가 없을 때 SHA 표시에 쓴다. */
+  currentHead?: string | null;
 }
 
 /** 맨 위 WIP 행들. 워크트리마다 한 행. */
-function WipRows({ wips, selection, graphWidth, lanes, colorOf }: WipRowsProps) {
+function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = null }: WipRowsProps) {
   const { t } = useTranslation();
   const activeTab = useUIStore((s) => s.activeTab);
   const followTarget = useFollowStore((s) => s.target);
@@ -180,12 +190,8 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf }: WipRowsProps) 
           <GraphWipRow
             key={wip.path}
             trailing={followed ? <FollowBadge mode={followed} /> : undefined}
-            wipLabel={
-              wip.isCurrent
-                ? t("shell.uncommittedCount", { count: wip.count ?? 0 })
-                : t("graph.wipWorktreeLabel", { name: worktreeName(wip), count: wip.count ?? 0 })
-            }
-            worktreeName={wip.isCurrent ? null : worktreeName(wip)}
+            wipLabel={t("shell.uncommitted")}
+            target={wipTarget({ ...wip, headOid: (wip.isCurrent ? currentHead : null) ?? wip.headOid ?? null })}
             count={wip.count}
             changedAt={wip.changedAt}
             color={worktreeColor(wip.path)}
@@ -194,6 +200,8 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf }: WipRowsProps) 
             connectDown={false}
             layout={lanes?.get(wipLaneOid(wip.path))}
             colorOf={lanes ? colorOf : undefined}
+            // 지금 연 워크트리는 여기서 바로 커밋한다. 다른 워크트리는 행을 눌러 따라간 뒤 그 워크트리를 연다.
+            action={wip.isCurrent && (wip.count ?? 0) > 0 ? <CommitNowButton count={wip.count ?? 0} /> : undefined}
             onSelect={() => selection.selectWip(wip)}
           />
         );
@@ -213,8 +221,6 @@ function CommitGraphList({
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const colorSeed = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? "");
   const accounts = useAccountStore((s) => s.accounts);
-  const compareBranch = useUIStore((s) => s.compareBranch);
-  const setCompareBranch = useUIStore((s) => s.setCompareBranch);
   const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
   const { selectCommit } = selection;
   const repoAccountId = useRepoAccountId();
@@ -225,9 +231,6 @@ function CommitGraphList({
   // 결과 배열은 렌더마다 새로 오므로, 받은 데이터 묶음이 바뀔 때만 다시 합친다.
   const otherData = otherHistories.map((q) => q.data);
   const otherKey = otherHistories.map((q) => q.dataUpdatedAt).join(",");
-  const { data: branchesData } = useBranches(activeRepoPath);
-  const branches = useMemo(() => branchesData ?? [], [branchesData]);
-  const currentBranchName = branches.find((b) => b.isHead)?.name ?? null;
   const { data: remoteTagNames } = useRemoteTags(activeRepoPath, repoAccountId);
   // 원격 태그 목록을 모르는 동안은 null로 둬 태그를 로컬 전용으로 잘못 표시하지 않는다.
   const remoteTags = useMemo(
@@ -289,6 +292,13 @@ function CommitGraphList({
     () => markNewCommits(commits, newCommits),
     [commits, newCommits],
   );
+  // 「main에서 갈라진 지점」 행(D4). 「파일별 변경」 배지와 같은 조회(HEAD가 바뀔 때만 다시 읽음)를 쓴다.
+  const forkEntries = useMemo(
+    () => (activeRepoPath ? [{ path: activeRepoPath, headOid: ownHead }] : []),
+    [activeRepoPath, ownHead],
+  );
+  const changes = useChangesVsDefaultOnHead(forkEntries)[0]?.data;
+  const forkIdx = forkPointIndex(commits, changes);
   const colorOf = useCallback(
     (chain: number) => wipChainColors.get(chain) ?? laneColor(colorSeed, chain),
     [colorSeed, wipChainColors],
@@ -332,18 +342,6 @@ function CommitGraphList({
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-      {branches.length > 1 && (
-        <div className="px-3 py-2 border-b border-(--line) shrink-0">
-          <BranchCompareSelector
-            branches={branches}
-            activeRepoPath={activeRepoPath}
-            currentBranch={currentBranchName}
-            compareBranch={compareBranch}
-            onSelect={setCompareBranch}
-          />
-        </div>
-      )}
-
       <div
         className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11px] font-semibold text-(--faint)"}
         style={{ paddingLeft: graphWidth + 8 }}
@@ -356,7 +354,14 @@ function CommitGraphList({
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
-        <WipRows wips={wips} selection={selection} graphWidth={graphWidth} lanes={layouts} colorOf={colorOf} />
+        <WipRows
+          wips={wips}
+          selection={selection}
+          graphWidth={graphWidth}
+          lanes={layouts}
+          colorOf={colorOf}
+          currentHead={ownHead}
+        />
 
         {isLoading ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{t("history.loadingHistory")}</p>
@@ -373,6 +378,15 @@ function CommitGraphList({
                 {marks.dividerBefore === index && (
                   <SeenDivider
                     seenAt={seenAt}
+                    graphWidth={graphWidth}
+                    through={prevLayout ? edgesThroughBottom(prevLayout.edges) : []}
+                    colorOf={colorOf}
+                  />
+                )}
+                {forkIdx === index && changes?.defaultBranch && (
+                  <ForkPointRow
+                    branch={changes.defaultBranch}
+                    timestamp={commit.timestamp}
                     graphWidth={graphWidth}
                     through={prevLayout ? edgesThroughBottom(prevLayout.edges) : []}
                     colorOf={colorOf}
@@ -427,9 +441,6 @@ function CommitGraphList({
   );
 }
 
-function worktreeName(wip: GraphWip): string {
-  return wip.branch ?? wip.path.split("/").pop() ?? wip.path;
-}
 
 /**
  * 커밋 우클릭 메뉴(`CommitContextMenu`)와 그 메뉴가 여는 확인 창·대화상자.
@@ -639,13 +650,13 @@ export function RepoLaneCommitGraph({
           graph.rows.map((row) => {
             switch (row.kind) {
               case "wip": {
-                const wt = row.wip.isMain ? null : worktreeName({ ...row.wip, isCurrent: false });
                 const followed = selectedKey === row.key ? followModeOf(row.wip.path) : null;
                 return (
                   <GraphWipRow
                     key={row.key}
-                    wipLabel={t("review.wipLabel", { repo: repoLabel(row.repoPath), count: row.wip.count })}
-                    worktreeName={wt}
+                    wipLabel={t("shell.uncommitted")}
+                    ariaContext={repoLabel(row.repoPath)}
+                    target={wipTarget(row.wip)}
                     count={row.wip.count}
                     changedAt={row.wip.changedAt}
                     color={repoLaneColor(row.repoPath)}

@@ -111,6 +111,8 @@ export interface GraphWip {
   /** 지금 열어 둔 워크트리(그래프가 보여 주는 이력의 주인)인지. */
   isCurrent: boolean;
   isMain: boolean;
+  /** 그 워크트리의 HEAD 커밋. 브랜치가 없을 때(detached) 「HEAD <sha>」로 보여 준다. 모르면 null. */
+  headOid?: string | null;
 }
 
 /** 경로 비교용: 끝의 `/`를 뗀다. */
@@ -142,4 +144,53 @@ export function edgesThroughBottom(
     if (edge.kind !== "in" && !byLane.has(edge.toLane)) byLane.set(edge.toLane, edge.chain);
   }
   return [...byLane].map(([lane, chain]) => ({ lane, chain }));
+}
+
+/**
+ * 그래프에 그릴 WIP 행. 커밋하지 않은 파일이 없는(0) 워크트리의 행은 숨긴다. 수를 아직 모르면(null)
+ * 남기고, 따라가는 중인 워크트리는 0이 돼도 남긴다(아래 칸이 그 워크트리를 계속 보여 주므로).
+ */
+export function visibleWipRows(wips: readonly GraphWip[], followTarget: string | null): GraphWip[] {
+  const followed = followTarget !== null ? normalizePath(followTarget) : null;
+  return wips.filter((w) => w.count !== 0 || normalizePath(w.path) === followed);
+}
+
+/**
+ * 저장소 그래프의 「main에서 갈라진 지점」 행을 둘 자리: 갈라진 지점 커밋 바로 위.
+ * 기본 브랜치 자신을 보고 있거나(그때 기준은 upstream이라 「main에서 갈라짐」이 아니다),
+ * 갈라진 지점을 못 찾았거나, 그 커밋을 아직 불러오지 않았으면 null.
+ */
+export function forkPointIndex(
+  commits: readonly { id: string }[],
+  changes:
+    | { baseStatus: string | null; mergeBaseOid: string | null; branch: string | null; defaultBranch: string | null }
+    | undefined,
+): number | null {
+  if (!changes || changes.baseStatus !== "found" || !changes.mergeBaseOid) return null;
+  if (changes.defaultBranch === null || changes.branch === changes.defaultBranch) return null;
+  const index = commits.findIndex((c) => c.id === changes.mergeBaseOid);
+  return index === -1 ? null : index;
+}
+
+/** WIP 행·커밋 입력이 밝히는 「어디에 쌓인 변경인가」. */
+export interface WipTarget {
+  /** 체크아웃한 브랜치. 브랜치가 없으면(detached HEAD) null. */
+  branch: string | null;
+  /** 브랜치가 없을 때 보여 줄 HEAD의 짧은 SHA. 모르면 null. */
+  shortSha: string | null;
+  /** 연결된 워크트리의 폴더 이름. 메인 작업 트리면 null. */
+  worktree: string | null;
+}
+
+/**
+ * 커밋하지 않은 변경이 어느 브랜치·워크트리에 있는지. 브랜치 이름과 워크트리 폴더 이름은 따로 보여 준다
+ * (같은 브랜치 이름이어도 워크트리가 다르면 다른 작업이다).
+ */
+export function wipTarget(wip: { path: string; branch: string | null; isMain: boolean; headOid?: string | null }): WipTarget {
+  const trimmed = wip.path.replace(/\/+$/, "");
+  return {
+    branch: wip.branch,
+    shortSha: wip.branch === null && wip.headOid ? wip.headOid.slice(0, 7) : null,
+    worktree: wip.isMain ? null : (trimmed.split("/").pop() ?? trimmed),
+  };
 }

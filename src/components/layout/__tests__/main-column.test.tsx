@@ -65,7 +65,12 @@ const historyPages = {
 /** 지금 연 저장소가 병합·pull 충돌 등으로 멈췄는지(`useMergeState`). */
 let mergeStateValue: string | null = null;
 
+/** main 대비 변경(탭 배지·갈라진 지점 행). 테스트마다 채운다. */
+const changesVsDefaultByPath: Record<string, unknown> = {};
+
 vi.mock("@/api/queries", () => ({
+  useChangesVsDefaultOnHead: (entries: readonly { path: string }[]) =>
+    entries.map((e) => ({ data: changesVsDefaultByPath[e.path] })),
   useMergeState: () => ({ data: mergeStateValue }),
   useStatus: (path: string | null) => ({ data: path ? statusEntries : [] }),
   useCommitHistoryInfinite: () => ({
@@ -176,7 +181,7 @@ describe("MainColumn (two-column shell)", () => {
     renderShell();
     expect(screen.queryByText("changes-view")).toBeNull();
 
-    const row = screen.getByRole("button", { name: "Uncommitted changes (2)" });
+    const row = screen.getByRole("button", { name: /^Uncommitted changes · .* · main working tree · 2 files$/ });
     fireEvent.click(row);
 
     expect(useUIStore.getState().activeTab).toBe("changes");
@@ -195,7 +200,7 @@ describe("MainColumn (two-column shell)", () => {
 
   it("stops following and shows the staging list (conflict banner) once a merge or pull stops on a conflict", () => {
     const view = renderShell();
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes (2)" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · main working tree · 2 files$/ }));
     expect(screen.getByTestId("follow-panel")).toBeTruthy();
 
     // Pull hits a conflict: the toolbar only calls setActiveTab("changes"), which is already the tab.
@@ -206,7 +211,7 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getByText("changes-view")).toBeTruthy();
 
     // Picking the row again during the merge still shows the staging list first.
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes (2)" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · main working tree · 2 files$/ }));
     expect(screen.queryByTestId("follow-panel")).toBeNull();
     expect(screen.getByText("changes-view")).toBeTruthy();
   });
@@ -219,7 +224,7 @@ describe("MainColumn (two-column shell)", () => {
     // Commit detail is loading (mocked query).
     expect(screen.getByText("Loading history")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes (2)" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · main working tree · 2 files$/ }));
     expect(useSelectionStore.getState().selectedCommitId).toBeNull();
     expect(screen.getByTestId("follow-panel")).toBeTruthy();
 
@@ -273,7 +278,7 @@ describe("MainColumn (two-column shell)", () => {
     const other = { ...repo, path: "/work/other", name: "other" } as RepoInfo;
     useRepositoryStore.setState({ repos: [repo, other] });
     renderShell();
-    fireEvent.click(screen.getByRole("tab", { name: "Changes by file" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes by file/ }));
     const first = screen.getByText(/^files-by-repo \/work\/app #/).textContent;
     // 아래 칸의 파일 목록·diff 대신 파일별 변경을 그린다.
     expect(screen.queryByText("history-list")).toBeNull();
@@ -283,7 +288,7 @@ describe("MainColumn (two-column shell)", () => {
     const next = screen.getByText(/^files-by-repo \/work\/other #/).textContent;
     // 다시 마운트됐다(마운트 번호가 다르다).
     expect(next?.split("#")[1]).not.toBe(first?.split("#")[1]);
-    expect(screen.getByRole("tab", { name: "Changes by file" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: /^Changes by file/ }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("keeps the stash tab when the panel remounts with an old commit selection", () => {

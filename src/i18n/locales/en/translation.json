@@ -63,7 +63,9 @@
       "unstageFile": "Unstage {{file}}",
       "stageAll": "Stage all changes",
       "unstageAll": "Unstage all changes"
-    }
+    },
+    "noChangesShort": "No changes",
+    "noChangesHint": "The commit box appears when files change."
   },
   "commit": {
     "summary": "Summary (required)",
@@ -84,7 +86,9 @@
     "copied": "Copied",
     "close": "Close",
     "stageFailed": "Stage failed: {{error}}",
-    "unstageFailed": "Unstage failed: {{error}}"
+    "unstageFailed": "Unstage failed: {{error}}",
+    "commitNow": "Commit ({{count}})",
+    "target": "Commit to {{branch}} · {{worktree}}"
   },
   "history": {
     "title": "History",
@@ -406,7 +410,9 @@
     "enableHighlight": "Enable highlighting",
     "expandUp": "Expand up",
     "expandDown": "Expand down",
-    "expandAll": "Expand all {{lines}} hidden lines"
+    "expandAll": "Expand all {{lines}} hidden lines",
+    "maximize": "Maximize diff (Esc to restore)",
+    "restoreSize": "Restore size"
   },
   "mdDiff": {
     "rendering": "Computing document diff...",
@@ -549,8 +555,6 @@
   },
   "compare": {
     "title": "Compare Branches",
-    "selectBranch": "Select a branch to compare",
-    "filterBranches": "Filter branches",
     "ahead": "Ahead",
     "behind": "Behind",
     "aheadCommits_one": "{{count}} commit ahead",
@@ -565,7 +569,6 @@
     "branchNotFound": "Branch not found — it may have been deleted",
     "loading": "Comparing branches",
     "comparingWith": "Comparing with {{branch}}",
-    "noBranches": "No branches available",
     "incoming": "Incoming",
     "outgoing": "Outgoing",
     "incomingFrom": "Incoming from {{branch}}",
@@ -579,10 +582,7 @@
     "selectorOutgoingTooltip_one": "{{count}} commit ahead of this branch",
     "selectorOutgoingTooltip_other": "{{count}} commits ahead of this branch",
     "noIncomingCommits": "No incoming commits",
-    "noOutgoingCommits": "No outgoing commits",
-    "kindSynced": "Synced with remote",
-    "kindLocal": "Local-only branch",
-    "kindRemote": "Remote-only branch"
+    "noOutgoingCommits": "No outgoing commits"
   },
   "merge": {
     "conflictStopped": "Merge stopped on conflicts. Resolve them in the Changes tab.",
@@ -877,7 +877,14 @@
     "seenYesterday": "yesterday {{time}}",
     "modifiedAgo": "modified {{time}}",
     "markSeen_one": "Mark {{count}} new commit as seen",
-    "markSeen_other": "Mark {{count}} new commits as seen"
+    "markSeen_other": "Mark {{count}} new commits as seen",
+    "comparing": "Comparing {{range}}",
+    "endCompare": "End comparison",
+    "forkPoint": "Branched off {{branch}} here",
+    "wipBranch": "{{branch}} branch",
+    "wipDetached": "No branch (HEAD {{sha}})",
+    "wipDetachedUnknown": "No branch (detached HEAD)",
+    "wipMainWorktree": "main working tree"
   },
   "commitDetail2": {
     "repo": "Repository",
@@ -1159,5 +1166,9 @@
     "groupBy": "Group files",
     "groupByRepo": "By repository",
     "groupByFolder": "By folder"
+  },
+  "layout": {
+    "resizeFileList": "Resize file list (double-click to reset)",
+    "resizeGraph": "Resize graph panel (double-click to reset)"
   }
 }

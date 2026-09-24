@@ -5,7 +5,13 @@ import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
-import { useMergeState, useStashList, useWorkflowRuns, useWorktrees } from "@/api/queries";
+import {
+  useCommitHistoryInfinite,
+  useMergeState,
+  useStashList,
+  useWorkflowRuns,
+  useWorktrees,
+} from "@/api/queries";
 import { CommitGraph, type WorktreeHead } from "./CommitGraph";
 import { useGraphReview } from "./useGraphReview";
 import { normalizePath, type GraphWip } from "./graph-model";
@@ -19,6 +25,10 @@ import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import { FilesGroupByPicker } from "@/components/review/FilesGroupByPicker";
 import { useFilesViewStore } from "@/components/review/files-view";
+import { activeRunCount, badgeCount } from "@/components/review/tab-counts";
+import { useChangedFileCount } from "@/components/review/useChangedFileCount";
+import { CompareChip } from "./CompareChip";
+import { CommitNowButton } from "@/components/commit/CommitNowButton";
 import { cn } from "@/lib/utils";
 
 /** Which graph-panel tab a `ui.activeTab` value belongs to. */
@@ -61,9 +71,16 @@ export function GraphPanel() {
     hasRemote ? activeRepoPath : null,
     repoAccountId,
   );
-  const activeRunCount = workflowRuns.filter(
-    (r) => r.status === "in_progress" || r.status === "queued",
-  ).length;
+  const runningCount = activeRunCount(workflowRuns);
+  const currentWipCount = review.wips.find((w) => w.isCurrent)?.count ?? 0;
+  // 「파일별 변경」 배지: 지금 연 워크트리의 main 대비 파일 수(그 탭이 보여 줄 목록과 같은 범위).
+  const { data: history } = useCommitHistoryInfinite(activeRepoPath);
+  const headOid = history?.pages[0]?.[0]?.id ?? null;
+  const fileCountEntries = useMemo(
+    () => (activeRepoPath ? [{ path: activeRepoPath, headOid }] : []),
+    [activeRepoPath, headOid],
+  );
+  const changedFiles = useChangedFileCount(fileCountEntries);
 
   // 「파일별 변경」은 저장하지 않는 화면 상태다. 다른 탭으로 옮기거나(툴바·merge 흐름 포함)
   // 저장된 탭이 바뀌면 닫고, 패널이 사라질 때(워크스페이스·저장소 목록으로 갈 때)도 닫는다.
@@ -117,7 +134,7 @@ export function GraphPanel() {
       aria-label={t("shell.panelTabs")}
       className={cn(
         "relative flex flex-col shrink-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden",
-        tab !== "files" && "h-[42%] min-h-[180px]",
+        tab !== "files" && "flex-1 min-h-0",
       )}
     >
       <div className="flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)">
@@ -127,6 +144,7 @@ export function GraphPanel() {
             active={tab === "graph"}
             onClick={openGraphTab}
             icon={<GitCommitVertical className="w-3.5 h-3.5" />}
+            count={badgeCount(review.newCommits?.newCount)}
           >
             {t("shell.graphTab")}
           </Tab>
@@ -135,6 +153,7 @@ export function GraphPanel() {
             active={tab === "files"}
             onClick={() => setFilesOpen(true)}
             icon={<Files className="w-3.5 h-3.5" />}
+            count={badgeCount(changedFiles)}
           >
             {t("filesByRepo.tab")}
           </Tab>
@@ -143,7 +162,7 @@ export function GraphPanel() {
             active={tab === "stash"}
             onClick={() => openStoredTab("stash")}
             icon={<Archive className="w-3.5 h-3.5" />}
-            count={stashes.length > 0 ? stashes.length : undefined}
+            count={badgeCount(stashes.length)}
           >
             {t("shell.stashTab")}
           </Tab>
@@ -152,11 +171,14 @@ export function GraphPanel() {
             active={tab === "actions"}
             onClick={() => openStoredTab("actions")}
             icon={<Play className="w-3.5 h-3.5" />}
-            count={activeRunCount > 0 ? activeRunCount : undefined}
+            count={badgeCount(runningCount)}
           >
             {t("actions.title")}
           </Tab>
         </TabGroup>
+        {tab === "graph" && <CompareChip />}
+        {/* 툴바와 상관없이 여기서도 커밋을 시작한다. */}
+        {currentWipCount > 0 && <CommitNowButton count={currentWipCount} variant="header" />}
         {tab === "graph" && review.newCommits !== null && review.newCommits.newCount > 0 && (
           <button
             type="button"

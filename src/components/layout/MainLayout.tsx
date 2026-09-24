@@ -1,6 +1,6 @@
 import { useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useUIStore } from "@/stores/ui";
+import { DEFAULT_SIDEBAR_WIDTH, useUIStore } from "@/stores/ui";
 import { useAutoSync } from "@/hooks/useAutoSync";
 import { useLiveChanges } from "@/hooks/useLiveChanges"; // W1-T3
 import { useSidebarWidth } from "@/hooks/useSidebarWidth";
@@ -9,6 +9,8 @@ import { RepoRail } from "./RepoRail";
 import { MainColumn } from "./MainColumn";
 import { SIDEBAR_HANDLE_WIDTH } from "./sidebar-layout";
 import { StatusBar } from "./StatusBar";
+import { SplitHandle } from "./SplitHandle";
+import { useDiffMaximizeEscape } from "./useDiffMaximize";
 import { ActivityLogPanel } from "./ActivityLogPanel";
 import { AutoSyncSettingsDialogHost } from "@/components/repository/AutoSyncSettingsDialog";
 import { clampSidebarWidth } from "@/lib/sidebar-width";
@@ -34,35 +36,21 @@ export function MainLayout() {
   // 좁은 레일로 남는다(hover는 레일 위에 떠서 펼쳐진다).
   const isResizable = railMode === "expanded";
 
-  const isDragging = useRef(false);
-  const startX = useRef(0);
   const startWidth = useRef(sidebarWidth);
-
-  const onMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      isDragging.current = true;
-      startX.current = e.clientX;
-      startWidth.current = sidebarWidth;
-
-      const onMouseMove = (ev: MouseEvent) => {
-        if (!isDragging.current) return;
-        const delta = ev.clientX - startX.current;
-        setSidebarWidth(
-          clampSidebarWidth(startWidth.current + delta, window.innerWidth),
-        );
-      };
-
-      const onMouseUp = () => {
-        isDragging.current = false;
-        window.removeEventListener("mousemove", onMouseMove);
-        window.removeEventListener("mouseup", onMouseUp);
-      };
-
-      window.addEventListener("mousemove", onMouseMove);
-      window.addEventListener("mouseup", onMouseUp);
-    },
-    [sidebarWidth, setSidebarWidth],
+  const handleDragStart = useCallback(() => {
+    startWidth.current = sidebarWidth;
+  }, [sidebarWidth]);
+  const handleDrag = useCallback(
+    (delta: number) => setSidebarWidth(clampSidebarWidth(startWidth.current + delta, window.innerWidth)),
+    [setSidebarWidth],
   );
+  const handleReset = useCallback(
+    () => setSidebarWidth(clampSidebarWidth(DEFAULT_SIDEBAR_WIDTH, window.innerWidth)),
+    [setSidebarWidth],
+  );
+
+  // diff 크게 보기: Escape로 되돌린다(입력 칸에 있을 때는 그 칸의 Escape가 먼저다).
+  useDiffMaximizeEscape();
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
@@ -70,16 +58,16 @@ export function MainLayout() {
         {/* Sidebar. When pinned open it takes the user-sized width. */}
         <RepoRail expandedWidth={isResizable ? sidebarWidth : undefined} />
 
-        {/* 시안에는 사이드바와 메인 사이에 선이 없다. 손잡이는 투명한 잡는 영역이고
-            올리면 색이 드러난다. */}
+        {/* 시안에는 사이드바와 메인 사이에 선이 없다. 손잡이는 다른 칸 나누기와 같은 모양이다
+            (투명한 잡는 영역, 올리면 색이 드러나고, 두 번 누르면 기본 폭). */}
         {isResizable && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
+          <SplitHandle
+            orientation="vertical"
+            size={SIDEBAR_HANDLE_WIDTH}
             aria-label={t("shell.resizeSidebar")}
-            onMouseDown={onMouseDown}
-            style={{ width: SIDEBAR_HANDLE_WIDTH }}
-            className="shrink-0 cursor-col-resize bg-transparent hover:bg-primary/40 transition-colors"
+            onDragStart={handleDragStart}
+            onDrag={handleDrag}
+            onReset={handleReset}
           />
         )}
 

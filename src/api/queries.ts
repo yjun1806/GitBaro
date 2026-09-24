@@ -504,7 +504,7 @@ export function useNewCommitIdsQuery(entry: SeenRecordInput | null, headOid: str
 }
 
 // W3-T4
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import type { InfiniteData, QueryState } from "@tanstack/react-query";
 import type { BranchInfo, CommitInfo, WorkflowRun } from "@/types";
 
@@ -887,6 +887,39 @@ export function useFileDiffsVsDefault(
       queryKey: ["fileDiffVsDefault", repoPath, filePath, oldPath],
       queryFn: () => getFileDiffVsDefault(repoPath, filePath, oldPath),
       staleTime: 30_000,
+    })),
+  });
+}
+
+/**
+ * 탭 개수 배지와 저장소 그래프의 「main에서 갈라진 지점」 행이 쓰는 main 대비 변경.
+ * 「파일별 변경」 목록과 같은 조회 키라 캐시를 함께 쓴다. 이쪽은 주기적으로 다시 읽지 않고,
+ * 워크트리의 HEAD가 바뀔 때만 다시 읽는다(커밋한 변경 목록은 HEAD가 바뀌어야 달라진다).
+ * pull·push·fetch 뒤에는 `invalidateAfterSync`가 다시 읽게 한다. 커밋하지 않은 변경은
+ * 파일 감시로 바로 갱신되는 `status`에서 따로 센다.
+ */
+export function useChangesVsDefaultOnHead(entries: readonly { path: string; headOid: string | null }[]) {
+  const queryClient = useQueryClient();
+  const headKey = entries.map((e) => `${e.path}\u0000${e.headOid ?? ""}`).join("\u0001");
+  const lastHeads = useRef(new Map<string, string | null>());
+  useEffect(() => {
+    const seen = lastHeads.current;
+    for (const { path, headOid } of entries) {
+      const before = seen.get(path);
+      if (before !== undefined && before !== headOid) {
+        void queryClient.invalidateQueries({ queryKey: ["changesVsDefault", path] });
+      }
+      seen.set(path, headOid);
+    }
+    // headKey가 목록의 내용을 대신 비교한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headKey, queryClient]);
+  return useQueries({
+    queries: entries.map(({ path }) => ({
+      queryKey: ["changesVsDefault", path],
+      queryFn: () => getChangesVsDefault(path),
+      staleTime: Infinity,
+      refetchInterval: false as const,
     })),
   });
 }
