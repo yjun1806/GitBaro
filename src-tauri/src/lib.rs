@@ -37,6 +37,8 @@ pub fn run() {
             commands::git::get_push_target,
             commands::git::git_pull,
             commands::git::list_remote_tags,
+            commands::auto_sync::get_auto_sync_snapshot,
+            commands::auto_sync::auto_fast_forward,
             commands::git::stash_push,
             commands::git::stash_pop,
             commands::git::stash_pop_by_oid,

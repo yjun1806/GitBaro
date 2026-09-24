@@ -191,6 +191,39 @@ export interface RepoSyncStatus {
   isDirty: boolean;
 }
 
+/**
+ * 저장소별 "원격 자동 최신화" 방식.
+ * - off: 자동으로 아무것도 하지 않는다
+ * - fetch: 원격을 확인(fetch)해 앞섬·뒤처짐만 갱신한다
+ * - pull: 확인한 뒤, 안전할 때만 현재 브랜치를 fast-forward한다
+ */
+export type AutoSyncMode = "off" | "fetch" | "pull";
+
+/** 자동 최신화 주기(분). */
+export type AutoSyncIntervalMinutes = 1 | 3 | 5 | 10 | 30;
+
+export interface AutoSyncSetting {
+  mode: AutoSyncMode;
+  intervalMinutes: AutoSyncIntervalMinutes;
+}
+
+/** 자동 fast-forward 판단에 쓰는 저장소 상태 (fetch 직후 기준). */
+export interface AutoSyncSnapshot {
+  detached: boolean;
+  hasUpstream: boolean;
+  ahead: number;
+  behind: number;
+  /** 스테이징·수정·추적되지 않은 파일이 하나도 없다. */
+  isClean: boolean;
+  /** merge·rebase·cherry-pick·revert 등이 진행 중이다. */
+  operationInProgress: boolean;
+}
+
+/** 자동 fast-forward 결과. commits가 0이면 조건이 맞지 않아 건너뛰었다. */
+export interface AutoFastForwardResult {
+  commits: number;
+}
+
 export interface RemoteInfo {
   name: string;
   url: string;
@@ -201,7 +234,6 @@ export interface AppSettings {
   defaultEditor: string;
   defaultShell: string;
   defaultAiCli: string;
-  autoFetchInterval: number;
   language: string;
 }
 

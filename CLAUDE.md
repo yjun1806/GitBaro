@@ -60,6 +60,7 @@ GitBaro/
 │   │   │   └── stash.rs           # Stash helpers
 │   │   ├── commands/              # Tauri #[tauri::command] handlers
 │   │   │   ├── git.rs             # status, stage, unstage, commit, diff, fetch, push, pull, stash
+│   │   │   ├── auto_sync.rs       # per-repo auto sync: post-fetch snapshot, safe ff-only to upstream
 │   │   │   ├── branch.rs          # branches, create, switch, delete, compare, merge, rename
 │   │   │   ├── history.rs         # commit history, detail, file diff, avatars
 │   │   │   ├── auth.rs            # gh CLI auth, account CRUD, per-repo account assignment

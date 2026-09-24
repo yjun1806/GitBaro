@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { startRepoWatch, stopRepoWatch } from "@/api/commands";
+import { useAutoSyncStore } from "@/stores/auto-sync";
 
 interface FsChangePayload {
   repoPath: string;
@@ -82,6 +83,8 @@ export function useRepoWatcher(repoPath: string | null) {
     track(
       listen<FsChangePayload>("fs:change", (event) => {
         if (!mounted) return;
+        // 원격 자동 최신화는 최근에 파일이 바뀐 작업 트리를 자동으로 받지 않는다.
+        useAutoSyncStore.getState().markActivity(event.payload.repoPath, Date.now());
         queryClient.invalidateQueries({
           queryKey: ["status", event.payload.repoPath],
         });

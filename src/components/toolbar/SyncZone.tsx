@@ -11,7 +11,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useActivityStore } from "@/stores/activity";
 import { useSyncStore, type SyncAction } from "@/stores/sync";
-import { useBranches, useHeadDetached, useTokenValidation } from "@/api/queries";
+import { invalidateAfterSync, useBranches, useHeadDetached, useTokenValidation } from "@/api/queries";
 import { gitFetch, gitPush, gitPull, getPushTarget } from "@/api/commands";
 import type { PushTarget } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { cn, getErrorMessage, isMergeConflictError } from "@/lib/utils";
 import { useClickOutside } from "./useToolbarDropdown";
 import { SyncDropdown } from "./SyncDropdown";
+import { AutoSyncHint } from "./AutoSyncHint";
 import { ConfirmCommandDialog } from "@/components/ui/ConfirmCommandDialog";
 
 interface SyncZoneProps {
@@ -113,15 +114,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   })();
 
   const invalidateAll = (includeActions = false) => {
-    const queries = Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["branches"] }),
-      queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] }),
-      queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
-      queryClient.invalidateQueries({ queryKey: ["status"] }),
-      queryClient.invalidateQueries({ queryKey: ["mergeState"] }),
-      queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-      queryClient.invalidateQueries({ queryKey: ["remoteTags"] }),
-    ]);
+    const queries = invalidateAfterSync(queryClient);
     if (includeActions) {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["workflowRuns"] });
@@ -267,6 +260,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
 
   return (
     <div ref={zoneRef} className="relative flex items-center shrink-0 pr-2">
+      <AutoSyncHint />
       {/* Split-button group */}
       <div className={cn(
         "flex items-center h-8 rounded-lg border transition-all",

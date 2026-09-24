@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
@@ -10,6 +10,11 @@ export default defineConfig(async () => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  test: {
+    // A worktree checked out next to the main tree resolves the tracked
+    // `.claude` symlink to the user's home config, whose plugin tests are not ours.
+    exclude: [...configDefaults.exclude, ".claude/**"],
   },
   clearScreen: false,
   server: {

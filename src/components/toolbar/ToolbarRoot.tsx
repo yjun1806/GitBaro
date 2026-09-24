@@ -44,8 +44,6 @@ export function ToolbarRoot() {
         theme: "system",
         language: "ko",
         defaultEditor: "",
-
-        autoFetchInterval: 0,
       } as AppSettings);
     }
     setShowSettings(true);

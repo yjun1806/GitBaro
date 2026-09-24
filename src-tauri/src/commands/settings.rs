@@ -10,7 +10,6 @@ pub struct AppSettings {
     pub default_editor: String,
     pub default_shell: String,
     pub default_ai_cli: String,
-    pub auto_fetch_interval: u64,
     pub language: String,
 }
 
@@ -50,7 +49,6 @@ impl Default for AppSettings {
             default_editor: "vscode".to_string(),
             default_shell: "terminal".to_string(),
             default_ai_cli: "claude".to_string(),
-            auto_fetch_interval: 0,
             language: "en".to_string(),
         }
     }
