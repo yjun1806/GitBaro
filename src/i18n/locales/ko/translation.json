@@ -796,13 +796,8 @@
     "empty": "아직 저장소가 없습니다",
     "quietRepos_one": "조용한 저장소 {{count}}개 ({{names}})",
     "quietRepos_other": "조용한 저장소 {{count}}개 ({{names}})",
-    "worktree": "워크트리",
     "favorite": "즐겨찾기",
     "meta": {
-      "modified_other": "수정 {{count}}",
-      "newCommits_other": "새 커밋 {{count}}",
-      "clean": "깨끗함",
-      "repos_other": "저장소 {{count}}",
       "changingNow": "지금 파일이 바뀌는 중 · {{ago}} 전",
       "changingNotWatched": "최근에 파일이 바뀜 · {{ago}} 전 (실시간 감시 밖이라 이후 변경이 늦게 보일 수 있음)"
     },
@@ -811,12 +806,31 @@
       "behind_other": "받을 커밋 {{count}}개"
     },
     "live": {
-      "title": "지금 파일이 바뀌는 곳",
-      "collapsedTitle": "지금 바뀌는 중 {{count}}",
-      "empty": "최근 10분 안에 바뀐 파일이 없습니다",
       "seconds": "{{count}}초",
-      "minutes": "{{count}}분",
-      "overflow": "+{{count}}"
+      "minutes": "{{count}}분"
+    },
+    "card": {
+      "primaryFolder": "기본 폴더",
+      "detached": "분리된 HEAD",
+      "forkedFrom": "{{base}}에서 갈라짐",
+      "uncommitted_one": "커밋 안 한 파일 {{count}}개",
+      "uncommitted_other": "커밋 안 한 파일 {{count}}개",
+      "changedJustNow": "방금 바뀜",
+      "changedMinutesAgo_one": "{{count}}분 전 바뀜",
+      "changedMinutesAgo_other": "{{count}}분 전 바뀜",
+      "changedHoursAgo_one": "{{count}}시간 전 바뀜",
+      "changedHoursAgo_other": "{{count}}시간 전 바뀜",
+      "toPush_one": "올릴 커밋 {{count}}개",
+      "toPush_other": "올릴 커밋 {{count}}개",
+      "notPublished": "아직 publish 안 함",
+      "clean": "바뀐 것 없음",
+      "viewOnly": "보기만 합니다. 누르면 체크아웃하지 않고 이 브랜치의 커밋을 봅니다.",
+      "viewBranchLabel": "{{branch}} 보기(체크아웃 안 함)",
+      "folderCount_one": "작업 폴더 {{count}}개",
+      "folderCount_other": "작업 폴더 {{count}}개",
+      "workspaceTitle_one": "{{name}} · 저장소 {{count}}개",
+      "workspaceTitle_other": "{{name}} · 저장소 {{count}}개",
+      "organization": "{{name}} (조직)"
     }
   },
   "sidebarDnd": {

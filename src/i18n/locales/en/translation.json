@@ -796,16 +796,8 @@
     "empty": "No repositories yet",
     "quietRepos_one": "{{count}} quiet repository ({{names}})",
     "quietRepos_other": "{{count}} quiet repositories ({{names}})",
-    "worktree": "Worktree",
     "favorite": "Favorite",
     "meta": {
-      "modified_one": "{{count}} modified",
-      "modified_other": "{{count}} modified",
-      "newCommits_one": "{{count}} new commit",
-      "newCommits_other": "{{count}} new commits",
-      "clean": "clean",
-      "repos_one": "{{count}} repo",
-      "repos_other": "{{count}} repos",
       "changingNow": "Files changing now · {{ago}} ago",
       "changingNotWatched": "Files changed recently · {{ago}} ago (not watched live, later changes may show up late)"
     },
@@ -814,12 +806,31 @@
       "behind_other": "{{count}} commits to pull"
     },
     "live": {
-      "title": "Files changing now",
-      "collapsedTitle": "{{count}} changing now",
-      "empty": "No files changed in the last 10 minutes",
       "seconds": "{{count}}s",
-      "minutes": "{{count}}m",
-      "overflow": "+{{count}}"
+      "minutes": "{{count}}m"
+    },
+    "card": {
+      "primaryFolder": "Primary folder",
+      "detached": "Detached HEAD",
+      "forkedFrom": "Branched from {{base}}",
+      "uncommitted_one": "{{count}} uncommitted file",
+      "uncommitted_other": "{{count}} uncommitted files",
+      "changedJustNow": "changed just now",
+      "changedMinutesAgo_one": "changed {{count}} min ago",
+      "changedMinutesAgo_other": "changed {{count}} min ago",
+      "changedHoursAgo_one": "changed {{count}} hour ago",
+      "changedHoursAgo_other": "changed {{count}} hours ago",
+      "toPush_one": "{{count}} commit to push",
+      "toPush_other": "{{count}} commits to push",
+      "notPublished": "Not published yet",
+      "clean": "No changes",
+      "viewOnly": "View only. Click to see this branch's commits without checking it out.",
+      "viewBranchLabel": "View {{branch}} (no checkout)",
+      "folderCount_one": "{{count}} working folder",
+      "folderCount_other": "{{count}} working folders",
+      "workspaceTitle_one": "{{name}} · {{count}} repository",
+      "workspaceTitle_other": "{{name}} · {{count}} repositories",
+      "organization": "{{name}} (organization)"
     }
   },
   "sidebarDnd": {

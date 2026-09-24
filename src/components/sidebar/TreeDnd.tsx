@@ -20,7 +20,7 @@ import {
   type DragStartEvent,
   type Announcements,
 } from "@dnd-kit/core";
-import { Ban, Folder, GripVertical } from "lucide-react";
+import { Ban, GripVertical, Layers } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AccountNode } from "@/lib/repo-tree";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
@@ -28,7 +28,6 @@ import { cn } from "@/lib/utils";
 import { useToastStore } from "@/stores/toast";
 import type { WorkspaceError } from "@/stores/workspace";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
-import { RowSubline } from "./RowSubline";
 import { INDENT_PX } from "./TreeRowFrame";
 import { LEADING_TILE, NEUTRAL_TILE, ROW_TITLE, TILE_ICON } from "./row-style";
 import {
@@ -213,7 +212,7 @@ function DragPreview({ data, blocked }: { data: RowDragData; blocked: boolean })
         {color ? (
           <span
             aria-hidden="true"
-            className={`${LEADING_TILE} text-[10px] font-extrabold`}
+            className={`${LEADING_TILE} text-[9.5px] font-extrabold`}
             style={{
               backgroundColor: color.background,
               color: color.foreground,
@@ -223,13 +222,13 @@ function DragPreview({ data, blocked }: { data: RowDragData; blocked: boolean })
           </span>
         ) : (
           <span className={NEUTRAL_TILE}>
-            <Folder className={TILE_ICON} aria-hidden="true" />
+            <Layers className={TILE_ICON} aria-hidden="true" />
           </span>
         )}
-        <span className="flex-1 min-w-0 flex flex-col gap-px">
-          <span className={`${ROW_TITLE} font-bold`}>{data.label}</span>
-          <RowSubline branch={data.branch ?? null} />
-        </span>
+        <span className={cn(ROW_TITLE, "font-semibold")}>{data.label}</span>
+        {data.branch && (
+          <span className="font-mono text-[11px] text-muted-foreground truncate max-w-[45%]">{data.branch}</span>
+        )}
         {data.badges}
       </span>
       {blocked && (
