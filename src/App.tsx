@@ -22,12 +22,16 @@ import { useToastStore } from "@/stores/toast";
 import { useGitEvents } from "@/hooks/useGitEvents";
 import { useRepoWatcher } from "@/hooks/useRepoWatcher";
 import { useVerifyWorktree } from "@/hooks/useVerifyWorktree";
+import { useActiveScope, useWorkspaceWatchPaths } from "@/hooks/useActiveScope";
 
 function AppContent() {
   const { t } = useTranslation();
   useGitEvents();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  // 저장소를 고른 동안: 기존 활성 저장소 감시(상태 새로고침). 워크스페이스를 고르면 경로가
+  // null이라 띄우지 않는다. 워크스페이스를 고른 동안: 그 저장소·워크트리를 활동 감시(`repo:activity`)에 더한다.
   useRepoWatcher(activeRepoPath);
+  useWorkspaceWatchPaths(useActiveScope());
   const accounts = useAccountStore((s) => s.accounts);
   const setAccounts = useAccountStore((s) => s.setAccounts);
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);

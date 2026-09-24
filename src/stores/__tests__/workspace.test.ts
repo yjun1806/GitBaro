@@ -4,6 +4,7 @@ import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
 import {
   WORKSPACES_STORAGE_KEY,
+  WORKSPACES_STORAGE_VERSION,
   sanitizeWorkspaceState,
   useWorkspaceStore,
 } from "@/stores/workspace";
@@ -33,6 +34,7 @@ describe("useWorkspaceStore", () => {
       sortModeByAccount: {},
       collapsed: [],
       dismissedSuggestions: [],
+      activeWorkspaceId: null,
     });
   });
 
@@ -260,11 +262,12 @@ describe("useWorkspaceStore", () => {
   });
 
   describe("저장", () => {
-    it("저장 키와 버전 1로 기록한다", () => {
+    it("저장 키와 지금 버전(2)으로 기록한다", () => {
       createOk("x", "mos", [xames.path]);
 
       const saved = JSON.parse(localStorage.getItem(WORKSPACES_STORAGE_KEY)!);
-      expect(saved.version).toBe(1);
+      expect(saved.version).toBe(WORKSPACES_STORAGE_VERSION);
+      expect(saved.version).toBe(2);
       expect(saved.state.workspaces[0]).toMatchObject({ name: "x", accountKey: "mos" });
       expect(saved.state).not.toHaveProperty("createWorkspace");
     });
@@ -314,6 +317,7 @@ describe("useWorkspaceStore", () => {
         sortModeByAccount: { mos: "name" },
         collapsed: [],
         dismissedSuggestions: [],
+        activeWorkspaceId: null,
       });
     });
 
@@ -332,6 +336,7 @@ describe("useWorkspaceStore", () => {
         sortModeByAccount: { yjun: "todo" },
         collapsed: ["acct:yjun", "repo:/r/A"],
         dismissedSuggestions: [],
+        activeWorkspaceId: null,
       });
     });
   });
@@ -374,7 +379,7 @@ describe("gitbaro-repos 접힘 상태 가져오기", () => {
 
     const saved = JSON.parse(localStorage.getItem(WORKSPACES_STORAGE_KEY)!);
     expect(saved).toMatchObject({
-      version: 1,
+      version: WORKSPACES_STORAGE_VERSION,
       state: { collapsed: ["acct:mondayoversleepclub", "acct:local"] },
     });
 

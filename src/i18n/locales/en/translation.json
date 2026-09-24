@@ -909,5 +909,18 @@
     "remoteUnpushedUnnamed_other": "Not pushed yet (↑{{count}})",
     "changedFiles_one": "Changed files {{count}}",
     "changedFiles_other": "Changed files {{count}}"
+  },
+  "activeScope": {
+    "workspaceDescription_one": "{{count}} repository. Pick a repository in the sidebar to see its graph.",
+    "workspaceDescription_other": "{{count}} repositories. Pick a repository in the sidebar to see its graph.",
+    "pickRepo": "Pick a repository",
+    "actions": {
+      "fetch": "Fetch",
+      "pull": "Pull",
+      "push": "Push",
+      "branch": "Branch",
+      "merge": "Merge",
+      "stash": "Stash"
+    }
   }
 }

@@ -175,9 +175,19 @@ describe("RepoTree — indentation levels", () => {
     expect(item("api")).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("treeitem", { name: "feat/login" })).toBeNull();
 
-    fireEvent.click(item("product"));
+    // 워크스페이스 행을 누르면 고르고(W4-T1), 접기는 ← 키나 ▾ 표시로 한다.
+    fireEvent.keyDown(item("product"), { key: "ArrowLeft" });
     expect(screen.queryByRole("treeitem", { name: "api" })).toBeNull();
     expect(useWorkspaceStore.getState().collapsed).toEqual(["repo:/r/api", "ws:w1"]);
+  });
+
+  it("selects the workspace when its row is clicked, without folding it", () => {
+    renderTree(makeData(baseSignals));
+    expect(item("product")).toHaveAttribute("aria-selected", "false");
+    fireEvent.click(item("product"));
+    expect(useWorkspaceStore.getState().activeWorkspaceId).toBe("w1");
+    expect(item("product")).toHaveAttribute("aria-selected", "true");
+    expect(item("product")).toHaveAttribute("aria-expanded", "true");
   });
 
   it("folds quiet repositories into one row", () => {

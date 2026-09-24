@@ -1,10 +1,12 @@
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { FolderGit2, X } from "lucide-react";
+import { Folder, FolderGit2, X } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useToastStore } from "@/stores/toast";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
+import { useActiveScope } from "@/hooks/useActiveScope";
+import { useWorkspaceStore } from "@/stores/workspace";
 import { stopWorktreePreview } from "@/api/commands";
 import { getErrorMessage } from "@/lib/utils";
 import { ToolbarRoot } from "@/components/toolbar";
@@ -40,6 +42,24 @@ function RepoListCard() {
 }
 
 /**
+ * 워크스페이스를 고른 상태의 메인 칸. 여러 저장소 리뷰 화면(W4-T3 `WorkspaceReview`)이
+ * 이 자리를 채운다. 그 전까지는 워크스페이스 이름과 저장소 수만 보여 준다.
+ */
+function WorkspaceScopeCard({ id, repoCount }: { id: string; repoCount: number }) {
+  const { t } = useTranslation();
+  const name = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === id)?.name ?? "");
+  return (
+    <Card className="flex-1">
+      <EmptyState
+        icon={Folder}
+        title={name}
+        description={t("activeScope.workspaceDescription", { count: repoCount })}
+      />
+    </Card>
+  );
+}
+
+/**
  * Right column of the two-column shell: toolbar on top, then the full-width
  * graph panel, then the file list + diff for whatever is picked in the panel.
  */
@@ -49,6 +69,7 @@ export function MainColumn() {
   const repoListOpen = useUIStore((s) => s.repoListOpen);
   const setPreviewBranch = useUIStore((s) => s.setPreviewBranch);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const scope = useActiveScope();
   const addToast = useToastStore((s) => s.addToast);
   const queryClient = useQueryClient();
 
@@ -72,13 +93,22 @@ export function MainColumn() {
   return (
     <main className="relative flex flex-col flex-1 min-w-0 h-full bg-background">
       <ToolbarRoot />
-      <PreviewBanner onStopPreview={handleStopPreview} />
+      {/* 미리보기는 저장소 하나에 묶여 있다. 워크스페이스 화면에서는 멈출 대상이 없으므로 숨긴다. */}
+      {scope?.kind === "repo" && <PreviewBanner onStopPreview={handleStopPreview} />}
 
       {/* 시안 frame()의 메인 칸 여백: 오른쪽·아래 g, 왼쪽 2px(사이드바가 자기 오른쪽 여백을 가진다) */}
       <div className="flex flex-col flex-1 min-h-0 gap-(--g) pt-(--g) pr-(--g) pb-(--g) pl-0.5">
         {repoListOpen ? (
           <RepoListCard />
-        ) : !activeRepoPath ? (
+        ) : scope?.kind === "repo" ? (
+          // 저장소 전용 화면은 저장소를 골랐을 때만 마운트한다. 안쪽 파일은 null 경로를 보지 않는다.
+          <>
+            <GraphPanel />
+            <ContentArea activeTab={activeTab} />
+          </>
+        ) : scope?.kind === "workspace" ? (
+          <WorkspaceScopeCard id={scope.id} repoCount={scope.paths.length} />
+        ) : (
           <Card className="flex-1">
             <EmptyState
               icon={FolderGit2}
@@ -86,11 +116,6 @@ export function MainColumn() {
               description={t("shell.noRepoDescription")}
             />
           </Card>
-        ) : (
-          <>
-            <GraphPanel />
-            <ContentArea activeTab={activeTab} />
-          </>
         )}
       </div>
     </main>

@@ -907,5 +907,18 @@
     "remoteUnpushedUnnamed_other": "아직 push 안 함 (↑{{count}})",
     "changedFiles_one": "바뀐 파일 {{count}}",
     "changedFiles_other": "바뀐 파일 {{count}}"
+  },
+  "activeScope": {
+    "workspaceDescription_one": "저장소 {{count}}개. 사이드바에서 저장소를 고르면 그 저장소의 그래프를 봅니다.",
+    "workspaceDescription_other": "저장소 {{count}}개. 사이드바에서 저장소를 고르면 그 저장소의 그래프를 봅니다.",
+    "pickRepo": "저장소를 고르세요",
+    "actions": {
+      "fetch": "Fetch",
+      "pull": "Pull",
+      "push": "Push",
+      "branch": "브랜치",
+      "merge": "Merge",
+      "stash": "Stash"
+    }
   }
 }
