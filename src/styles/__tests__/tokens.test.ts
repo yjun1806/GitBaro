@@ -159,9 +159,9 @@ describe("리뷰 개편 시각 토큰 (globals.css)", () => {
     expect(darkBlock).toMatch(/--live-soft:\s*rgba\(229,\s*112,\s*11,\s*0\.16\)/);
   });
 
-  it("--font-mono는 Pretendard를 유지한다 (사용자 결정 2026-09-24)", () => {
+  it("--font-mono는 D2Coding이고 SF Mono/Menlo로 대체한다 (사용자 결정 2026-09-24, README:51)", () => {
     const themeBlock = extractBlock(css, /@theme\s*\{/);
-    expect(themeBlock).toMatch(/--font-mono:\s*"Pretendard"/);
+    expect(themeBlock).toMatch(/--font-mono:\s*"D2Coding",\s*ui-monospace,\s*"SF Mono",\s*Menlo,\s*monospace/);
   });
 
   it("diff 추가·삭제 배경·글자색이 원천 값과 같다", () => {
