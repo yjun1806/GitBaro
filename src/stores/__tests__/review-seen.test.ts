@@ -319,6 +319,30 @@ describe("지운 저장소 정리", () => {
     expect(state().entries[ALPHA]).toEqual({ branch: "main", oid: "a201", seenAt: 2000 });
   });
 
+  it("링크된 워크트리도 저장소로 등록돼 있으면, 하나를 지워도 같은 물리 저장소를 가리키는 다른 등록 저장소의 기준선은 남긴다", () => {
+    // /repos/alpha(메인)와 /repos/alpha/feat(alpha의 링크된 워크트리)이 모두 저장소 목록에
+    // 따로 등록된 경우. list_review_worktrees는 어느 쪽으로 스캔하든 같은 물리 저장소의
+    // 워크트리 전체(둘 다)를 돌려준다.
+    const ALPHA_MAIN = ALPHA;
+    const ALPHA_LINKED = "/repos/alpha/feat";
+    state().applyScan(
+      [
+        repo(ALPHA_MAIN, [wt(ALPHA_MAIN, true, "a1"), wt(ALPHA_LINKED, false, "f1", "feature")]),
+        repo(ALPHA_LINKED, [wt(ALPHA_MAIN, true, "a1"), wt(ALPHA_LINKED, false, "f1", "feature")]),
+      ],
+      1000,
+    );
+    expect(state().entries[ALPHA_MAIN]).toBeDefined();
+    expect(state().entries[ALPHA_LINKED]).toBeDefined();
+
+    // ALPHA_LINKED만 저장소 목록에서 뺀다. ALPHA_MAIN은 여전히 등록돼 있다.
+    state().forgetRepos([ALPHA_LINKED]);
+
+    expect(state().entries[ALPHA_MAIN]).toEqual({ branch: "main", oid: "a1", seenAt: 1000 });
+    expect(state().entries[ALPHA_LINKED]).toEqual({ branch: "feature", oid: "f1", seenAt: 1000 });
+    expect(state().scannedRepos).toEqual([ALPHA_MAIN]);
+  });
+
   it("저장소 스토어가 복원되기 전의 빈 repos로는 정리하지 않는다", () => {
     state().applyScan([repo(ALPHA, [wt(ALPHA, true, "a1")])], 1000);
     vi.spyOn(useRepositoryStore.persist, "hasHydrated").mockReturnValue(false);

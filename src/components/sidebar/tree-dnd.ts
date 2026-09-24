@@ -51,8 +51,11 @@ export type DropPlan =
           }
         | { to: "account"; repoPath: string };
     }
-  /** 다른 계정의 행 위라 놓을 수 없다. */
-  | { type: "blocked" };
+  /**
+   * 놓을 수 없다: 다른 계정의 행 위(`reason` 없음)거나, 계정을 아직 모르는 임시 그룹
+   * (`reason: "account-pending"`, `AccountHeader`가 정렬 메뉴를 숨기는 그 그룹) 안이다.
+   */
+  | { type: "blocked"; reason?: "account-pending" };
 
 /** 계정 아래 형제: 워크스페이스와 저장소, 그 뒤에 「조용한 저장소」 줄의 저장소. */
 function accountSiblings(account: AccountNode): string[] {
@@ -144,6 +147,20 @@ export function zoneFor(activeKind: DragKind, overKind: DragKind, ratio: number)
 const sameOrder = (a: string[], b: string[]) =>
   a.length === b.length && a.every((k, i) => k === b[i]);
 
+/**
+ * 저장소 노드가 계정 바로 아래에서 어느 무리(활성/조용함)에 있는지. 워크스페이스 노드나
+ * 없는 키는 null(무리 구분이 없어 다른 검사에 걸리지 않는다).
+ */
+function repoGroup(tree: AccountNode[], key: string): "active" | "quiet" | null {
+  for (const account of tree) {
+    if (account.quietRepos.some((r) => r.key === key)) return "quiet";
+    for (const child of account.children) {
+      if (child.kind === "repo" && child.key === key) return "active";
+    }
+  }
+  return null;
+}
+
 /** 놓은 결과를 계산한다. 아무것도 바뀌지 않으면 null. */
 export function planDrop(
   tree: AccountNode[],
@@ -156,6 +173,18 @@ export function planDrop(
   const over = locateNode(tree, overKey);
   if (!active || !over) return null;
   if (active.accountKey !== over.accountKey) return { type: "blocked" };
+
+  const activeAccount = tree.find((a) => a.accountKey === active.accountKey);
+  if (activeAccount?.pending) return { type: "blocked", reason: "account-pending" };
+
+  // 「조용한 저장소」 무리는 활동으로 자동 정해진다(끌어서 옮기지 않는다). 활성 저장소를
+  // 조용한 저장소 줄 안에 놓거나 그 반대로 놓으면, 놓아도 그 자리로 가지 않아 표시선이
+  // 거짓말을 하게 되므로 아예 표시선을 보이지 않는다(`indicatorOf`가 null plan은 그린다).
+  if (zone !== "into") {
+    const activeGroup = repoGroup(tree, active.key);
+    const overGroup = repoGroup(tree, over.key);
+    if (activeGroup && overGroup && activeGroup !== overGroup) return null;
+  }
 
   if (zone === "into") {
     if (active.kind !== "repo" || over.kind !== "workspace" || !over.workspaceId) return null;
@@ -209,7 +238,7 @@ export function applyDrop(plan: DropPlan): WorkspaceResult {
   const store = useWorkspaceStore.getState();
   switch (plan.type) {
     case "blocked":
-      return { ok: false, reason: "account-mismatch" };
+      return { ok: false, reason: plan.reason ?? "account-mismatch" };
     case "into":
       return store.addRepoToWorkspace(plan.workspaceId, plan.repoPath);
     case "reorder": {

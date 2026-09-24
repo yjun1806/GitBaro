@@ -286,3 +286,57 @@ describe("다른 계정", () => {
     ).toBeNull();
   });
 });
+
+describe("계정을 아직 모르는 임시 그룹(「Other」)", () => {
+  it("그 안에서는 순서를 바꿀 수 없고, 순서·정렬을 저장하지 않는다", () => {
+    // owner가 없고 accountId만 있는데 그 계정을 아직 모른다 → AccountHeader가
+    // showActions를 끄는 바로 그 pending 그룹.
+    const p1 = makeRepo("p1", null, { accountId: "acc1" });
+    const p2 = makeRepo("p2", null, { accountId: "acc1" });
+    useRepositoryStore.setState({ repos: [p1, p2] });
+
+    const { plan, result } = drop(key(p2), key(p1), "before");
+
+    expect(plan).toEqual({ type: "blocked", reason: "account-pending" });
+    expect(result).toEqual({ ok: false, reason: "account-pending" });
+    expect(ws().orderByParent).toEqual({});
+    expect(ws().sortModeByAccount).toEqual({});
+  });
+});
+
+describe("「조용한 저장소」 줄", () => {
+  const activeRepo = makeRepo("active", "mos");
+  const quietRepo = makeRepo("quiet", "mos");
+
+  function treeWithOneQuiet() {
+    return buildRepoTree({
+      repos: [activeRepo, quietRepo],
+      accounts: [],
+      workspaces: ws().workspaces,
+      orderByParent: ws().orderByParent,
+      sortModeByAccount: ws().sortModeByAccount,
+      signals: { [quietRepo.path]: {} },
+      now: 0,
+    });
+  }
+
+  it("활성 저장소를 조용한 저장소 위로 끌면 표시선을 그리지 않고(계획이 없고), 순서도 저장하지 않는다", () => {
+    const plan = planDrop(
+      treeWithOneQuiet(),
+      repoNodeKey(activeRepo.path),
+      repoNodeKey(quietRepo.path),
+      "before",
+    );
+    expect(plan).toBeNull();
+  });
+
+  it("조용한 저장소를 활성 저장소 위로 끌어도 마찬가지다", () => {
+    const plan = planDrop(
+      treeWithOneQuiet(),
+      repoNodeKey(quietRepo.path),
+      repoNodeKey(activeRepo.path),
+      "after",
+    );
+    expect(plan).toBeNull();
+  });
+});

@@ -222,11 +222,21 @@ export const useReviewSeenStore = create<ReviewSeenState>()(
           // 접두어 판정(belongsToRepo)만으로는 저장소 폴더 밖에 만든 워크트리(앱이 기본
           // 제안하는 위치 포함)를 찾지 못한다. 마지막 스캔이 기록해 둔 정확한 목록을 더한다.
           const explicitPaths = new Set(repoPaths.flatMap((p) => state.worktreesByRepo[p] ?? []));
+          // 링크된 워크트리도 저장소로 등록될 수 있다. 그러면 `list_review_worktrees`는 같은
+          // 물리 저장소의 모든 워크트리(메인 포함)를 돌려주므로, 지우는 저장소와 남아 있는
+          // 저장소의 `worktreesByRepo`가 겹칠 수 있다. 아직 등록돼 있는 다른 저장소가 같은
+          // 워크트리 목록을 가리키고 있으면 그 경로의 기준선은 지우지 않는다.
+          const keptWorktreePaths = new Set(
+            Object.entries(state.worktreesByRepo)
+              .filter(([repoPath]) => !gone.has(repoPath))
+              .flatMap(([, paths]) => paths),
+          );
           const entries = Object.fromEntries(
             Object.entries(state.entries).filter(
               ([path]) =>
-                !explicitPaths.has(path) &&
-                ![...gone].some((repoPath) => belongsToRepo(path, repoPath)),
+                keptWorktreePaths.has(path) ||
+                (!explicitPaths.has(path) &&
+                  ![...gone].some((repoPath) => belongsToRepo(path, repoPath))),
             ),
           );
           const worktreesByRepo = { ...state.worktreesByRepo };
