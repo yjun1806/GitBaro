@@ -377,3 +377,6 @@ export interface BranchUpdate {
   oldOid: string;
   newOid: string;
 }
+
+/** A multi-step git operation that stops for conflict resolution. */
+export type GitOperation = "merge" | "rebase" | "cherryPick" | "revert" | "squash";

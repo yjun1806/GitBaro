@@ -19,6 +19,8 @@ interface CommitContextMenuProps {
   onReset: () => void;
   onRevert: () => void;
   onCherryPick: () => void;
+  /** Merge commits cannot be cherry-picked as one change. */
+  isMergeCommit: boolean;
   onClose: () => void;
 }
 
@@ -31,6 +33,7 @@ export function CommitContextMenu({
   onReset,
   onRevert,
   onCherryPick,
+  isMergeCommit,
   onClose,
 }: CommitContextMenuProps) {
   const { t } = useTranslation();
@@ -66,6 +69,7 @@ export function CommitContextMenu({
           label: t("history.contextMenu.cherryPick"),
           icon: <Cherry className="w-3.5 h-3.5" />,
           onClick: onCherryPick,
+          disabled: isMergeCommit,
         },
       ],
     },

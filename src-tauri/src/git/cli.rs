@@ -381,16 +381,42 @@ impl GitCliEngine {
 
     /// Create a new commit that undoes `oid`. `--no-edit` keeps the default
     /// revert message. `oid` must be a validated hex commit id.
+    ///
+    /// git refuses to revert a merge commit without a mainline, so for merges
+    /// we pass `-m 1`: undo what the merge brought in relative to the branch
+    /// it was merged into (same as GitHub Desktop).
     pub async fn revert_commit(&self, oid: &str) -> Result<(), AppError> {
-        self.run_local_checked(&["revert", "--no-edit", oid]).await?;
+        let mut args = vec!["revert", "--no-edit"];
+        if self.is_merge_commit(oid).await? {
+            args.extend(["-m", "1"]);
+        }
+        args.push(oid);
+        self.run_local_checked(&args).await?;
         Ok(())
     }
 
     /// Apply the changes introduced by `oid` on top of the current branch.
-    /// `oid` must be a validated hex commit id.
+    /// `oid` must be a validated hex commit id. Merge commits are rejected:
+    /// replaying a whole merge as one commit is rarely what the user wants,
+    /// and git would fail anyway without a mainline.
     pub async fn cherry_pick_commit(&self, oid: &str) -> Result<(), AppError> {
+        if self.is_merge_commit(oid).await? {
+            return Err(AppError::GitCli {
+                message: "Cannot cherry-pick a merge commit".to_string(),
+                exit_code: None,
+            });
+        }
         self.run_local_checked(&["cherry-pick", oid]).await?;
         Ok(())
+    }
+
+    /// Whether `oid` has more than one parent.
+    async fn is_merge_commit(&self, oid: &str) -> Result<bool, AppError> {
+        let line = self
+            .run_local_checked(&["rev-list", "--parents", "-n", "1", oid])
+            .await?;
+        // "<oid> <parent1> <parent2> ..."
+        Ok(line.split_whitespace().count() > 2)
     }
 
     /// Stash working changes via git CLI.
@@ -475,9 +501,18 @@ impl GitCliEngine {
 
     /// Squash-merge a branch into the current branch via git CLI.
     /// This stages the squashed changes but does NOT create a commit.
-    pub async fn squash_merge(&self, branch: &str) -> Result<(), AppError> {
-        self.run_local_checked(&["merge", "--squash", "--", branch]).await?;
-        Ok(())
+    /// If the squash stops on conflicts, `message` replaces git's SQUASH_MSG so
+    /// that continuing after the conflicts commits with the same message a
+    /// conflict-free squash would get.
+    pub async fn squash_merge(&self, branch: &str, message: &str) -> Result<(), AppError> {
+        let result = self.run_local_checked(&["merge", "--squash", "--", branch]).await;
+        if result.is_err() {
+            let squash_msg = self.git_dir().await?.join("SQUASH_MSG");
+            if squash_msg.exists() {
+                std::fs::write(&squash_msg, format!("{}\n", message))?;
+            }
+        }
+        result.map(|_| ())
     }
 
     /// Rebase the current branch onto the given base via git CLI.
@@ -503,8 +538,24 @@ impl GitCliEngine {
     /// Continue an in-progress merge after conflicts are resolved and staged.
     /// Commits the merge without opening an editor.
     pub async fn merge_continue(&self) -> Result<(), AppError> {
-        self.run_local_checked(&["commit", "--no-edit"]).await?;
+        // Without an editor git keeps `#` lines, so the "# Conflicts:" list it
+        // appends to the prepared message would end up in the commit.
+        self.run_local_checked(&["commit", "--no-edit", "--cleanup=strip"]).await?;
         Ok(())
+    }
+
+    /// Whether the index has nothing staged relative to HEAD. Unmerged
+    /// (conflicted) entries count as staged changes.
+    async fn index_matches_head(&self) -> Result<bool, AppError> {
+        let output = self.run_local(&["diff", "--cached", "--quiet"]).await?;
+        match output.status.code() {
+            Some(0) => Ok(true),
+            Some(1) => Ok(false),
+            code => Err(AppError::GitCli {
+                message: parse_git_error(&String::from_utf8_lossy(&output.stderr)),
+                exit_code: code,
+            }),
+        }
     }
 
     /// Abort an in-progress rebase (`git rebase --abort`).
@@ -521,23 +572,71 @@ impl GitCliEngine {
         Ok(())
     }
 
-    /// Report whether a merge or rebase is in progress by checking for the
-    /// marker files git creates in the git dir.
-    pub async fn operation_in_progress(&self) -> Result<Option<&'static str>, AppError> {
+    /// Absolute path of this worktree's git dir (where MERGE_HEAD etc. live).
+    async fn git_dir(&self) -> Result<PathBuf, AppError> {
         let git_dir = self.run_local_checked(&["rev-parse", "--git-dir"]).await?;
-        let git_dir_path = {
-            let p = PathBuf::from(&git_dir);
-            if p.is_absolute() { p } else { self.repo_path.join(p) }
-        };
-        if git_dir_path.join("MERGE_HEAD").exists() {
-            Ok(Some("merge"))
-        } else if git_dir_path.join("rebase-merge").exists()
-            || git_dir_path.join("rebase-apply").exists()
-        {
-            Ok(Some("rebase"))
-        } else {
-            Ok(None)
+        let p = PathBuf::from(&git_dir);
+        Ok(if p.is_absolute() { p } else { self.repo_path.join(p) })
+    }
+
+    /// Report which multi-step operation is in progress by checking for the
+    /// marker files git creates in the git dir.
+    pub async fn operation_in_progress(&self) -> Result<Option<GitOperation>, AppError> {
+        self.operation_in(&self.git_dir().await?).await
+    }
+
+    async fn operation_in(&self, git_dir: &Path) -> Result<Option<GitOperation>, AppError> {
+        match detect_operation(git_dir) {
+            // git leaves SQUASH_MSG behind when a squash is undone by some
+            // commands (e.g. `restore --staged`). With nothing staged there is
+            // no squash left to continue or abort.
+            Some(GitOperation::Squash) if self.index_matches_head().await? => Ok(None),
+            op => Ok(op),
         }
+    }
+
+    /// Abort the given operation, restoring the pre-operation state.
+    pub async fn operation_abort(&self, op: GitOperation) -> Result<(), AppError> {
+        match op {
+            GitOperation::Merge => self.merge_abort().await,
+            GitOperation::Rebase => self.rebase_abort().await,
+            GitOperation::CherryPick => {
+                self.run_local_checked(&["cherry-pick", "--abort"]).await?;
+                Ok(())
+            }
+            GitOperation::Revert => {
+                self.run_local_checked(&["revert", "--abort"]).await?;
+                Ok(())
+            }
+            // A squash merge leaves no MERGE_HEAD, so `merge --abort` refuses.
+            // `reset --merge` is what `merge --abort` runs under the hood; it
+            // also clears SQUASH_MSG.
+            GitOperation::Squash => {
+                self.run_local_checked(&["reset", "--merge"]).await?;
+                Ok(())
+            }
+        }
+    }
+
+    /// Continue the given operation after conflicts are resolved and staged.
+    pub async fn operation_continue(&self, op: GitOperation) -> Result<(), AppError> {
+        match op {
+            // A squash is concluded the same way as a merge: commit with the
+            // prepared message (SQUASH_MSG).
+            GitOperation::Merge | GitOperation::Squash => self.merge_continue().await,
+            GitOperation::Rebase => self.rebase_continue().await,
+            GitOperation::CherryPick => self.sequencer_continue("cherry-pick").await,
+            GitOperation::Revert => self.sequencer_continue("revert").await,
+        }
+    }
+
+    /// Continue a cherry-pick or revert. When the resolution left nothing to
+    /// commit (the change is already on this branch), git refuses `--continue`
+    /// and the commit is skipped instead, as GitHub Desktop does.
+    async fn sequencer_continue(&self, command: &str) -> Result<(), AppError> {
+        let step = if self.index_matches_head().await? { "--skip" } else { "--continue" };
+        self.run_local_checked(&["-c", "core.editor=true", command, step]).await?;
+        Ok(())
     }
 
     /// Get recently checked-out branches from reflog.
@@ -693,29 +792,142 @@ fn parse_worktree_porcelain(output: &str) -> Vec<WorktreeEntry> {
     entries
 }
 
+// ── Multi-step operation state ───────────────────────────────────────────────
+
+/// A multi-step git operation that stops for conflict resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GitOperation {
+    Merge,
+    Rebase,
+    CherryPick,
+    Revert,
+    Squash,
+}
+
+/// Read the operation state from the marker files in `git_dir`.
+fn detect_operation(git_dir: &Path) -> Option<GitOperation> {
+    let has = |name: &str| git_dir.join(name).exists();
+    if has("rebase-merge") || has("rebase-apply") {
+        Some(GitOperation::Rebase)
+    } else if has("MERGE_HEAD") {
+        Some(GitOperation::Merge)
+    } else if has("CHERRY_PICK_HEAD") {
+        Some(GitOperation::CherryPick)
+    } else if has("REVERT_HEAD") {
+        Some(GitOperation::Revert)
+    } else if has("SQUASH_MSG") {
+        // `merge --squash` writes SQUASH_MSG and no MERGE_HEAD. git does not
+        // always remove it when the squash is undone, so callers also check
+        // that something is staged (see `operation_in`).
+        Some(GitOperation::Squash)
+    } else {
+        None
+    }
+}
+
 // ── Preview operations (merge-based preview) ─────────────────────────────────
 // 다른 branch의 변경사항을 임시 머지하여 dev 서버 핫리로드로 미리보기한다.
 // stop_preview로 깔끔하게 원복한다.
+//
+// 미리보기 여부는 git dir의 표식 파일(PREVIEW_MARKER)로만 판단한다. MERGE_HEAD만
+// 보고 판단하면 사용자가 직접 진행 중인 merge를 미리보기 잔여물로 오인해 중단한다.
+// 표식에는 미리보기가 만든 MERGE_HEAD와 스태시 oid를 적어, 정리할 때 그 둘만 건드린다.
+
+const PREVIEW_MARKER: &str = "gitbaro-preview";
+
+/// Contents of the preview marker file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PreviewMarker {
+    merge_head: String,
+    stash_oid: Option<String>,
+}
+
+impl PreviewMarker {
+    fn to_file_contents(&self) -> String {
+        format!(
+            "{}\n{}\n",
+            self.merge_head,
+            self.stash_oid.as_deref().unwrap_or("")
+        )
+    }
+
+    fn from_file_contents(contents: &str) -> Option<Self> {
+        let mut lines = contents.lines().map(str::trim);
+        let merge_head = lines.next().filter(|l| !l.is_empty())?.to_string();
+        let stash_oid = lines.next().filter(|l| !l.is_empty()).map(String::from);
+        Some(Self { merge_head, stash_oid })
+    }
+}
 
 impl GitCliEngine {
+    /// Current `refs/stash` oid, if any stash exists.
+    async fn stash_top_oid(&self) -> Result<Option<String>, AppError> {
+        let out = self
+            .run_local(&["rev-parse", "--verify", "-q", "refs/stash"])
+            .await?;
+        let oid = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        Ok((out.status.success() && !oid.is_empty()).then_some(oid))
+    }
+
+    /// Pop the stash entry whose commit is `oid` (not whatever is on top).
+    /// Returns false when that entry no longer exists.
+    async fn stash_pop_oid(&self, oid: &str) -> Result<bool, AppError> {
+        let list = self.run_local_checked(&["stash", "list", "--format=%H"]).await?;
+        let Some(index) = list.lines().position(|l| l.trim() == oid) else {
+            return Ok(false);
+        };
+        let entry = format!("stash@{{{}}}", index);
+        self.run_local_checked(&["stash", "pop", &entry]).await?;
+        Ok(true)
+    }
+
     /// Start previewing another branch by performing a no-commit merge.
-    /// If the working tree is dirty, stashes changes first.
-    pub async fn start_preview(&self, branch: &str) -> Result<(), AppError> {
-        // 1. dirty 상태면 stash
-        let status = self.run_local_checked(&["status", "--porcelain"]).await?;
-        let was_dirty = !status.is_empty();
-        if was_dirty {
-            self.run_local_checked(&["stash", "push", "-m", "gitbaro-preview"]).await?;
+    /// Local changes (including untracked files) are stashed first.
+    /// Returns false when there is nothing to preview (already up to date);
+    /// in that case the working tree is left as it was.
+    pub async fn start_preview(&self, branch: &str) -> Result<bool, AppError> {
+        let git_dir = self.git_dir().await?;
+        if self.operation_in(&git_dir).await?.is_some() || git_dir.join(PREVIEW_MARKER).exists() {
+            return Err(AppError::GitCli {
+                message: "Another operation is in progress".to_string(),
+                exit_code: None,
+            });
         }
 
-        // 2. no-commit merge
-        let result = self.run_local(&["merge", "--no-commit", "--no-ff", branch]).await?;
-        if !result.status.success() {
-            // 머지 실패 시 abort 후 stash 복원
-            let _ = self.run_local(&["merge", "--abort"]).await;
-            if was_dirty {
-                let _ = self.run_local(&["stash", "pop"]).await;
+        // 1. dirty 상태면 스태시하고, 새로 생긴 스태시의 oid를 기록한다.
+        let status = self.run_local_checked(&["status", "--porcelain"]).await?;
+        let stash_oid = if status.is_empty() {
+            None
+        } else {
+            let before = self.stash_top_oid().await?;
+            self.run_local_checked(&["stash", "push", "-u", "-m", "gitbaro-preview"])
+                .await?;
+            let after = self.stash_top_oid().await?;
+            if after.is_none() || after == before {
+                return Err(AppError::GitCli {
+                    message: "Failed to stash local changes".to_string(),
+                    exit_code: None,
+                });
             }
+            after
+        };
+        let restore_stash = || async {
+            if let Some(oid) = &stash_oid {
+                let _ = self.stash_pop_oid(oid).await;
+            }
+        };
+
+        // 2. no-commit merge
+        let result = self
+            .run_local(&["merge", "--no-commit", "--no-ff", "--", branch])
+            .await?;
+        if !result.status.success() {
+            // 방금 시작한 merge만 되돌린다 (시작 전엔 진행 중인 작업이 없음을 확인했다).
+            if git_dir.join("MERGE_HEAD").exists() {
+                let _ = self.run_local(&["merge", "--abort"]).await;
+            }
+            restore_stash().await;
             let stderr = String::from_utf8_lossy(&result.stderr);
             return Err(AppError::GitCli {
                 message: parse_git_error(&stderr),
@@ -723,32 +935,357 @@ impl GitCliEngine {
             });
         }
 
-        Ok(())
+        // "Already up to date": merge가 시작되지 않았으니 미리보기도 없다.
+        let merge_head = std::fs::read_to_string(git_dir.join("MERGE_HEAD")).ok();
+        let Some(merge_head) = merge_head.map(|h| h.trim().to_string()) else {
+            restore_stash().await;
+            return Ok(false);
+        };
+
+        let marker = PreviewMarker { merge_head, stash_oid };
+        std::fs::write(git_dir.join(PREVIEW_MARKER), marker.to_file_contents())?;
+        Ok(true)
     }
 
-    /// Stop an active preview by aborting the merge and restoring stash.
+    /// Stop an active preview: abort the preview merge and restore the exact
+    /// stash it created. Does nothing when no preview marker exists, and never
+    /// aborts a merge that the preview did not start.
     pub async fn stop_preview(&self) -> Result<(), AppError> {
-        // 1. merge abort
-        self.run_local_checked(&["merge", "--abort"]).await?;
+        let git_dir = self.git_dir().await?;
+        let marker_path = git_dir.join(PREVIEW_MARKER);
+        let Ok(contents) = std::fs::read_to_string(&marker_path) else {
+            return Ok(());
+        };
+        let Some(marker) = PreviewMarker::from_file_contents(&contents) else {
+            std::fs::remove_file(&marker_path)?;
+            return Ok(());
+        };
 
-        // 2. gitbaro-preview stash가 있으면 pop
-        let stash_list = self.run_local_checked(&["stash", "list"]).await?;
-        if stash_list.contains("gitbaro-preview") {
-            self.run_local_checked(&["stash", "pop"]).await?;
+        let current_merge_head = std::fs::read_to_string(git_dir.join("MERGE_HEAD"))
+            .ok()
+            .map(|h| h.trim().to_string());
+        match current_merge_head {
+            Some(head) if head == marker.merge_head => {
+                self.run_local_checked(&["merge", "--abort"]).await?;
+            }
+            // 사용자가 시작한 다른 merge가 진행 중이면 건드리지 않는다.
+            // 미리보기 스태시는 스태시 목록에 그대로 남는다.
+            Some(_) => {
+                std::fs::remove_file(&marker_path)?;
+                return Ok(());
+            }
+            // 미리보기 merge가 이미 끝났다(중단·커밋). 스태시만 복원한다.
+            None => {}
         }
 
+        if let Some(oid) = &marker.stash_oid {
+            if self.operation_in(&git_dir).await?.is_none() {
+                self.stash_pop_oid(oid).await?;
+            }
+        }
+        std::fs::remove_file(&marker_path)?;
         Ok(())
     }
 
-    /// Check if a merge is currently in progress (.git/MERGE_HEAD exists).
-    pub async fn is_merging(&self) -> Result<bool, AppError> {
-        let git_dir = self.run_local_checked(&["rev-parse", "--git-dir"]).await?;
-        let git_dir_path = {
-            let p = PathBuf::from(&git_dir);
-            if p.is_absolute() { p } else { self.repo_path.join(p) }
+    /// Whether a preview started by GitBaro is active (the marker exists).
+    pub async fn is_previewing(&self) -> Result<bool, AppError> {
+        Ok(self.git_dir().await?.join(PREVIEW_MARKER).exists())
+    }
+}
+
+#[cfg(test)]
+mod operation_tests {
+    use super::*;
+    use std::process::Command as StdCommand;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    static COUNTER: AtomicU32 = AtomicU32::new(0);
+
+    struct TempRepo(PathBuf);
+
+    impl Drop for TempRepo {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let out = StdCommand::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .output()
+            .expect("git 실행 실패");
+        assert!(out.status.success(), "git {:?}: {}", args, String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// git이 실패해도 되는 명령(충돌을 일으키는 merge 등).
+    fn git_may_fail(dir: &Path, args: &[&str]) {
+        let _ = StdCommand::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .output();
+    }
+
+    fn write(dir: &Path, name: &str, contents: &str) {
+        std::fs::write(dir.join(name), contents).unwrap();
+    }
+
+    /// main에 a.txt, `feature` 브랜치에서 a.txt를 다르게 고친 저장소.
+    /// main도 a.txt를 고쳐 두어 merge하면 충돌이 난다.
+    fn conflicting_repo() -> TempRepo {
+        let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir()
+            .join(format!("gitbaro-op-{}-{}", std::process::id(), n));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        git(&dir, &["config", "user.email", "t@t"]);
+        git(&dir, &["config", "user.name", "t"]);
+        git(&dir, &["config", "commit.gpgsign", "false"]);
+        write(&dir, "a.txt", "base\n");
+        git(&dir, &["add", "-A"]);
+        git(&dir, &["commit", "-qm", "init"]);
+        git(&dir, &["checkout", "-qb", "feature"]);
+        write(&dir, "a.txt", "feature\n");
+        git(&dir, &["commit", "-qam", "feature change"]);
+        git(&dir, &["checkout", "-q", "main"]);
+        write(&dir, "a.txt", "main\n");
+        git(&dir, &["commit", "-qam", "main change"]);
+        TempRepo(dir)
+    }
+
+    fn head(dir: &Path) -> String {
+        git(dir, &["rev-parse", "HEAD"])
+    }
+
+    #[tokio::test]
+    async fn user_merge_is_not_mistaken_for_a_preview() {
+        let repo = conflicting_repo();
+        git_may_fail(&repo.0, &["merge", "feature"]);
+        assert!(repo.0.join(".git/MERGE_HEAD").exists());
+
+        let engine = GitCliEngine::new(&repo.0);
+        assert!(!engine.is_previewing().await.unwrap());
+        engine.stop_preview().await.unwrap();
+
+        assert!(repo.0.join(".git/MERGE_HEAD").exists(), "사용자 merge가 중단됨");
+        assert_eq!(
+            engine.operation_in_progress().await.unwrap(),
+            Some(GitOperation::Merge)
+        );
+    }
+
+    #[tokio::test]
+    async fn preview_restores_its_own_stash_including_untracked_files() {
+        let repo = conflicting_repo();
+        // 미리보기와 무관한 기존 스태시
+        write(&repo.0, "other.txt", "other\n");
+        git(&repo.0, &["stash", "push", "-u", "-m", "user stash"]);
+        // 충돌 없는 미리보기 대상 브랜치
+        git(&repo.0, &["checkout", "-qb", "clean"]);
+        write(&repo.0, "b.txt", "b\n");
+        git(&repo.0, &["add", "b.txt"]);
+        git(&repo.0, &["commit", "-qm", "add b"]);
+        git(&repo.0, &["checkout", "-q", "main"]);
+        // 미리보기 전 로컬 변경: 추적되지 않은 파일
+        write(&repo.0, "wip.txt", "wip\n");
+        let before = head(&repo.0);
+
+        let engine = GitCliEngine::new(&repo.0);
+        assert!(engine.start_preview("clean").await.unwrap());
+        assert!(engine.is_previewing().await.unwrap());
+        assert!(!repo.0.join("wip.txt").exists(), "untracked 파일도 스태시돼야 함");
+        assert!(repo.0.join("b.txt").exists());
+
+        engine.stop_preview().await.unwrap();
+        assert!(!engine.is_previewing().await.unwrap());
+        assert_eq!(head(&repo.0), before);
+        assert!(!repo.0.join("b.txt").exists());
+        assert_eq!(std::fs::read_to_string(repo.0.join("wip.txt")).unwrap(), "wip\n");
+        let stashes = git(&repo.0, &["stash", "list", "--format=%s"]);
+        assert_eq!(stashes.lines().count(), 1);
+        assert!(stashes.contains("user stash"), "기존 스태시가 꺼내짐: {stashes}");
+    }
+
+    #[tokio::test]
+    async fn already_up_to_date_is_not_a_preview() {
+        let repo = conflicting_repo();
+        write(&repo.0, "wip.txt", "wip\n");
+        let engine = GitCliEngine::new(&repo.0);
+
+        // main은 main~1을 이미 포함한다.
+        assert!(!engine.start_preview("main~1").await.unwrap());
+        assert!(!engine.is_previewing().await.unwrap());
+        assert!(repo.0.join("wip.txt").exists());
+        assert!(git(&repo.0, &["stash", "list"]).is_empty());
+    }
+
+    #[tokio::test]
+    async fn preview_refuses_to_start_during_a_user_merge() {
+        let repo = conflicting_repo();
+        git_may_fail(&repo.0, &["merge", "feature"]);
+        let engine = GitCliEngine::new(&repo.0);
+
+        assert!(engine.start_preview("feature").await.is_err());
+        assert!(repo.0.join(".git/MERGE_HEAD").exists());
+    }
+
+    #[tokio::test]
+    async fn cherry_pick_conflict_is_detected_and_aborted() {
+        let repo = conflicting_repo();
+        let before = head(&repo.0);
+        git_may_fail(&repo.0, &["cherry-pick", "feature"]);
+        let engine = GitCliEngine::new(&repo.0);
+
+        let op = engine.operation_in_progress().await.unwrap();
+        assert_eq!(op, Some(GitOperation::CherryPick));
+        engine.operation_abort(GitOperation::CherryPick).await.unwrap();
+        assert_eq!(engine.operation_in_progress().await.unwrap(), None);
+        assert_eq!(head(&repo.0), before);
+    }
+
+    #[tokio::test]
+    async fn revert_conflict_is_detected_and_continued() {
+        let repo = conflicting_repo();
+        // main~1 ("init")을 되돌리면 이후 수정과 충돌한다.
+        write(&repo.0, "a.txt", "main again\n");
+        git(&repo.0, &["commit", "-qam", "main again"]);
+        git_may_fail(&repo.0, &["revert", "--no-edit", "HEAD~1"]);
+        let engine = GitCliEngine::new(&repo.0);
+
+        assert_eq!(
+            engine.operation_in_progress().await.unwrap(),
+            Some(GitOperation::Revert)
+        );
+        write(&repo.0, "a.txt", "resolved\n");
+        git(&repo.0, &["add", "a.txt"]);
+        engine.operation_continue(GitOperation::Revert).await.unwrap();
+        assert_eq!(engine.operation_in_progress().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn squash_conflict_is_detected_and_aborted() {
+        let repo = conflicting_repo();
+        let before = head(&repo.0);
+        git_may_fail(&repo.0, &["merge", "--squash", "feature"]);
+        let engine = GitCliEngine::new(&repo.0);
+
+        assert_eq!(
+            engine.operation_in_progress().await.unwrap(),
+            Some(GitOperation::Squash)
+        );
+        engine.operation_abort(GitOperation::Squash).await.unwrap();
+        assert_eq!(engine.operation_in_progress().await.unwrap(), None);
+        assert_eq!(head(&repo.0), before);
+        assert_eq!(std::fs::read_to_string(repo.0.join("a.txt")).unwrap(), "main\n");
+    }
+
+    #[tokio::test]
+    async fn undone_squash_is_not_reported_as_in_progress() {
+        let repo = conflicting_repo();
+        git(&repo.0, &["checkout", "-qb", "clean", "main~1"]);
+        write(&repo.0, "b.txt", "b\n");
+        git(&repo.0, &["add", "b.txt"]);
+        git(&repo.0, &["commit", "-qm", "add b"]);
+        git(&repo.0, &["checkout", "-q", "main"]);
+        git(&repo.0, &["merge", "--squash", "clean"]);
+        let engine = GitCliEngine::new(&repo.0);
+        assert_eq!(
+            engine.operation_in_progress().await.unwrap(),
+            Some(GitOperation::Squash)
+        );
+
+        // `restore --staged` undoes the squash but leaves SQUASH_MSG behind.
+        git(&repo.0, &["restore", "--staged", "."]);
+        assert!(repo.0.join(".git/SQUASH_MSG").exists());
+        assert_eq!(engine.operation_in_progress().await.unwrap(), None);
+        std::fs::remove_file(repo.0.join("b.txt")).unwrap();
+        assert!(engine.start_preview("clean").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn squash_conflict_continues_with_the_app_message() {
+        let repo = conflicting_repo();
+        let engine = GitCliEngine::new(&repo.0);
+        let message = "Squash merge branch 'feature'";
+        assert!(engine.squash_merge("feature", message).await.is_err());
+        assert_eq!(
+            engine.operation_in_progress().await.unwrap(),
+            Some(GitOperation::Squash)
+        );
+
+        write(&repo.0, "a.txt", "resolved\n");
+        git(&repo.0, &["add", "a.txt"]);
+        engine.operation_continue(GitOperation::Squash).await.unwrap();
+        assert_eq!(engine.operation_in_progress().await.unwrap(), None);
+        assert_eq!(git(&repo.0, &["log", "-1", "--format=%B"]), message);
+    }
+
+    #[tokio::test]
+    async fn merge_conflict_continue_leaves_no_conflict_comments() {
+        let repo = conflicting_repo();
+        git_may_fail(&repo.0, &["merge", "feature"]);
+        write(&repo.0, "a.txt", "resolved\n");
+        git(&repo.0, &["add", "a.txt"]);
+        let engine = GitCliEngine::new(&repo.0);
+        engine.operation_continue(GitOperation::Merge).await.unwrap();
+        assert_eq!(git(&repo.0, &["log", "-1", "--format=%B"]), "Merge branch 'feature'");
+    }
+
+    #[tokio::test]
+    async fn empty_cherry_pick_is_skipped_on_continue() {
+        let repo = conflicting_repo();
+        let before = head(&repo.0);
+        git_may_fail(&repo.0, &["cherry-pick", "feature"]);
+        // 충돌을 main 쪽으로 해결해 커밋할 변경이 남지 않는다.
+        write(&repo.0, "a.txt", "main\n");
+        git(&repo.0, &["add", "a.txt"]);
+        let engine = GitCliEngine::new(&repo.0);
+        assert_eq!(
+            engine.operation_in_progress().await.unwrap(),
+            Some(GitOperation::CherryPick)
+        );
+
+        engine.operation_continue(GitOperation::CherryPick).await.unwrap();
+        assert_eq!(engine.operation_in_progress().await.unwrap(), None);
+        assert_eq!(head(&repo.0), before);
+    }
+
+    #[tokio::test]
+    async fn merge_commit_is_reverted_with_mainline_and_not_cherry_picked() {
+        let repo = conflicting_repo();
+        // 충돌 없는 병합 커밋을 만든다.
+        git(&repo.0, &["checkout", "-qb", "side", "main~1"]);
+        write(&repo.0, "c.txt", "c\n");
+        git(&repo.0, &["add", "c.txt"]);
+        git(&repo.0, &["commit", "-qm", "add c"]);
+        git(&repo.0, &["checkout", "-q", "main"]);
+        git(&repo.0, &["merge", "--no-ff", "--no-edit", "side"]);
+        let merge = head(&repo.0);
+        let engine = GitCliEngine::new(&repo.0);
+
+        assert!(engine.cherry_pick_commit(&merge).await.is_err());
+        engine.revert_commit(&merge).await.unwrap();
+        assert!(!repo.0.join("c.txt").exists());
+        assert_eq!(std::fs::read_to_string(repo.0.join("a.txt")).unwrap(), "main\n");
+    }
+
+    #[test]
+    fn preview_marker_round_trips() {
+        let with_stash = PreviewMarker {
+            merge_head: "abc".into(),
+            stash_oid: Some("def".into()),
         };
-        let merge_head = git_dir_path.join("MERGE_HEAD");
-        Ok(merge_head.exists())
+        let without = PreviewMarker { merge_head: "abc".into(), stash_oid: None };
+        for m in [with_stash, without] {
+            assert_eq!(PreviewMarker::from_file_contents(&m.to_file_contents()), Some(m));
+        }
+        assert_eq!(PreviewMarker::from_file_contents(""), None);
     }
 }
 
