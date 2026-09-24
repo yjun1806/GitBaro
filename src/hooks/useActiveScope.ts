@@ -3,7 +3,8 @@ import { useReviewStatusQuery } from "@/api/queries";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
-import type { Workspace } from "@/lib/repo-tree";
+import { repoAccountsByPath, toAccountKey, workspaceMembership, type Workspace } from "@/lib/repo-tree";
+import { useAccountStore } from "@/stores/account";
 import type { RepoInfo, RepoReviewStatus } from "@/types";
 
 /**
@@ -17,24 +18,45 @@ export type ActiveScope =
   | { kind: "workspace"; id: string; paths: string[] }
   | null;
 
+type AccountLite = { id: string; username: string };
+
+/**
+ * 워크스페이스에 지금 드는 저장소. 사이드바 트리와 같은 규칙(`workspaceMembership`)을 쓴다.
+ * 그래서 계정이 바뀌어 사이드바에서 다른 계정 아래로 옮겨 간 저장소는 여기서도 빠진다.
+ */
+export function workspaceMemberRepos(
+  workspaceId: string,
+  workspaces: Workspace[],
+  repos: RepoInfo[],
+  accounts: AccountLite[],
+): RepoInfo[] {
+  const { membersById } = workspaceMembership(
+    workspaces,
+    repos,
+    repoAccountsByPath(repos, accounts),
+  );
+  return membersById.get(workspaceId) ?? [];
+}
+
 /**
  * 선택 상태에서 범위를 구한다. 저장소와 워크스페이스는 스토어가 둘 중 하나만 잡도록
  * 맞추지만, 저장값이 어긋나 둘 다 남아 있으면 저장소를 따른다(기존 화면이 그대로 뜬다).
  * 워크스페이스 id가 가리키는 워크스페이스가 없으면(지워짐) 선택이 없는 것으로 본다.
+ * `paths`는 사이드바가 그 워크스페이스 아래에 보여 주는 저장소와 같다.
  */
 export function resolveActiveScope(
   activeRepoPath: string | null,
   activeWorkspaceId: string | null,
   workspaces: Workspace[],
   repos: RepoInfo[],
+  accounts: AccountLite[],
 ): ActiveScope {
   if (activeRepoPath) return { kind: "repo", path: activeRepoPath };
   if (!activeWorkspaceId) return null;
   const ws = workspaces.find((w) => w.id === activeWorkspaceId);
   if (!ws) return null;
-  // 저장소 목록에서 지운 저장소는 `forgetRepos`가 빼지만, 복원 순서 탓에 잠깐 남을 수 있다.
-  const registered = new Set(repos.map((r) => r.path));
-  return { kind: "workspace", id: ws.id, paths: ws.repoPaths.filter((p) => registered.has(p)) };
+  const members = workspaceMemberRepos(ws.id, workspaces, repos, accounts);
+  return { kind: "workspace", id: ws.id, paths: members.map((r) => r.path) };
 }
 
 /** 지금 범위. 저장소 전용 화면은 `kind === "repo"`일 때만 마운트한다(`MainColumn`). */
@@ -43,32 +65,43 @@ export function useActiveScope(): ActiveScope {
   const repos = useRepositoryStore((s) => s.repos);
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const accounts = useAccountStore((s) => s.accounts);
   return useMemo(
-    () => resolveActiveScope(activeRepoPath, activeWorkspaceId, workspaces, repos),
-    [activeRepoPath, activeWorkspaceId, workspaces, repos],
+    () => resolveActiveScope(activeRepoPath, activeWorkspaceId, workspaces, repos, accounts),
+    [activeRepoPath, activeWorkspaceId, workspaces, repos, accounts],
   );
 }
 
 /**
  * 워크스페이스를 골랐을 때 활성으로 바꿀 계정 id. 저장소를 고를 때(`useSelectRepo`)처럼
- * 저장소에 지정된 계정(`accountId`)을 쓴다.
- * 1. 워크스페이스의 계정 키와 username이 같은 로그인 계정이 있고, 그 계정이 지정된 저장소가 있으면 그 계정
- * 2. 아니면 워크스페이스 순서대로 처음 나오는, 계정이 지정된 저장소의 계정
- * 3. 지정된 계정이 하나도 없으면 null(활성 계정을 바꾸지 않는다)
+ * 저장소에 지정된 계정(`accountId`)을 쓴다. 워크스페이스에는 저장소가 여럿이므로 다음 순서로 하나를 정한다.
+ * 1. 워크스페이스의 계정 키와 username이 같은 로그인 계정이 저장소 하나에라도 지정돼 있으면 그 계정
+ *    (개인 계정 워크스페이스는 보통 여기서 정해진다)
+ * 2. 아니면(조직 워크스페이스 등) 가장 많은 저장소에 지정된 로그인 계정. 수가 같으면 워크스페이스에서
+ *    먼저 나오는 저장소의 계정
+ * 3. 지정된 로그인 계정이 하나도 없으면 null(활성 계정을 바꾸지 않는다)
+ *
+ * `members`는 `workspaceMemberRepos`로 구한, 지금 워크스페이스에 드는 저장소다.
  */
 export function workspaceAccountId(
   workspace: Workspace,
-  repos: RepoInfo[],
-  accounts: { id: string; username: string }[],
+  members: RepoInfo[],
+  accounts: AccountLite[],
 ): string | null {
-  const byPath = new Map(repos.map((r) => [r.path, r]));
   const known = new Set(accounts.map((a) => a.id));
-  const assigned = workspace.repoPaths
-    .map((p) => byPath.get(p)?.accountId ?? null)
+  const assigned = members
+    .map((r) => r.accountId ?? null)
     .filter((id): id is string => id !== null && known.has(id));
-  const named = accounts.find((a) => a.username.toLowerCase() === workspace.accountKey);
+  const named = accounts.find((a) => toAccountKey(a.username) === toAccountKey(workspace.accountKey));
   if (named && assigned.includes(named.id)) return named.id;
-  return assigned[0] ?? null;
+  const counts = new Map<string, number>();
+  for (const id of assigned) counts.set(id, (counts.get(id) ?? 0) + 1);
+  // Map은 넣은 순서를 지키므로, 수가 같으면 먼저 나온 계정이 남는다.
+  let best: string | null = null;
+  for (const [id, n] of counts) {
+    if (best === null || n > (counts.get(best) ?? 0)) best = id;
+  }
+  return best;
 }
 
 /** 워크스페이스 모드의 활동 감시 등록 키(`registerWatchPaths`). */

@@ -154,6 +154,45 @@ export function repoAccountsByPath(
   return result;
 }
 
+export interface WorkspaceMembership {
+  /** 워크스페이스 id → 지금 그 워크스페이스에 드는 저장소(워크스페이스에 적힌 순서) */
+  membersById: Map<string, RepoInfo[]>;
+  /** 저장소 경로 → 그 저장소를 담은 워크스페이스의 계정 키 */
+  claimedBy: Map<string, string>;
+}
+
+/**
+ * 워크스페이스마다 지금 실제로 드는 저장소를 정한다. 사이드바(`buildRepoTree`)와 선택 범위
+ * (`resolveActiveScope`)가 이 규칙 하나를 함께 쓴다.
+ * - 저장소 목록(`repos`)에 없는 경로는 뺀다.
+ * - 저장소의 지금 계정이 워크스페이스 계정과 다르면 뺀다(계정 지정이나 원격이 바뀐 경우).
+ *   계정을 아직 모르는 저장소(`RepoAccount.pending`)는 저장된 소속을 믿고 둔다(모른다고
+ *   빼면 계정 목록을 불러오기 전마다 워크스페이스가 빈다).
+ * - 한 저장소는 앞선 워크스페이스 하나에만 든다.
+ */
+export function workspaceMembership(
+  workspaces: Workspace[],
+  repos: RepoInfo[],
+  accountByPath: Map<string, RepoAccount>,
+): WorkspaceMembership {
+  const repoByPath = new Map(repos.map((r) => [r.path, r]));
+  const claimedBy = new Map<string, string>();
+  const membersById = new Map<string, RepoInfo[]>();
+  for (const ws of workspaces) {
+    const wsAccount = toAccountKey(ws.accountKey);
+    const members = ws.repoPaths
+      .map((p) => repoByPath.get(p))
+      .filter((r): r is RepoInfo => r !== undefined)
+      .filter((r) => {
+        const acc = accountByPath.get(r.path);
+        return !!acc && (acc.pending || acc.key === wsAccount) && !claimedBy.has(r.path);
+      });
+    members.forEach((r) => claimedBy.set(r.path, wsAccount));
+    membersById.set(ws.id, members);
+  }
+  return { membersById, claimedBy };
+}
+
 function todoScore(s: PathSignals | undefined): number {
   if (!s) return 0;
   return (s.dirtyCount ?? 0) + (s.newCommits ?? 0) + (s.ahead ?? 0) + (s.behind ?? 0);
@@ -276,7 +315,6 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
   } = input;
 
   const accountByPath = repoAccountsByPath(repos, accounts);
-  const repoByPath = new Map(repos.map((r) => [r.path, r]));
 
   const makeRepoNode = (repo: RepoInfo): RepoNode => ({
     kind: "repo",
@@ -290,20 +328,11 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
     })),
   });
 
-  // 저장소 경로 → 담긴 워크스페이스의 계정 키. 계정을 아직 모르는 저장소는 저장된 소속을
-  // 믿고 워크스페이스에 둔다(모른다고 빼면 계정 목록을 불러오기 전마다 워크스페이스가 빈다).
-  const claimedBy = new Map<string, string>();
+  const { membersById, claimedBy } = workspaceMembership(workspaces, repos, accountByPath);
   const workspaceNodes = new Map<string, WorkspaceNode[]>();
   for (const ws of workspaces) {
     const wsAccount = toAccountKey(ws.accountKey);
-    const memberRepos = ws.repoPaths
-      .map((p) => repoByPath.get(p))
-      .filter((r): r is RepoInfo => r !== undefined)
-      .filter((r) => {
-        const acc = accountByPath.get(r.path);
-        return !!acc && (acc.pending || acc.key === wsAccount) && !claimedBy.has(r.path);
-      });
-    memberRepos.forEach((r) => claimedBy.set(r.path, wsAccount));
+    const memberRepos = membersById.get(ws.id) ?? [];
     const node: WorkspaceNode = {
       kind: "workspace",
       key: workspaceNodeKey(ws.id),

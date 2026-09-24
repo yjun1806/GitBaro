@@ -5,7 +5,6 @@ import {
   Archive,
   ArrowDown,
   ArrowUp,
-  Folder,
   GitBranch,
   GitMerge,
   RefreshCw,
@@ -31,9 +30,8 @@ import { SyncZone } from "./SyncZone";
 import { AccountZone } from "./AccountZone";
 import type { AppSettings } from "@/types";
 import { useActiveScope } from "@/hooks/useActiveScope";
-import { useWorkspaceStore } from "@/stores/workspace";
 
-/** 워크스페이스 모드에서 꺼 두는 저장소 전용 동작. 시안 툴바의 두 묶음과 같은 순서다. */
+/** 워크스페이스 모드에서 꺼 두는 저장소 전용 동작. 시안 툴바(`gen_d.py` toolbar())의 두 묶음과 같은 순서다. */
 const REPO_ONLY_ACTIONS: { key: string; icon: LucideIcon; labelKey: string }[][] = [
   [
     { key: "fetch", icon: RefreshCw, labelKey: "activeScope.actions.fetch" },
@@ -48,28 +46,24 @@ const REPO_ONLY_ACTIONS: { key: string; icon: LucideIcon; labelKey: string }[][]
 ];
 
 /**
- * 워크스페이스를 고른 동안 저장소 전용 영역(브랜치·워크트리·동기화) 대신 보이는 자리.
- * 여러 저장소 Fetch·Pull·Push는 W5에서 붙는다. 그때까지 모든 버튼을 끄고 「저장소를 고르세요」를 알린다.
+ * 워크스페이스를 고른 동안 저장소 전용 영역(브랜치·워크트리·동기화) 자리에 두는 꺼진 버튼 묶음.
+ * 지금 툴바에는 Merge·Stash 버튼이 없어서, 「꺼 둔다」는 조건을 보이려고 시안의 두 묶음을
+ * 꺼진 상태로만 그린다. 워크스페이스 이름은 메인 칸 제목(W4-T3)이 보여 주므로 여기 두지 않는다.
+ *
+ * 임시 자리다. W5-T1의 `GitActionZone`이 저장소·워크스페이스 두 모드를 모두 맡으면 이 컴포넌트와
+ * `REPO_ONLY_ACTIONS`는 통째로 지운다(모양도 그쪽을 따른다).
  * 꺼진 버튼은 마우스 이벤트를 받지 않아 툴팁이 뜨지 않으므로, 툴팁은 감싼 span에 단다.
  */
-function WorkspaceModeZone({ workspaceId }: { workspaceId: string }) {
+function WorkspaceDisabledActions() {
   const { t } = useTranslation();
-  const name = useWorkspaceStore(
-    (s) => s.workspaces.find((w) => w.id === workspaceId)?.name ?? "",
-  );
   const hint = t("activeScope.pickRepo");
   return (
-    <>
-      <div className="flex items-center gap-2 min-w-0 pl-3 pr-2 shrink">
-        <Folder className="w-4 h-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-semibold truncate max-w-[240px]">{name}</span>
-      </div>
-      <div className="flex-1 min-w-[40px] h-full" data-tauri-drag-region />
+    <div className="flex items-center gap-2.5 px-2 shrink-0">
       {REPO_ONLY_ACTIONS.map((group) => (
         <div
           key={group.map((a) => a.key).join("-")}
           role="group"
-          className="flex items-center gap-0.5 mx-1 shrink-0"
+          className="flex items-center gap-0.5 p-[3px] rounded-[11px] bg-card shadow-(--shadow-sm)"
         >
           {group.map(({ key, icon: Icon, labelKey }) => (
             <span key={key} title={hint} className="inline-flex">
@@ -79,7 +73,7 @@ function WorkspaceModeZone({ workspaceId }: { workspaceId: string }) {
                 aria-disabled="true"
                 aria-label={`${t(labelKey)} — ${hint}`}
                 data-action={key}
-                className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium text-muted-foreground opacity-50 cursor-not-allowed"
+                className="flex items-center gap-1.5 h-[30px] px-2.5 rounded-lg text-[12.5px] font-semibold text-muted-foreground opacity-50 cursor-not-allowed"
               >
                 <Icon className="w-3.5 h-3.5" aria-hidden="true" />
                 {t(labelKey)}
@@ -88,7 +82,7 @@ function WorkspaceModeZone({ workspaceId }: { workspaceId: string }) {
           ))}
         </div>
       ))}
-    </>
+    </div>
   );
 }
 
@@ -184,7 +178,10 @@ export function ToolbarRoot() {
     <>
       <div className="flex items-center h-[52px] border-b border-border bg-surface select-none">
         {scope?.kind === "workspace" ? (
-          <WorkspaceModeZone workspaceId={scope.id} />
+          <>
+            <div className="flex-1 min-w-[40px] h-full" data-tauri-drag-region />
+            <WorkspaceDisabledActions />
+          </>
         ) : (
           <>
             {/* Zone A: Branch */}

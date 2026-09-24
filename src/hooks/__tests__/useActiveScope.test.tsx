@@ -30,6 +30,7 @@ import {
 } from "@/hooks/useActiveScope";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { makeRepo } from "@/lib/__tests__/repo-tree-fixtures";
+import { buildRepoTree } from "@/lib/repo-tree";
 import type { GitHubAccount } from "@/types";
 
 const personal = { id: "acc-yjun", username: "yjun" } as GitHubAccount;
@@ -144,13 +145,14 @@ describe("저장소 ↔ 워크스페이스 전환", () => {
 
 describe("resolveActiveScope", () => {
   const ws = { id: "w1", name: "x", accountKey: "mos", repoPaths: [xames.path, "/gone"] };
+  const accounts = [personal, work];
 
   it("아무것도 고르지 않았으면 null", () => {
-    expect(resolveActiveScope(null, null, [ws], [xames])).toBeNull();
+    expect(resolveActiveScope(null, null, [ws], [xames], accounts)).toBeNull();
   });
 
   it("저장소 목록에 없는 경로는 워크스페이스 범위에서 뺀다", () => {
-    expect(resolveActiveScope(null, "w1", [ws], [xames])).toEqual({
+    expect(resolveActiveScope(null, "w1", [ws], [xames], accounts)).toEqual({
       kind: "workspace",
       id: "w1",
       paths: [xames.path],
@@ -158,14 +160,65 @@ describe("resolveActiveScope", () => {
   });
 
   it("저장값이 어긋나 둘 다 잡혀 있으면 저장소를 따른다", () => {
-    expect(resolveActiveScope(xames.path, "w1", [ws], [xames])).toEqual({
+    expect(resolveActiveScope(xames.path, "w1", [ws], [xames], accounts)).toEqual({
       kind: "repo",
       path: xames.path,
     });
   });
 
   it("지워진 워크스페이스를 가리키면 null", () => {
-    expect(resolveActiveScope(null, "gone", [ws], [xames])).toBeNull();
+    expect(resolveActiveScope(null, "gone", [ws], [xames], accounts)).toBeNull();
+  });
+
+  it("사이드바와 같은 규칙: 계정이 바뀐 저장소는 워크스페이스 범위에서 빠진다", () => {
+    // 원격이 없는 저장소는 지정된 계정의 username으로 계정이 정해진다.
+    const local = makeRepo("notes", null, { accountId: personal.id });
+    const other = makeRepo("dotfiles", "yjun", { accountId: personal.id });
+    const personalWs = {
+      id: "w2",
+      name: "personal",
+      accountKey: "yjun",
+      repoPaths: [local.path, other.path],
+    };
+    const before = resolveActiveScope(null, "w2", [personalWs], [local, other], accounts);
+    expect(before).toEqual({ kind: "workspace", id: "w2", paths: [local.path, other.path] });
+
+    // 툴바에서 notes의 계정을 mos로 바꿨다. 사이드바는 notes를 mos 아래로 옮긴다.
+    const moved = { ...local, accountId: work.id };
+    const after = resolveActiveScope(null, "w2", [personalWs], [moved, other], accounts);
+    expect(after).toEqual({ kind: "workspace", id: "w2", paths: [other.path] });
+    const tree = buildRepoTree({
+      repos: [moved, other],
+      accounts,
+      workspaces: [personalWs],
+      orderByParent: {},
+      sortModeByAccount: {},
+    });
+    const wsNode = tree
+      .flatMap((a) => a.children)
+      .find((n) => n.kind === "workspace" && n.workspace.id === "w2");
+    expect(wsNode?.kind === "workspace" && wsNode.repos.map((r) => r.repo.path)).toEqual(
+      after?.kind === "workspace" ? after.paths : null,
+    );
+  });
+
+  it("계정을 아직 모르는 저장소는 사이드바처럼 워크스페이스에 둔다", () => {
+    // 계정 목록을 불러오기 전(accounts가 빔)이라 원격 없는 scratch의 계정은 pending이다.
+    const localWork = makeRepo("scratch", null, { accountId: work.id });
+    const w = { id: "w3", name: "x", accountKey: "mos", repoPaths: [localWork.path] };
+    expect(resolveActiveScope(null, "w3", [w], [localWork], [])).toEqual({
+      kind: "workspace",
+      id: "w3",
+      paths: [localWork.path],
+    });
+  });
+
+  it("같은 저장소가 두 워크스페이스에 적혀 있으면 앞선 워크스페이스에만 든다", () => {
+    const first = { id: "a", name: "a", accountKey: "mos", repoPaths: [xames.path] };
+    const second = { id: "b", name: "b", accountKey: "mos", repoPaths: [xames.path, xamesApp.path] };
+    expect(
+      resolveActiveScope(null, "b", [first, second], [xames, xamesApp], accounts),
+    ).toEqual({ kind: "workspace", id: "b", paths: [xamesApp.path] });
   });
 });
 
@@ -176,9 +229,30 @@ describe("workspaceAccountId", () => {
     expect(workspaceAccountId(ws, [gitbaro, xames], [personal, work])).toBe(work.id);
   });
 
-  it("이름이 같은 계정이 없으면 처음 나오는 지정 계정", () => {
+  it("이름이 같은 계정이 없으면 가장 많은 저장소에 지정된 계정(순서와 상관없이)", () => {
+    const org = { ...ws, accountKey: "some-org" };
+    const orgRepos = [
+      makeRepo("a", "some-org", { accountId: personal.id }),
+      makeRepo("b", "some-org", { accountId: work.id }),
+      makeRepo("c", "some-org", { accountId: work.id }),
+    ];
+    expect(workspaceAccountId(org, orgRepos, [personal, work])).toBe(work.id);
+    expect(workspaceAccountId(org, [...orgRepos].reverse(), [personal, work])).toBe(work.id);
+  });
+
+  it("수가 같으면 워크스페이스에서 먼저 나오는 저장소의 계정", () => {
     const org = { ...ws, accountKey: "some-org" };
     expect(workspaceAccountId(org, [gitbaro, xames], [personal, work])).toBe(personal.id);
+  });
+
+  it("로그인하지 않은 계정 id는 세지 않는다", () => {
+    const org = { ...ws, accountKey: "some-org" };
+    const repos = [
+      makeRepo("a", "some-org", { accountId: "logged-out" }),
+      makeRepo("b", "some-org", { accountId: "logged-out" }),
+      makeRepo("c", "some-org", { accountId: work.id }),
+    ];
+    expect(workspaceAccountId(org, repos, [personal, work])).toBe(work.id);
   });
 
   it("지정된 계정이 없으면 null(활성 계정을 바꾸지 않는다)", () => {

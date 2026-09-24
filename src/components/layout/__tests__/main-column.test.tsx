@@ -219,7 +219,8 @@ describe("MainColumn — workspace scope (W4-T1)", () => {
   it("mounts no repository-only screen while a workspace is picked, and back again", async () => {
     const { useWorkspaceStore } = await import("@/stores/workspace");
     useWorkspaceStore.setState({
-      workspaces: [{ id: "w1", name: "xames", accountKey: "mos", repoPaths: [repo.path] }],
+      // 원격도 계정도 없는 저장소는 사이드바에서 "Local" 아래에 있다. 워크스페이스도 그 계정 안에 둔다.
+      workspaces: [{ id: "w1", name: "xames", accountKey: "local", repoPaths: [repo.path] }],
       activeWorkspaceId: null,
     });
     act(() => {

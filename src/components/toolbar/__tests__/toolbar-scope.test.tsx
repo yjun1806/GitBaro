@@ -57,7 +57,8 @@ describe("ToolbarRoot — workspace mode", () => {
     expect(screen.queryByText("branch-zone")).toBeNull();
     expect(screen.queryByText("worktree-zone")).toBeNull();
     expect(screen.queryByText("sync-zone")).toBeNull();
-    expect(screen.getByText("xames-ws")).toBeTruthy();
+    // 워크스페이스 이름은 메인 칸 제목(W4-T3)이 맡는다. 툴바는 끄기만 한다.
+    expect(screen.queryByText("xames-ws")).toBeNull();
 
     for (const label of ["Fetch", "Pull", "Push", "Branch", "Merge", "Stash"]) {
       const button = screen.getByRole("button", { name: `${label} — Pick a repository` });

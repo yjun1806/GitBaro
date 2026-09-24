@@ -5,7 +5,7 @@ import { useAccountStore } from "@/stores/account";
 import { useUIStore } from "@/stores/ui";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useVerifyWorktree } from "@/hooks/useVerifyWorktree";
-import { workspaceAccountId } from "@/hooks/useActiveScope";
+import { workspaceAccountId, workspaceMemberRepos } from "@/hooks/useActiveScope";
 import { gitFetch } from "@/api/commands";
 
 /* ─── Module-level fetch tracker (resets on app restart) ─── */
@@ -70,13 +70,17 @@ export function useSelectRepo() {
     (id: string) => {
       const result = setActiveWorkspace(id);
       if (!result.ok) return;
-      const ws = useWorkspaceStore.getState().workspaces.find((w) => w.id === id);
+      const { workspaces } = useWorkspaceStore.getState();
+      const ws = workspaces.find((w) => w.id === id);
       if (ws) {
-        const accountId = workspaceAccountId(
-          ws,
+        const { accounts } = useAccountStore.getState();
+        const members = workspaceMemberRepos(
+          id,
+          workspaces,
           useRepositoryStore.getState().repos,
-          useAccountStore.getState().accounts,
+          accounts,
         );
+        const accountId = workspaceAccountId(ws, members, accounts);
         if (accountId) setActiveAccount(accountId);
       }
       setRepoListOpen(false);
