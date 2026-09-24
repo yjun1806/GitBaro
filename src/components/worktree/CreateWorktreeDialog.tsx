@@ -134,6 +134,7 @@ export function CreateWorktreeDialog({
   return (
     <Dialog
       onClose={onClose}
+      dismissible={!creating}
       labelledBy={titleId}
       className="bg-card rounded-xl shadow-2xl w-full max-w-md"
     >
@@ -144,7 +145,8 @@ export function CreateWorktreeDialog({
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
+            disabled={creating}
+            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <X className="w-4 h-4" />
           </button>
@@ -288,7 +290,8 @@ export function CreateWorktreeDialog({
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-border">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            disabled={creating}
+            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t("common.cancel")}
           </button>
