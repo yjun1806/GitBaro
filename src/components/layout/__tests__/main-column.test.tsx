@@ -84,6 +84,7 @@ vi.mock("@/api/queries", () => ({
   useRemoteTags: () => ({ data: undefined }),
   useWorktrees: () => ({ data: [] }),
   useRepoSyncStatuses: () => ({ data: undefined }),
+  useUnpushedCommits: () => ({ data: undefined }),
   useReviewStatusQuery: () => ({ data: undefined, isLoading: false }),
   useNewCommitCountsQuery: () => ({ data: undefined, isLoading: false }),
   useNewCommitIdsQuery: () => ({ data: undefined }),

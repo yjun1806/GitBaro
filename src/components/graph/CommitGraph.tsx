@@ -5,7 +5,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
-import { useUIStore } from "@/stores/ui";
+import { useSeenMarkerMode, useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
 import { useToastStore } from "@/stores/toast";
 import { useFollowStore, type FollowMode } from "@/stores/follow";
@@ -31,7 +31,15 @@ import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
 import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
 import type { CommitInfo, HistoryTarget } from "@/types";
 import type { GraphRowLayout } from "@/lib/graph-lanes";
-import { edgePath, ForkPointRow, GRAPH_COLUMNS, GraphRow, GraphWipRow, SeenDivider } from "./GraphRow";
+import {
+  edgePath,
+  ForkPointRow,
+  GRAPH_COLUMNS,
+  GraphRow,
+  GraphWipRow,
+  useSeenLabel,
+  type CommitDot,
+} from "./GraphRow";
 import {
   edgesThroughBottom,
   forkPointIndex,
@@ -47,6 +55,14 @@ import {
 } from "./graph-model";
 import { repoLaneColor, type LaneWip, type RepoLaneGraph } from "./repo-lanes";
 import { mergeHistories, wipLaneOid, withWipLanes, worktreeColor } from "./worktree-history";
+import {
+  branchColors,
+  mutedChainNames,
+  remoteBoundaryIndex,
+  worktreeChainColors,
+  type ShownWorktree,
+} from "./graph-paint";
+import { branchColorOf, MUTED_LANE } from "./lane-style";
 import { BranchRangeGraph } from "@/components/branch/BranchRangeGraph";
 import { activeRange, isStaleRange, useBranchRangeStore } from "@/components/branch/branch-range";
 
@@ -89,7 +105,7 @@ export function CommitGraph({ wips: allWips, ...rest }: CommitGraphProps) {
   const followTarget = useFollowStore((s) => s.target);
   // 커밋하지 않은 파일이 없는 워크트리의 「커밋하지 않은 변경 · 파일 0」 행은 숨긴다.
   const wips = useMemo(() => visibleWipRows(allWips, followTarget), [allWips, followTarget]);
-  const props = { ...rest, wips };
+  const props = { ...rest, wips, shownWips: allWips };
   const selection = useGraphSelection();
   const range = useActiveBranchRange();
   // 범위 모드(브랜치 패널의 「비교」): `base..target` 커밋만 그린다. WIP 행은 남긴다.
@@ -115,6 +131,9 @@ export function CommitGraph({ wips: allWips, ...rest }: CommitGraphProps) {
   }
   return <CommitGraphList {...props} selection={selection} />;
 }
+
+/** 커밋 목록 칸이 받는 것: 그릴 WIP 행과, 칠할 워크트리(파일이 없어 WIP 행을 숨긴 워크트리 포함). */
+type CommitGraphListProps = CommitGraphProps & { shownWips: readonly GraphWip[]; selection: GraphSelection };
 
 type GraphSelection = ReturnType<typeof useGraphSelection>;
 
@@ -220,12 +239,17 @@ function CommitGraphList({
   newCommits,
   seenAt,
   wips,
+  shownWips,
   worktreeHeads = NO_WORKTREE_HEADS,
   historyTarget,
   selection,
-}: CommitGraphProps & { selection: GraphSelection }) {
+}: CommitGraphListProps) {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const hasRemote = useRepositoryStore((s) => (s.activeRepo?.remotes.length ?? 0) > 0);
+  // 검토 기준이 「원격에 없는 커밋」이면 커밋 점으로 원격에 있는지 보여 준다.
+  const unpushedMode = !useSeenMarkerMode();
+  const seenLabel = useSeenLabel();
   const colorSeed = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? "");
   const accounts = useAccountStore((s) => s.accounts);
   const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
@@ -262,7 +286,16 @@ function CommitGraphList({
   }, [wips, worktreeHeads, ownHead]);
   const wipLaneKey = wipLanes.map((w) => `${w.path}\u0000${w.head ?? ""}`).join("\u0001");
 
-  const { commits, layouts, graphWidth, ownIds, wipChainColors } = useMemo(() => {
+  // 그래프에 함께 그리는 워크트리(지금 연 워크트리가 먼저). 그 워크트리의 줄기와 브랜치 이름표를 그 색으로 칠한다.
+  const shown = useMemo<ShownWorktree[]>(() => {
+    const headOf = new Map(worktreeHeads.map((h) => [h.path, h.head]));
+    return [...shownWips]
+      .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent))
+      .map((w) => ({ path: w.path, branch: w.branch, head: w.isCurrent ? ownHead : (headOf.get(w.path) ?? null) }));
+  }, [shownWips, worktreeHeads, ownHead]);
+  const shownKey = shown.map((w) => `${w.path}\u0000${w.branch ?? ""}\u0000${w.head ?? ""}`).join("\u0001");
+
+  const { commits, layouts, graphWidth, ownIds, chainColors, mutedNames } = useMemo(() => {
     const own = historyData?.pages.flat() ?? [];
     // 다른 워크트리의 커밋을 시간순으로 끼워 넣는다(D5). 각 이력 안의 순서는 그대로다.
     const all = mergeHistories(
@@ -279,22 +312,19 @@ function CommitGraphList({
       return true;
     });
     const maxLanes = result.rows.reduce((m, r) => Math.max(m, r.width), 1);
-    // WIP 행이 연 줄기는 그 워크트리의 색으로 그린다 — 칩·WIP 행·그 워크트리 커밋이 같은 색이다.
-    const chainColors = new Map<number, string>();
-    for (const w of wipLanes) {
-      const row = byOid.get(wipLaneOid(w.path));
-      if (row && !chainColors.has(row.chain)) chainColors.set(row.chain, worktreeColor(w.path));
-    }
+    // 워크트리 하나에 색 하나: 그 워크트리의 WIP 행과 HEAD 줄기는 칩 견본과 같은 색, 나머지는 회색이다.
+    const colors = worktreeChainColors(byOid, shown);
     return {
       commits: drawn,
       layouts: byOid,
       graphWidth: graphColumnWidth(maxLanes),
       ownIds: new Set(own.map((c) => c.id)),
-      wipChainColors: chainColors,
+      chainColors: colors,
+      mutedNames: mutedChainNames(drawn, byOid, colors),
     };
-    // otherKey·wipLaneKey가 다른 워크트리 이력과 WIP 행 목록의 내용을 대신 비교한다.
+    // otherKey·wipLaneKey·shownKey가 다른 워크트리 이력, WIP 행, 칠할 워크트리 목록의 내용을 대신 비교한다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyData, hasNextPage, otherKey, wipLaneKey]);
+  }, [historyData, hasNextPage, otherKey, wipLaneKey, shownKey]);
 
   const marks = useMemo(
     () => markNewCommits(commits, newCommits),
@@ -308,9 +338,30 @@ function CommitGraphList({
   );
   const changes = useChangesVsDefaultOnHead(forkEntries)[0]?.data;
   const forkIdx = forkPointIndex(commits, changes);
+  // 체크아웃하지 않고 다른 브랜치를 보는 중이면 워크트리와 상관없는 이력이라 예전처럼 저장소 색조로 칠한다.
   const colorOf = useCallback(
-    (chain: number) => wipChainColors.get(chain) ?? laneColor(colorSeed, chain),
-    [colorSeed, wipChainColors],
+    (chain: number) => chainColors.get(chain) ?? (viewing ? laneColor(colorSeed, chain) : MUTED_LANE),
+    [colorSeed, chainColors, viewing],
+  );
+  const laneTitle = useCallback(
+    (chain: number) => {
+      if (viewing || !mutedNames.has(chain)) return undefined;
+      return mutedNames.get(chain) ?? t("graph.laneMerged");
+    },
+    [viewing, mutedNames, t],
+  );
+  const colorByBranch = useMemo(() => branchColors(viewing ? [] : shown), [viewing, shown]);
+  const refColor = useCallback(
+    (label: { name: string; kind: string }) =>
+      label.kind === "tag" ? null : branchColorOf(label.name, label.kind === "remoteBranch", colorByBranch),
+    [colorByBranch],
+  );
+  const markRemote = unpushedMode && hasRemote;
+  const dotOf = (commit: CommitInfo): CommitDot =>
+    !markRemote || commit.isUnpushed === undefined ? "plain" : commit.isUnpushed ? "unpushed" : "pushed";
+  const boundaryIdx = useMemo(
+    () => (markRemote ? remoteBoundaryIndex(commits, (id) => ownIds.has(id)) : null),
+    [markRemote, commits, ownIds],
   );
 
   const selectedIdx = useMemo(
@@ -388,14 +439,6 @@ function CommitGraphList({
             const prevLayout = index > 0 ? layouts.get(commits[index - 1].id) : undefined;
             return (
               <Fragment key={commit.id}>
-                {marks.dividerBefore === index && (
-                  <SeenDivider
-                    seenAt={seenAt}
-                    graphWidth={graphWidth}
-                    through={prevLayout ? edgesThroughBottom(prevLayout.edges) : []}
-                    colorOf={colorOf}
-                  />
-                )}
                 {forkIdx === index && changes?.defaultBranch && (
                   <ForkPointRow
                     branch={changes.defaultBranch}
@@ -418,6 +461,12 @@ function CommitGraphList({
                   isNew={marks.newIds.has(commit.id)}
                   isSeen={marks.dividerBefore !== null && index >= marks.dividerBefore}
                   wipAbove={false}
+                  dot={dotOf(commit)}
+                  laneTitle={laneTitle}
+                  refColor={refColor}
+                  remoteBoundary={boundaryIdx === index}
+                  // 「여기까지 확인함」은 전체 폭 줄 대신 확인한 첫 커밋의 레인에 눈금으로 단다.
+                  seenTick={marks.dividerBefore === index ? seenLabel(seenAt) : null}
                   onClick={() => selectCommit(commit.id)}
                   onContextMenu={(e) => {
                     e.preventDefault();
@@ -428,18 +477,6 @@ function CommitGraphList({
               </Fragment>
             );
           })
-        )}
-        {!isLoading && marks.dividerBefore !== null && marks.dividerBefore === commits.length && (
-          <SeenDivider
-            seenAt={seenAt}
-            graphWidth={graphWidth}
-            through={
-              commits.length > 0
-                ? edgesThroughBottom(layouts.get(commits[commits.length - 1].id)?.edges ?? [])
-                : []
-            }
-            colorOf={colorOf}
-          />
         )}
         <div ref={loadMoreRef} />
         {isFetchingNextPage && (
@@ -627,6 +664,7 @@ export function RepoLaneCommitGraph({
   onSelectWip,
 }: RepoLaneCommitGraphProps) {
   const { t } = useTranslation();
+  const seenLabel = useSeenLabel();
   const accounts = useAccountStore((s) => s.accounts);
   const startFollow = useFollowStore((s) => s.start);
   const followModeOf = useFollowModeOf();
@@ -714,22 +752,13 @@ export function RepoLaneCommitGraph({
                     isHighlighted={activeIndex === idx}
                     isNew={row.isNew}
                     isSeen={row.isSeen}
+                    seenTick={row.seenTick ? seenLabel(seenAt) : null}
                     wipAbove={false}
                     leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
                     onClick={() => onSelectCommit(row.repoPath, row.commit, row.key)}
                   />
                 );
               }
-              case "seen":
-                return (
-                  <SeenDivider
-                    key={row.key}
-                    seenAt={seenAt}
-                    graphWidth={graphWidth}
-                    through={row.through}
-                    colorOf={colorOf}
-                  />
-                );
               case "base":
                 return (
                   <BaseRow

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Archive, Files, GitCommitVertical, Play } from "lucide-react";
 import { useSeenMarkerMode, useUIStore } from "@/stores/ui";
@@ -17,6 +17,7 @@ import { CommitGraph, type WorktreeHead } from "./CommitGraph";
 import { useGraphReview } from "./useGraphReview";
 import { normalizePath, type GraphWip } from "./graph-model";
 import { worktreeColor } from "./worktree-history";
+import { useGraphWorktreesStore } from "./graph-worktrees";
 import { activeRange, useBranchRangeStore } from "@/components/branch/branch-range";
 import { WorktreeChips, type WorktreeChip } from "@/components/worktree/WorktreeChips";
 import type { WorktreeInfo } from "@/types";
@@ -209,6 +210,8 @@ export function GraphPanel() {
           chips={worktreeFilter.chips}
           visible={worktreeFilter.visible}
           onToggle={worktreeFilter.toggle}
+          onShowAll={worktreeFilter.showAll}
+          onShowCurrentOnly={worktreeFilter.showCurrentOnly}
         />
       )}
       {/* 「main 대비 변경」의 목록과 diff는 이 카드 아래 칸에 그린다(MainColumn). */}
@@ -243,18 +246,21 @@ function chipOrder(a: GraphWip, b: GraphWip): number {
 }
 
 /**
- * 칩 줄에서 그래프에 보일 워크트리를 고른다(D5). 처음에는 모두 보이고, 끈 워크트리는
- * 저장소마다 기억한다(화면 상태라 저장하지 않는다). 지금 연 워크트리는 늘 보인다.
+ * 「함께 보는 워크트리」 칩 줄에서 그래프에 그릴 워크트리를 고른다(D5). 처음에는 지금 연 워크트리만
+ * 그리고, 켠 워크트리는 저장소마다 앱을 켜는 동안 기억한다(`useGraphWorktreesStore`). 지금 연
+ * 워크트리는 늘 보인다.
  * - `wips`: 보이는 워크트리의 WIP 행만.
  * - `heads`: 보이는 다른 워크트리의 HEAD. 그래프가 그 이력을 함께 그린다.
  */
 function useWorktreeFilter(allWips: GraphWip[]) {
   const ownerPath = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? null);
   const { data: worktreeList } = useWorktrees(ownerPath);
-  const [hiddenByRepo, setHiddenByRepo] = useState<Readonly<Record<string, readonly string[]>>>({});
-  const hidden = useMemo(
-    () => new Set(ownerPath ? (hiddenByRepo[ownerPath] ?? []) : []),
-    [hiddenByRepo, ownerPath],
+  const shownByRepo = useGraphWorktreesStore((s) => s.shownByRepo);
+  const toggleShown = useGraphWorktreesStore((s) => s.toggle);
+  const setShown = useGraphWorktreesStore((s) => s.setShown);
+  const shown = useMemo(
+    () => new Set(ownerPath ? (shownByRepo[ownerPath] ?? []) : []),
+    [shownByRepo, ownerPath],
   );
 
   const infoByPath = useMemo(() => {
@@ -281,8 +287,8 @@ function useWorktreeFilter(allWips: GraphWip[]) {
   );
 
   const visible = useMemo(
-    () => new Set(allWips.filter((w) => w.isCurrent || !hidden.has(w.path)).map((w) => w.path)),
-    [allWips, hidden],
+    () => new Set(allWips.filter((w) => w.isCurrent || shown.has(w.path)).map((w) => w.path)),
+    [allWips, shown],
   );
   const wips = useMemo(() => allWips.filter((w) => visible.has(w.path)), [allWips, visible]);
   const heads = useMemo(() => {
@@ -295,15 +301,16 @@ function useWorktreeFilter(allWips: GraphWip[]) {
 
   const toggle = useCallback(
     (path: string) => {
-      if (!ownerPath) return;
-      setHiddenByRepo((prev) => {
-        const current = prev[ownerPath] ?? [];
-        const next = current.includes(path) ? current.filter((p) => p !== path) : [...current, path];
-        return { ...prev, [ownerPath]: next };
-      });
+      if (ownerPath) toggleShown(ownerPath, path);
     },
-    [ownerPath],
+    [ownerPath, toggleShown],
   );
+  const showAll = useCallback(() => {
+    if (ownerPath) setShown(ownerPath, allWips.filter((w) => !w.isCurrent).map((w) => w.path));
+  }, [ownerPath, allWips, setShown]);
+  const showCurrentOnly = useCallback(() => {
+    if (ownerPath) setShown(ownerPath, []);
+  }, [ownerPath, setShown]);
 
-  return { chips, visible, wips, heads, toggle };
+  return { chips, visible, wips, heads, toggle, showAll, showCurrentOnly };
 }

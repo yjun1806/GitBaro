@@ -225,10 +225,10 @@ describe("WorkspaceReview", () => {
     expect(within(legend).queryByText("xames-design")).toBeNull();
   });
 
-  it("draws WIP rows, new-commit divider and the base row", () => {
+  it("draws WIP rows, a seen tick on each lane and the base row", () => {
     renderReview();
     expect(screen.getByRole("button", { name: /^xames-backend · Uncommitted changes · .* branch · .* · 1 file$/ })).toBeTruthy();
-    expect(screen.getByRole("separator", { name: "Seen up to here" })).toBeTruthy();
+    expect(screen.getAllByRole("img", { name: /^Seen up to here/ }).length).toBeGreaterThan(0);
     expect(screen.getByText("Where each repository branched off its default branch")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Mark 1 new commit as seen" })).toBeTruthy();
   });
@@ -237,7 +237,7 @@ describe("WorkspaceReview", () => {
     useUIStore.setState({ reviewBasis: "unpushed" });
     syncState.byPath = { [APP]: { unpushed: 2 }, [API]: { unpushed: 1 }, [API_WT]: { unpushed: 4 } };
     renderReview();
-    expect(screen.queryByRole("separator", { name: "Seen up to here" })).toBeNull();
+    expect(screen.queryByRole("img", { name: /^Seen up to here/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /new commits? as seen/ })).toBeNull();
     expect(screen.getByRole("tab", { name: /Commit graph/ }).textContent).toContain("7");
   });

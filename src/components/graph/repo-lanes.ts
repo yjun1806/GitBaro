@@ -43,9 +43,10 @@ export type RepoLaneRow =
       isNew: boolean;
       /** 「여기까지 확인함」 아래(이미 확인한) 커밋. */
       isSeen: boolean;
+      /** 그 저장소 레인에서 확인한 첫 커밋. 레인에 「여기까지 확인함」 눈금을 단다. */
+      seenTick: boolean;
       layout: GraphRowLayout;
     }
-  | { kind: "seen"; key: string; through: { lane: number; chain: number }[] }
   | { kind: "base"; key: string; layout: GraphRowLayout };
 
 export interface RepoLaneGraph {
@@ -89,14 +90,13 @@ function mergeByTime<T>(lists: readonly (readonly T[])[], timeOf: (item: T) => n
 
 type Draft =
   | { kind: "wip"; lane: number; repoLane: number; wip: LaneWip }
-  | { kind: "commit"; lane: number; commit: CommitInfo; isNew: boolean; isSeen: boolean }
-  | { kind: "seen" }
+  | { kind: "commit"; lane: number; commit: CommitInfo; isNew: boolean; isSeen: boolean; seenTick: boolean }
   | { kind: "base" };
 
 /**
- * 행 순서: WIP 행(최근에 바뀐 순) → 새 커밋(시각순) → 「여기까지 확인함」 → 확인한 커밋(시각순)
- * → main에서 갈라진 지점. 새 커밋이 없으면 구분선을 두지 않는다. 갈라진 지점을 찾은 저장소가
- * 없으면 맨 아래 행도 두지 않는다.
+ * 행 순서: WIP 행(최근에 바뀐 순) → 새 커밋(시각순) → 확인한 커밋(시각순) → main에서 갈라진 지점.
+ * 「여기까지 확인함」은 전체 폭 줄 대신 저장소 레인마다 확인한 첫 커밋에 눈금(`seenTick`)으로 단다.
+ * 새 커밋이 없으면 눈금도 없다. 갈라진 지점을 찾은 저장소가 없으면 맨 아래 행도 두지 않는다.
  *
  * `newIds`는 저장소 경로 → 새 커밋 SHA 목록이다(`list_new_commit_ids`).
  */
@@ -142,23 +142,21 @@ export function buildRepoLaneRows(
       commit,
       isNew: fresh?.has(commit.id) ?? false,
       isSeen: false,
+      seenTick: false,
     }));
     newLists.push(mine.filter((d) => d.isNew));
     oldLists.push(mine.filter((d) => !d.isNew));
   });
   const newRows = mergeByTime(newLists, (d) => d.commit.timestamp);
   const hasNew = newRows.length > 0;
-  const oldRows = mergeByTime(oldLists, (d) => d.commit.timestamp).map((d) => ({
-    ...d,
-    isSeen: hasNew,
-  }));
+  const ticked = new Set<number>();
+  const oldRows = mergeByTime(oldLists, (d) => d.commit.timestamp).map((d) => {
+    const seenTick = hasNew && !ticked.has(d.lane);
+    if (seenTick) ticked.add(d.lane);
+    return { ...d, isSeen: hasNew, seenTick };
+  });
 
-  const drafts: Draft[] = [
-    ...wipDrafts,
-    ...newRows,
-    ...(hasNew ? [{ kind: "seen" as const }] : []),
-    ...oldRows,
-  ];
+  const drafts: Draft[] = [...wipDrafts, ...newRows, ...oldRows];
   const baseIndex = repos.some((r) => r.hasBase) ? drafts.length : -1;
   if (baseIndex >= 0) drafts.push({ kind: "base" });
 
@@ -215,15 +213,10 @@ export function buildRepoLaneRows(
           commit: d.commit,
           isNew: d.isNew,
           isSeen: d.isSeen,
+          seenTick: d.seenTick,
           layout: { oid: d.commit.id, lane: d.lane, chain: d.lane, edges, width: Math.max(width, d.lane + 1) },
         };
       }
-      case "seen":
-        return {
-          kind: "seen",
-          key: "seen",
-          through: edges.map((e) => ({ lane: e.toLane, chain: e.chain })),
-        };
       case "base":
         return { kind: "base", key: "base", layout: { oid: "base", lane: 0, chain: -1, edges, width } };
     }

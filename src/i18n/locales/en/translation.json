@@ -907,7 +907,6 @@
     "wipWorktreeLabel": "Uncommitted changes in {{name}} ({{count}})",
     "seenHere": "Seen up to here",
     "seenHereAt": "Seen up to here · {{time}}",
-    "seenHint": "Commits above this line are new",
     "seenToday": "today {{time}}",
     "seenYesterday": "yesterday {{time}}",
     "modifiedAgo": "modified {{time}}",
@@ -919,7 +918,9 @@
     "wipBranch": "{{branch}} branch",
     "wipDetached": "No branch (HEAD {{sha}})",
     "wipDetachedUnknown": "No branch (detached HEAD)",
-    "wipMainWorktree": "primary folder"
+    "wipMainWorktree": "primary folder",
+    "remoteBoundary": "On a remote from here down",
+    "laneMerged": "merged"
   },
   "commitDetail2": {
     "repo": "Repository",
@@ -1155,14 +1156,12 @@
     "stash": "Stash"
   },
   "overlap": {
-    "chipsLabel": "Worktrees shown in the graph",
+    "chipsLabel": "Worktrees to show together in the graph",
     "chipCurrent": "Open worktree, always shown ({{path}})",
     "chipMain": "primary folder",
     "chipFrom": "from {{base}}",
     "chipDirty_one": "{{count}} uncommitted file",
     "chipDirty_other": "{{count}} uncommitted files",
-    "chipsShown_one": "Showing {{count}} worktree in the graph",
-    "chipsShown_other": "Showing {{count}} worktrees together in the graph",
     "markTitle": "Also being edited in another worktree: {{names}}",
     "sameFile": "Same file",
     "andMore_one": "and {{count}} more",
@@ -1177,7 +1176,11 @@
     "pickWorktree": "Worktree to compare",
     "thisWorktree": "This worktree",
     "otherWorktree": "Other worktree",
-    "close": "Close"
+    "close": "Close",
+    "legendLabel": "Worktrees shown together",
+    "showMore_one": "{{count}} more worktree · show together",
+    "showMore_other": "{{count}} more worktrees · show together",
+    "showCurrentOnly": "Only this worktree"
   },
   "filesByRepo": {
     "tab": "Changes vs {{base}}",

@@ -906,7 +906,6 @@
     "wipWorktreeLabel": "{{name}}의 커밋 안 한 변경 ({{count}})",
     "seenHere": "여기까지 확인함",
     "seenHereAt": "여기까지 확인함 · {{time}}",
-    "seenHint": "이 선 위의 커밋이 「새 커밋」이에요",
     "seenToday": "오늘 {{time}}",
     "seenYesterday": "어제 {{time}}",
     "modifiedAgo": "{{time}} 수정",
@@ -917,7 +916,9 @@
     "wipBranch": "{{branch}} 브랜치",
     "wipDetached": "브랜치 없음 (HEAD {{sha}})",
     "wipDetachedUnknown": "브랜치 없음 (HEAD 분리)",
-    "wipMainWorktree": "기본 폴더"
+    "wipMainWorktree": "기본 폴더",
+    "remoteBoundary": "원격에 올라간 지점",
+    "laneMerged": "merge됨"
   },
   "commitDetail2": {
     "repo": "저장소",
@@ -1139,14 +1140,12 @@
     "stash": "Stash"
   },
   "overlap": {
-    "chipsLabel": "그래프에 표시할 워크트리",
+    "chipsLabel": "그래프에 함께 볼 워크트리",
     "chipCurrent": "지금 연 워크트리라 늘 표시해요 ({{path}})",
     "chipMain": "기본 폴더",
     "chipFrom": "{{base}}에서",
     "chipDirty_one": "커밋 안 한 파일 {{count}}개",
     "chipDirty_other": "커밋 안 한 파일 {{count}}개",
-    "chipsShown_one": "그래프에 워크트리 {{count}}개를 표시",
-    "chipsShown_other": "그래프에 워크트리 {{count}}개를 함께 표시",
     "markTitle": "다른 워크트리도 수정 중: {{names}}",
     "sameFile": "같은 파일",
     "andMore_one": "외 {{count}}곳",
@@ -1161,7 +1160,10 @@
     "pickWorktree": "견줄 워크트리",
     "thisWorktree": "이 워크트리",
     "otherWorktree": "다른 워크트리",
-    "close": "닫기"
+    "close": "닫기",
+    "legendLabel": "함께 보는 워크트리",
+    "showMore_other": "워크트리 {{count}}개 더 · 함께 보기",
+    "showCurrentOnly": "지금 워크트리만"
   },
   "filesByRepo": {
     "tab": "{{base}} 대비 변경",

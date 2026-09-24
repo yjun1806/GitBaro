@@ -2,13 +2,20 @@ import type { ReactNode } from "react";
 import { Tag, GitBranch } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { CommitInfo, RefLabel } from "@/types";
+import { LANE_LABEL_CLASS, laneLabelStyle } from "@/components/graph/lane-style";
 
 export function RefBadge({
   label,
   remoteTags,
+  laneColor,
 }: {
   label: RefLabel;
   remoteTags?: Set<string> | null;
+  /**
+   * 커밋 그래프에서 이 브랜치를 체크아웃한 워크트리의 레인 색. 주면 브랜치 이름표를 그 색조로
+   * 칠한다(옅은 바탕 + 같은 색조의 진한 글자). 태그와 워크트리에 묶이지 않은 브랜치는 회색 그대로.
+   */
+  laneColor?: string | null;
 }) {
   const isRemote = label.kind === "remoteBranch";
   const isTag = label.kind === "tag";
@@ -20,6 +27,25 @@ export function RefBadge({
   //   Location → form: local/unpushed refs are outlined (local-only tags dashed),
   //              on-remote refs are filled. HEAD is the one emphasised ref.
   const TypeIcon = isTag ? Tag : GitBranch;
+  const laneStyle = isTag ? undefined : laneLabelStyle(laneColor);
+  if (laneStyle) {
+    return (
+      <span
+        style={laneStyle}
+        data-lane-label=""
+        className={cn(
+          "inline-flex items-center gap-0.5 max-w-[140px] rounded px-1 py-px text-[10px] font-medium leading-none border",
+          LANE_LABEL_CLASS,
+          // 원격 브랜치는 바탕 없이 테두리만, HEAD는 테두리와 굵기로 한 번 더 강조한다.
+          isRemote ? "bg-transparent dark:bg-transparent border-current/40" : "border-transparent",
+          label.isHead && "border-current/60 font-semibold",
+        )}
+      >
+        <TypeIcon className="w-2.5 h-2.5 shrink-0" />
+        <span className="truncate">{label.name}</span>
+      </span>
+    );
+  }
   return (
     <span
       title={isLocalOnlyTag ? `${label.name} (local only)` : undefined}

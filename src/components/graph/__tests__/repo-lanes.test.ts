@@ -26,15 +26,18 @@ const summary = (rows: ReturnType<typeof buildRepoLaneRows>["rows"]) =>
   rows.map((r) => (r.kind === "commit" ? r.commit.id : r.kind === "wip" ? `wip:${r.repoPath}` : r.kind));
 
 describe("buildRepoLaneRows", () => {
-  it("puts WIP rows on top, then new commits by time, the seen divider, older commits, then the base", () => {
+  it("puts WIP rows on top, then new commits by time, older commits with a seen tick per lane, then the base", () => {
     const newIds = new Map([
       ["/w/a", new Set(["a2"])],
       ["/w/b", new Set(["b2"])],
     ]);
     const { rows } = buildRepoLaneRows([A, B], [wipA], newIds);
-    expect(summary(rows)).toEqual(["wip:/w/a", "a2", "b2", "seen", "b1", "a1", "base"]);
+    expect(summary(rows)).toEqual(["wip:/w/a", "a2", "b2", "b1", "a1", "base"]);
     const a1 = rows.find((r) => r.kind === "commit" && r.commit.id === "a1");
     expect(a1 && a1.kind === "commit" && a1.isSeen).toBe(true);
+    // 저장소 레인마다 확인한 첫 커밋에만 눈금이 붙는다.
+    const ticks = rows.flatMap((r) => (r.kind === "commit" && r.seenTick ? [r.commit.id] : []));
+    expect(ticks).toEqual(["b1", "a1"]);
   });
 
   it("leaves out the divider when nothing is new, and the base when no repository found one", () => {
@@ -81,11 +84,9 @@ describe("buildRepoLaneRows", () => {
     expect(base.layout.edges.map((e) => e.chain)).toEqual([0]);
   });
 
-  it("carries the lines that pass through the seen divider", () => {
-    const { rows } = buildRepoLaneRows([A, B], [], new Map([["/w/a", new Set(["a2"])]]));
-    const seen = rows.find((r) => r.kind === "seen");
-    if (!seen || seen.kind !== "seen") throw new Error("no divider");
-    expect(seen.through).toEqual([{ lane: 0, chain: 0 }]);
+  it("puts no seen tick anywhere when nothing is new", () => {
+    const { rows } = buildRepoLaneRows([A, B], [], new Map());
+    expect(rows.some((r) => r.kind === "commit" && r.seenTick)).toBe(false);
   });
 });
 
