@@ -23,6 +23,11 @@ const GIT_DIR_DEBOUNCE_MS = 250;
  * with HEAD, so a HEAD change covers it. fileDiff is here because a staged diff
  * changes with the index. stashShow is keyed by stash position, so a stash
  * pushed or dropped elsewhere changes which entry each index points at.
+ * wipFiles (used by the follow panel, D4) also depends on the index — staging
+ * or committing changes which files are "uncommitted" without touching the
+ * working tree, and `repo:activity` deliberately ignores `.git/` internals
+ * (`watcher/activity.rs` classify_activity), so this is the only signal that
+ * reaches it for index/HEAD-only changes (`git add`, `git commit`, `git reset`).
  */
 const GIT_DIR_QUERY_KEYS = [
   "status",
@@ -34,6 +39,7 @@ const GIT_DIR_QUERY_KEYS = [
   "stashShow",
   "recentBranches",
   "fileDiff",
+  "wipFiles",
 ] as const;
 
 /**

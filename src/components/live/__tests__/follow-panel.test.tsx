@@ -475,4 +475,28 @@ describe("FollowPanel — same file in another worktree (D5)", () => {
     expect(screen.queryByTestId("overlap-mark")).toBeNull();
     expect(screen.queryByTestId("overlap-banner")).toBeNull();
   });
+
+  it("reads the sibling worktree's old path when the followed file was renamed here", async () => {
+    // WT (followed) renamed a.ts → new.ts; REPO (sibling) still edits it at the old path.
+    backend.files = [wipFile("src/new.ts", nowSecs(), { status: "renamed", origPath: "src/old.ts" })];
+    backend.filesByPath = { [REPO]: [wipFile("src/old.ts", nowSecs() - 100)] };
+    backend.hunks = { [`${REPO}\u0000src/old.ts`]: addHunk(5) };
+
+    renderFollow();
+    await waitFor(() => expect(screen.getAllByTestId("overlap-mark")).toHaveLength(1));
+    const banner = await screen.findByTestId("overlap-banner");
+    expect(banner.textContent).toContain("Same file");
+    // The sibling has no "src/new.ts" — its diff must be read at the shared old path.
+    await waitFor(() =>
+      expect(getFileDiff.mock.calls.some(([repo, file]) => repo === REPO && file === "src/old.ts")).toBe(true),
+    );
+    expect(getFileDiff.mock.calls.some(([repo, file]) => repo === REPO && file === "src/new.ts")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "View both worktrees side by side" }));
+    await screen.findByRole("dialog");
+    await waitFor(() => expect(screen.getAllByTestId("diff-viewer")).toHaveLength(3));
+    // The side-by-side dialog also reads the sibling column at its own old path.
+    expect(getFileDiff).toHaveBeenCalledWith(REPO, "src/old.ts", false);
+    expect(getFileDiff.mock.calls.some(([repo, file]) => repo === REPO && file === "src/new.ts")).toBe(false);
+  });
 });

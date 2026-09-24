@@ -419,6 +419,9 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
   // 같은 저장소의 다른 워크트리도 고치는 파일(D5 ⧉). 보고 있는 파일이면 diff 위에 경고를 띄운다.
   const overlap = useWorktreeOverlap(path, list);
   const shownSiblings = shown ? overlap.of(shown) : [];
+  // 이름을 바꾼 파일은 다른 워크트리에 이 워크트리의 새 경로가 없을 수 있다 — 겹침이 옛 경로로
+  // 맞았다면 그쪽 diff는 옛 경로로 읽어야 한다(OverlapBadge.tsx의 matchedPathOf).
+  const siblingFilePath = shown ? (overlap.matchedPathOf(shown) ?? shown.path) : null;
   const [sideBySideOf, setSideBySideOf] = useState<string | null>(null);
   const sideBySideOpen = shown !== null && sideBySideOf === shown.path && shownSiblings.length > 0;
 
@@ -511,9 +514,9 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
         </div>
       ) : (
         <>
-          {shownSiblings.length > 0 && (
+          {shownSiblings.length > 0 && siblingFilePath && (
             <OverlapBanner
-              filePath={shown.path}
+              filePath={siblingFilePath}
               mine={diff}
               siblings={shownSiblings}
               onSideBySide={() => {
@@ -571,6 +574,7 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
     sideBySideOpen && shown ? (
       <SideBySideDiff
         filePath={shown.path}
+        theirFilePath={siblingFilePath ?? shown.path}
         mine={{ path, branch: null, staged }}
         siblings={shownSiblings}
         onClose={() => setSideBySideOf(null)}

@@ -23,6 +23,12 @@ export interface OverlapSibling extends OverlapWorktree {
 export interface WorktreeOverlap {
   /** 이 워크트리의 파일(새 경로 또는 옛 경로) → 같은 파일을 고치는 다른 워크트리. */
   of: (file: Pick<WipFile, "path" | "origPath">) => readonly OverlapSibling[];
+  /**
+   * `of(file)`가 겹침을 찾을 때 실제로 맞춘 경로 — 새 경로 또는 옛 경로 중 다른 워크트리의
+   * 파일 목록에도 있던 쪽. 이름을 바꾼 파일은 다른 워크트리에 새 경로가 없을 수 있으므로
+   * (겹침이 옛 경로로만 맞았다면) 그쪽 diff를 읽을 때는 이 경로를 써야 한다.
+   */
+  matchedPathOf: (file: Pick<WipFile, "path" | "origPath">) => string | null;
 }
 
 const NO_SIBLINGS: readonly OverlapSibling[] = [];
@@ -69,13 +75,19 @@ export function useWorktreeOverlap(path: string, files: readonly WipFile[]): Wor
     });
     const mine = files.flatMap((f) => (f.origPath ? [f.path, f.origPath] : [f.path]));
     const overlap = findSameFileWorktrees(mine, inputs);
-    const of = (file: Pick<WipFile, "path" | "origPath">): readonly OverlapSibling[] => {
-      const hit = overlap.get(file.path) ?? (file.origPath ? overlap.get(file.origPath) : undefined);
-      if (!hit) return NO_SIBLINGS;
-      const name = overlap.has(file.path) ? file.path : (file.origPath ?? file.path);
-      return hit.map((w) => ({ ...w, staged: stagedSideOf(byWorktree.get(w.path)?.get(name)) }));
+    const matchedNameOf = (file: Pick<WipFile, "path" | "origPath">): string | null => {
+      if (overlap.has(file.path)) return file.path;
+      if (file.origPath && overlap.has(file.origPath)) return file.origPath;
+      return null;
     };
-    return { of };
+    const of = (file: Pick<WipFile, "path" | "origPath">): readonly OverlapSibling[] => {
+      const name = matchedNameOf(file);
+      const hit = name ? overlap.get(name) : undefined;
+      if (!hit) return NO_SIBLINGS;
+      return hit.map((w) => ({ ...w, staged: stagedSideOf(byWorktree.get(w.path)?.get(name!)) }));
+    };
+    const matchedPathOf = (file: Pick<WipFile, "path" | "origPath">): string | null => matchedNameOf(file);
+    return { of, matchedPathOf };
     // dataKey가 다른 워크트리 파일 목록의 내용을 대신 비교한다(useQueries 결과 배열은 매번 새로 온다).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siblings, dataKey, files]);

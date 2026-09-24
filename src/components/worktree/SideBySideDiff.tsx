@@ -14,7 +14,13 @@ export interface SideBySideSide {
 }
 
 export interface SideBySideDiffProps {
+  /** 지금 보던 워크트리(왼쪽)에서의 경로. */
   filePath: string;
+  /**
+   * 다른 워크트리(오른쪽)에서의 경로. 이름을 바꾼 파일은 겹침이 옛 경로로만 맞을 수 있어
+   * `filePath`와 다를 수 있다(`OverlapBadge.tsx`의 `matchedPathOf`). 생략하면 `filePath`와 같다.
+   */
+  theirFilePath?: string;
   /** 지금 보던 워크트리(왼쪽). */
   mine: SideBySideSide;
   /** 같은 파일을 고치는 다른 워크트리들. 하나를 골라 오른쪽에 둔다. */
@@ -56,11 +62,12 @@ function DiffColumn({ side, filePath, label }: { side: SideBySideSide; filePath:
  * 두 워크트리가 함께 고치는 파일을 나란히 본다(시안 D5 「두 워크트리 나란히 보기」).
  * 왼쪽은 지금 보던 워크트리, 오른쪽은 같은 파일을 고치는 다른 워크트리다. 여럿이면 위에서 고른다.
  */
-export function SideBySideDiff({ filePath, mine, siblings, onClose }: SideBySideDiffProps) {
+export function SideBySideDiff({ filePath, theirFilePath, mine, siblings, onClose }: SideBySideDiffProps) {
   const { t } = useTranslation();
   const titleId = useId();
   const [pick, setPick] = useState(0);
   const other = siblings[Math.min(pick, siblings.length - 1)];
+  const otherPath = theirFilePath ?? filePath;
   return (
     <Dialog
       onClose={onClose}
@@ -104,7 +111,7 @@ export function SideBySideDiff({ filePath, mine, siblings, onClose }: SideBySide
       </div>
       <div className="flex flex-1 min-h-0 gap-(--g)">
         <DiffColumn side={mine} filePath={filePath} label={t("overlap.thisWorktree")} />
-        {other && <DiffColumn key={other.path} side={other} filePath={filePath} label={t("overlap.otherWorktree")} />}
+        {other && <DiffColumn key={other.path} side={other} filePath={otherPath} label={t("overlap.otherWorktree")} />}
       </div>
     </Dialog>
   );
