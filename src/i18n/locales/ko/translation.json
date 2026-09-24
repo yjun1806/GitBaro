@@ -802,5 +802,29 @@
       "seconds": "{{count}}초",
       "minutes": "{{count}}분"
     }
+  },
+  "commitDetail2": {
+    "repo": "저장소",
+    "commit": "커밋",
+    "copyHash": "커밋 해시 전체 복사",
+    "parents_one": "부모",
+    "parents_other": "부모",
+    "noParents": "부모 없음(첫 커밋)",
+    "coAuthors": "공동 작성자",
+    "agentGuess": "에이전트 작성(추정)",
+    "ci": "CI",
+    "ciState": {
+      "running": "실행 중",
+      "failed": "실패",
+      "passed": "통과",
+      "cancelled": "취소됨",
+      "other": "끝남"
+    },
+    "ciNone": "이 커밋의 실행 기록 없음",
+    "remote": "원격",
+    "remotePushed": "{{remote}}에 올라가 있음",
+    "remoteUnpushed_one": "아직 push 안 함 ({{remote}}보다 ↑{{count}})",
+    "remoteUnpushed_other": "아직 push 안 함 ({{remote}}보다 ↑{{count}})",
+    "remoteNoUpstream": "아직 push 안 함 (연결된 원격 브랜치 없음)"
   }
 }
