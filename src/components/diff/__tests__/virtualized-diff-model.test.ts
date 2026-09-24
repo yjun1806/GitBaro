@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DiffFile, DiffLineType } from "@git-diff-view/core";
-import { buildDiffLayout, contentStyleFor } from "../VirtualizedDiffView";
+import { buildDiffLayout, contentStyleFor, DIFF_SCROLL_STYLE } from "../VirtualizedDiffView";
 
 // VirtualizedDiffView가 의존하는 DiffFile의 행 모델 계약을 검증한다.
 // 렌더러는 0..unifiedLineLength(및 splitLineLength)를 인덱스로 순회하며
@@ -208,6 +208,14 @@ describe("buildDiffLayout", () => {
 
     const after = buildDiffLayout(file, true).rows.filter((r) => r.kind === "line");
     expect(after).toHaveLength(file.splitLineLength);
+  });
+});
+
+describe("스크롤 컨테이너", () => {
+  // 스크롤바가 생겼다 사라질 때 본문 폭이 바뀌면 모든 줄의 접힘·높이가 다시 계산되고,
+  // 그 높이 변화가 다시 스크롤바를 토글해 화면이 떨린다. 자리를 늘 비워 두어 끊는다.
+  it("스크롤바 자리를 항상 비워 둔다", () => {
+    expect(DIFF_SCROLL_STYLE.scrollbarGutter).toBe("stable");
   });
 });
 

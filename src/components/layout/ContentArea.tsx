@@ -66,7 +66,7 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
     );
   }
 
-  return <DiffViewer diff={diff ?? null} status={fileStatus} />;
+  return <DiffViewer diff={diff ?? null} status={fileStatus} staged={staged} />;
 }
 
 function CommitDetailView({ commitId }: { commitId: string }) {

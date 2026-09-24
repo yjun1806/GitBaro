@@ -16,7 +16,7 @@ let watchGeneration = 0;
 
 /**
  * Watches the active repository's working tree via the backend FS watcher and
- * invalidates the status query when files change. Replaces tight status polling
+ * invalidates the status and open file-diff queries when files change. Replaces tight status polling
  * with event-driven refresh; the query keeps a slow poll as a safety net.
  */
 export function useRepoWatcher(repoPath: string | null) {
@@ -47,6 +47,11 @@ export function useRepoWatcher(repoPath: string | null) {
       if (!mounted) return;
       queryClient.invalidateQueries({
         queryKey: ["status", event.payload.repoPath],
+      });
+      // 열려 있는 diff도 디스크 내용을 따라가야 한다. 이벤트는 백엔드에서 이미 디바운스돼
+      // 오고, 화면에 붙은 쿼리만 다시 조회된다(나머지는 stale 표시만).
+      queryClient.invalidateQueries({
+        queryKey: ["fileDiff", event.payload.repoPath],
       });
       // rail/목록의 dirty·ahead/behind 인디케이터도 함께 갱신 (오프라인 계산)
       queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
