@@ -143,6 +143,7 @@
     "failedToStash": "Could not set your changes aside, so the branch was not changed: {{error}}",
     "changesKeptInStash": "Your changes could not be put back automatically. They are kept in the Stash tab.",
     "changesRestoreFailed": "Switched branch, but your changes could not be reapplied cleanly. Check the changed files; the changes are also kept in the Stash tab. ({{error}})",
+    "renameTitle": "Rename Branch",
     "noBranch": "No branch",
     "createBranch": "Create Branch",
     "defaultBranch": "Default Branch",

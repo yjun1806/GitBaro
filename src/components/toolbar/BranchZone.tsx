@@ -21,6 +21,7 @@ import { BranchDropdown } from "./BranchDropdown";
 import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
 import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
 import { DeleteBranchDialog } from "@/components/branch/DeleteBranchDialog";
+import { RenameBranchDialog } from "@/components/branch/RenameBranchDialog";
 import { selectionAfterStashPushed } from "@/lib/stash-selection";
 import { runWithStashedChanges } from "./run-with-stashed-changes";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
@@ -52,6 +53,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [pendingRename, setPendingRename] = useState<string | null>(null);
 
   const headBranch = branches.find((b) => b.isHead);
   const currentBranch = headBranch?.name ?? null;
@@ -235,15 +237,16 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     }
   };
 
-  const handleRename = async (branchName: string) => {
-    const newName = window.prompt(t("branch.contextMenu.rename"), branchName);
-    if (!newName || newName === branchName || !activeRepoPath) return;
+  const handleRenameConfirm = async (oldName: string, newName: string) => {
+    if (!activeRepoPath) return;
     try {
-      await renameBranch(activeRepoPath, branchName, newName);
-      await invalidateAll();
-      addToast(t("branch.renamed", { old: branchName, new: newName }), "success");
+      await renameBranch(activeRepoPath, oldName, newName);
+      addToast(t("branch.renamed", { old: oldName, new: newName }), "success");
+      setPendingRename(null);
     } catch (err) {
       addToast(t("branch.failedToRename", { error: getErrorMessage(err) }), "error");
+    } finally {
+      await invalidateAll();
     }
   };
 
@@ -330,7 +333,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
               onCreateBranch={() => setShowCreateDialog(true)}
               onOpenWorktree={openWorktree}
               onDelete={handleDelete}
-              onRename={handleRename}
+              onRename={setPendingRename}
               onCompare={handleCompare}
               onMerge={handleMerge}
               onCopyName={handleCopyName}
@@ -355,6 +358,15 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           targetBranch={pendingSwitch}
           onConfirm={handleSwitchConfirm}
           onClose={() => setPendingSwitch(null)}
+        />
+      )}
+
+      {pendingRename && (
+        <RenameBranchDialog
+          branchName={pendingRename}
+          branches={branches}
+          onRename={(newName) => handleRenameConfirm(pendingRename, newName)}
+          onClose={() => setPendingRename(null)}
         />
       )}
 

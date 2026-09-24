@@ -143,6 +143,7 @@
     "failedToStash": "변경사항을 보관하지 못해 Branch를 바꾸지 않았습니다: {{error}}",
     "changesKeptInStash": "변경사항을 자동으로 되돌리지 못했습니다. Stash 탭에 보관되어 있습니다.",
     "changesRestoreFailed": "Branch는 바뀌었지만 변경사항을 깔끔하게 다시 적용하지 못했습니다. 변경된 파일을 확인하세요. 변경사항은 Stash 탭에도 남아 있습니다. ({{error}})",
+    "renameTitle": "Branch 이름 변경",
     "noBranch": "Branch 없음",
     "createBranch": "Branch 생성",
     "defaultBranch": "기본 Branch",
