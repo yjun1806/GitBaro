@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BranchRow } from "./BranchRow";
@@ -8,10 +7,11 @@ interface BranchGroupProps {
   label: string;
   branches: BranchInfo[];
   currentBranch: string | null;
-  activeIndex: number | null;
-  startIndex: number;
-  collapsible?: boolean;
-  defaultCollapsed?: boolean;
+  /** Name of the keyboard-highlighted branch, if any. */
+  activeName: string | null;
+  /** Given together with `onToggleCollapsed` to make the group collapsible. */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
   count?: number;
   trailing?: React.ReactNode;
   worktreeByBranch?: Map<string, WorktreeInfo>;
@@ -23,17 +23,16 @@ export function BranchGroup({
   label,
   branches,
   currentBranch,
-  activeIndex,
-  startIndex,
-  collapsible = false,
-  defaultCollapsed = false,
+  activeName,
+  collapsed = false,
+  onToggleCollapsed,
   count,
   trailing,
   worktreeByBranch,
   onSelect,
   onContextMenu,
 }: BranchGroupProps) {
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const collapsible = onToggleCollapsed !== undefined;
 
   if (branches.length === 0 && !collapsible) return null;
 
@@ -41,7 +40,7 @@ export function BranchGroup({
     <div className="py-1">
       {collapsible ? (
         <button
-          onClick={() => setCollapsed((v) => !v)}
+          onClick={onToggleCollapsed}
           className="w-full flex items-center gap-1.5 px-3 pt-1.5 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
         >
           <ChevronRight
@@ -63,12 +62,12 @@ export function BranchGroup({
       )}
 
       {!collapsed &&
-        branches.map((branch, i) => (
+        branches.map((branch) => (
           <BranchRow
             key={branch.name}
             branch={branch}
             isCurrent={branch.name === currentBranch}
-            isActive={activeIndex === startIndex + i}
+            isActive={branch.name === activeName}
             worktreeByBranch={worktreeByBranch}
             onSelect={() => onSelect(branch)}
             onContextMenu={(e) => onContextMenu?.(branch, e)}

@@ -1,13 +1,10 @@
-import { useReducer, useState, useCallback } from "react";
+import { useReducer, useState, useCallback, useMemo } from "react";
 import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useBranchGroups } from "@/hooks/useBranchGroups";
 import type { SortBy } from "@/hooks/useBranchGroups";
-import {
-  BranchTabContent,
-  getFlatBranchCount,
-  getBranchAtIndex,
-} from "@/components/branch/BranchTabContent";
+import { BranchTabContent } from "@/components/branch/BranchTabContent";
+import { getVisibleBranches, nextActiveName } from "@/components/branch/visible-branches";
 import { BranchContextMenu } from "@/components/branch/BranchContextMenu";
 import type { BranchInfo, WorktreeInfo } from "@/types";
 
@@ -15,7 +12,8 @@ import type { BranchInfo, WorktreeInfo } from "@/types";
 
 type DropdownState = {
   query: string;
-  activeIndex: number;
+  /** Keyboard-highlighted branch, by name so collapsing a group cannot move it. */
+  activeName: string | null;
   contextMenu: {
     branch: BranchInfo;
     x: number;
@@ -25,7 +23,7 @@ type DropdownState = {
 
 type DropdownAction =
   | { type: "SET_QUERY"; query: string }
-  | { type: "NAVIGATE"; direction: "up" | "down"; total: number }
+  | { type: "NAVIGATE"; direction: "up" | "down"; visibleNames: string[] }
   | {
       type: "OPEN_CONTEXT_MENU";
       branch: BranchInfo;
@@ -38,17 +36,12 @@ type DropdownAction =
 function reducer(state: DropdownState, action: DropdownAction): DropdownState {
   switch (action.type) {
     case "SET_QUERY":
-      return { ...state, query: action.query, activeIndex: -1 };
-    case "NAVIGATE": {
-      if (action.total === 0) return state;
-      const next =
-        state.activeIndex < 0
-          ? action.direction === "down" ? 0 : action.total - 1
-          : action.direction === "down"
-            ? (state.activeIndex + 1) % action.total
-            : (state.activeIndex - 1 + action.total) % action.total;
-      return { ...state, activeIndex: next };
-    }
+      return { ...state, query: action.query, activeName: null };
+    case "NAVIGATE":
+      return {
+        ...state,
+        activeName: nextActiveName(action.visibleNames, state.activeName, action.direction),
+      };
     case "OPEN_CONTEXT_MENU":
       return {
         ...state,
@@ -61,7 +54,7 @@ function reducer(state: DropdownState, action: DropdownAction): DropdownState {
     case "CLOSE_CONTEXT_MENU":
       return { ...state, contextMenu: null };
     case "RESET":
-      return { query: "", activeIndex: -1, contextMenu: null };
+      return { query: "", activeName: null, contextMenu: null };
     default:
       return state;
   }
@@ -106,9 +99,11 @@ export function BranchDropdown({
   const [sortBy, setSortBy] = useState<SortBy>("name");
   const [state, dispatch] = useReducer(reducer, {
     query: "",
-    activeIndex: -1,
+    activeName: null,
     contextMenu: null,
   });
+  const [collapsedPrefixes, setCollapsedPrefixes] = useState<ReadonlySet<string>>(new Set());
+  const [remoteCollapsed, setRemoteCollapsed] = useState(true);
 
   const groups = useBranchGroups(
     branches,
@@ -117,7 +112,24 @@ export function BranchDropdown({
     sortBy,
   );
 
-  const flatCount = getFlatBranchCount(groups);
+  // Only rows that are actually rendered can be reached with the arrow keys.
+  const visibleBranches = useMemo(
+    () => getVisibleBranches(groups, sortBy, { collapsedPrefixes, remoteCollapsed }),
+    [groups, sortBy, collapsedPrefixes, remoteCollapsed],
+  );
+  const visibleNames = useMemo(() => visibleBranches.map((b) => b.name), [visibleBranches]);
+
+  const togglePrefix = useCallback((prefix: string) => {
+    setCollapsedPrefixes((prev) => {
+      const next = new Set(prev);
+      if (next.has(prefix)) {
+        next.delete(prefix);
+      } else {
+        next.add(prefix);
+      }
+      return next;
+    });
+  }, []);
 
   const handleSelect = useCallback(
     (branch: BranchInfo) => {
@@ -150,15 +162,15 @@ export function BranchDropdown({
       switch (e.key) {
         case "ArrowDown":
           e.preventDefault();
-          dispatch({ type: "NAVIGATE", direction: "down", total: flatCount });
+          dispatch({ type: "NAVIGATE", direction: "down", visibleNames });
           break;
         case "ArrowUp":
           e.preventDefault();
-          dispatch({ type: "NAVIGATE", direction: "up", total: flatCount });
+          dispatch({ type: "NAVIGATE", direction: "up", visibleNames });
           break;
         case "Enter": {
           e.preventDefault();
-          const branch = getBranchAtIndex(groups, state.activeIndex);
+          const branch = visibleBranches.find((b) => b.name === state.activeName);
           if (branch) handleSelect(branch);
           break;
         }
@@ -172,7 +184,7 @@ export function BranchDropdown({
           break;
       }
     },
-    [flatCount, groups, state.activeIndex, state.contextMenu, handleSelect, onClose],
+    [visibleNames, visibleBranches, state.activeName, state.contextMenu, handleSelect, onClose],
   );
 
   return (
@@ -213,8 +225,12 @@ export function BranchDropdown({
         <BranchTabContent
           groups={groups}
           currentBranch={currentBranch}
-          activeIndex={state.activeIndex}
+          activeName={state.activeName}
           sortBy={sortBy}
+          collapsedPrefixes={collapsedPrefixes}
+          remoteCollapsed={remoteCollapsed}
+          onTogglePrefix={togglePrefix}
+          onToggleRemote={() => setRemoteCollapsed((v) => !v)}
           worktreeByBranch={worktreeByBranch}
           onSortChange={setSortBy}
           onSelect={handleSelect}
@@ -227,6 +243,7 @@ export function BranchDropdown({
         <BranchContextMenu
           isCurrent={state.contextMenu.branch.name === currentBranch}
           isDefault={state.contextMenu.branch.isDefault}
+          isRemote={state.contextMenu.branch.isRemote}
           position={{ x: state.contextMenu.x, y: state.contextMenu.y }}
           onCheckout={() => {
             handleSelect(state.contextMenu!.branch);
