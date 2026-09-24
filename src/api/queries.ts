@@ -295,7 +295,7 @@ export function useWorkflowRunJobs(
 
 // ── Stash Mutations ─────────────────────────────────────────────────────────
 
-/** "merge" | "rebase" | null — the git operation currently in progress. */
+/** The git operation currently in progress, or null. */
 export function useMergeState(repoPath: string | null) {
   return useQuery({
     queryKey: ["mergeState", repoPath],

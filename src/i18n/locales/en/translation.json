@@ -488,6 +488,9 @@
   "mergeRecovery": {
     "mergeInProgress": "Merge in progress",
     "rebaseInProgress": "Rebase in progress",
+    "cherryPickInProgress": "Cherry-pick in progress",
+    "revertInProgress": "Revert in progress",
+    "squashInProgress": "Squash merge in progress",
     "resolveHint": "Resolve and stage {{count}} conflicted file(s), then continue.",
     "readyHint": "All conflicts resolved. You can continue the operation.",
     "continue": "Continue",

@@ -300,8 +300,10 @@ export async function checkMergeConflicts(
   return invoke("check_merge_conflicts", { repoPath, branch });
 }
 
-/** "merge" | "rebase" | null — the operation currently in progress, if any. */
-export async function getMergeState(repoPath: string): Promise<string | null> {
+import type { GitOperation } from "@/types";
+
+/** The operation currently in progress, if any. */
+export async function getMergeState(repoPath: string): Promise<GitOperation | null> {
   return invoke("get_merge_state", { repoPath });
 }
 
@@ -737,7 +739,8 @@ export async function removeWorktree(
 }
 
 // Preview
-export async function startWorktreePreview(repoPath: string, branch: string): Promise<void> {
+/** Resolves false when there was nothing to preview (already up to date). */
+export async function startWorktreePreview(repoPath: string, branch: string): Promise<boolean> {
   return invoke("start_worktree_preview", { repoPath, branch });
 }
 

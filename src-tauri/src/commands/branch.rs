@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::git::branch::validate_branch_name;
-use crate::git::cli::GitCliEngine;
+use crate::git::cli::{GitCliEngine, GitOperation};
 use crate::git::commit::commit_to_info;
 use crate::git::engine::{BranchCompareResult, MergePreCheckResult, MergeStrategy};
 use crate::git::libgit::is_working_tree_dirty;
@@ -510,42 +510,49 @@ pub async fn merge_branch_into_current(
     Ok(format!("Successfully merged '{}' into current branch", branch))
 }
 
-/// Abort an in-progress merge or rebase, returning the working tree to its
-/// pre-operation state. Lets users escape a conflicted merge/rebase from the GUI.
+/// Abort the in-progress merge, rebase, cherry-pick, revert or squash,
+/// returning the working tree to its pre-operation state.
 #[tauri::command]
 pub async fn abort_merge_or_rebase(
     repo_path: String,
     app_handle: tauri::AppHandle,
 ) -> Result<(), AppError> {
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
-    match engine.operation_in_progress().await? {
-        Some("rebase") => engine.rebase_abort().await,
-        Some("merge") => engine.merge_abort().await,
-        _ => Ok(()),
-    }
+    let op = require_operation(&engine).await?;
+    engine.operation_abort(op).await
 }
 
-/// Continue an in-progress merge or rebase after the user has resolved and
-/// staged the conflicted files.
+/// Continue the in-progress operation after the user has resolved and staged
+/// the conflicted files.
 #[tauri::command]
 pub async fn continue_merge_or_rebase(
     repo_path: String,
     app_handle: tauri::AppHandle,
 ) -> Result<(), AppError> {
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
-    match engine.operation_in_progress().await? {
-        Some("rebase") => engine.rebase_continue().await,
-        Some("merge") => engine.merge_continue().await,
-        _ => Ok(()),
-    }
+    let op = require_operation(&engine).await?;
+    engine.operation_continue(op).await
 }
 
-/// Report whether a merge or rebase is currently in progress (`"merge"`,
-/// `"rebase"`, or `null`), so the UI can show a conflict-resolution banner.
+/// The operation in progress, or an error so the UI never reports success
+/// for a button that did nothing.
+async fn require_operation(engine: &GitCliEngine) -> Result<GitOperation, AppError> {
+    engine
+        .operation_in_progress()
+        .await?
+        .ok_or_else(|| AppError::GitCli {
+            message: "No merge, rebase, cherry-pick or revert is in progress".to_string(),
+            exit_code: None,
+        })
+}
+
+/// Report which operation is in progress (`"merge"`, `"rebase"`,
+/// `"cherryPick"`, `"revert"`, `"squash"`, or `null`), so the UI can show a
+/// conflict-resolution banner.
 #[tauri::command]
-pub async fn get_merge_state(repo_path: String) -> Result<Option<String>, AppError> {
+pub async fn get_merge_state(repo_path: String) -> Result<Option<GitOperation>, AppError> {
     let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
-    Ok(engine.operation_in_progress().await?.map(|s| s.to_string()))
+    engine.operation_in_progress().await
 }
 
 #[tauri::command]

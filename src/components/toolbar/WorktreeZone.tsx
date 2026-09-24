@@ -39,7 +39,9 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
-  // 마운트 시 잔여 미리보기 정리. 미리보기를 멈추면 메인 작업트리 상태가 복원되므로
+  // 마운트 시 잔여 미리보기 정리. checkPreviewActive는 GitBaro가 미리보기를 시작하며
+  // 남긴 표식 파일만 본다(사용자가 진행 중인 merge는 미리보기로 보지 않는다).
+  // 미리보기를 멈추면 메인 작업트리 상태가 복원되므로
   // status/branches/diff를 갱신하고, 미리보기 워크트리가 사라지므로 worktrees도 갱신한다.
   useEffect(() => {
     if (!activeRepoPath) return;

@@ -3,6 +3,15 @@ import { useTranslation } from "react-i18next";
 import { useMergeState, useMergeRecoveryMutations } from "@/api/queries";
 import { getErrorMessage } from "@/lib/utils";
 import { useToastStore } from "@/stores/toast";
+import type { GitOperation } from "@/types";
+
+const OPERATION_LABEL_KEYS: Record<GitOperation, string> = {
+  merge: "mergeRecovery.mergeInProgress",
+  rebase: "mergeRecovery.rebaseInProgress",
+  cherryPick: "mergeRecovery.cherryPickInProgress",
+  revert: "mergeRecovery.revertInProgress",
+  squash: "mergeRecovery.squashInProgress",
+};
 
 interface MergeConflictBannerProps {
   repoPath: string | null;
@@ -11,7 +20,8 @@ interface MergeConflictBannerProps {
 }
 
 /**
- * Shows when a merge or rebase is in progress and lets the user abort it or,
+ * Shows when a merge, rebase, cherry-pick, revert or squash merge is in
+ * progress and lets the user abort it or,
  * once all conflicts are resolved and staged, continue it. Without this the
  * user is stranded in a mid-merge state after a conflict.
  */
@@ -24,10 +34,7 @@ export function MergeConflictBanner({ repoPath, conflictCount }: MergeConflictBa
   if (!mergeState) return null;
 
   const hasConflicts = conflictCount > 0;
-  const opLabel =
-    mergeState === "rebase"
-      ? t("mergeRecovery.rebaseInProgress")
-      : t("mergeRecovery.mergeInProgress");
+  const opLabel = t(OPERATION_LABEL_KEYS[mergeState]);
 
   const handleAbort = () => {
     abort.mutate(undefined, {
