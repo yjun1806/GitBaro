@@ -67,4 +67,19 @@ describe("useLiveChangesStore", () => {
     expect(state.overflow).toEqual(["/repo/b"]);
     expect(state.lastChangedAt["/repo/b"]).toBe(5_000);
   });
+
+  // The actual substitution — reading `useLiveChanges`'s fallback effect,
+  // which maps `dirtyLatestMtime` from the 20s poll into this store — is
+  // exercised end to end in `src/hooks/__tests__/useLiveChanges.test.ts`.
+  // These are unit tests of the store's own bookkeeping only.
+  it("isWatched: true for a watched path, false for an overflowed one", () => {
+    useLiveChangesStore.getState().setWatchState(["/repo/a"], ["/repo/b"]);
+
+    expect(useLiveChangesStore.getState().isWatched("/repo/a")).toBe(true);
+    expect(useLiveChangesStore.getState().isWatched("/repo/b")).toBe(false);
+  });
+
+  it("isWatched: true (optimistic) for a path with no watch state yet", () => {
+    expect(useLiveChangesStore.getState().isWatched("/repo/unknown")).toBe(true);
+  });
 });

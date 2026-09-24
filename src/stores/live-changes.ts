@@ -22,6 +22,14 @@ interface LiveChangesState {
   recordChange: (path: string, at: number) => void;
   /** `now` 기준 10분 안에 바뀐 경로. 최근 순. */
   recentChangedPaths: (now?: number) => string[];
+  /**
+   * 이 경로가 실시간 감시 대상인지(`repo:activity` 이벤트를 받는지), 아니면
+   * 상한을 넘겨 20초 폴링으로 대신 채워지는지. `watched`/`overflow` 배열
+   * 대신 이 함수로 물어본다 — 화면마다 배열을 직접 뒤지지 않게 한다.
+   * 둘 중 어디에도 없는 경로(아직 `set_activity_watch` 응답을 못 받은
+   * 경로)는 `true`로 본다(낙관적 기본값 — 실시간 도는 중이라 가정).
+   */
+  isWatched: (path: string) => boolean;
 }
 
 export const useLiveChangesStore = create<LiveChangesState>((set, get) => ({
@@ -45,4 +53,6 @@ export const useLiveChangesStore = create<LiveChangesState>((set, get) => ({
       .sort((a, b) => b[1] - a[1])
       .map(([path]) => path);
   },
+
+  isWatched: (path) => !get().overflow.includes(path),
 }));

@@ -33,12 +33,36 @@ export const useActivityTargetsStore = create<ActivityTargetsState>((set) => ({
     }),
 }));
 
-/** 등록된 모든 화면의 경로를 중복 없이, 등록 순서를 지켜 하나로 합친다. */
+/**
+ * `useLiveChanges`가 등록된 저장소 전체를 등록하는 key. 40곳 상한을 넘겼을
+ * 때 등록된 저장소가 다른 화면이 더한 경로보다 우선하도록(다른 우선순위
+ * 규칙은 명세에 없다) `selectActivityTargets`가 이 key를 맨 앞에 둔다.
+ */
+export const REPOS_KEY = "repos";
+
+/** 이 순서의 key가 먼저 오고, 나머지 key는 등록 순서 그대로 뒤따른다. */
+const KEY_PRIORITY: readonly string[] = [REPOS_KEY];
+
+/**
+ * 등록된 모든 화면의 경로를 중복 없이 하나로 합친다.
+ *
+ * `KEY_PRIORITY`에 있는 key가 먼저, 나머지는 `extraByKey`의 삽입 순서대로
+ * 뒤따른다. 등록 순서(Object.values 그대로)에만 기대지 않는 이유: 화면이
+ * 다시 등록될 때(effect의 cleanup 뒤 재실행 등) key가 지워졌다가 새로
+ * 들어가면 일반 객체의 삽입 순서가 바뀌고, 자식 컴포넌트의 effect가 부모보다
+ * 먼저 도는 React의 실행 순서 때문에 마운트 시점에도 순서가 뒤집힐 수 있다.
+ * 우선순위를 등록 순서가 아니라 이 목록으로 못박아 두 문제 모두를 피한다.
+ */
 export function selectActivityTargets(extraByKey: Record<string, string[]>): string[] {
+  const orderedKeys = [
+    ...KEY_PRIORITY.filter((key) => key in extraByKey),
+    ...Object.keys(extraByKey).filter((key) => !KEY_PRIORITY.includes(key)),
+  ];
+
   const seen = new Set<string>();
   const merged: string[] = [];
-  for (const paths of Object.values(extraByKey)) {
-    for (const path of paths) {
+  for (const key of orderedKeys) {
+    for (const path of extraByKey[key]) {
       if (!seen.has(path)) {
         seen.add(path);
         merged.push(path);

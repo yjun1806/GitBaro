@@ -54,6 +54,22 @@ pub fn resolve_targets(requested: &[PathBuf]) -> ResolvedTargets {
     }
 }
 
+/// Moves any path whose `notify::Watcher::watch` call failed from `watched`
+/// into `overflow`. A path notify rejects (e.g. it does not exist because a
+/// volume is unmounted, or it was deleted) never gets `repo:activity` events,
+/// so it must fall back to polling like any other overflowed path — otherwise
+/// it silently gets neither.
+fn demote_failed_watches(mut resolved: ResolvedTargets, failed: &HashSet<PathBuf>) -> ResolvedTargets {
+    if failed.is_empty() {
+        return resolved;
+    }
+    let (still_watched, newly_failed): (Vec<PathBuf>, Vec<PathBuf>) =
+        resolved.watched.into_iter().partition(|p| !failed.contains(p));
+    resolved.watched = still_watched;
+    resolved.overflow.extend(newly_failed);
+    resolved
+}
+
 /// What changed between the currently watched set and a newly resolved one.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TargetDiff {
@@ -164,9 +180,25 @@ pub(crate) fn canonicalize_best_effort(path: &Path) -> PathBuf {
 /// Watches a dynamic set of directories (up to [`MAX_ACTIVITY_TARGETS`]) and
 /// calls `callback(root, at_epoch_ms)` at most once per [`ACTIVITY_WINDOW`]
 /// per root when something inside it changes.
+///
+/// Internally, everything is tracked and matched against incoming FS events
+/// in **canonical** form (notify/FSEvents reports canonical paths — see
+/// [`canonicalize_best_effort`]). But callers register paths in whatever form
+/// they have them (e.g. `/tmp/foo`, a symlink, a trailing slash), and the
+/// existing single-repo watcher (`commands::watch`) echoes the caller's
+/// original path in its events. To keep `repo:activity` consistent with that
+/// and with what `set_activity_watch`'s caller registered, `watched`/
+/// `overflow` and the emitted event path are always translated back to the
+/// caller's original spelling before leaving this module.
 pub struct ActivityWatcher {
     watcher: Mutex<RecommendedWatcher>,
+    /// Canonical paths currently *successfully* watched by the OS watcher.
+    /// A path notify failed to `watch()` (e.g. it does not exist) is never
+    /// kept here, so the next `set_targets` call — seeing it missing from
+    /// this list — retries `watch()` on it instead of assuming it is covered.
     watched: Arc<Mutex<Vec<PathBuf>>>,
+    /// Canonical path -> the original path the caller last registered it as.
+    labels: Arc<Mutex<HashMap<PathBuf, PathBuf>>>,
 }
 
 impl ActivityWatcher {
@@ -181,7 +213,9 @@ impl ActivityWatcher {
         .map_err(|e| AppError::Io(std::io::Error::other(e.to_string())))?;
 
         let watched: Arc<Mutex<Vec<PathBuf>>> = Arc::new(Mutex::new(Vec::new()));
+        let labels: Arc<Mutex<HashMap<PathBuf, PathBuf>>> = Arc::new(Mutex::new(HashMap::new()));
         let watched_for_thread = watched.clone();
+        let labels_for_thread = labels.clone();
 
         std::thread::spawn(move || {
             let mut throttle = ActivityThrottle::new(ACTIVITY_WINDOW);
@@ -193,7 +227,7 @@ impl ActivityWatcher {
                         for path in &event.paths {
                             if let Some(root) = classify_activity(path, &targets) {
                                 if throttle.record(root.clone(), now) {
-                                    callback(root, now_ms());
+                                    callback(to_original(&labels_for_thread, &root), now_ms());
                                 }
                             }
                         }
@@ -207,34 +241,70 @@ impl ActivityWatcher {
                 }
 
                 for root in throttle.due(Instant::now()) {
-                    callback(root, now_ms());
+                    callback(to_original(&labels_for_thread, &root), now_ms());
                 }
             }
         });
 
-        Ok(Self { watcher: Mutex::new(watcher), watched })
+        Ok(Self { watcher: Mutex::new(watcher), watched, labels })
     }
 
     /// Applies a new requested target list: canonicalizes, dedupes, caps at
     /// [`MAX_ACTIVITY_TARGETS`], and updates the OS-level watches to match.
+    /// A path whose `watch()` call fails is reported in `overflow`, not
+    /// `watched` — it gets neither events nor a slot, so the frontend's 20s
+    /// poll fallback covers it like any other overflowed path.
     pub fn set_targets(&self, requested: &[PathBuf]) -> ResolvedTargets {
-        let canonical: Vec<PathBuf> = requested.iter().map(|p| canonicalize_best_effort(p)).collect();
-        let resolved = resolve_targets(&canonical);
+        // Canonicalize while deduping by canonical form (first occurrence's
+        // original spelling wins), so two requested paths that resolve to the
+        // same place are only watched once.
+        let mut seen = HashSet::new();
+        let mut canonical_order = Vec::with_capacity(requested.len());
+        let mut canonical_to_original = HashMap::with_capacity(requested.len());
+        for original in requested {
+            let canonical = canonicalize_best_effort(original);
+            if seen.insert(canonical.clone()) {
+                canonical_to_original.insert(canonical.clone(), original.clone());
+                canonical_order.push(canonical);
+            }
+        }
+        *self.labels.lock().unwrap() = canonical_to_original.clone();
+
+        let capped = resolve_targets(&canonical_order);
 
         let mut watched = self.watched.lock().unwrap();
-        let diff = diff_targets(&watched, &resolved.watched);
+        let diff = diff_targets(&watched, &capped.watched);
+        let mut failed: HashSet<PathBuf> = HashSet::new();
         {
             let mut w = self.watcher.lock().unwrap();
             for path in &diff.removed {
                 let _ = w.unwatch(path);
             }
             for path in &diff.added {
-                let _ = w.watch(path, RecursiveMode::Recursive);
+                if w.watch(path, RecursiveMode::Recursive).is_err() {
+                    failed.insert(path.clone());
+                }
             }
         }
+
+        let resolved = demote_failed_watches(capped, &failed);
         *watched = resolved.watched.clone();
-        resolved
+
+        let label_of = |p: &PathBuf| canonical_to_original.get(p).cloned().unwrap_or_else(|| p.clone());
+        ResolvedTargets {
+            watched: resolved.watched.iter().map(label_of).collect(),
+            overflow: resolved.overflow.iter().map(label_of).collect(),
+        }
     }
+}
+
+fn to_original(labels: &Mutex<HashMap<PathBuf, PathBuf>>, canonical: &Path) -> PathBuf {
+    labels
+        .lock()
+        .unwrap()
+        .get(canonical)
+        .cloned()
+        .unwrap_or_else(|| canonical.to_path_buf())
 }
 
 #[cfg(test)]
@@ -346,5 +416,150 @@ mod tests {
         assert!(throttle.record(p("/b"), t0));
         assert!(!throttle.record(p("/a"), t0 + Duration::from_millis(100)));
         assert!(!throttle.record(p("/b"), t0 + Duration::from_millis(100)));
+    }
+
+    #[test]
+    fn demote_failed_watches_moves_only_the_failed_paths_to_overflow() {
+        let resolved = ResolvedTargets {
+            watched: vec![p("/a"), p("/b"), p("/c")],
+            overflow: vec![p("/d")],
+        };
+        let mut failed = HashSet::new();
+        failed.insert(p("/b"));
+
+        let result = demote_failed_watches(resolved, &failed);
+        assert_eq!(result.watched, vec![p("/a"), p("/c")]);
+        assert_eq!(result.overflow, vec![p("/d"), p("/b")]);
+    }
+
+    #[test]
+    fn demote_failed_watches_is_a_no_op_when_nothing_failed() {
+        let resolved = ResolvedTargets { watched: vec![p("/a")], overflow: vec![p("/b")] };
+        let result = demote_failed_watches(resolved.clone(), &HashSet::new());
+        assert_eq!(result, resolved);
+    }
+
+    // -- Integration tests against the real OS watcher (notify) --------
+
+    fn unique_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "gitbaro-activity-{}-{}-{}",
+            name,
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Waits until `rx` receives an event whose path is `expected` (canonical
+    /// comparison, since the callback echoes the caller's original path), up
+    /// to a few seconds.
+    fn wait_for_activity(rx: &mpsc::Receiver<PathBuf>, expected: &Path, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+            match rx.recv_timeout(left) {
+                Ok(path) if path == expected => return true,
+                Ok(_) => continue,
+                Err(_) => return false,
+            }
+        }
+        false
+    }
+
+    /// `set_targets` must not just compute the diff — it has to actually call
+    /// `watch`/`unwatch` on the OS watcher, so added paths start reporting
+    /// activity and removed paths stop.
+    #[test]
+    fn set_targets_watches_added_paths_and_unwatches_removed_paths_on_the_real_watcher() {
+        let a = unique_dir("added");
+        let b = unique_dir("removed-later");
+        let (tx, rx) = mpsc::channel::<PathBuf>();
+        let watcher = ActivityWatcher::new(move |path, _at| {
+            let _ = tx.send(path);
+        })
+        .unwrap();
+
+        // Register both; original (non-canonical-looking) spelling is what
+        // must come back in `watched` and in the emitted event.
+        let resolved = watcher.set_targets(&[a.clone(), b.clone()]);
+        assert!(resolved.watched.contains(&a));
+        assert!(resolved.watched.contains(&b));
+        std::thread::sleep(Duration::from_millis(300));
+
+        std::fs::write(a.join("file.txt"), "hello").unwrap();
+        assert!(wait_for_activity(&rx, &a, Duration::from_secs(5)), "expected activity under {a:?}");
+
+        // Drop `b` from the target list — edits inside it must stop being
+        // reported once unwatch() has actually run.
+        let resolved = watcher.set_targets(std::slice::from_ref(&a));
+        assert!(!resolved.watched.contains(&b));
+        std::thread::sleep(Duration::from_millis(300));
+
+        std::fs::write(b.join("file.txt"), "hello").unwrap();
+        assert!(
+            !wait_for_activity(&rx, &b, Duration::from_millis(800)),
+            "expected no activity under {b:?} after it was unwatched"
+        );
+
+        let _ = std::fs::remove_dir_all(&a);
+        let _ = std::fs::remove_dir_all(&b);
+    }
+
+    /// A path that does not exist (or was removed) fails `notify::Watcher::
+    /// watch`. It must land in `overflow`, not `watched` — otherwise the
+    /// frontend expects events that never arrive and the 20s poll fallback
+    /// never covers it either.
+    #[test]
+    fn set_targets_demotes_a_path_that_fails_to_watch_to_overflow() {
+        let missing = std::env::temp_dir().join(format!(
+            "gitbaro-activity-missing-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&missing); // make sure it does not exist
+
+        let watcher = ActivityWatcher::new(|_, _| {}).unwrap();
+        let resolved = watcher.set_targets(std::slice::from_ref(&missing));
+
+        assert!(!resolved.watched.contains(&missing), "a path that fails to watch must not be reported as watched");
+        assert!(resolved.overflow.contains(&missing), "it must fall back to the overflow/poll path instead");
+    }
+
+    /// Measures the cost of watching [`MAX_ACTIVITY_TARGETS`] real
+    /// directories at once — the spec (review-redesign-tasks.md W1-T3) asks
+    /// this be measured rather than assumed. Logged as the decision record
+    /// for whether "지금 바뀌는 곳" needs to fall back to polling-only.
+    #[test]
+    fn measures_the_cost_of_watching_the_full_40_path_cap() {
+        let dirs: Vec<PathBuf> = (0..MAX_ACTIVITY_TARGETS).map(|i| unique_dir(&format!("cap{i}"))).collect();
+        let watcher = ActivityWatcher::new(|_, _| {}).unwrap();
+
+        let start = Instant::now();
+        let resolved = watcher.set_targets(&dirs);
+        let elapsed = start.elapsed();
+
+        assert_eq!(resolved.watched.len(), MAX_ACTIVITY_TARGETS);
+        assert!(resolved.overflow.is_empty());
+        // Measured on this machine: ~2.5s to register all 40 (see decisions
+        // in the task report — notify's FSEvents backend rebuilds its merged
+        // stream on every watch() call, so this is ~O(n) restarts, not O(1)).
+        // This sanity bound only guards against a true hang/regression (e.g.
+        // an accidental O(n^2) beyond what FSEvents already costs); it is not
+        // a target to optimize toward in this test.
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "watching {} paths took {:?}, expected it to stay well under 10s",
+            MAX_ACTIVITY_TARGETS,
+            elapsed
+        );
+        eprintln!(
+            "[activity bench] set_targets() for {} paths (initial registration, cold) took {:?}",
+            MAX_ACTIVITY_TARGETS, elapsed
+        );
+
+        for dir in &dirs {
+            let _ = std::fs::remove_dir_all(dir);
+        }
     }
 }
