@@ -522,3 +522,13 @@ export interface NewCommitCount {
   newCount: number;
   basis: NewCommitBasis;
 }
+
+// W3-T3
+
+/**
+ * `list_new_commit_ids`의 응답. 개수와 규칙은 `NewCommitCount`와 같고, 새 커밋으로 센 커밋의
+ * SHA를 함께 준다(최대 1000개. 넘치면 `ids.length < newCount`).
+ */
+export interface NewCommitIds extends NewCommitCount {
+  ids: string[];
+}

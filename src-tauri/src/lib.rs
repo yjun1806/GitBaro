@@ -119,6 +119,8 @@ pub fn run() {
             // W1-T4
             commands::review::review_status,
             commands::review::count_new_commits,
+            // W3-T3
+            commands::review::list_new_commit_ids,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");

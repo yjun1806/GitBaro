@@ -150,7 +150,7 @@ pub fn count_new_commits(record: &SeenRecord) -> Result<NewCommitCount, git2::Er
     let head = head_ref.peel_to_commit()?.id();
     let branch = head_ref.is_branch().then(|| head_ref.shorthand().map(str::to_string)).flatten();
 
-    let (new_count, basis) = count_for(&repo, head, branch.as_deref(), record)?;
+    let (new_count, basis) = count_for(&repo, head, branch.as_deref(), record, None)?;
     Ok(NewCommitCount {
         path: record.path.clone(),
         head_oid: head.to_string(),
@@ -159,17 +159,53 @@ pub fn count_new_commits(record: &SeenRecord) -> Result<NewCommitCount, git2::Er
     })
 }
 
+/// `list_new_commit_ids` 가 돌려주는 커밋 SHA 수의 상한. 그래프는 앞쪽 몇 페이지만 그리므로
+/// 이보다 많으면 개수(`new_count`)만 정확하고 목록은 잘린다.
+pub const MAX_LISTED_IDS: usize = 1_000;
+
+/// 한 워크트리의 새 커밋 수와, 새 커밋으로 센 커밋의 SHA(최대 `MAX_LISTED_IDS` 개).
+/// 그래프가 새 커밋 점과 「여기까지 확인함」 구분선을 개수와 같은 커밋에 그리는 데 쓴다.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewCommitIds {
+    pub path: String,
+    pub head_oid: String,
+    pub new_count: u32,
+    pub basis: CountBasis,
+    /// 새 커밋으로 센 커밋. `count_new_commits` 와 같은 규칙으로 고른다.
+    pub ids: Vec<String>,
+}
+
+/// `record.path` 워크트리의 새 커밋 목록. 규칙은 `count_new_commits` 와 같다.
+pub fn list_new_commit_ids(record: &SeenRecord) -> Result<NewCommitIds, git2::Error> {
+    let repo = Repository::open(&record.path)?;
+    let head_ref = repo.head()?;
+    let head = head_ref.peel_to_commit()?.id();
+    let branch = head_ref.is_branch().then(|| head_ref.shorthand().map(str::to_string)).flatten();
+
+    let mut ids = Vec::new();
+    let (new_count, basis) = count_for(&repo, head, branch.as_deref(), record, Some(&mut ids))?;
+    Ok(NewCommitIds {
+        path: record.path.clone(),
+        head_oid: head.to_string(),
+        new_count,
+        basis,
+        ids,
+    })
+}
+
 fn count_for(
     repo: &Repository,
     head: Oid,
     branch: Option<&str>,
     record: &SeenRecord,
+    mut ids: Option<&mut Vec<String>>,
 ) -> Result<(u32, CountBasis), git2::Error> {
     let base = base_branch(repo, branch);
     let seen_oid = record.oid.as_deref().and_then(|s| Oid::from_str(s).ok());
     let same_branch = record.branch.as_deref() == branch;
     let Some(seen_oid) = seen_oid.filter(|_| same_branch) else {
-        return merge_base_count(repo, head, branch, base.as_ref());
+        return merge_base_count(repo, head, branch, base.as_ref(), ids);
     };
 
     if seen_oid == head || repo.graph_descendant_of(head, seen_oid).unwrap_or(false) {
@@ -178,19 +214,19 @@ fn count_for(
         // 자기 원격 추적 브랜치는 이 브랜치 자신의 줄기라 빼지 않는다(pull 로 받은 커밋은 새 커밋).
         let other_base = base.filter(|b| !is_own_line(repo, branch, &b.name)).map(|b| b.tip);
         let hide: Vec<Oid> = std::iter::once(seen_oid).chain(other_base).collect();
-        let n = count_range(repo, head, &hide, |_| true)?;
+        let n = count_range(repo, head, &hide, |_| true, ids.as_deref_mut())?;
         return Ok((n, CountBasis::Oid));
     }
 
     let Some(seen_at) = record.seen_at else {
-        return merge_base_count(repo, head, branch, base.as_ref());
+        return merge_base_count(repo, head, branch, base.as_ref(), ids);
     };
     // 기반 브랜치를 못 찾으면 옛 기준 커밋(아직 객체가 남아 있으면)과의 공통 조상을 쓴다.
     let lower = base.map(|b| b.tip).or_else(|| repo.merge_base(head, seen_oid).ok());
     // author 시각은 초 단위라, 확인한 그 초에 만든 커밋도 새 커밋으로 친다.
     let seen_sec = seen_at.div_euclid(1000);
     let hide: Vec<Oid> = lower.into_iter().collect();
-    let n = count_range(repo, head, &hide, |c| c.author().when().seconds() >= seen_sec)?;
+    let n = count_range(repo, head, &hide, |c| c.author().when().seconds() >= seen_sec, ids)?;
     Ok((n, CountBasis::AuthorTime))
 }
 
@@ -204,11 +240,12 @@ fn merge_base_count(
     head: Oid,
     branch: Option<&str>,
     base: Option<&BaseBranch>,
+    ids: Option<&mut Vec<String>>,
 ) -> Result<(u32, CountBasis), git2::Error> {
     let n = match base {
-        Some(b) => count_range(repo, head, &[b.tip], |_| true)?,
+        Some(b) => count_range(repo, head, &[b.tip], |_| true, ids)?,
         None if is_default_branch(repo, branch) => 0,
-        None => count_range(repo, head, &[], |_| true)?,
+        None => count_range(repo, head, &[], |_| true, ids)?,
     };
     Ok((n, CountBasis::MergeBase))
 }
@@ -276,12 +313,13 @@ fn branch_oid(repo: &Repository, name: &str) -> Option<Oid> {
 }
 
 /// `head` 에서 닿되 `hide` 의 어느 것에서도 닿지 않는 커밋 중 `keep` 을 만족하는 것의 수.
-/// 최대 `MAX_WALK` 개까지 걷는다.
+/// 최대 `MAX_WALK` 개까지 걷는다. `ids` 가 있으면 센 커밋의 SHA 를 `MAX_LISTED_IDS` 개까지 담는다.
 fn count_range(
     repo: &Repository,
     head: Oid,
     hide: &[Oid],
     keep: impl Fn(&git2::Commit) -> bool,
+    mut ids: Option<&mut Vec<String>>,
 ) -> Result<u32, git2::Error> {
     let mut walk = repo.revwalk()?;
     walk.push(head)?;
@@ -293,6 +331,9 @@ fn count_range(
         let commit = repo.find_commit(oid?)?;
         if keep(&commit) {
             n = n.saturating_add(1);
+            if let Some(list) = ids.as_deref_mut().filter(|l| l.len() < MAX_LISTED_IDS) {
+                list.push(commit.id().to_string());
+            }
         }
     }
     Ok(n)
@@ -593,6 +634,68 @@ mod tests {
         commit_at(&wt, "n1", 1);
         let r = record(&wt, Some("0000000000000000000000000000000000000001"), None, Some("feat/n"));
         assert_eq!(count(&r), (1, CountBasis::MergeBase));
+    }
+
+    // W3-T3 — 그래프가 새 커밋 점을 찍을 커밋 목록
+
+    fn ids_of(r: &SeenRecord) -> (u32, CountBasis, Vec<String>) {
+        let l = list_new_commit_ids(r).unwrap();
+        (l.new_count, l.basis, l.ids)
+    }
+
+    #[test]
+    fn listed_ids_skip_base_commits_merged_in_after_the_seen_oid() {
+        let main = init_repo("ids-oid");
+        let wt = add_worktree(&main, "wt-ids-oid", "feat/ids", "main");
+        commit_at(&wt, "f1", 1);
+        let r = record(&wt, Some(&head(&wt)), Some(ms(2)), Some("feat/ids"));
+        commit_at(&main, "m1", 3);
+        commit_at(&main, "m2", 4);
+        git_env(&wt, &["merge", "-q", "--no-ff", "-m", "merge main", "main"], Some(T0 + 5 * 60), Some(T0 + 5 * 60));
+
+        // 병합 커밋 하나만 새 커밋이다. main 에서 들어온 m1·m2 는 목록에 없다.
+        let (n, basis, ids) = ids_of(&r);
+        assert_eq!((n, basis), (1, CountBasis::Oid));
+        assert_eq!(ids, vec![head(&wt)]);
+        assert_eq!(count(&r), (n, basis));
+    }
+
+    #[test]
+    fn listed_ids_from_the_merge_base_keep_the_branch_commits_below_newer_base_commits() {
+        let main = init_repo("ids-mb");
+        let wt = add_worktree(&main, "wt-ids-mb", "feat/mb", "main");
+        commit_at(&wt, "f1", 1);
+        let f1 = head(&wt);
+        commit_at(&wt, "f2", 2);
+        let f2 = head(&wt);
+        // main 의 커밋이 f2 보다 늦어 시간순으로는 f1·f2 위에 온다.
+        commit_at(&main, "m1", 3);
+        commit_at(&main, "m2", 4);
+        git_env(&wt, &["merge", "-q", "--no-ff", "-m", "merge main", "main"], Some(T0 + 5 * 60), Some(T0 + 5 * 60));
+        let merge = head(&wt);
+
+        let r = record(&wt, None, None, None);
+        let (n, basis, mut ids) = ids_of(&r);
+        assert_eq!((n, basis), (3, CountBasis::MergeBase));
+        ids.sort();
+        let mut want = vec![merge, f2, f1];
+        want.sort();
+        assert_eq!(ids, want);
+    }
+
+    #[test]
+    fn listed_ids_after_a_rebase_follow_author_time() {
+        let main = init_repo("ids-at");
+        let wt = add_worktree(&main, "wt-ids-at", "feat/at", "main");
+        commit_at(&wt, "a1", 1);
+        let r = record(&wt, Some(&head(&wt)), Some(ms(2)), Some("feat/at"));
+        commit_at(&wt, "a2", 3);
+        commit_at(&main, "m1", 4);
+        git_env(&wt, &["rebase", "-q", "main"], None, Some(T0 + 6 * 60));
+
+        let (n, basis, ids) = ids_of(&r);
+        assert_eq!((n, basis), (1, CountBasis::AuthorTime));
+        assert_eq!(ids, vec![head(&wt)]);
     }
 
     #[test]
