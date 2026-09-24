@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
-import { useAccountStore } from "@/stores/account";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useStatus, useSettings, useStashList, useWorkflowRuns } from "@/api/queries";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { RepoHeaderContextMenu } from "@/components/repository/RepoHeaderContextMenu";
@@ -43,7 +43,7 @@ export function Sidebar() {
   const changesCount = statusEntries.length;
   const { data: stashes = [] } = useStashList(activeRepoPath);
   const stashCount = stashes.length;
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  const repoAccountId = useRepoAccountId();
   const { selectRepo, fetchingPath } = useSelectRepo();
   const isFetching = fetchingPath !== null;
   const [repoMenuPos, setRepoMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -52,7 +52,7 @@ export function Sidebar() {
   const hasRemote = activeRepo ? activeRepo.remotes.length > 0 : false;
   const { data: workflowRuns = [] } = useWorkflowRuns(
     hasRemote ? activeRepoPath : null,
-    activeAccountId,
+    repoAccountId,
   );
   const activeRunCount = workflowRuns.filter(
     (r) => r.status === "in_progress" || r.status === "queued",

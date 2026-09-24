@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { UserX, WifiOff } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
-import { useAccountStore } from "@/stores/account";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useSelectionStore } from "@/stores/selection";
 import { useWorkflowRuns } from "@/api/queries";
 import { ActionsList } from "./ActionsList";
@@ -10,12 +10,12 @@ export function ActionsView() {
   const { t } = useTranslation();
   const activeRepo = useRepositoryStore((s) => s.activeRepo);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
-  const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  // 전역 활성 계정이 아니라 이 저장소에 지정된 계정으로 GitHub API를 부른다.
+  const accountId = useRepoAccountId();
   const selectedRunId = useSelectionStore((s) => s.selectedRunId);
   const selectRun = useSelectionStore((s) => s.selectRun);
 
   const hasRemote = activeRepo ? activeRepo.remotes.length > 0 : false;
-  const accountId = activeAccountId;
 
   const { data: runs = [], isLoading } = useWorkflowRuns(
     hasRemote ? activeRepoPath : null,

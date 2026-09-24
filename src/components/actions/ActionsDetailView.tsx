@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-shell";
 import { useRepositoryStore } from "@/stores/repository";
-import { useAccountStore } from "@/stores/account";
+import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useWorkflowRunJobs, useWorkflowRuns } from "@/api/queries";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { WorkflowJob, JobStep } from "@/types";
@@ -99,7 +99,7 @@ function StepRow({ step }: { step: JobStep }) {
 export function ActionsDetailView({ runId }: ActionsDetailViewProps) {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
-  const accountId = useAccountStore((s) => s.activeAccountId);
+  const accountId = useRepoAccountId();
 
   const { data: runs = [] } = useWorkflowRuns(activeRepoPath, accountId);
   const run = runs.find((r) => r.id === runId);
