@@ -10,6 +10,7 @@ pub mod output_parser;
 pub mod remote;
 pub mod stash;
 pub mod status;
+pub mod unpushed;
 pub mod worktree_base;
 
 // Convenient re-exports for callers
