@@ -101,6 +101,10 @@ vi.mock("@/api/queries", () => ({
   }),
   fetchFileDiff: () => new Promise(() => {}),
   useStashMutations: () => ({ push: { mutateAsync: vi.fn() } }),
+  // W6-T2 워크트리 칩·겹침 경고
+  useWorktreeHeadHistories: () => [],
+  useWipFilesMany: () => [],
+  useCachedFileDiff: () => ({ data: undefined }),
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
 

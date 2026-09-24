@@ -10,7 +10,15 @@ import { useReviewSeenStore } from "@/stores/review-seen";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useFollowStore } from "@/stores/follow";
 import { syncStatusPaths } from "@/components/sidebar/tree-model";
-import type { CommitInfo, NewCommitIds, RepoInfo, RepoReviewStatus, SeenRecordInput, StatusEntry } from "@/types";
+import type {
+  CommitInfo,
+  NewCommitIds,
+  RepoInfo,
+  RepoReviewStatus,
+  SeenRecordInput,
+  StatusEntry,
+  WorktreeInfo,
+} from "@/types";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/components/stash/StashView", () => ({ StashView: () => <div>stash-list</div> }));
@@ -85,6 +93,12 @@ function fakeIds(entry: SeenRecordInput): NewCommitIds {
   };
 }
 
+/** `useWorktrees` 응답과 다른 워크트리의 HEAD 이력(칩 줄, D5). 기본은 비어 있다. */
+const worktreeState = {
+  list: [] as WorktreeInfo[],
+  histories: {} as Record<string, CommitInfo[]>,
+};
+
 /** `useRepoSyncStatuses`에 넘긴 경로 목록. */
 const syncCalls: string[][] = [];
 
@@ -118,7 +132,9 @@ vi.mock("@/api/queries", async (importOriginal) => ({
   useBranches: () => ({ data: [] }),
   useRemoteTags: () => ({ data: undefined }),
   useCommitAvatars: () => ({ data: {} }),
-  useWorktrees: () => ({ data: [] }),
+  useWorktrees: () => ({ data: worktreeState.list }),
+  useWorktreeHeadHistories: (heads: { path: string; head: string }[]) =>
+    heads.map((h) => ({ data: worktreeState.histories[h.path], dataUpdatedAt: 1 })),
   useRepoSyncStatuses: (paths: string[]) => {
     syncCalls.push(paths);
     return { data: syncByPath };
@@ -157,6 +173,8 @@ beforeEach(async () => {
   openWorktree.mockImplementation(switchTo);
   backend.hold = false;
   backend.pending = [];
+  worktreeState.list = [];
+  worktreeState.histories = {};
   useUIStore.setState({ activeTab: "history", compareBranch: null, repoListOpen: false });
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
@@ -308,5 +326,79 @@ describe("GraphPanel commit graph", () => {
     renderPanel();
     expect(await screen.findByRole("button", { name: "새 커밋 2개 확인함으로 표시" })).toBeTruthy();
     expect(screen.getByRole("separator").textContent).toContain("여기까지 확인함 · 오늘 ");
+  });
+});
+
+describe("GraphPanel worktree chips (D5)", () => {
+  const worktree = (path: string, head: string, extra: Partial<WorktreeInfo> = {}): WorktreeInfo => ({
+    path,
+    head,
+    branch: null,
+    isMain: false,
+    isBare: false,
+    isLocked: false,
+    lockReason: null,
+    isDirty: false,
+    isPrunable: false,
+    base: null,
+    ...extra,
+  });
+
+  beforeEach(() => {
+    worktreeState.list = [
+      worktree(REPO, "c1", { branch: "main", isMain: true }),
+      worktree(FEAT, "f1", {
+        branch: "feat/x",
+        base: { name: "main", source: "recorded", aheadOfBase: 1, behindBase: 0 },
+      }),
+    ];
+    // feat/x has one commit of its own on top of c2, newer than main's HEAD.
+    worktreeState.histories = {
+      [FEAT]: [commit("f1", ["c2"], { timestamp: 1_700_000_100 }), commit("c2", ["c3"]), commit("c3", ["c4"])],
+    };
+  });
+
+  it("shows a chip per worktree and draws the other worktree's commits in the same graph", async () => {
+    renderPanel();
+    const chips = screen.getByRole("group", { name: "Worktrees shown in the graph" });
+    const buttons = within(chips).getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual(["mainmain tree1", "feat/xfrom main4"]);
+    expect(buttons[0].getAttribute("aria-pressed")).toBe("true");
+    expect(within(chips).getByText("Showing 2 worktrees together in the graph")).toBeTruthy();
+    await screen.findByRole("separator");
+    expect(rowLabels()).toEqual([
+      "Uncommitted changes in feat/x (4)",
+      "Uncommitted changes (1)",
+      "f1",
+      "c1",
+      "c2",
+      "--seen--",
+      "c3",
+      "c4",
+    ]);
+  });
+
+  it("hides a worktree's WIP row and commits when its chip is turned off, and brings them back", async () => {
+    renderPanel();
+    const chips = screen.getByRole("group", { name: "Worktrees shown in the graph" });
+    const feat = within(chips).getByRole("button", { name: /feat\/x/ });
+    fireEvent.click(feat);
+    expect(feat.getAttribute("aria-pressed")).toBe("false");
+    await screen.findByRole("separator");
+    expect(rowLabels()).toEqual(["Uncommitted changes (1)", "c1", "c2", "--seen--", "c3", "c4"]);
+    expect(within(chips).getByText("Showing 1 worktree in the graph")).toBeTruthy();
+
+    fireEvent.click(feat);
+    expect(rowLabels()).toContain("f1");
+    expect(rowLabels()).toContain("Uncommitted changes in feat/x (4)");
+  });
+
+  it("keeps the open worktree on: its chip cannot be turned off", () => {
+    renderPanel();
+    const chips = screen.getByRole("group", { name: "Worktrees shown in the graph" });
+    const main = within(chips).getByRole("button", { name: /^main/ });
+    fireEvent.click(main);
+    expect(main.getAttribute("aria-pressed")).toBe("true");
+    expect(rowLabels()).toContain("Uncommitted changes (1)");
   });
 });

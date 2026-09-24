@@ -15,6 +15,7 @@ import {
   useCommitAvatars,
   useCommitHistoryInfinite,
   useRemoteTags,
+  useWorktreeHeadHistories,
 } from "@/api/queries";
 import { createBranch, type ResetMode } from "@/api/commands";
 import { useCommitActions } from "@/hooks/useCommitActions";
@@ -40,6 +41,7 @@ import {
   type GraphWip,
 } from "./graph-model";
 import { repoLaneColor, type LaneWip, type RepoLaneGraph } from "./repo-lanes";
+import { mergeHistories } from "./worktree-history";
 import { BranchRangeGraph } from "@/components/branch/BranchRangeGraph";
 import { activeRange, isStaleRange, useBranchRangeStore } from "@/components/branch/branch-range";
 
@@ -50,7 +52,21 @@ export interface CommitGraphProps {
   newCommits: { newCount: number; ids: readonly string[] } | null;
   /** 지금 연 워크트리를 확인한 시각(epoch ms). */
   seenAt: number | null;
+  /**
+   * 칩 줄에서 고른 다른 워크트리의 HEAD(D5). 그 이력의 첫 페이지를 지금 연 워크트리의
+   * 이력과 합쳐 한 그래프에 그린다. 없으면 지금 연 워크트리의 이력만.
+   */
+  worktreeHeads?: readonly WorktreeHead[];
 }
+
+/** 그래프에 함께 그릴 다른 워크트리. */
+export interface WorktreeHead {
+  path: string;
+  /** HEAD 커밋. 바뀌면 이력을 다시 읽는다. */
+  head: string;
+}
+
+const NO_WORKTREE_HEADS: readonly WorktreeHead[] = [];
 
 /**
  * 위 패널의 커밋 그래프(단일 저장소). 전체 폭 레인 그래프로 HEAD의 이력을 그리고,
@@ -143,10 +159,15 @@ interface WipRowsProps {
   graphWidth: number;
   /** 지금 연 워크트리의 HEAD 커밋이 있는 줄기. 그 행과 점선으로 잇는다. 없으면 null. */
   headChain: number | null;
+  /**
+   * HEAD 커밋이 WIP 행 바로 아래(첫 커밋 행)에 있는지. 다른 워크트리의 더 새 커밋이 위에
+   * 끼면(D5) 점선을 긋지 않는다. 생략하면 `headChain`이 있을 때 잇는다.
+   */
+  connectHead?: boolean;
 }
 
 /** 맨 위 WIP 행들. 워크트리마다 한 행. */
-function WipRows({ wips, selection, graphWidth, headChain }: WipRowsProps) {
+function WipRows({ wips, selection, graphWidth, headChain, connectHead }: WipRowsProps) {
   const { t } = useTranslation();
   const activeTab = useUIStore((s) => s.activeTab);
   const colorSeed = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? "");
@@ -171,7 +192,7 @@ function WipRows({ wips, selection, graphWidth, headChain }: WipRowsProps) {
             color={wip.isCurrent ? laneColor(colorSeed, headChain ?? 0) : laneColor(wip.path, 0)}
             graphWidth={graphWidth}
             selected={activeTab === "changes" && (followTarget !== null ? followed !== null : wip.isCurrent)}
-            connectDown={wip.isCurrent && headChain !== null}
+            connectDown={wip.isCurrent && headChain !== null && (connectHead ?? true)}
             onSelect={() => selection.selectWip(wip)}
           />
         );
@@ -184,6 +205,7 @@ function CommitGraphList({
   newCommits,
   seenAt,
   wips,
+  worktreeHeads = NO_WORKTREE_HEADS,
   selection,
 }: CommitGraphProps & { selection: GraphSelection }) {
   const { t } = useTranslation();
@@ -198,6 +220,10 @@ function CommitGraphList({
 
   const { data: historyData, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useCommitHistoryInfinite(activeRepoPath);
+  const otherHistories = useWorktreeHeadHistories(worktreeHeads);
+  // 결과 배열은 렌더마다 새로 오므로, 받은 데이터 묶음이 바뀔 때만 다시 합친다.
+  const otherData = otherHistories.map((q) => q.data);
+  const otherKey = otherHistories.map((q) => q.dataUpdatedAt).join(",");
   const { data: branchesData } = useBranches(activeRepoPath);
   const branches = useMemo(() => branchesData ?? [], [branchesData]);
   const currentBranchName = branches.find((b) => b.isHead)?.name ?? null;
@@ -217,7 +243,13 @@ function CommitGraphList({
   // 레인은 불러온 전체 이력으로 계산한다(1만 행도 100ms 안, `graph-lanes` 테스트).
   // 페이지가 밀려 같은 커밋이 두 번 오면 레인 계산이 뺀 커밋을 목록에서도 뺀다.
   const { commits, layouts, graphWidth } = useMemo(() => {
-    const all = historyData?.pages.flat() ?? [];
+    const own = historyData?.pages.flat() ?? [];
+    // 다른 워크트리의 커밋을 시간순으로 끼워 넣는다(D5). 각 이력 안의 순서는 그대로다.
+    const all = mergeHistories(
+      own,
+      otherData.map((d) => d ?? []),
+      hasNextPage !== true,
+    );
     const result = computeGraphLanes(all.map((c) => ({ oid: c.id, parentIds: c.parentIds })));
     const byOid = new Map(result.rows.map((r) => [r.oid, r]));
     const kept = new Set<string>();
@@ -228,7 +260,9 @@ function CommitGraphList({
     });
     const maxLanes = result.rows.reduce((m, r) => Math.max(m, r.width), 1);
     return { commits: drawn, layouts: byOid, graphWidth: graphColumnWidth(maxLanes) };
-  }, [historyData]);
+    // otherKey가 다른 워크트리 이력의 내용을 대신 비교한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyData, hasNextPage, otherKey]);
 
   const marks = useMemo(
     () => markNewCommits(commits, newCommits),
@@ -271,8 +305,10 @@ function CommitGraphList({
 
   const menu = useCommitMenu(activeRepoPath);
 
-  const headId = commits[0]?.id;
+  // HEAD는 지금 연 워크트리 이력의 첫 커밋이다. 다른 워크트리의 커밋이 섞이면(D5) 첫 행이 아닐 수 있다.
+  const headId = historyData?.pages[0]?.[0]?.id;
   const headChain = headId ? (layouts.get(headId)?.chain ?? 0) : null;
+  const headOnTop = headId !== undefined && commits[0]?.id === headId;
   const currentWipShown = wips.some((w) => w.isCurrent);
 
   return (
@@ -301,7 +337,13 @@ function CommitGraphList({
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
-        <WipRows wips={wips} selection={selection} graphWidth={graphWidth} headChain={headChain} />
+        <WipRows
+          wips={wips}
+          selection={selection}
+          graphWidth={graphWidth}
+          headChain={headChain}
+          connectHead={headOnTop}
+        />
 
         {isLoading ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{t("history.loadingHistory")}</p>
@@ -335,7 +377,7 @@ function CommitGraphList({
                   isHighlighted={activeIndex === index}
                   isNew={marks.newIds.has(commit.id)}
                   isSeen={marks.dividerBefore !== null && index >= marks.dividerBefore}
-                  wipAbove={index === 0 && currentWipShown}
+                  wipAbove={index === 0 && headOnTop && currentWipShown}
                   onClick={() => selectCommit(commit.id)}
                   onContextMenu={(e) => {
                     e.preventDefault();

@@ -19,6 +19,13 @@ import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { normalizePath } from "@/components/graph/graph-model";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
+import {
+  OverlapBanner,
+  OverlapMark,
+  useWorktreeOverlap,
+  type WorktreeOverlap,
+} from "@/components/worktree/OverlapBadge";
+import { SideBySideDiff } from "@/components/worktree/SideBySideDiff";
 import type { ActivityEvent, DiffOutput, WipFile } from "@/types";
 
 /** `registerWatchPaths`에 쓰는 이 화면의 key. 감시 대상 목록에서 맨 앞에 온다. */
@@ -254,10 +261,13 @@ function StagedSideToggle({ staged, onChange }: { staged: boolean; onChange: (st
 function FollowFileList({
   files,
   selected,
+  overlap,
   onPick,
 }: {
   files: WipFile[];
   selected: string | null;
+  /** 다른 워크트리도 고치는 파일(⧉, 시안 D5). */
+  overlap: WorktreeOverlap;
   onPick: (path: string) => void;
 }) {
   const { t } = useTranslation();
@@ -300,6 +310,7 @@ function FollowFileList({
               <span>{name}</span>
               {dir && <span className="ml-1.5 text-[11px] text-(--faint)">{dir}</span>}
             </span>
+            <OverlapMark siblings={overlap.of(f)} />
             {f.staged && (
               <span className="shrink-0 text-[10.5px] text-(--faint)">
                 {f.unstaged ? t("live.partlyStaged") : t("live.staged")}
@@ -405,6 +416,12 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
   }, [fresh]);
   const toastOpen = fresh !== null && closedAt !== fresh.at;
 
+  // 같은 저장소의 다른 워크트리도 고치는 파일(D5 ⧉). 보고 있는 파일이면 diff 위에 경고를 띄운다.
+  const overlap = useWorktreeOverlap(path, list);
+  const shownSiblings = shown ? overlap.of(shown) : [];
+  const [sideBySideOf, setSideBySideOf] = useState<string | null>(null);
+  const sideBySideOpen = shown !== null && sideBySideOf === shown.path && shownSiblings.length > 0;
+
   const handlePause = () => pause(shown?.path ?? pausedOn);
   const handleResume = () => (isTarget ? resume() : start(path));
 
@@ -452,7 +469,7 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
       ) : list.length === 0 ? (
         <p className="px-3 py-2 text-xs text-muted-foreground">{t("live.noChanges")}</p>
       ) : (
-        <FollowFileList files={list} selected={shown?.path ?? null} onPick={pickFile} />
+        <FollowFileList files={list} selected={shown?.path ?? null} overlap={overlap} onPick={pickFile} />
       )}
       {footer && (
         <div className="mt-auto flex flex-col gap-2 px-3 py-2.5 shrink-0 border-t border-(--line)">{footer}</div>
@@ -493,28 +510,42 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
           {t("diff.loadingDiff")}
         </div>
       ) : (
-        <DiffViewer
-          diff={diff ?? null}
-          status={shown.status}
-          staged={staged}
-          freshLines={freshLines}
-          revealLine={following && fresh ? (fresh.delta.ranges[0]?.start ?? null) : null}
-          headerExtra={
-            <>
-              {partlyStaged && (
-                <StagedSideToggle
-                  staged={staged}
-                  onChange={(next) => {
-                    // 볼 쪽을 고르는 것도 사용자가 화면을 잡는 것이다 — 그 파일에 머문다.
-                    if (following) handlePause();
-                    setSidePick({ path: shown.path, staged: next });
-                  }}
-                />
-              )}
-              {shown.modifiedAt !== null && <ModifiedAgo at={shown.modifiedAt} />}
-            </>
-          }
-        />
+        <>
+          {shownSiblings.length > 0 && (
+            <OverlapBanner
+              filePath={shown.path}
+              mine={diff}
+              siblings={shownSiblings}
+              onSideBySide={() => {
+                // 나란히 보기를 여는 것도 사용자 개입이다 — 멈춰야 보는 동안 파일이 바뀌지 않는다.
+                if (following) handlePause();
+                setSideBySideOf(shown.path);
+              }}
+            />
+          )}
+          <DiffViewer
+            diff={diff ?? null}
+            status={shown.status}
+            staged={staged}
+            freshLines={freshLines}
+            revealLine={following && fresh ? (fresh.delta.ranges[0]?.start ?? null) : null}
+            headerExtra={
+              <>
+                {partlyStaged && (
+                  <StagedSideToggle
+                    staged={staged}
+                    onChange={(next) => {
+                      // 볼 쪽을 고르는 것도 사용자가 화면을 잡는 것이다 — 그 파일에 머문다.
+                      if (following) handlePause();
+                      setSidePick({ path: shown.path, staged: next });
+                    }}
+                  />
+                )}
+                {shown.modifiedAt !== null && <ModifiedAgo at={shown.modifiedAt} />}
+              </>
+            }
+          />
+        </>
       )}
       {toastOpen && fresh && (
         <div
@@ -536,9 +567,20 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
     </div>
   );
 
+  const sideBySide =
+    sideBySideOpen && shown ? (
+      <SideBySideDiff
+        filePath={shown.path}
+        mine={{ path, branch: null, staged }}
+        siblings={shownSiblings}
+        onClose={() => setSideBySideOf(null)}
+      />
+    ) : null;
+
   if (variant === "cards") {
     return (
       <div className="flex flex-1 min-h-0 gap-(--g)" data-testid="follow-panel">
+        {sideBySide}
         <section className="relative flex flex-col w-[320px] shrink-0 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden">
           {listPane}
           <SwitchingOverlay />
@@ -552,6 +594,7 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
   }
   return (
     <div className="flex h-full min-h-0" data-testid="follow-panel">
+      {sideBySide}
       <div className="w-[300px] shrink-0 flex flex-col min-h-0 border-r border-(--line)">{listPane}</div>
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">{diffPane}</div>
     </div>

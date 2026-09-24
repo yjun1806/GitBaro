@@ -79,6 +79,10 @@ vi.mock("@/api/queries", () => ({
   useRemoteTags: () => ({ data: undefined }),
   useCommitAvatars: () => ({ data: {} }),
   useBranchDivergence: () => ({ data: [], isLoading: false }),
+  // W6-T2 워크트리 칩·겹침 경고
+  useWorktreeHeadHistories: () => [],
+  useWipFilesMany: () => [],
+  useCachedFileDiff: () => ({ data: undefined }),
 }));
 
 const { CommitGraph } = await import("@/components/graph/CommitGraph");

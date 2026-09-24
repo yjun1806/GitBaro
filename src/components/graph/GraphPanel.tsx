@@ -1,13 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Archive, GitCommitVertical, Play } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
-import { useStashList, useWorkflowRuns } from "@/api/queries";
-import { CommitGraph } from "./CommitGraph";
+import { useStashList, useWorkflowRuns, useWorktrees } from "@/api/queries";
+import { CommitGraph, type WorktreeHead } from "./CommitGraph";
 import { useGraphReview } from "./useGraphReview";
+import { laneColor, normalizePath, type GraphWip } from "./graph-model";
+import { WorktreeChips, type WorktreeChip } from "@/components/worktree/WorktreeChips";
+import type { WorktreeInfo } from "@/types";
 import { StashView } from "@/components/stash/StashView";
 import { ActionsView } from "@/components/actions/ActionsView";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
@@ -55,6 +58,7 @@ export function GraphPanel() {
   ).length;
 
   const tab = graphPanelTabOf(activeTab);
+  const worktreeFilter = useWorktreeFilter(review.wips);
 
   // 커밋을 새로 고를 때만 아래 칸을 커밋 상세로 바꾼다. 패널이 다시 마운트될 때
   // (저장소 목록을 열었다 닫을 때 등) 남아 있던 선택으로 스태시·Actions 탭에서
@@ -120,12 +124,20 @@ export function GraphPanel() {
         )}
       </div>
 
+      {tab === "graph" && worktreeFilter.chips.length > 1 && (
+        <WorktreeChips
+          chips={worktreeFilter.chips}
+          visible={worktreeFilter.visible}
+          onToggle={worktreeFilter.toggle}
+        />
+      )}
       <div role="tabpanel" className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
         {tab === "graph" ? (
           <CommitGraph
-            wips={review.wips}
+            wips={worktreeFilter.wips}
             newCommits={review.newCommits}
             seenAt={review.seenAt}
+            worktreeHeads={worktreeFilter.heads}
           />
         ) : tab === "stash" ? (
           <StashView />
@@ -136,4 +148,78 @@ export function GraphPanel() {
       </div>
     </section>
   );
+}
+
+const NO_HEADS: WorktreeHead[] = [];
+
+/** 칩 순서: 메인 먼저, 그다음 경로순(WIP 행 순서와 같다). */
+function chipOrder(a: GraphWip, b: GraphWip): number {
+  return Number(b.isMain) - Number(a.isMain) || a.path.localeCompare(b.path);
+}
+
+/**
+ * 칩 줄에서 그래프에 보일 워크트리를 고른다(D5). 처음에는 모두 보이고, 끈 워크트리는
+ * 저장소마다 기억한다(화면 상태라 저장하지 않는다). 지금 연 워크트리는 늘 보인다.
+ * - `wips`: 보이는 워크트리의 WIP 행만.
+ * - `heads`: 보이는 다른 워크트리의 HEAD. 그래프가 그 이력을 함께 그린다.
+ */
+function useWorktreeFilter(allWips: GraphWip[]) {
+  const ownerPath = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? null);
+  const { data: worktreeList } = useWorktrees(ownerPath);
+  const [hiddenByRepo, setHiddenByRepo] = useState<Readonly<Record<string, readonly string[]>>>({});
+  const hidden = useMemo(
+    () => new Set(ownerPath ? (hiddenByRepo[ownerPath] ?? []) : []),
+    [hiddenByRepo, ownerPath],
+  );
+
+  const infoByPath = useMemo(() => {
+    const map = new Map<string, WorktreeInfo>();
+    for (const w of worktreeList ?? []) map.set(normalizePath(w.path), w);
+    return map;
+  }, [worktreeList]);
+
+  const colorSeed = ownerPath ?? "";
+  const chips = useMemo<WorktreeChip[]>(
+    () =>
+      [...allWips].sort(chipOrder).map((w) => {
+        const info = infoByPath.get(normalizePath(w.path));
+        return {
+          path: w.path,
+          branch: w.branch,
+          isMain: w.isMain,
+          isCurrent: w.isCurrent,
+          base: info?.base ?? null,
+          dirtyCount: w.count,
+          color: w.isCurrent ? laneColor(colorSeed, 0) : laneColor(w.path, 0),
+        };
+      }),
+    [allWips, infoByPath, colorSeed],
+  );
+
+  const visible = useMemo(
+    () => new Set(allWips.filter((w) => w.isCurrent || !hidden.has(w.path)).map((w) => w.path)),
+    [allWips, hidden],
+  );
+  const wips = useMemo(() => allWips.filter((w) => visible.has(w.path)), [allWips, visible]);
+  const heads = useMemo(() => {
+    const out = wips.flatMap((w) => {
+      const head = w.isCurrent ? null : infoByPath.get(normalizePath(w.path))?.head;
+      return head ? [{ path: w.path, head }] : [];
+    });
+    return out.length > 0 ? out : NO_HEADS;
+  }, [wips, infoByPath]);
+
+  const toggle = useCallback(
+    (path: string) => {
+      if (!ownerPath) return;
+      setHiddenByRepo((prev) => {
+        const current = prev[ownerPath] ?? [];
+        const next = current.includes(path) ? current.filter((p) => p !== path) : [...current, path];
+        return { ...prev, [ownerPath]: next };
+      });
+    },
+    [ownerPath],
+  );
+
+  return { chips, visible, wips, heads, toggle };
 }

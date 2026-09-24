@@ -1090,5 +1090,30 @@
     "stageAll": "모두 스테이지",
     "commit": "커밋…",
     "stash": "Stash"
+  },
+  "overlap": {
+    "chipsLabel": "그래프에 표시할 워크트리",
+    "chipCurrent": "지금 연 워크트리라 늘 표시해요 ({{path}})",
+    "chipMain": "메인",
+    "chipFrom": "{{base}}에서",
+    "chipDirty_one": "커밋하지 않은 파일 {{count}}개",
+    "chipDirty_other": "커밋하지 않은 파일 {{count}}개",
+    "chipsShown_one": "그래프에 워크트리 {{count}}개를 표시",
+    "chipsShown_other": "그래프에 워크트리 {{count}}개를 함께 표시",
+    "markTitle": "다른 워크트리도 수정 중: {{names}}",
+    "sameFile": "같은 파일",
+    "andMore_one": "외 {{count}}곳",
+    "andMore_other": "외 {{count}}곳",
+    "bannerAlsoEditing_one": "워크트리도 이 파일을 고치고 있어요.",
+    "bannerAlsoEditing_other": "워크트리도 이 파일을 고치고 있어요.",
+    "bannerNoLines": "나란히 열면 바뀐 줄을 견줘 볼 수 있어요.",
+    "bannerDifferentLines": "지금은 다른 줄({{mine}}행 / {{theirs}}행)이에요.",
+    "bannerSharedLines": "두 쪽 모두 {{shared}}행을 고치고 있어요({{mine}}행 / {{theirs}}행).",
+    "sideBySide": "두 워크트리 나란히 보기",
+    "sideBySideTitle": "두 워크트리의 같은 파일",
+    "pickWorktree": "견줄 워크트리",
+    "thisWorktree": "이 워크트리",
+    "otherWorktree": "다른 워크트리",
+    "close": "닫기"
   }
 }

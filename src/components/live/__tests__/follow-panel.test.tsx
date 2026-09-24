@@ -7,7 +7,7 @@ import { useFollowStore } from "@/stores/follow";
 import { useRepositoryStore } from "@/stores/repository";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
-import type { ActivityEvent, DiffOutput, WipFile } from "@/types";
+import type { ActivityEvent, DiffHunk, DiffOutput, RepoInfo, RepoReviewStatus, WipFile } from "@/types";
 
 const REPO = "/work/app";
 /** 활성 저장소가 아닌 워크트리. 따라가기는 이 경로를 연 적 없이 따라간다. */
@@ -36,16 +36,22 @@ const backend = {
   contents: {} as Record<string, string>,
   /** 스테이징 쪽 diff의 새 내용(일부만 스테이징한 파일). */
   stagedContents: {} as Record<string, string>,
+  /** 워크트리별 파일 목록. 없으면 `files`(따라가는 워크트리). */
+  filesByPath: {} as Record<string, WipFile[]>,
+  /** `워크트리\0파일` → diff hunk(겹침 경고의 줄 범위). */
+  hunks: {} as Record<string, DiffHunk[]>,
+  /** `review_status` 응답(같은 저장소의 워크트리 목록). */
+  scan: [] as RepoReviewStatus[],
 };
 
-const getWipFiles = vi.fn(async (_path: string) => backend.files);
+const getWipFiles = vi.fn(async (path: string) => backend.filesByPath[path] ?? backend.files);
 const getFileDiff = vi.fn(
-  async (_repoPath: string, filePath: string, staged: boolean): Promise<DiffOutput> => ({
+  async (repoPath: string, filePath: string, staged: boolean): Promise<DiffOutput> => ({
     filePath,
     oldContent: lines(30),
     newContent: (staged ? backend.stagedContents[filePath] : backend.contents[filePath]) ?? "",
     binary: false,
-    hunks: [],
+    hunks: backend.hunks[`${repoPath}\u0000${filePath}`] ?? [],
   }),
 );
 const stageFiles = vi.fn(async (_repoPath: string, _paths: string[]) => {});
@@ -57,6 +63,7 @@ vi.mock("@/api/commands", async (importOriginal) => ({
   getFileDiff: (repoPath: string, filePath: string, staged: boolean) => getFileDiff(repoPath, filePath, staged),
   stageFiles: (repoPath: string, paths: string[]) => stageFiles(repoPath, paths),
   getWorktrees: async () => [],
+  reviewStatus: async () => backend.scan,
 }));
 
 vi.mock("@/hooks/useOpenWorktree", () => ({ useOpenWorktree: () => openWorktree }));
@@ -128,8 +135,11 @@ beforeEach(async () => {
   backend.files = [wipFile("src/b.ts", nowSecs() - 4), wipFile("src/a.ts", nowSecs() - 40)];
   backend.contents = { "src/a.ts": lines(10), "src/b.ts": lines(30) };
   backend.stagedContents = {};
+  backend.filesByPath = {};
+  backend.hunks = {};
+  backend.scan = [];
   useLiveChangesStore.setState({ watched: [], overflow: [] });
-  useRepositoryStore.setState({ activeRepoPath: REPO });
+  useRepositoryStore.setState({ activeRepoPath: REPO, repos: [] });
   useActivityTargetsStore.setState({ extraByKey: {} });
   useFollowStore.getState().start(WT);
 });
@@ -382,5 +392,74 @@ describe("FollowRepoFooter", () => {
     expect(screen.queryByRole("button", { name: "Stage all" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open this worktree" }));
     expect(openWorktree).toHaveBeenCalledWith(WT);
+  });
+});
+
+describe("FollowPanel — same file in another worktree (D5)", () => {
+  const addHunk = (line: number): DiffHunk[] => [
+    {
+      oldStart: line,
+      oldLines: 0,
+      newStart: line,
+      newLines: 1,
+      header: "",
+      lines: [{ content: "x", lineType: "add", oldLineNo: null, newLineNo: line }],
+    },
+  ];
+
+  beforeEach(() => {
+    useRepositoryStore.setState({ repos: [{ path: REPO, name: "app" } as unknown as RepoInfo] });
+    backend.scan = [
+      {
+        repoPath: REPO,
+        worktrees: [
+          { path: REPO, branch: "main", headOid: "c1", isMain: true },
+          { path: WT, branch: "feat/agent", headOid: "f1", isMain: false },
+        ],
+      },
+    ];
+    // The main worktree also edits b.ts (different lines), but not a.ts.
+    backend.filesByPath = { [REPO]: [wipFile("src/b.ts", nowSecs() - 100), wipFile("src/c.ts", nowSecs() - 100)] };
+    backend.hunks = { [`${WT}\u0000src/b.ts`]: addHunk(2), [`${REPO}\u0000src/b.ts`]: addHunk(20) };
+  });
+
+  it("marks files another worktree of the same repository also changes", async () => {
+    renderFollow();
+    await waitFor(() => expect(screen.getAllByTestId("overlap-mark")).toHaveLength(1));
+    const mark = screen.getByTestId("overlap-mark");
+    expect(mark.closest("[role=listitem]")?.getAttribute("title")).toBe("src/b.ts");
+    expect(mark.getAttribute("title")).toBe("Also being edited in another worktree: main");
+  });
+
+  it("warns above the diff and fills in the changed lines once both diffs are loaded", async () => {
+    renderFollow();
+    const banner = await screen.findByTestId("overlap-banner");
+    expect(banner.textContent).toContain("Same file");
+    expect(banner.textContent).toContain("main");
+    // The other worktree's diff has not been read yet: no line numbers, and no request for it.
+    expect(banner.textContent).toContain("Open them side by side to compare the changed lines.");
+    expect(getFileDiff.mock.calls.some(([repo]) => repo === REPO)).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "View both worktrees side by side" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("src/b.ts");
+    await waitFor(() => expect(screen.getAllByTestId("diff-viewer")).toHaveLength(3));
+    await waitFor(() =>
+      expect(screen.getByTestId("overlap-banner").textContent).toContain("Different lines for now (lines 2 / 20)."),
+    );
+    // Opening the comparison is the user taking over: following pauses so the file stays put.
+    expect(useFollowStore.getState().mode).toBe("paused");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows no warning for a file only this worktree changes", async () => {
+    backend.filesByPath = { [REPO]: [wipFile("src/c.ts", nowSecs() - 100)] };
+    renderFollow();
+    await waitFor(() => expect(getWipFiles).toHaveBeenCalledWith(REPO));
+    await screen.findByText(/src\/b\.ts fresh=/);
+    expect(screen.queryByTestId("overlap-mark")).toBeNull();
+    expect(screen.queryByTestId("overlap-banner")).toBeNull();
   });
 });

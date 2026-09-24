@@ -1104,5 +1104,30 @@
     "stageAll": "Stage all",
     "commit": "Commit…",
     "stash": "Stash"
+  },
+  "overlap": {
+    "chipsLabel": "Worktrees shown in the graph",
+    "chipCurrent": "Open worktree, always shown ({{path}})",
+    "chipMain": "main tree",
+    "chipFrom": "from {{base}}",
+    "chipDirty_one": "{{count}} uncommitted file",
+    "chipDirty_other": "{{count}} uncommitted files",
+    "chipsShown_one": "Showing {{count}} worktree in the graph",
+    "chipsShown_other": "Showing {{count}} worktrees together in the graph",
+    "markTitle": "Also being edited in another worktree: {{names}}",
+    "sameFile": "Same file",
+    "andMore_one": "and {{count}} more",
+    "andMore_other": "and {{count}} more",
+    "bannerAlsoEditing_one": "worktree is also editing this file.",
+    "bannerAlsoEditing_other": "worktrees are also editing this file.",
+    "bannerNoLines": "Open them side by side to compare the changed lines.",
+    "bannerDifferentLines": "Different lines for now (lines {{mine}} / {{theirs}}).",
+    "bannerSharedLines": "Both change lines {{shared}} (lines {{mine}} / {{theirs}}).",
+    "sideBySide": "View both worktrees side by side",
+    "sideBySideTitle": "Same file in two worktrees",
+    "pickWorktree": "Worktree to compare",
+    "thisWorktree": "This worktree",
+    "otherWorktree": "Other worktree",
+    "close": "Close"
   }
 }

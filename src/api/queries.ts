@@ -801,3 +801,49 @@ export function fetchFileDiff(
     queryFn: () => getFileDiff(repoPath, filePath, staged),
   });
 }
+
+// W6-T2 — 워크트리 칩·겹침 경고(D5)
+
+/** 같은 저장소의 다른 워크트리 파일 목록을 다시 읽는 주기. 따라가는 워크트리만 이벤트로 갱신한다. */
+export const SIBLING_WIP_POLL_MS = 20_000;
+
+/**
+ * 워크트리 여러 곳의 커밋하지 않은 파일(`useWipFiles`와 같은 캐시 항목). 결과는 `paths` 순서다.
+ * 따라가지 않는 워크트리는 감시 이벤트로 무효화되지 않으므로 주기적으로 다시 읽는다.
+ */
+export function useWipFilesMany(paths: readonly string[]) {
+  return useQueries({
+    queries: paths.map((path) => ({
+      queryKey: ["wipFiles", path],
+      queryFn: () => getWipFiles(path),
+      refetchInterval: SIBLING_WIP_POLL_MS,
+      refetchIntervalInBackground: false,
+    })),
+  });
+}
+
+/**
+ * 이미 불러온 diff만 돌려준다(`useFileDiff`와 같은 캐시 항목). 새로 읽지 않는다 —
+ * 겹침 경고의 줄 범위는 이미 불러온 diff로만 계산한다.
+ */
+export function useCachedFileDiff(repoPath: string | null, filePath: string | null, staged: boolean) {
+  return useQuery({
+    queryKey: ["fileDiff", repoPath, filePath, staged],
+    queryFn: () => getFileDiff(repoPath!, filePath!, staged),
+    enabled: false,
+  });
+}
+
+/**
+ * 워크트리마다 HEAD 이력의 첫 페이지. 그래프에 다른 워크트리의 커밋을 함께 그릴 때 쓴다.
+ * HEAD가 바뀌면 키가 바뀌어 다시 읽는다(HEAD는 워크트리 목록 조회에서 온다).
+ */
+export function useWorktreeHeadHistories(heads: readonly { path: string; head: string }[]) {
+  return useQueries({
+    queries: heads.map(({ path, head }) => ({
+      queryKey: ["worktreeHeadHistory", path, head],
+      queryFn: () => getCommitHistory(path, COMMIT_HISTORY_PAGE_SIZE, 0),
+      staleTime: 30_000,
+    })),
+  });
+}
