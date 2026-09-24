@@ -1007,13 +1007,16 @@
       "noAccount": "No account"
     },
     "stale": "As of last fetch · {{time}}",
-    "staleNever": "As of last fetch (never fetched)",
+    "staleNever": "As of last fetch (time unknown)",
     "notes": {
-      "needsPull": "{{name}} has new commits on the remote, so it needs a Pull first. Left as is, only this repository will be rejected.",
       "setsUpstream": "{{name}} will be linked to a new remote branch (-u).",
       "fetchFailed": "{{name}} couldn't fetch, so its plan is as of the last fetch. If the remote has new commits, the result may differ.",
       "noAccount": "{{name}} has no account assigned, so it is skipped.",
-      "error": "{{name}}: {{error}}"
+      "error": "{{name}}: {{error}}",
+      "needsPull_one": "{{name}} has {{count}} new commit on the remote, so it needs a Pull first. Left as is, only this repository will be rejected.",
+      "needsPull_other": "{{name}} has {{count}} new commits on the remote, so it needs a Pull first. Left as is, only this repository will be rejected.",
+      "staleUpToDate_pull": "{{name}} couldn't fetch, so “Nothing to pull” may be out of date. Check it to pull anyway.",
+      "staleUpToDate_push": "{{name}} couldn't fetch, so “Nothing to push” may be out of date. Check it to push anyway."
     },
     "pullFirst": "Pull {{name}} first, then push",
     "confirm": {
@@ -1031,6 +1034,7 @@
       "conflict": "Stopped on a conflict",
       "failed": "Failed"
     },
-    "summary": "{{ok}} succeeded · {{failed}} failed"
+    "summary": "{{ok}} succeeded · {{failed}} failed",
+    "preparingFetch": "Checking what will run in each repository…"
   }
 }

@@ -15,6 +15,7 @@ vi.mock("@/api/commands", () => commands);
 vi.mock("@/api/queries", () => ({ invalidateAfterSync: () => Promise.resolve() }));
 
 import { useRepositoryStore } from "@/stores/repository";
+import { useSyncStore } from "@/stores/sync";
 import { makeRepo } from "@/lib/__tests__/repo-tree-fixtures";
 
 const { MultiRepoRemoteDialog } = await import("@/components/review/MultiRepoRemoteDialog");
@@ -31,6 +32,7 @@ function plan(name: string, overrides: Partial<RepoRemotePlan>): RepoRemotePlan 
     remote: "origin",
     command: "git push origin feat/notification-settings",
     commits: 2,
+    behind: 0,
     needsPull: false,
     setsUpstream: false,
     skip: false,
@@ -43,7 +45,7 @@ function plan(name: string, overrides: Partial<RepoRemotePlan>): RepoRemotePlan 
 
 const PUSH_PLANS = [
   plan("xames-backend", {}),
-  plan("xames-app", { commits: 15, needsPull: true }),
+  plan("xames-app", { commits: 15, behind: 1, needsPull: true }),
   plan("xames-admin", { command: "git push -u origin feat/notification-settings", setsUpstream: true }),
   plan("xames-design", { command: "git push origin feat/noti-tokens", commits: 0, skip: true, skipReason: "upToDate" }),
 ];
@@ -64,6 +66,7 @@ beforeEach(async () => {
   commands.gitPush.mockImplementation(() => Promise.resolve());
   commands.planRemoteOp.mockImplementation(() => Promise.resolve(PUSH_PLANS));
   useRepositoryStore.setState({ repos, activeRepoPath: null, activeRepo: null });
+  useSyncStore.setState({ syncingByRepo: {}, lastFetchedByRepo: {} });
 });
 
 afterEach(cleanup);
@@ -93,7 +96,7 @@ describe("MultiRepoRemoteDialog", () => {
 
   it("warns ahead about a needed pull and a new upstream (-u)", async () => {
     renderDialog();
-    expect(await screen.findByText(/xames-app has new commits on the remote/)).toBeTruthy();
+    expect(await screen.findByText(/xames-app has 1 new commit on the remote/)).toBeTruthy();
     expect(screen.getByText(/xames-admin will be linked to a new remote branch \(-u\)/)).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: "Pull xames-app first, then push" })).toBeTruthy();
   });
@@ -107,6 +110,71 @@ describe("MultiRepoRemoteDialog", () => {
     expect(within(row).getByTestId("stale-fetch").textContent).toMatch(/^As of last fetch · /);
     expect(screen.queryAllByTestId("stale-fetch")).toHaveLength(1);
     expect(screen.getByText(/xames-app couldn't fetch/)).toBeTruthy();
+  });
+
+  it("dates the stale label by the last successful fetch when the failed fetch left no time", async () => {
+    const twoHoursAgo = Math.floor(Date.now() / 1000) - 2 * 3600;
+    useSyncStore.setState({ lastFetchedByRepo: { "/repos/xames-app": twoHoursAgo } });
+    commands.gitFetch.mockImplementation((path: string) =>
+      path === "/repos/xames-app" ? Promise.reject(new Error("offline")) : Promise.resolve(),
+    );
+    commands.planRemoteOp.mockImplementation(() =>
+      Promise.resolve(PUSH_PLANS.map((p) => (p.path === "/repos/xames-app" ? { ...p, fetchedAt: null } : p))),
+    );
+    renderDialog();
+    const row = await screen.findByTestId("plan-row-xames-app");
+    const label = within(row).getByTestId("stale-fetch").textContent ?? "";
+    expect(label).toMatch(/^As of last fetch · /);
+    expect(label).not.toMatch(/unknown/);
+  });
+
+  it("lets the user pull a 'nothing to pull' repository whose fetch failed", async () => {
+    commands.gitFetch.mockImplementation((path: string) =>
+      path === "/repos/xames-app" ? Promise.reject(new Error("offline")) : Promise.resolve(),
+    );
+    commands.planRemoteOp.mockImplementation(() =>
+      Promise.resolve(
+        paths.map((p) =>
+          plan(p.split("/").pop() ?? p, {
+            command: "git pull --no-rebase origin refs/heads/main",
+            commits: 0,
+            skip: true,
+            skipReason: "upToDate",
+          }),
+        ),
+      ),
+    );
+    renderDialog("pull");
+    const row = await screen.findByTestId("plan-row-xames-app");
+    const box = within(row).getByRole("checkbox", { name: "xames-app" }) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(box.disabled).toBe(false);
+    expect(screen.getByText(/xames-app couldn't fetch, so “Nothing to pull” may be out of date/)).toBeTruthy();
+    const fresh = within(screen.getByTestId("plan-row-xames-backend")).getByRole("checkbox", {
+      name: "xames-backend",
+    }) as HTMLInputElement;
+    expect(fresh.disabled).toBe(true);
+
+    fireEvent.click(box);
+    fireEvent.click(screen.getByRole("button", { name: "Pull 1 repository" }));
+    await waitFor(() => expect(commands.gitPull).toHaveBeenCalledTimes(1));
+    expect(commands.gitPull.mock.calls[0][0]).toBe("/repos/xames-app");
+  });
+
+  it("translates remote-selection error codes like the single-repository toolbar", async () => {
+    commands.gitPush.mockImplementation((path: string) =>
+      path === "/repos/xames-app"
+        ? Promise.reject({ type: "GitCli", message: "detached_head" })
+        : path === "/repos/xames-admin"
+          ? Promise.reject({ type: "GitCli", message: "no_upstream:feat/x" })
+          : Promise.resolve(),
+    );
+    renderDialog();
+    fireEvent.click(await screen.findByRole("button", { name: "Push 3 repositories" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("1 succeeded · 2 failed"));
+    expect(within(screen.getByTestId("plan-row-xames-app")).getByText(/HEAD is detached/)).toBeTruthy();
+    expect(within(screen.getByTestId("plan-row-xames-admin")).getByText(/This branch has no upstream/)).toBeTruthy();
+    expect(screen.queryByText("detached_head")).toBeNull();
   });
 
   it("pushes each checked repository separately and shows per-repository results", async () => {
@@ -133,6 +201,14 @@ describe("MultiRepoRemoteDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Push 2 repositories" }));
     await waitFor(() => expect(commands.gitPush).toHaveBeenCalledTimes(2));
     expect(commands.gitPush.mock.calls.map((c) => c[0])).toEqual(["/repos/xames-app", "/repos/xames-admin"]);
+  });
+
+  it("does not claim to fetch while preparing a Fetch", async () => {
+    await i18n.changeLanguage("ko");
+    commands.planRemoteOp.mockImplementation(() => new Promise(() => {}));
+    renderDialog("fetch");
+    expect(screen.getByText("저장소마다 실행할 내용을 확인하는 중…")).toBeTruthy();
+    expect(screen.queryByText(/fetch해서/)).toBeNull();
   });
 
   it("does not fetch ahead of a Fetch and shows the Korean copy", async () => {

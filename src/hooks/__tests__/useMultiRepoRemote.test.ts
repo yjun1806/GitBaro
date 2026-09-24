@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   isRunnable,
+  isSelectable,
   prepareRemotePlan,
   runRemotePlan,
   targetsFor,
@@ -18,6 +19,7 @@ function plan(path: string, overrides: Partial<RepoRemotePlan> = {}): RepoRemote
     remote: "origin",
     command: "git push origin feat/x",
     commits: 1,
+    behind: 0,
     needsPull: false,
     setsUpstream: false,
     skip: false,
@@ -29,7 +31,7 @@ function plan(path: string, overrides: Partial<RepoRemotePlan> = {}): RepoRemote
 }
 
 function row(path: string, overrides: Partial<RepoRemotePlan> = {}, accountId: string | null = "acc"): RemotePlanRow {
-  return { name: path.slice(1), accountId, plan: plan(path, overrides), fetchFailed: false };
+  return { name: path.slice(1), accountId, plan: plan(path, overrides), fetchFailed: false, lastFetchedAt: null };
 }
 
 function deps(overrides: Partial<RemoteDeps> = {}): RemoteDeps & { calls: string[] } {
@@ -53,8 +55,8 @@ function deps(overrides: Partial<RemoteDeps> = {}): RemoteDeps & { calls: string
 }
 
 const targets = [
-  { path: "/a", name: "a", accountId: "acc-a" },
-  { path: "/b", name: "b", accountId: "acc-b" },
+  { path: "/a", name: "a", accountId: "acc-a", lastFetchedAt: null },
+  { path: "/b", name: "b", accountId: "acc-b", lastFetchedAt: null },
 ];
 
 describe("prepareRemotePlan", () => {
@@ -87,13 +89,48 @@ describe("prepareRemotePlan", () => {
 
     const d2 = deps();
     const { rows: rows2 } = await prepareRemotePlan(
-      [{ path: "/c", name: "c", accountId: null }],
+      [{ path: "/c", name: "c", accountId: null, lastFetchedAt: null }],
       "push",
       d2,
     );
     expect(d2.fetch).not.toHaveBeenCalled();
     expect(rows2[0].fetchFailed).toBe(false);
     expect(isRunnable(rows2[0])).toBe(false);
+  });
+
+  it("dates a failed fetch's plan by the last successful fetch, not the failed attempt", async () => {
+    // 실패한 fetch는 FETCH_HEAD를 비우므로 백엔드는 시각을 모른다(null). 앱이 기억한 성공 시각을 쓴다.
+    const d = deps({
+      fetch: vi.fn(() => Promise.reject(new Error("offline"))),
+      plan: vi.fn((paths: string[]) =>
+        Promise.resolve(paths.map((p) => plan(p, { fetchedAt: p === "/a" ? null : 1_600_000_000 }))),
+      ),
+    });
+    const { rows } = await prepareRemotePlan(
+      [
+        { path: "/a", name: "a", accountId: "acc", lastFetchedAt: 1_650_000_000 },
+        { path: "/b", name: "b", accountId: "acc", lastFetchedAt: null },
+      ],
+      "pull",
+      d,
+    );
+    expect(rows.map((r) => r.lastFetchedAt)).toEqual([1_650_000_000, 1_600_000_000]);
+  });
+
+  it("lets the user pick a 'nothing to pull' repository whose fetch failed, unchecked by default", async () => {
+    const d = deps({
+      fetch: vi.fn(() => Promise.reject(new Error("offline"))),
+      plan: vi.fn((paths: string[]) =>
+        Promise.resolve(paths.map((p) => plan(p, { commits: 0, skip: true, skipReason: "upToDate" }))),
+      ),
+    });
+    const { rows } = await prepareRemotePlan(targets, "pull", d);
+    expect(rows.map(isRunnable)).toEqual([false, false]);
+    expect(rows.map(isSelectable)).toEqual([true, true]);
+
+    const run = deps();
+    await runRemotePlan(rows.slice(0, 1), "pull", new Set(), () => {}, run);
+    expect(run.calls).toEqual(["pull /a acc-a"]);
   });
 
   it("skips a repository the backend returned no plan for", async () => {
@@ -168,10 +205,12 @@ describe("targetsFor", () => {
       makeRepo("xames", "mos", { accountId: "mos-bot" }),
       makeRepo("xames-app", "mos", { accountId: null }),
     ];
-    expect(targetsFor(["/repos/xames", "/repos/xames-app", "/repos/gone"], repos)).toEqual([
-      { path: "/repos/xames", name: "xames", accountId: "mos-bot" },
-      { path: "/repos/xames-app", name: "xames-app", accountId: null },
-      { path: "/repos/gone", name: "gone", accountId: null },
+    expect(
+      targetsFor(["/repos/xames", "/repos/xames-app", "/repos/gone"], repos, { "/repos/xames": 1_700_000_000 }),
+    ).toEqual([
+      { path: "/repos/xames", name: "xames", accountId: "mos-bot", lastFetchedAt: 1_700_000_000 },
+      { path: "/repos/xames-app", name: "xames-app", accountId: null, lastFetchedAt: null },
+      { path: "/repos/gone", name: "gone", accountId: null, lastFetchedAt: null },
     ]);
   });
 });

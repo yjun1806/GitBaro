@@ -6,15 +6,17 @@
 //!
 //! 명령 문자열은 원격 **이름**과 브랜치로만 만든다. 원격 URL이나 토큰은 넣지 않는다.
 //! 실제 실행은 기존 `git_fetch`·`git_pull`·`git_push` 명령이 저장소마다 따로 한다.
-//! 원격 선택 규칙은 그 명령들(`commands/git.rs`의 `SyncTarget`)과 같게 맞춘다. push 대상은
-//! `get_push_target`을 그대로 불러 실제 실행과 어긋나지 않게 한다.
+//! 원격 선택은 그 명령들이 쓰는 `commands/git.rs`의 `SyncTarget`을 그대로 불러 정한다.
+//! 규칙을 따로 베끼지 않으므로 보여 주는 명령과 실제 실행이 어긋나지 않는다.
 
 use std::path::Path;
 
 use git2::{BranchType, Repository};
 use serde::{Deserialize, Serialize};
 
+use crate::commands::git::{sync_target_from_repo, SyncTarget};
 use crate::error::AppError;
+use crate::git::cli::pull_mode_flag;
 
 /// 확인 창이 다루는 원격 작업.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,6 +61,8 @@ pub struct RepoRemotePlan {
     pub command: Option<String>,
     /// Push: 올릴 커밋 수. Pull: 받을 커밋 수. Fetch: 0.
     pub commits: u32,
+    /// 원격 브랜치에만 있는 커밋 수(마지막 fetch 기준). Push의 「먼저 Pull 필요」 안내에 쓴다.
+    pub behind: u32,
     /// 원격 브랜치에 로컬에 없는 커밋이 있다(마지막 fetch 기준). Push는 먼저 Pull이 필요하다.
     pub needs_pull: bool,
     /// Push가 추적 브랜치를 새로 연결하거나 바꾼다(`-u`).
@@ -66,7 +70,8 @@ pub struct RepoRemotePlan {
     /// 이번 작업에서 뺀다. 확인 창에서 체크를 풀고 흐리게 보여 준다.
     pub skip: bool,
     pub skip_reason: Option<RemotePlanSkipReason>,
-    /// 마지막 fetch 시각(유닉스 초). `FETCH_HEAD`의 수정 시각. fetch한 적이 없으면 `None`.
+    /// 마지막으로 **성공한** fetch 시각(유닉스 초). 내용이 있는 `FETCH_HEAD`의 수정 시각이다.
+    /// 실패한 fetch는 `FETCH_HEAD`를 빈 파일로 덮어쓰므로, 비어 있거나 없으면 `None`(시각 모름).
     pub fetched_at: Option<i64>,
     /// `skip_reason`이 `error`일 때 이유.
     pub error: Option<String>,
@@ -80,6 +85,7 @@ impl RepoRemotePlan {
             remote: None,
             command: None,
             commits: 0,
+            behind: 0,
             needs_pull: false,
             sets_upstream: false,
             skip: false,
@@ -126,134 +132,65 @@ pub(crate) fn plan_repo(path: &str, op: RemotePlanOp) -> RepoRemotePlan {
         fetched_at: fetched_at(&repo),
         ..base
     };
-    match read_sync_config(&repo) {
-        Ok(config) => plan_with_config(&repo, &config, op, base),
-        Err(e) => RepoRemotePlan {
-            error: Some(e.to_string()),
+    if op != RemotePlanOp::Fetch && is_unborn(&repo) {
+        return base.skipped(RemotePlanSkipReason::Unborn);
+    }
+    match sync_target_from_repo(&repo) {
+        Ok(target) => plan_with_target(&repo, &target, op, base),
+        Err(e) => skipped_by_error(base, e),
+    }
+}
+
+/// 원격 선택 규칙이 돌려준 에러 코드(`commands/git.rs`의 `remote_error`)를 건너뛰는 이유로 바꾼다.
+fn skip_reason_from_error(err: &AppError) -> RemotePlanSkipReason {
+    let AppError::GitCli { message, .. } = err else {
+        return RemotePlanSkipReason::Error;
+    };
+    match message.as_str() {
+        "detached_head" => RemotePlanSkipReason::DetachedHead,
+        "no_remote" => RemotePlanSkipReason::NoRemote,
+        "multiple_remotes" => RemotePlanSkipReason::MultipleRemotes,
+        m if m.starts_with("no_upstream:") => RemotePlanSkipReason::NoUpstream,
+        _ => RemotePlanSkipReason::Error,
+    }
+}
+
+fn skipped_by_error(base: RepoRemotePlan, err: AppError) -> RepoRemotePlan {
+    match skip_reason_from_error(&err) {
+        RemotePlanSkipReason::Error => RepoRemotePlan {
+            error: Some(err.to_string()),
             ..base
         }
         .skipped(RemotePlanSkipReason::Error),
+        reason => base.skipped(reason),
     }
 }
 
-/// 원격 선택에 필요한 저장소 설정. `commands/git.rs`의 `SyncTarget`과 같은 값을 읽는다.
-struct SyncConfig {
-    branch: Option<String>,
-    /// `(branch.<name>.remote, branch.<name>.merge)`.
-    upstream: Option<(String, String)>,
-    remotes: Vec<String>,
-    push_default: Option<String>,
-    pull_mode_configured: bool,
-    unborn: bool,
+/// 커밋이 하나도 없는 저장소(HEAD가 아직 없는 브랜치를 가리킴).
+fn is_unborn(repo: &Repository) -> bool {
+    repo.head().is_err() && repo.head_detached().ok() != Some(true)
 }
 
-fn read_sync_config(repo: &Repository) -> Result<SyncConfig, AppError> {
-    let unborn = repo.head().is_err() && repo.head_detached().ok() != Some(true);
-    let branch = head_branch_name(repo);
-    let config = repo.config()?;
-    let upstream = branch.as_ref().and_then(|name| {
-        let remote = config.get_string(&format!("branch.{}.remote", name)).ok()?;
-        let merge = config.get_string(&format!("branch.{}.merge", name)).ok()?;
-        Some((remote, merge))
-    });
-    let remotes = repo
-        .remotes()?
-        .iter()
-        .flatten()
-        .map(str::to_string)
-        .collect();
-    let is_set = |key: &str| config.get_entry(key).is_ok();
-    let pull_mode_configured = is_set("pull.rebase")
-        || branch
-            .as_ref()
-            .is_some_and(|name| is_set(&format!("branch.{}.rebase", name)));
-    Ok(SyncConfig {
-        branch,
-        upstream,
-        remotes,
-        push_default: config.get_string("push.default").ok(),
-        pull_mode_configured,
-        unborn,
-    })
-}
-
-/// HEAD가 가리키는 로컬 브랜치 이름. 커밋이 없는 저장소도 이름을 준다. detached면 `None`.
-fn head_branch_name(repo: &Repository) -> Option<String> {
-    if repo.head_detached().unwrap_or(false) {
-        return None;
-    }
-    let head = repo.find_reference("HEAD").ok()?;
-    let target = head.symbolic_target()?;
-    target.strip_prefix("refs/heads/").map(str::to_string)
-}
-
-impl SyncConfig {
-    fn upstream_remote(&self) -> Option<&str> {
-        self.upstream
-            .as_ref()
-            .map(|(remote, _)| remote.as_str())
-            .filter(|remote| *remote != ".")
-    }
-
-    fn default_remote(&self) -> Result<String, RemotePlanSkipReason> {
-        if self.remotes.iter().any(|r| r == "origin") {
-            return Ok("origin".to_string());
-        }
-        match self.remotes.as_slice() {
-            [only] => Ok(only.clone()),
-            [] => Err(RemotePlanSkipReason::NoRemote),
-            _ => Err(RemotePlanSkipReason::MultipleRemotes),
-        }
-    }
-
-    fn fetch_remotes(&self) -> Result<Vec<String>, RemotePlanSkipReason> {
-        let upstream = self.upstream_remote().map(str::to_string);
-        match (upstream, self.default_remote()) {
-            (Some(up), Ok(def)) if up != def => Ok(vec![up, def]),
-            (Some(up), _) => Ok(vec![up]),
-            (None, default) => default.map(|def| vec![def]),
-        }
-    }
-
-    /// push 대상 `(원격, refspec)`. `get_push_target`과 같은 규칙이다.
-    fn push_target(&self, branch: &str) -> Result<(String, String), RemotePlanSkipReason> {
-        if let (Some((_, merge)), Some(remote)) = (&self.upstream, self.upstream_remote()) {
-            let upstream_name = merge.strip_prefix("refs/heads/").unwrap_or(merge);
-            if upstream_name == branch {
-                return Ok((remote.to_string(), branch.to_string()));
-            }
-            if matches!(self.push_default.as_deref(), Some("upstream" | "tracking")) {
-                return Ok((remote.to_string(), format!("{}:{}", branch, merge)));
-            }
-        }
-        Ok((self.default_remote()?, branch.to_string()))
-    }
-
-    /// pull에 넘길 방식 플래그. 설정이 있으면 따르고(플래그 없음), 없으면 `--no-rebase`.
-    fn pull_mode_flag(&self) -> Option<&'static str> {
-        (!self.pull_mode_configured).then_some("--no-rebase")
-    }
-}
-
-fn plan_with_config(
+fn plan_with_target(
     repo: &Repository,
-    config: &SyncConfig,
+    target: &SyncTarget,
     op: RemotePlanOp,
     base: RepoRemotePlan,
 ) -> RepoRemotePlan {
     let base = RepoRemotePlan {
-        branch: config.branch.clone(),
+        branch: target.branch.clone(),
         ..base
     };
     match op {
-        RemotePlanOp::Fetch => plan_fetch(config, base),
-        RemotePlanOp::Pull => plan_pull(repo, config, base),
-        RemotePlanOp::Push => plan_push(repo, config, base),
+        RemotePlanOp::Fetch => plan_fetch(target, base),
+        RemotePlanOp::Pull => plan_pull(repo, target, base),
+        RemotePlanOp::Push => plan_push(repo, target, base),
     }
 }
 
-fn plan_fetch(config: &SyncConfig, base: RepoRemotePlan) -> RepoRemotePlan {
-    match config.fetch_remotes() {
+/// `git_fetch`와 같이 `fetch_remotes()`의 원격마다 `git fetch --prune <원격>`을 실행한다.
+fn plan_fetch(target: &SyncTarget, base: RepoRemotePlan) -> RepoRemotePlan {
+    match target.fetch_remotes() {
         Ok(remotes) => RepoRemotePlan {
             remote: remotes.first().cloned(),
             command: Some(
@@ -265,31 +202,27 @@ fn plan_fetch(config: &SyncConfig, base: RepoRemotePlan) -> RepoRemotePlan {
             ),
             ..base
         },
-        Err(reason) => base.skipped(reason),
+        Err(e) => skipped_by_error(base, e),
     }
 }
 
-fn plan_pull(repo: &Repository, config: &SyncConfig, base: RepoRemotePlan) -> RepoRemotePlan {
-    let Some(branch) = config.branch.as_deref() else {
-        return base.skipped(RemotePlanSkipReason::DetachedHead);
+/// `git_pull`과 같이 `pull_target()`·`pull_rebase(None)`으로 명령을 만든다. 실제 인자 그대로다.
+fn plan_pull(repo: &Repository, target: &SyncTarget, base: RepoRemotePlan) -> RepoRemotePlan {
+    let (remote, merge_ref) = match target.pull_target() {
+        Ok(pair) => pair,
+        Err(e) => return skipped_by_error(base, e),
     };
-    if config.unborn {
-        return base.skipped(RemotePlanSkipReason::Unborn);
-    }
-    let Some((remote, merge)) = config.upstream.clone() else {
-        return base.skipped(RemotePlanSkipReason::NoUpstream);
-    };
-    let flag = config
-        .pull_mode_flag()
+    let flag = pull_mode_flag(target.pull_rebase(None))
         .map(|f| format!("{} ", f))
         .unwrap_or_default();
-    let merge_name = merge.strip_prefix("refs/heads/").unwrap_or(&merge);
-    let command = format!("git pull {}{} {}", flag, remote, merge_name);
+    let command = format!("git pull {}{} {}", flag, remote, merge_ref);
+    let branch = target.branch.as_deref().unwrap_or_default();
     let behind = upstream_ahead_behind(repo, branch).map_or(0, |(_, behind)| behind);
     let plan = RepoRemotePlan {
         remote: Some(remote),
         command: Some(command),
         commits: behind,
+        behind,
         ..base
     };
     if behind == 0 {
@@ -299,24 +232,20 @@ fn plan_pull(repo: &Repository, config: &SyncConfig, base: RepoRemotePlan) -> Re
     }
 }
 
-fn plan_push(repo: &Repository, config: &SyncConfig, base: RepoRemotePlan) -> RepoRemotePlan {
-    let Some(branch) = config.branch.clone() else {
-        return base.skipped(RemotePlanSkipReason::DetachedHead);
-    };
-    if config.unborn {
-        return base.skipped(RemotePlanSkipReason::Unborn);
-    }
-    let (remote, refspec) = match config.push_target(&branch) {
-        Ok(target) => target,
-        Err(reason) => return base.skipped(reason),
+/// `git_push`와 같이 `push_target()`으로 대상을 정한다.
+fn plan_push(repo: &Repository, target: &SyncTarget, base: RepoRemotePlan) -> RepoRemotePlan {
+    let (remote, refspec) = match target.push_target() {
+        Ok(pair) => pair,
+        Err(e) => return skipped_by_error(base, e),
     };
     let dest = refspec
         .split_once(':')
         .map_or(refspec.as_str(), |(_, dst)| dst);
     let dest = dest.strip_prefix("refs/heads/").unwrap_or(dest).to_string();
-    // push는 늘 `--set-upstream`으로 실행된다. 이미 같은 곳을 추적하면 바뀌는 게 없으므로
-    // 그때만 `-u` 없이 보여 준다.
-    let sets_upstream = config.upstream.as_ref() != Some(&(remote.clone(), format!("refs/heads/{}", dest)));
+    // push는 늘 `--set-upstream`으로 실행된다(`GitCliEngine::push`). 이미 같은 곳을 추적하면
+    // 바뀌는 게 없으므로, 시안 D3처럼 추적 브랜치가 바뀔 때만 `-u`를 보여 준다.
+    let sets_upstream =
+        target.upstream.as_ref() != Some(&(remote.clone(), format!("refs/heads/{}", dest)));
     let command = if sets_upstream {
         format!("git push -u {} {}", remote, refspec)
     } else {
@@ -337,12 +266,15 @@ fn plan_push(repo: &Repository, config: &SyncConfig, base: RepoRemotePlan) -> Re
         remote: Some(remote),
         command: Some(command),
         commits: ahead,
+        behind,
         needs_pull: behind > 0,
         sets_upstream,
         ..base
     };
-    // 원격에 브랜치가 없으면 커밋이 0개여도 브랜치를 새로 만드는 push는 의미가 있다.
-    if remote_has_branch && ahead == 0 {
+    // 원격 브랜치가 이미 있고 보낼 커밋도 없고 추적 브랜치도 그대로면 할 일이 없다.
+    // 원격에 브랜치가 없거나 추적 브랜치를 새로 연결하면(단일 저장소 툴바의 Publish와 같음)
+    // 커밋이 0개여도 push에 의미가 있다.
+    if remote_has_branch && ahead == 0 && !sets_upstream {
         plan.skipped(RemotePlanSkipReason::UpToDate)
     } else {
         plan
@@ -372,18 +304,30 @@ fn upstream_ahead_behind(repo: &Repository, branch: &str) -> Option<(u32, u32)> 
     Some((a as u32, b as u32))
 }
 
-/// 마지막 fetch 시각. `FETCH_HEAD`는 워크트리마다 따로 있고, 없으면 공용 git 폴더를 본다.
+/// 마지막으로 성공한 fetch 시각. `FETCH_HEAD`는 워크트리마다 따로 있고, 없으면 공용 git 폴더를 본다.
+///
+/// git은 fetch를 시작하면서 `FETCH_HEAD`를 비우고 받아 온 ref를 적는다. 그래서 fetch가 실패하면
+/// (인증·네트워크) 파일은 빈 채로 수정 시각만 지금이 된다. 그 시각을 「마지막 fetch」로 보이면
+/// 오래된 계획이 방금 확인한 것처럼 보이므로, 빈 파일은 시각을 모른다고 본다.
 fn fetched_at(repo: &Repository) -> Option<i64> {
     let git_dir = repo.path();
-    mtime_secs(&git_dir.join("FETCH_HEAD")).or_else(|| {
+    let own = git_dir.join("FETCH_HEAD");
+    let path = if own.exists() {
+        own
+    } else {
         // 워크트리의 git 폴더에는 공용 폴더를 가리키는 `commondir` 파일이 있다.
         let common = std::fs::read_to_string(git_dir.join("commondir")).ok()?;
-        mtime_secs(&git_dir.join(common.trim()).join("FETCH_HEAD"))
-    })
+        git_dir.join(common.trim()).join("FETCH_HEAD")
+    };
+    successful_fetch_mtime(&path)
 }
 
-fn mtime_secs(path: &Path) -> Option<i64> {
-    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+fn successful_fetch_mtime(path: &Path) -> Option<i64> {
+    let meta = std::fs::metadata(path).ok()?;
+    if meta.len() == 0 {
+        return None;
+    }
+    let modified = meta.modified().ok()?;
     let secs = modified.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
     i64::try_from(secs).ok()
 }
@@ -503,13 +447,14 @@ mod tests {
         let plan = plan_repo(p(&work), RemotePlanOp::Push);
         assert!(plan.needs_pull);
         assert_eq!(plan.commits, 1);
+        assert_eq!(plan.behind, 1, "안내에 원격에만 있는 커밋 수를 보여 준다");
         assert!(!plan.skip);
         assert!(plan.fetched_at.is_some(), "fetch 뒤에는 FETCH_HEAD 시각이 있어야 함");
 
         // 같은 상태에서 Pull 계획은 받을 커밋 1개.
         let pull = plan_repo(p(&work), RemotePlanOp::Pull);
         assert_eq!(pull.commits, 1);
-        assert_eq!(pull.command.as_deref(), Some("git pull --no-rebase origin main"));
+        assert_eq!(pull.command.as_deref(), Some("git pull --no-rebase origin refs/heads/main"));
         assert!(!pull.skip);
     }
 
@@ -534,7 +479,7 @@ mod tests {
         let (_, work) = clone_with_origin(&root);
         git(&work, &["config", "pull.rebase", "true"]);
         let pull = plan_repo(p(&work), RemotePlanOp::Pull);
-        assert_eq!(pull.command.as_deref(), Some("git pull origin main"));
+        assert_eq!(pull.command.as_deref(), Some("git pull origin refs/heads/main"));
     }
 
     #[test]
@@ -624,6 +569,116 @@ mod tests {
             Some(format!("git push -u {} {}", target.remote, target.refspec).as_str())
         );
         assert!(plan.sets_upstream);
+    }
+
+    #[test]
+    fn push_links_an_upstream_even_when_the_remote_branch_is_at_the_same_commit() {
+        let root = tmp_dir("relink");
+        let (_, work) = clone_with_origin(&root);
+        git(&work, &["checkout", "-q", "-b", "feat/y"]);
+        commit(&work, "y");
+        git(&work, &["push", "-q", "-u", "origin", "feat/y"]);
+        git(&work, &["branch", "--unset-upstream"]);
+
+        let plan = plan_repo(p(&work), RemotePlanOp::Push);
+        assert_eq!(plan.commits, 0);
+        assert!(plan.sets_upstream);
+        assert!(!plan.skip, "추적 브랜치를 새로 연결하는 push는 건너뛰지 않는다");
+        assert_eq!(plan.command.as_deref(), Some("git push -u origin feat/y"));
+    }
+
+    #[test]
+    fn a_failed_fetch_does_not_count_as_the_last_fetch() {
+        let root = tmp_dir("failed-fetch");
+        let (_, work) = clone_with_origin(&root);
+        git(&work, &["fetch", "-q", "origin"]);
+        assert!(plan_repo(p(&work), RemotePlanOp::Pull).fetched_at.is_some());
+
+        git(&work, &["remote", "set-url", "origin", p(&root.join("gone.git"))]);
+        let failed = Command::new("git")
+            .args(["fetch", "--prune", "origin"])
+            .current_dir(&work)
+            .output()
+            .unwrap();
+        assert!(!failed.status.success());
+        let plan = plan_repo(p(&work), RemotePlanOp::Pull);
+        assert_eq!(plan.fetched_at, None, "실패한 fetch 시각을 마지막 fetch로 보이면 안 됨");
+    }
+
+    #[test]
+    fn fetch_lists_every_remote_the_real_fetch_uses() {
+        let root = tmp_dir("fork-fetch");
+        let (origin, work) = clone_with_origin(&root);
+        git(&work, &["remote", "add", "upstream", p(&origin)]);
+        git(&work, &["fetch", "-q", "upstream"]);
+        git(&work, &["branch", "-q", "--set-upstream-to", "upstream/main"]);
+
+        let target = sync_target_from_repo(&Repository::open(&work).unwrap()).unwrap();
+        let expected = target
+            .fetch_remotes()
+            .unwrap()
+            .iter()
+            .map(|r| format!("git fetch --prune {}", r))
+            .collect::<Vec<_>>()
+            .join(" && ");
+        let plan = plan_repo(p(&work), RemotePlanOp::Fetch);
+        assert_eq!(plan.command.as_deref(), Some(expected.as_str()));
+        assert_eq!(
+            plan.command.as_deref(),
+            Some("git fetch --prune upstream && git fetch --prune origin")
+        );
+    }
+
+    #[test]
+    fn pull_command_uses_the_real_pull_target_and_branch_rebase_setting() {
+        let root = tmp_dir("pull-target");
+        let (_, work) = clone_with_origin(&root);
+        git(&work, &["config", "branch.main.rebase", "true"]);
+        let target = sync_target_from_repo(&Repository::open(&work).unwrap()).unwrap();
+        let (remote, merge_ref) = target.pull_target().unwrap();
+        assert_eq!(target.pull_rebase(None), None);
+        let plan = plan_repo(p(&work), RemotePlanOp::Pull);
+        assert_eq!(
+            plan.command.as_deref(),
+            Some(format!("git pull {} {}", remote, merge_ref).as_str())
+        );
+    }
+
+    #[tokio::test]
+    async fn push_default_upstream_pushes_to_the_tracked_branch() {
+        let root = tmp_dir("push-default-upstream");
+        let (_, work) = clone_with_origin(&root);
+        git(&work, &["checkout", "-q", "-b", "feat/w", "origin/main"]);
+        git(&work, &["config", "push.default", "upstream"]);
+        commit(&work, "w");
+        let target = crate::commands::git::get_push_target(p(&work).to_string())
+            .await
+            .unwrap();
+        assert_eq!(target.refspec, "feat/w:refs/heads/main");
+        let plan = plan_repo(p(&work), RemotePlanOp::Push);
+        assert_eq!(
+            plan.command.as_deref(),
+            Some(format!("git push {} {}", target.remote, target.refspec).as_str()),
+            "추적 브랜치 그대로 올리므로 -u 없이 보인다"
+        );
+        assert!(!plan.sets_upstream);
+        assert_eq!(plan.commits, 1);
+    }
+
+    #[test]
+    fn remote_error_codes_become_skip_reasons() {
+        let code = |m: &str| AppError::GitCli {
+            message: m.to_string(),
+            exit_code: None,
+        };
+        assert_eq!(skip_reason_from_error(&code("detached_head")), RemotePlanSkipReason::DetachedHead);
+        assert_eq!(skip_reason_from_error(&code("no_remote")), RemotePlanSkipReason::NoRemote);
+        assert_eq!(
+            skip_reason_from_error(&code("multiple_remotes")),
+            RemotePlanSkipReason::MultipleRemotes
+        );
+        assert_eq!(skip_reason_from_error(&code("no_upstream:x")), RemotePlanSkipReason::NoUpstream);
+        assert_eq!(skip_reason_from_error(&code("boom")), RemotePlanSkipReason::Error);
     }
 
     #[test]

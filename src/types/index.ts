@@ -684,13 +684,15 @@ export interface RepoRemotePlan {
   command: string | null;
   /** Push: 올릴 커밋 수. Pull: 받을 커밋 수. Fetch: 0. */
   commits: number;
+  /** 원격 브랜치에만 있는 커밋 수(마지막 fetch 기준). */
+  behind: number;
   /** 원격 브랜치에 로컬에 없는 커밋이 있다. Push는 먼저 Pull이 필요하다. */
   needsPull: boolean;
   /** Push가 추적 브랜치를 새로 연결한다(`-u`). */
   setsUpstream: boolean;
   skip: boolean;
   skipReason: RemotePlanSkipReason | null;
-  /** 마지막 fetch 시각(유닉스 초). */
+  /** 마지막으로 성공한 fetch 시각(유닉스 초). 모르면 null. */
   fetchedAt: number | null;
   error: string | null;
 }

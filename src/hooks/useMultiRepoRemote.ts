@@ -12,6 +12,8 @@ export interface RemoteRepoTarget {
   path: string;
   name: string;
   accountId: string | null;
+  /** 이 앱에서 마지막으로 성공한 fetch 시각(유닉스 초). 모르면 null. */
+  lastFetchedAt: number | null;
 }
 
 /** 확인 창의 저장소 한 줄. */
@@ -24,6 +26,11 @@ export interface RemotePlanRow {
    * 있는데 받아 오지 못했으면 틀릴 수 있다.
    */
   fetchFailed: boolean;
+  /**
+   * 마지막으로 **성공한** fetch 시각(유닉스 초). 「마지막 fetch 기준」 표시에 쓴다.
+   * 실패한 fetch 시각은 들어가지 않는다. 모르면 null.
+   */
+  lastFetchedAt: number | null;
 }
 
 export type RemoteRowResult =
@@ -49,9 +56,27 @@ const DEFAULT_DEPS: RemoteDeps = {
   plan: planRemoteOp,
 };
 
-/** 체크하고 실행할 수 있는 줄인가. 계정이 없거나 계획이 건너뛴 저장소는 실행하지 않는다. */
+/** 계획상 실행할 줄인가(처음부터 체크한다). 계정이 없거나 계획이 건너뛴 저장소는 아니다. */
 export function isRunnable(row: RemotePlanRow): boolean {
   return !row.plan.skip && row.accountId !== null && row.plan.command !== null;
+}
+
+/**
+ * 계획은 「할 일 없음」이지만 fetch가 실패해 틀렸을 수 있는 줄. 원격에 새 커밋이 있는데
+ * 받아 오지 못했을 수 있으므로, 체크는 풀어 두되 사용자가 골라 실행할 수 있게 한다.
+ */
+export function isStaleUpToDate(row: RemotePlanRow): boolean {
+  return (
+    row.fetchFailed &&
+    row.plan.skipReason === "upToDate" &&
+    row.accountId !== null &&
+    row.plan.command !== null
+  );
+}
+
+/** 사용자가 체크해서 실행할 수 있는 줄. */
+export function isSelectable(row: RemotePlanRow): boolean {
+  return isRunnable(row) || isStaleUpToDate(row);
 }
 
 /**
@@ -79,14 +104,18 @@ export async function prepareRemotePlan(
     op,
   );
   const planByPath = new Map(plans.map((plan) => [plan.path, plan]));
-  const rows = targets.map((target, i) => ({
-    name: target.name,
-    accountId: target.accountId,
-    plan: planByPath.get(target.path) ?? missingPlan(target.path),
-    // 계정이 없어 fetch를 못 한 저장소는 어차피 실행하지 않는다. 「마지막 fetch 기준」은
-    // 실행할 수 있는데 최신이 아닐 수 있는 저장소에만 붙인다.
-    fetchFailed: op !== "fetch" && target.accountId !== null && !fetchOutcome[i].ok,
-  }));
+  const rows = targets.map((target, i) => {
+    const plan = planByPath.get(target.path) ?? missingPlan(target.path);
+    return {
+      name: target.name,
+      accountId: target.accountId,
+      plan,
+      // 계정이 없어 fetch를 못 한 저장소는 어차피 실행하지 않는다. 「마지막 fetch 기준」은
+      // 실행할 수 있는데 최신이 아닐 수 있는 저장소에만 붙인다.
+      fetchFailed: op !== "fetch" && target.accountId !== null && !fetchOutcome[i].ok,
+      lastFetchedAt: latest(target.lastFetchedAt, plan.fetchedAt),
+    };
+  });
   return { rows, fetchedPaths: fetchOutcome.filter((o) => o.ok).map((o) => o.path) };
 }
 
@@ -105,7 +134,7 @@ export async function runRemotePlan(
   let results: Record<string, RemoteRowResult> = {};
   for (const row of rows) {
     const { path } = row.plan;
-    if (!isRunnable(row) || row.accountId === null) continue;
+    if (!isSelectable(row) || row.accountId === null) continue;
     const accountId = row.accountId;
     onResult(path, { status: "running" });
     let result: RemoteRowResult;
@@ -132,6 +161,7 @@ function missingPlan(path: string): RepoRemotePlan {
     remote: null,
     command: null,
     commits: 0,
+    behind: 0,
     needsPull: false,
     setsUpstream: false,
     skip: true,
@@ -141,14 +171,28 @@ function missingPlan(path: string): RepoRemotePlan {
   };
 }
 
-/** 워크스페이스 경로를 등록된 저장소 정보(이름·지정 계정)로 바꾼다. */
-export function targetsFor(paths: string[], repos: RepoInfo[]): RemoteRepoTarget[] {
+function latest(a: number | null, b: number | null): number | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.max(a, b);
+}
+
+/**
+ * 워크스페이스 경로를 등록된 저장소 정보(이름·지정 계정)로 바꾼다.
+ * `lastFetched`는 이 앱에서 성공한 fetch 시각(`useSyncStore.lastFetchedByRepo`)이다.
+ */
+export function targetsFor(
+  paths: string[],
+  repos: RepoInfo[],
+  lastFetched: Readonly<Record<string, number>> = {},
+): RemoteRepoTarget[] {
   return paths.map((path) => {
     const repo = repos.find((r) => r.path === path);
     return {
       path,
       name: repo?.name ?? path.split("/").filter(Boolean).pop() ?? path,
       accountId: repo?.accountId ?? null,
+      lastFetchedAt: lastFetched[path] ?? null,
     };
   });
 }
@@ -174,7 +218,9 @@ export function useMultiRepoRemote(paths: string[], op: RemoteOp) {
   const [error, setError] = useState<string | null>(null);
 
   // 창을 연 순간의 저장소 목록으로 계획을 만든다. 열려 있는 동안 목록이 바뀌어도 다시 만들지 않는다.
-  const [targets] = useState(() => targetsFor(paths, repos));
+  const [targets] = useState(() =>
+    targetsFor(paths, repos, useSyncStore.getState().lastFetchedByRepo),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -207,7 +253,7 @@ export function useMultiRepoRemote(paths: string[], op: RemoteOp) {
   }, []);
 
   const chosen = useMemo(
-    () => rows.filter((r) => isRunnable(r) && selected.has(r.plan.path)),
+    () => rows.filter((r) => isSelectable(r) && selected.has(r.plan.path)),
     [rows, selected],
   );
 

@@ -4,8 +4,11 @@ import { AlertTriangle, Check, Loader2, X } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
 import { avatarColor } from "@/lib/avatar-color";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { remoteErrorKey } from "@/lib/remote-error";
 import {
   isRunnable,
+  isSelectable,
+  isStaleUpToDate,
   useMultiRepoRemote,
   type RemotePlanRow,
   type RemoteRowResult,
@@ -72,7 +75,8 @@ export function MultiRepoRemoteDialog({ paths, op, onClose }: MultiRepoRemoteDia
       {phase === "preparing" && (
         <div className="flex items-center gap-2 px-4 py-6 border-t border-(--line) text-[12.5px] text-muted-foreground">
           <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-          {t("multiRepoRemote.preparing")}
+          {/* Fetch는 창을 열 때 미리 fetch하지 않는다(실행 자체가 fetch). */}
+          {t(op === "fetch" ? "multiRepoRemote.preparingFetch" : "multiRepoRemote.preparing")}
         </div>
       )}
 
@@ -190,22 +194,22 @@ interface PlanRowProps {
 
 function PlanRow({ row, op, checked, locked, result, onToggle }: PlanRowProps) {
   const { t } = useTranslation();
-  const runnable = isRunnable(row);
+  const selectable = isSelectable(row);
   const { plan } = row;
   const color = avatarColor(row.name);
   return (
     <div
       data-testid={`plan-row-${row.name}`}
-      data-skipped={!runnable || undefined}
-      className={cn("px-4 py-2.5 border-t border-(--line)", !runnable && "opacity-50")}
+      data-skipped={!isRunnable(row) || undefined}
+      className={cn("px-4 py-2.5 border-t border-(--line)", !selectable && "opacity-50")}
     >
       <div className={GRID}>
         <input
           type="checkbox"
           aria-label={row.name}
           className="m-0 accent-(--acc)"
-          checked={runnable && checked}
-          disabled={!runnable || locked}
+          checked={selectable && checked}
+          disabled={!selectable || locked}
           onChange={onToggle}
         />
         <span className="flex items-center gap-2 min-w-0">
@@ -223,8 +227,8 @@ function PlanRow({ row, op, checked, locked, result, onToggle }: PlanRowProps) {
           {row.fetchFailed && (
             <span className="flex items-center gap-1 text-[11px] text-warning" data-testid="stale-fetch">
               <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />
-              {plan.fetchedAt
-                ? t("multiRepoRemote.stale", { time: formatRelativeTime(plan.fetchedAt) })
+              {row.lastFetchedAt
+                ? t("multiRepoRemote.stale", { time: formatRelativeTime(row.lastFetchedAt) })
                 : t("multiRepoRemote.staleNever")}
             </span>
           )}
@@ -235,7 +239,7 @@ function PlanRow({ row, op, checked, locked, result, onToggle }: PlanRowProps) {
       </div>
       {result?.status === "failed" && (
         <p role="alert" className="mt-1 pl-[30px] text-[11.5px] text-danger break-words">
-          {result.message}
+          {failureText(result.message, t)}
         </p>
       )}
     </div>
@@ -268,6 +272,12 @@ function ResultLabel({ result }: { result: RemoteRowResult }) {
 
 type Translate = ReturnType<typeof useTranslation>["t"];
 
+/** 실행 실패 문구. 원격 선택 오류 코드(`detached_head` 등)는 단일 저장소 툴바와 같은 문구로 바꾼다. */
+function failureText(message: string, t: Translate): string {
+  const key = remoteErrorKey(message);
+  return key ? t(key) : message;
+}
+
 /** 오른쪽 칸: 건너뛰는 이유, 또는 ↑/↓ 커밋 수. Fetch는 커밋 수를 미리 알 수 없어 비운다. */
 function commitsLabel(row: RemotePlanRow, op: RemoteOp, t: Translate): string {
   if (row.accountId === null && !row.plan.skip) return t("multiRepoRemote.skip.noAccount");
@@ -282,18 +292,22 @@ function commitsLabel(row: RemotePlanRow, op: RemoteOp, t: Translate): string {
   return "";
 }
 
-/** 표 아래 안내: Pull이 먼저 필요한 저장소, `-u`로 새로 연결하는 저장소, fetch 실패, 계정 없음. */
+/**
+ * 표 아래 안내: Pull이 먼저 필요한 저장소, `-u`로 새로 연결하는 저장소, fetch 실패(할 일 없음으로
+ * 계획된 저장소 포함), 계정 없음.
+ */
 function noteLines(rows: RemotePlanRow[], op: RemoteOp, t: Translate): string[] {
   return rows.flatMap((row) => {
     const { plan, name } = row;
     if (plan.skipReason === "error") {
       return [t("multiRepoRemote.notes.error", { name, error: plan.error ?? "" })];
     }
+    if (isStaleUpToDate(row)) return [t(`multiRepoRemote.notes.staleUpToDate_${op}`, { name })];
     if (plan.skip) return [];
     if (row.accountId === null) return [t("multiRepoRemote.notes.noAccount", { name })];
     return [
       ...(row.fetchFailed ? [t("multiRepoRemote.notes.fetchFailed", { name })] : []),
-      ...(op === "push" && plan.needsPull ? [t("multiRepoRemote.notes.needsPull", { name })] : []),
+      ...(op === "push" && plan.needsPull ? [t("multiRepoRemote.notes.needsPull", { name, count: plan.behind })] : []),
       ...(op === "push" && plan.setsUpstream ? [t("multiRepoRemote.notes.setsUpstream", { name })] : []),
     ];
   });
