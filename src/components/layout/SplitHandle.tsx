@@ -82,7 +82,7 @@ export function SplitHandle({
       <span
         aria-hidden="true"
         className={cn(
-          "rounded-full bg-transparent group-hover:bg-primary/40 group-active:bg-primary/60 transition-colors",
+          "rounded-full bg-transparent group-hover:bg-(--ln) group-active:bg-(--muted) transition-colors",
           vertical ? "w-[3px] h-10" : "h-[3px] w-10",
         )}
       />

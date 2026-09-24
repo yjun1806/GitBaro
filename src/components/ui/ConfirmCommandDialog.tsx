@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { AlertTriangle, X } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
 import { cn } from "@/lib/utils";
+import { FLOATING_SURFACE } from "./layers";
 
 interface ConfirmCommandDialogProps {
   title: string;
@@ -32,12 +33,12 @@ export function ConfirmCommandDialog({
     <Dialog
       onClose={onClose}
       labelledBy={titleId}
-      className="bg-card rounded-xl shadow-2xl w-full max-w-md mx-4"
+      className={cn("rounded-xl w-full max-w-md mx-4", FLOATING_SURFACE)}
     >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h3 id={titleId} className="text-base font-semibold text-primary">{title}</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-primary">
+          <h3 id={titleId} className="text-base font-semibold text-foreground">{title}</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <X size={16} />
           </button>
         </div>
@@ -53,7 +54,7 @@ export function ConfirmCommandDialog({
             <p className="text-xs text-muted-foreground mb-1.5">
               {t("common.commandPreview")}
             </p>
-            <div className="font-mono text-xs bg-muted rounded px-3 py-2 text-primary">
+            <div className="font-mono text-xs bg-muted rounded px-3 py-2 text-foreground">
               {command}
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { FLOATING_SURFACE } from "./layers";
 import { useMenuKeyboard } from "@/hooks/useMenuKeyboard";
 
 export interface ContextMenuItem {
@@ -59,7 +60,7 @@ export function ContextMenu({ sections, position, onClose, ariaLabel }: ContextM
       aria-label={ariaLabel}
       tabIndex={-1}
       onKeyDown={onKeyDown}
-      className="fixed outline-none bg-popover border border-border rounded-lg shadow-lg z-[100] py-1 min-w-[200px]"
+      className={cn("fixed outline-none rounded-lg z-[100] py-1 min-w-[200px]", FLOATING_SURFACE)}
       style={{ left: position.x, top: position.y }}
     >
       {sections.map((section, si) => (

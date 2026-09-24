@@ -1,5 +1,7 @@
 import { useState, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { cn } from "@/lib/utils";
+import { FLOATING_SURFACE } from "./layers";
 
 interface TooltipProps {
   label: string;
@@ -33,7 +35,7 @@ export function Tooltip({ label, children }: TooltipProps) {
           <span
             role="tooltip"
             style={{ left: coords.x, top: coords.y }}
-            className="fixed z-[100] -mt-1.5 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-foreground shadow-lg pointer-events-none"
+            className={cn("fixed z-[100] -mt-1.5 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md px-2 py-1 text-xs pointer-events-none", FLOATING_SURFACE)}
           >
             {label}
           </span>,

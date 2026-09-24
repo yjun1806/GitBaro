@@ -82,7 +82,7 @@ export function LiveDot({ watched, className }: LiveDotProps) {
       title={label}
       data-watched={watched}
       className={cn(
-        "w-[7px] h-[7px] rounded-full bg-[var(--live)] shadow-[0_0_0_2px_var(--canvas)]",
+        "w-[7px] h-[7px] rounded-full bg-[var(--live)] shadow-[0_0_0_2px_var(--frame)]",
         !watched && "opacity-40",
         className,
       )}

@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "react";
 import { GitBranch, ChevronDown, Check, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { FLOATING_SURFACE } from "./layers";
 import type { BranchInfo } from "@/types";
 
 interface BranchComboboxProps {
@@ -106,7 +107,7 @@ export function BranchCombobox({
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+        <div className={cn("absolute left-0 right-0 top-full mt-1 rounded-lg z-50 overflow-hidden", FLOATING_SURFACE)}>
           {/* Search input */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
             <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -136,7 +137,7 @@ export function BranchCombobox({
                     className={cn(
                       "w-full flex items-start gap-2 px-3 py-2 text-left transition-colors",
                       isSelected
-                        ? "bg-primary/10"
+                        ? "bg-accent"
                         : "hover:bg-accent",
                     )}
                   >
@@ -144,7 +145,7 @@ export function BranchCombobox({
                       className={cn(
                         "w-3.5 h-3.5 mt-0.5 shrink-0",
                         isSelected
-                          ? "text-primary"
+                          ? "text-foreground"
                           : "text-muted-foreground",
                       )}
                     />
@@ -153,7 +154,7 @@ export function BranchCombobox({
                         className={cn(
                           "text-sm truncate",
                           isSelected
-                            ? "text-primary font-medium"
+                            ? "text-foreground font-medium"
                             : "text-foreground",
                         )}
                       >
@@ -174,7 +175,7 @@ export function BranchCombobox({
                       )}
                     </div>
                     {isSelected && (
-                      <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
+                      <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-foreground" />
                     )}
                   </button>
                 );

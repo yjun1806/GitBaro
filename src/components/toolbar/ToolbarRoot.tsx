@@ -115,7 +115,7 @@ export function ToolbarRoot() {
   return (
     <ToolbarDropdownContext.Provider value={dropdown}>
       {/* @container: 툴바 폭에 따라 git 작업 버튼 이름을 숨긴다(ActionButton의 TOOLBAR_LABEL_CLASS). */}
-      <div className={cn("@container flex items-center border-b border-border bg-surface select-none", HEADER_HEIGHT_CLASS)}>
+      <div className={cn("@container flex items-center border-b border-(--line2) bg-(--frame) select-none", HEADER_HEIGHT_CLASS)}>
         {/* macOS 트래픽 라이트는 사이드바 쪽(맨 왼쪽 위 모서리)에 있다 — 그 자리 예약은
             RepoRail의 머리글이 진다(TRAFFIC_LIGHT_INSET_PX, layout-tokens.ts). */}
         {scope?.kind === "workspace" ? (
@@ -172,7 +172,7 @@ export function ToolbarRoot() {
         {/* Zone D: Settings */}
         <button
           onClick={handleOpenSettings}
-          className={cn("flex items-center justify-center w-[42px] hover:bg-accent transition-colors text-muted-foreground hover:text-foreground shrink-0", HEADER_HEIGHT_CLASS)}
+          className={cn("flex items-center justify-center w-[42px] hover:bg-(--frame-hover) transition-colors text-muted-foreground hover:text-foreground shrink-0", HEADER_HEIGHT_CLASS)}
           title={t("common.settings")}
         >
           <Settings className="w-4 h-4" />

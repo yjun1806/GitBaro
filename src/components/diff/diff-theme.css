@@ -17,9 +17,10 @@
   --diff-add-lineNumber--: var(--diff-add-content--);
   --diff-del-lineNumber--: var(--diff-del-content--);
   --diff-plain-lineNumber-color--: var(--ln, var(--gray-600));
-  --diff-hunk-content--: #eaecf5;
-  --diff-hunk-lineNumber--: #d4d8ed;
-  --diff-hunk-content-color--: #5E6AD2;
+  /* 구획 머리(@@)는 강조가 아니라 회색 단계다(색 체계: 브랜드·상태 색 밖은 회색). */
+  --diff-hunk-content--: var(--diff-hunk);
+  --diff-hunk-lineNumber--: var(--diff-hunk);
+  --diff-hunk-content-color--: var(--diff-hunk-fg);
   --diff-border--: var(--line2, var(--gray-300));
   --diff-plain-content--: var(--panel, var(--white));
   --diff-empty-content--: var(--chip, var(--gray-100));
@@ -34,9 +35,9 @@
   --diff-add-lineNumber--: #1f3824;
   --diff-del-lineNumber--: #4a2020;
   --diff-plain-lineNumber-color--: var(--gray-500);
-  --diff-hunk-content--: #1c1e30;
-  --diff-hunk-lineNumber--: #2a2d4e;
-  --diff-hunk-content-color--: #7E89EC;
+  --diff-hunk-content--: var(--gray-925);
+  --diff-hunk-lineNumber--: var(--gray-925);
+  --diff-hunk-content-color--: var(--gray-500);
   --diff-border--: var(--gray-900);
   --diff-plain-content--: var(--gray-1000);
   --diff-empty-content--: var(--gray-950);
@@ -82,7 +83,7 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: #5E6AD2;
+  background: var(--fg2);
   cursor: ew-resize;
   z-index: 10;
 }
@@ -96,7 +97,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #5E6AD2;
+  background: var(--fg2);
   border: 2px solid white;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
@@ -118,7 +119,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #5E6AD2;
+  background: var(--fg2);
   cursor: pointer;
   border: 2px solid white;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -148,17 +149,17 @@
   border-radius: 4px;
   cursor: pointer;
   background: transparent;
-  color: var(--gray-600);
+  color: var(--muted);
   transition: all 0.15s ease;
 }
 
 .image-diff-mode-btn:hover {
-  color: var(--gray-900);
+  color: var(--fg);
 }
 
 .image-diff-mode-btn.active {
-  background: white;
-  color: var(--gray-900);
+  background: var(--panel);
+  color: var(--fg);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
@@ -178,6 +179,6 @@
 /* Image meta info */
 .image-meta-label {
   font-size: 11px;
-  color: var(--gray-500);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }

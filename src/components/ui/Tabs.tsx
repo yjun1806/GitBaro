@@ -17,7 +17,8 @@ const colorClasses: Record<
   primary: {
     activeText: "text-foreground",
     indicator: "bg-primary",
-    badge: "bg-primary/10 text-primary",
+    // 탭 개수 배지는 강조가 아니라 회색이다(브랜드 색은 활성 탭 밑줄에만).
+    badge: "bg-foreground/10 text-foreground",
   },
   info: {
     activeText: "text-info",

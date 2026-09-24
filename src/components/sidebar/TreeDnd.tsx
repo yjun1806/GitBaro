@@ -322,7 +322,7 @@ export function DraggableRow({
       {mine && !blocked && mine.zone === "into" && (
         <span
           aria-hidden="true"
-          className="absolute inset-0 rounded-[var(--radius-item)] ring-2 ring-primary/50 pointer-events-none"
+          className="absolute inset-0 rounded-[var(--radius-item)] ring-2 ring-foreground/30 pointer-events-none"
         />
       )}
       {blocked && (
@@ -341,7 +341,7 @@ function DropLine({ depth, edge }: { depth: number; edge: "top" | "bottom" }) {
     <span
       aria-hidden="true"
       className={cn(
-        "absolute right-2 h-0.5 rounded-full bg-primary pointer-events-none z-10",
+        "absolute right-2 h-0.5 rounded-full bg-(--fg2) pointer-events-none z-10",
         edge === "top" ? "-top-px" : "-bottom-px",
       )}
       style={{ left: 8 + depth * INDENT_PX }}

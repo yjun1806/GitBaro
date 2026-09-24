@@ -5,6 +5,17 @@ import { cn } from "@/lib/utils";
 /** 들여쓰기 한 단계의 폭(px). 시안 `gen_d.py`의 `depth*14`. */
 export const INDENT_PX = 14;
 
+/** 사이드바에서 선택된 줄의 왼쪽 막대(브랜드 색). 부모는 `relative`여야 한다. */
+export function SelectionBar() {
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="selection-bar"
+      className="absolute left-0 top-[5px] bottom-[5px] w-[3px] rounded-r-[2px] bg-(--acc)"
+    />
+  );
+}
+
 interface TreeRowFrameProps {
   /** 화면 읽기 프로그램에 알리는 트리 단계(1부터). */
   level: number;
@@ -81,12 +92,12 @@ export function TreeRowFrame({
         "relative flex items-center gap-[var(--item)] pr-2 rounded-[var(--radius-item)] cursor-default select-none outline-none",
         tall ? "min-h-9 py-1" : "min-h-[var(--row)] py-[3px]",
         "focus-visible:ring-2 focus-visible:ring-ring/40",
-        selected
-          ? "bg-card shadow-[var(--shadow-sm)]"
-          : "hover:bg-[color-mix(in_srgb,var(--panel)_60%,transparent)]",
+        // 사이드바(층 0)에서는 흰 카드를 쓰지 않는다: 선택은 채움 + 브랜드 색 왼쪽 막대, hover는 옅은 채움.
+        selected ? "bg-(--frame-sel)" : "hover:bg-(--frame-hover)",
         className,
       )}
     >
+      {selected && <SelectionBar />}
       {Array.from({ length: depth }, (_, i) => (
         <span
           key={i}

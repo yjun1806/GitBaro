@@ -17,6 +17,7 @@ import {
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import { HEADER_HEIGHT_CLASS, TRAFFIC_LIGHT_INSET_PX } from "@/lib/layout-tokens";
 import { cn } from "@/lib/utils";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
 import type { RepoInfo, RepoSyncStatus } from "@/types";
 
 export const RAIL_COLLAPSED_WIDTH = 56;
@@ -60,7 +61,7 @@ function SidebarControl({ expanded }: { expanded: boolean }) {
         onClick={() => setOpen((v) => !v)}
         title={t("rail.sidebarControl")}
         className={cn(
-          "flex items-center gap-2 h-8 rounded-md hover:bg-accent transition-colors text-muted-foreground",
+          "flex items-center gap-2 h-8 rounded-md hover:bg-(--frame-hover) transition-colors text-muted-foreground",
           expanded ? "w-full px-2.5" : "w-8 justify-center",
         )}
       >
@@ -71,7 +72,7 @@ function SidebarControl({ expanded }: { expanded: boolean }) {
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-2 mb-1 w-56 bg-popover border border-border rounded-lg shadow-lg z-50 py-1">
+        <div className={cn("absolute bottom-full left-2 mb-1 w-56 rounded-lg z-50 py-1", FLOATING_SURFACE)}>
           <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground border-b border-border">
             {t("rail.sidebarControl")}
           </p>
@@ -85,9 +86,9 @@ function SidebarControl({ expanded }: { expanded: boolean }) {
               className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
             >
               <span className="w-4 shrink-0 flex items-center justify-center">
-                {railMode === mode && <Check className="w-3.5 h-3.5 text-primary" />}
+                {railMode === mode && <Check className="w-3.5 h-3.5 text-foreground" />}
               </span>
-              <span className={cn(railMode === mode && "text-primary font-medium")}>
+              <span className={cn(railMode === mode && "text-foreground font-medium")}>
                 {label}
               </span>
             </button>
@@ -154,12 +155,12 @@ function RailItem({
       onMouseLeave={onHoverEnd}
       className={cn(
         "relative flex items-center justify-center w-11 h-10 mx-auto rounded-lg transition-colors shrink-0",
-        isActive ? "bg-primary/10" : "hover:bg-accent",
+        isActive ? "bg-(--frame-sel)" : "hover:bg-(--frame-hover)",
       )}
     >
       {/* Active accent bar */}
       {isActive && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary" />
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-(--acc)" />
       )}
       <span className="relative shrink-0">
         <span
@@ -171,17 +172,17 @@ function RailItem({
         {/* 이름/카운트 공간이 없어 아바타 코너에 점만 표시:
             우상단 = push/pull 상태, 우하단 = 커밋되지 않은 변경 */}
         {isFetching ? (
-          <Loader2 className="absolute -top-1 -right-1 w-3 h-3 text-primary animate-spin" />
+          <Loader2 className="absolute -top-1 -right-1 w-3 h-3 text-muted-foreground animate-spin" />
         ) : (
           <RepoSyncIndicator
             status={syncStatus}
             variant="dot"
-            className="absolute -top-0.5 -right-0.5 ring-2 ring-background"
+            className="absolute -top-0.5 -right-0.5 ring-2 ring-(--frame)"
           />
         )}
         {syncStatus?.isDirty && (
           <span
-            className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-[var(--live)] ring-2 ring-background"
+            className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-[var(--live)] ring-2 ring-(--frame)"
             title={t("repo.uncommittedChanges")}
           />
         )}
@@ -271,8 +272,8 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
         style={{ width: panelWidth }}
         className={cn(
           // 시안의 사이드바는 바탕(canvas) 위에 선 없이 놓인다. 선은 메인 칸 위에 떠서 펼쳐질 때만 긋는다.
-          "absolute inset-y-0 left-0 flex flex-col bg-background transition-[width] duration-150 z-30",
-          isOverlay && "border-r border-border shadow-xl",
+          "absolute inset-y-0 left-0 flex flex-col bg-(--frame) transition-[width] duration-150 z-30",
+          isOverlay && "border-r border-border shadow-(--shadow-float)",
         )}
       >
         {/* 사이드바 머리글 줄 — 툴바(ToolbarRoot)와 같은 높이(HEADER_HEIGHT_CLASS)라
@@ -280,7 +281,7 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
             맨 왼쪽 위, 즉 이 줄 안에 있으므로 그 자리(TRAFFIC_LIGHT_INSET_PX)는 여기서
             예약한다(Overlay 타이틀바). 접힌 사이드바는 그 폭(56px)이 트래픽 라이트보다
             좁아 예약할 자리가 없어 이 예약은 펼침(hover 포함) 상태에서만 둔다. */}
-        <div className={cn("flex items-center shrink-0 border-b border-border", HEADER_HEIGHT_CLASS)}>
+        <div className={cn("flex items-center shrink-0 border-b border-(--line2)", HEADER_HEIGHT_CLASS)}>
           {isExpanded && (
             <div className="h-full shrink-0" style={{ width: TRAFFIC_LIGHT_INSET_PX }} data-tauri-drag-region />
           )}
@@ -289,7 +290,7 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
             title={t("rail.allRepos")}
             aria-pressed={repoListOpen}
             className={cn(
-              "flex items-center gap-2.5 flex-1 min-w-0 h-full hover:bg-accent transition-colors",
+              "flex items-center gap-2.5 flex-1 min-w-0 h-full hover:bg-(--frame-hover) transition-colors",
               isExpanded ? "pr-4" : "justify-center",
               repoListOpen ? "text-foreground" : "text-muted-foreground",
             )}
@@ -344,7 +345,7 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
       {/* Hover tooltip (collapsed mode) — fixed to escape overflow clipping */}
       {tip && (
         <div
-          className="fixed z-50 pointer-events-none px-2 py-1 rounded-md bg-popover border border-border text-xs whitespace-nowrap shadow-md"
+          className={cn("fixed z-50 pointer-events-none px-2 py-1 rounded-md text-xs whitespace-nowrap", FLOATING_SURFACE)}
           style={{ left: COLLAPSED_WIDTH + 8, top: tip.y, transform: "translateY(-50%)" }}
         >
           {tip.name}

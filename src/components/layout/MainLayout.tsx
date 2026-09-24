@@ -53,7 +53,9 @@ export function MainLayout() {
   useDiffMaximizeEscape();
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+    // 창 바탕은 층 0(창 틀)이다. 사이드바와 폭 조절 손잡이가 같은 색으로 이어지고,
+    // 본문 칸(MainColumn)만 층 1 바탕을 깐다.
+    <div className="flex flex-col h-screen bg-(--frame) text-foreground overflow-hidden">
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar. When pinned open it takes the user-sized width. */}
         <RepoRail expandedWidth={isResizable ? sidebarWidth : undefined} />

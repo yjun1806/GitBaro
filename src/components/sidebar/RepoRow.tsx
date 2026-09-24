@@ -167,7 +167,7 @@ export function RepoRow({
               </span>
             )}
           </span>
-          {fetching && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />}
+          {fetching && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
           {rowBadges}
         </TreeRowFrame>
       </DraggableRow>

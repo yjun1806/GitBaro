@@ -42,7 +42,7 @@ function EntryRow({ entry }: { entry: GitCommandEntry }) {
       >
         <span className="shrink-0">
           {isActive ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
           ) : entry.success ? (
             <CheckCircle className="w-3.5 h-3.5 text-success" />
           ) : (
@@ -113,7 +113,7 @@ export function ActivityLogPanel() {
   const hasMore = entries.length > visibleCount;
 
   return (
-    <div className="h-[280px] border-t border-border bg-surface flex flex-col">
+    <div className="h-[280px] border-t border-border bg-card flex flex-col">
       <div className="flex items-center justify-between px-3 h-8 shrink-0 border-b border-border">
         <span className="text-xs font-semibold text-foreground">
           {t("activity.title")}

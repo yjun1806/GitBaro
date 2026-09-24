@@ -37,8 +37,12 @@ function customPropertyNames(block: string): Set<string> {
 // W1-T1 완료 기준이 요구하는 리뷰 개편 토큰 이름들. 두 테마 블록 모두에
 // 이 이름들이 있어야 한다.
 const REQUIRED_REVIEW_TOKENS = [
+  "--frame",
+  "--frame-hover",
+  "--frame-sel",
   "--canvas",
   "--panel",
+  "--float",
   "--line",
   "--line2",
   "--chip",
@@ -48,13 +52,16 @@ const REQUIRED_REVIEW_TOKENS = [
   "--faint",
   "--ln",
   "--acc",
+  "--acc-hover",
   "--acc-sel",
   "--acc-faint",
   "--acc-line",
   "--live",
   "--live-soft",
+  "--status-fail",
   "--shadow",
   "--shadow-sm",
+  "--shadow-float",
   "--radius-panel",
   "--radius-item",
   "--radius-chip",
@@ -105,18 +112,18 @@ describe("리뷰 개편 시각 토큰 (globals.css)", () => {
     expect(customPropertyNames(darkBlock)).toEqual(customPropertyNames(lightBlock));
   });
 
-  it("Light 블록의 색·그림자·모서리 토큰이 원천 값 그대로다 (plans/design/README.md:43~53)", () => {
-    expect(lightBlock).toMatch(/--canvas:\s*#efefee/);
+  it("Light 블록의 색·그림자·모서리 토큰이 원천 값 그대로다 (plans/design/README.md 「색 체계 결정」)", () => {
+    expect(lightBlock).toMatch(/--canvas:\s*#f1f1ef/);
     expect(lightBlock).toMatch(/--panel:\s*#ffffff/);
-    expect(lightBlock).toMatch(/--line:\s*#ebebea/);
+    expect(lightBlock).toMatch(/--line:\s*#e6e6e3/);
     expect(lightBlock).toMatch(/--line2:\s*#d4d4d2/);
     expect(lightBlock).toMatch(/--chip:\s*#f3f3f2/);
     expect(lightBlock).toMatch(/--fg:\s*#1a1a19/);
-    expect(lightBlock).toMatch(/--fg2:\s*#3d3d3b/);
+    expect(lightBlock).toMatch(/--fg2:\s*#4a4a47/);
     expect(lightBlock).toMatch(/--muted:\s*#62625f/);
-    expect(lightBlock).toMatch(/--faint:\s*#8a8a86/);
+    expect(lightBlock).toMatch(/--faint:\s*var\(--muted\)/);
     expect(lightBlock).toMatch(/--ln:\s*#b6b6b2/);
-    expect(lightBlock).toMatch(/--acc:\s*#16181d/);
+    expect(lightBlock).toMatch(/--acc:\s*#be3f72/);
     expect(lightBlock).toMatch(/--live:\s*#e5700b/);
     expect(lightBlock).toMatch(/--shadow:\s*0 1px 2px rgba\(0,\s*0,\s*0,\s*0\.04\),\s*0 6px 20px rgba\(0,\s*0,\s*0,\s*0\.05\)/);
     expect(lightBlock).toMatch(/--shadow-sm:\s*0 1px 3px rgba\(0,\s*0,\s*0,\s*0\.07\)/);
@@ -126,9 +133,10 @@ describe("리뷰 개편 시각 토큰 (globals.css)", () => {
     expect(lightBlock).toMatch(/--radius-pill:\s*9999px/);
   });
 
-  it("acc-sel/acc-faint/acc-line은 강조색을 각각 8%/4%/35%로 섞는다 (README 47줄)", () => {
+  it("acc-sel/acc-line은 브랜드 색을 8%/35%로 섞고, acc-faint는 브랜드 색 없이 회색이다", () => {
     expect(lightBlock).toMatch(/--acc-sel:\s*color-mix\(in srgb,\s*var\(--acc\)\s*8%,\s*var\(--panel\)\)/);
-    expect(lightBlock).toMatch(/--acc-faint:\s*color-mix\(in srgb,\s*var\(--acc\)\s*4%,\s*var\(--panel\)\)/);
+    // 섹션 머리 띠 등 강조가 아닌 곳에서 쓰므로 브랜드 색이 새지 않게 한다.
+    expect(lightBlock).not.toMatch(/--acc-faint:[^;]*--acc\b/);
     expect(lightBlock).toMatch(/--acc-line:\s*color-mix\(in srgb,\s*var\(--acc\)\s*35%,\s*transparent\)/);
   });
 

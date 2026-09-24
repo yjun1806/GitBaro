@@ -91,7 +91,7 @@ export function AccountHeader({
                 setCreating(true);
               }}
               onKeyDown={(e) => e.stopPropagation()}
-              className="w-5 h-5 shrink-0 flex items-center justify-center rounded-[var(--radius-chip)] text-[var(--faint)] hover:text-foreground hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="w-5 h-5 shrink-0 flex items-center justify-center rounded-[var(--radius-chip)] text-[var(--faint)] hover:text-foreground hover:bg-(--frame-hover) outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               <FolderPlus className="w-3 h-3" aria-hidden="true" />
             </button>

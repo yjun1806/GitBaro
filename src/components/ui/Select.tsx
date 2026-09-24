@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import type { KeyboardEvent } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FLOATING_SURFACE } from "./layers";
 
 export interface SelectOption {
   value: string;
@@ -78,7 +79,7 @@ export function Select({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 py-1 max-h-48 overflow-y-auto">
+        <div className={cn("absolute left-0 right-0 top-full mt-1 rounded-lg z-50 py-1 max-h-48 overflow-y-auto", FLOATING_SURFACE)}>
           {options.map((option) => (
             <button
               key={option.value}
@@ -89,7 +90,7 @@ export function Select({
               className={cn(
                 "w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors",
                 option.value === value
-                  ? "bg-primary/10 text-primary"
+                  ? "bg-accent text-foreground font-medium"
                   : "text-foreground hover:bg-accent",
               )}
             >
