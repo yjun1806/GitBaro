@@ -41,6 +41,11 @@ describe("file selection", () => {
     expect(entryPaths([renamed, entry("x.ts", true)])).toEqual(["new.ts", "old.ts", "x.ts"]);
   });
 
+  it("never sends a copy's source file to git", () => {
+    const copied = entry("copy.ts", true, { status: "copied", origPath: "src.ts" });
+    expect(entryPaths([copied])).toEqual(["copy.ts"]);
+  });
+
   it("leaves conflicted files out of stage all", () => {
     const entries = [entry("a.ts", false), entry("c.ts", false, { status: "conflicted" })];
     expect(stageableEntries(entries).map((e) => e.path)).toEqual(["a.ts"]);

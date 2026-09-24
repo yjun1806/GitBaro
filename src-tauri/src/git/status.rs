@@ -151,8 +151,14 @@ fn tracked_entry(xy: &str, path: String, orig_path: Option<String>) -> Porcelain
 pub fn read_status(repo_path: &Path) -> Result<Vec<PorcelainEntry>, AppError> {
     // --no-optional-locks: status is polled; never hold index.lock while the
     // user runs git in a terminal (same as GitHub Desktop).
+    // status.renames=true: a user's `status.renames` / `diff.renames = copies`
+    // would otherwise report copies, whose source is a separate, still-changed
+    // file. Stage/unstage/discard on a copy row must never touch that source,
+    // so copies are reported as plain additions.
     let output = Command::new("git")
         .args([
+            "-c",
+            "status.renames=true",
             "--no-optional-locks",
             "status",
             "--porcelain=v2",

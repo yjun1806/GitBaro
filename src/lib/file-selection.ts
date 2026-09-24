@@ -31,12 +31,13 @@ export function resolveFileSelection(
 /**
  * Paths git must receive to stage/unstage/discard `entries`. A rename is two
  * index entries (the new path and the removed old path), so both are sent.
+ * Other statuses never send `origPath` (a copy's source is a separate file).
  */
 export function entryPaths(entries: StatusEntry[]): string[] {
   const paths = new Set<string>();
   for (const e of entries) {
     paths.add(e.path);
-    if (e.origPath) paths.add(e.origPath);
+    if (e.status === "renamed" && e.origPath) paths.add(e.origPath);
   }
   return [...paths];
 }

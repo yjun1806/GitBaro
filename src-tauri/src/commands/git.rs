@@ -822,6 +822,28 @@ mod tests {
         assert_eq!(e["staged"], true);
     }
 
+    /// diff.renames=copies 설정이 있어도 복사본은 원본 경로 없이 추가로만 보여야 한다.
+    /// 복사 행에서 stage/unstage/discard 할 때 원본 파일의 변경을 건드리지 않게 하기 위함.
+    #[tokio::test]
+    async fn status_never_reports_copies() {
+        let dir = temp_repo("status-copies");
+        git(&dir, &["config", "diff.renames", "copies"]);
+        git(&dir, &["config", "status.renames", "copies"]);
+        let original = std::fs::read(dir.join("README.md")).unwrap();
+        std::fs::write(dir.join("copy.md"), &original).unwrap();
+        let mut changed = original.clone();
+        changed.extend_from_slice(b"more\n");
+        std::fs::write(dir.join("README.md"), &changed).unwrap();
+        git(&dir, &["add", "-A"]);
+
+        let entries = get_status(dir.to_string_lossy().to_string()).await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let copy = entries.iter().find(|e| e["path"] == "copy.md").expect("copy row");
+        assert_eq!(copy["indexStatus"], "added", "{:?}", entries);
+        assert!(copy["origPath"].is_null(), "{:?}", entries);
+    }
+
     /// skip-worktree(sparse checkout) 파일은 디스크에 없어도 삭제로 보이면 안 된다.
     #[tokio::test]
     async fn status_ignores_skip_worktree_files() {

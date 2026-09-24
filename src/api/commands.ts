@@ -62,8 +62,10 @@ export async function getStatus(repoPath: string): Promise<StatusEntry[]> {
       });
       continue;
     }
-    const indexRenamed = entry.indexStatus === "renamed" || entry.indexStatus === "copied";
-    const worktreeRenamed = entry.worktreeStatus === "renamed" || entry.worktreeStatus === "copied";
+    // Only renames carry origPath: a copy's source is a separate file with its
+    // own row, and acting on it from the copy row would touch its changes.
+    const indexRenamed = entry.indexStatus === "renamed";
+    const worktreeRenamed = entry.worktreeStatus === "renamed";
     if (entry.staged && entry.indexStatus !== "unchanged") {
       entries.push({
         path: entry.path,
