@@ -939,9 +939,58 @@ export async function getWorkspaceHistory(
 
 // W5-T5 — main 대비 변경
 
-import type { BranchChanges } from "@/types";
+import type { BranchChanges, FileDiffVsDefault } from "@/types";
 
 /** 저장소 하나가 main과 갈라진 지점 이후로 바꾼 파일과 커밋하지 않은 변경. 저장소마다 따로 부른다. */
 export async function getChangesVsDefault(path: string): Promise<BranchChanges> {
   return invoke("get_changes_vs_default", { path });
+}
+
+interface RawFileDiffVsDefault extends Omit<RawFileDiff, "staged" | "binaryPreview"> {
+  oldPath: string | null;
+  baseOid: string | null;
+  baseIsDivergencePoint: boolean;
+}
+
+/** 줄 단위 diff 원본을 화면용 `DiffOutput` 모양으로 바꾼다. */
+function fileDiffVsDefaultFromRaw(raw: RawFileDiffVsDefault): FileDiffVsDefault {
+  return {
+    filePath: raw.filePath,
+    oldPath: raw.oldPath,
+    oldContent: raw.oldContent,
+    newContent: raw.newContent,
+    binary: raw.binary,
+    baseOid: raw.baseOid,
+    baseIsDivergencePoint: raw.baseIsDivergencePoint,
+    hunks: raw.hunks.map((h) => ({
+      header: h.header,
+      oldStart: h.oldStart,
+      oldLines: h.lines.filter((l) => l.kind !== "addition").length,
+      newStart: h.newStart,
+      newLines: h.lines.filter((l) => l.kind !== "deletion").length,
+      lines: h.lines.map((l) => ({
+        content: l.content,
+        lineType: mapLineKind(l.kind),
+        oldLineNo: l.oldLineNo,
+        newLineNo: l.newLineNo,
+      })),
+    })),
+  };
+}
+
+/**
+ * 파일 하나를 그 저장소 main과 갈라진 지점 → 작업 트리로 비교한 줄 단위 diff.
+ * `oldPath`에는 `BranchChangedFile.oldPath`(이름을 바꾼 파일의 이전 경로)를 넘긴다.
+ */
+export async function getFileDiffVsDefault(
+  path: string,
+  filePath: string,
+  oldPath: string | null = null,
+): Promise<FileDiffVsDefault> {
+  const raw: RawFileDiffVsDefault = await invoke("get_file_diff_vs_default", {
+    path,
+    filePath,
+    oldPath,
+  });
+  return fileDiffVsDefaultFromRaw(raw);
 }

@@ -602,10 +602,26 @@ export interface BranchChanges {
   /** `found`가 아니면 `committed`는 비고 `files`는 `uncommitted`와 같다. 커밋이 없는 저장소면 null. */
   baseStatus: WorkspaceBaseStatus | null;
   mergeBaseOid: string | null;
-  /** 갈라진 지점 → HEAD. */
+  /**
+   * 갈라진 지점 → HEAD. `branch === defaultBranch`면 기준은 upstream(`baseRef`, 예: `origin/main`)이고,
+   * 이 목록은 아직 push하지 않은 커밋의 변경이다. 화면은 이 경우를 따로 설명해야 한다.
+   */
   committed: BranchChangedFile[];
-  /** HEAD → 작업 트리(스테이징·추적하지 않는 파일 포함). */
+  /**
+   * HEAD → 작업 트리(스테이징·추적하지 않는 파일 포함).
+   * `git rm --cached`로 인덱스에서만 뺀 파일은 같은 경로가 `deleted`와 `untracked` 두 번 나온다.
+   */
   uncommitted: BranchChangedFile[];
   /** 갈라진 지점 → 작업 트리. 고쳤다가 되돌린 파일은 빠진다. */
   files: BranchChangedFile[];
+}
+
+/** `get_file_diff_vs_default`의 결과. 파일 하나를 갈라진 지점 → 작업 트리로 비교한다. */
+export interface FileDiffVsDefault extends DiffOutput {
+  /** 이름을 바꾼 파일이면 갈라진 지점에서의 경로. */
+  oldPath: string | null;
+  /** 비교 기준 커밋. 갈라진 지점을 못 찾으면 HEAD, 커밋이 없는 저장소면 null. */
+  baseOid: string | null;
+  /** false면 갈라진 지점을 못 찾아 HEAD와 비교한 결과다(`BranchChanges.files`와 같은 규칙). */
+  baseIsDivergencePoint: boolean;
 }

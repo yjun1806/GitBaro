@@ -125,6 +125,7 @@ pub fn run() {
             commands::workspace_history::get_workspace_history,
             // W5-T5
             commands::branch_changes::get_changes_vs_default,
+            commands::branch_changes::get_file_diff_vs_default,
         ])
         .setup(|app| {
             tracing::info!("GitBaro starting up");
