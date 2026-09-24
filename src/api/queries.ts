@@ -1,4 +1,5 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import {
   getStatus,
   getBranches,
@@ -86,9 +87,27 @@ export function useBranchDivergence(repoPath: string | null, enabled: boolean) {
 }
 
 /**
+ * fetch·pull·push 뒤 원격 상태와 작업 트리에 기대는 쿼리를 모두 무효화한다.
+ * 툴바 동기화 버튼과 원격 자동 최신화가 함께 쓴다.
+ */
+export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> {
+  return Promise.all(
+    [
+      "branches",
+      "repoSyncStatus",
+      "commitHistory",
+      "status",
+      "mergeState",
+      "fileDiff",
+      "remoteTags",
+    ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
+  );
+}
+
+/**
  * 여러 레포의 push/pull 필요 상태(ahead/behind)를 한 번에 조회한다.
  * 경로별 `RepoSyncStatus` 맵으로 반환하며, 마지막 fetch 시점 기준이므로
- * 백그라운드 fetch(useBackgroundFetch) 완료 시 `["repoSyncStatus"]` 무효화로
+ * 원격 자동 최신화(useAutoSync) 완료 시 `["repoSyncStatus"]` 무효화로
  * 갱신된다. 키를 정렬된 경로 목록으로 삼아 레포 목록 변화에만 반응한다.
  */
 export function useRepoSyncStatuses(repoPaths: string[]) {
@@ -99,7 +118,7 @@ export function useRepoSyncStatuses(repoPaths: string[]) {
     enabled: sortedPaths.length > 0,
     staleTime: 15_000,
     // 오프라인 libgit2 계산이라 저비용 — 전체 레포의 dirty/ahead가 이벤트 없이도
-    // 주기적으로 갱신되도록 포그라운드 폴링을 둔다. behind는 별도 background fetch가 갱신.
+    // 주기적으로 갱신되도록 포그라운드 폴링을 둔다. behind는 원격 자동 최신화(useAutoSync)가 갱신.
     refetchInterval: 20_000,
     refetchIntervalInBackground: false,
     select: (statuses): Record<string, RepoSyncStatus> =>

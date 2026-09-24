@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
-import { useBackgroundFetch } from "@/hooks/useBackgroundFetch";
+import { useAutoSync } from "@/hooks/useAutoSync";
 import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import "@/stores/selection"; // ensure cross-store subscriptions are registered
 import { RepoRail } from "./RepoRail";
@@ -19,8 +19,8 @@ export function MainLayout() {
 
   useRepositoryStore((s) => s.activeRepoPath);
 
-  // 열린 모든 레포를 주기적으로 fetch해 사이드바 push/pull 인디케이터를 최신화
-  useBackgroundFetch();
+  // 저장소별 설정에 따라 원격을 주기적으로 확인하고, 안전할 때만 자동으로 받는다
+  useAutoSync();
 
   const sidebarWidth = useSidebarWidth();
 

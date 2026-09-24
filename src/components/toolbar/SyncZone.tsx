@@ -11,7 +11,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useActivityStore } from "@/stores/activity";
 import { useSyncStore, type SyncAction } from "@/stores/sync";
-import { useBranches, useHeadDetached, useTokenValidation } from "@/api/queries";
+import { invalidateAfterSync, useBranches, useHeadDetached, useTokenValidation } from "@/api/queries";
 import { gitFetch, gitPush, gitPull, getPushTarget } from "@/api/commands";
 import type { PushTarget } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
@@ -113,15 +113,7 @@ export function SyncZone({ isOpen, onToggle, onClose }: SyncZoneProps) {
   })();
 
   const invalidateAll = (includeActions = false) => {
-    const queries = Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["branches"] }),
-      queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] }),
-      queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
-      queryClient.invalidateQueries({ queryKey: ["status"] }),
-      queryClient.invalidateQueries({ queryKey: ["mergeState"] }),
-      queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-      queryClient.invalidateQueries({ queryKey: ["remoteTags"] }),
-    ]);
+    const queries = invalidateAfterSync(queryClient);
     if (includeActions) {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["workflowRuns"] });

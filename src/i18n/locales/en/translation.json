@@ -713,5 +713,9 @@
     "noChanges": "Already up to date",
     "progress": "{{percent}}%",
     "loadMore": "Load more ({{remaining}} remaining)"
+  },
+  "autoSync": {
+    "fastForwardedToast_one": "{{repo}}: pulled {{count}} remote commit automatically",
+    "fastForwardedToast_other": "{{repo}}: pulled {{count}} remote commits automatically"
   }
 }
