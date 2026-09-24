@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createSafeStorage } from "@/lib/safe-storage";
+import { MIN_SIDEBAR_WIDTH } from "@/lib/sidebar-width";
 import type { Theme } from "@/types";
 
 /** Repo rail display mode (Supabase-style sidebar control) */
@@ -35,21 +36,20 @@ interface UIState {
   setDiffLineMode: (mode: DiffLineMode) => void;
 }
 
-// Matches MainLayout's drag minimum.
-const MIN_PERSISTED_SIDEBAR_WIDTH = 200;
 const RAIL_MODES: readonly RailMode[] = ["expanded", "collapsed", "hover"];
 const DIFF_LINE_MODES: readonly DiffLineMode[] = ["unified", "split"];
 
 /**
  * Picks only well-formed persisted fields. localStorage can hold values from an
- * older build or a hand edit; a bad width would collapse the layout.
+ * older build or a hand edit; a bad width would collapse the layout. The upper
+ * bound depends on the window, so MainLayout applies it with clampSidebarWidth.
  */
 export function sanitizePersistedUI(persisted: unknown): Partial<UIState> {
   if (typeof persisted !== "object" || persisted === null) return {};
   const p = persisted as Record<string, unknown>;
   const out: Partial<UIState> = {};
   if (RAIL_MODES.includes(p.railMode as RailMode)) out.railMode = p.railMode as RailMode;
-  if (typeof p.sidebarWidth === "number" && Number.isFinite(p.sidebarWidth) && p.sidebarWidth >= MIN_PERSISTED_SIDEBAR_WIDTH) {
+  if (typeof p.sidebarWidth === "number" && Number.isFinite(p.sidebarWidth) && p.sidebarWidth >= MIN_SIDEBAR_WIDTH) {
     out.sidebarWidth = p.sidebarWidth;
   }
   if (DIFF_LINE_MODES.includes(p.diffLineMode as DiffLineMode)) {
