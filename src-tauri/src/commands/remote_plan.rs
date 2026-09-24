@@ -254,13 +254,13 @@ fn plan_push(repo: &Repository, target: &SyncTarget, base: RepoRemotePlan) -> Re
     let remote_ref = format!("refs/remotes/{}/{}", remote, dest);
     let head = repo.head().ok().and_then(|h| h.target());
     let remote_oid = repo.refname_to_id(&remote_ref).ok();
-    let (ahead, behind, remote_has_branch) = match (head, remote_oid) {
+    let (ahead, behind) = match (head, remote_oid) {
         (Some(local), Some(remote_oid)) => {
             let (a, b) = repo.graph_ahead_behind(local, remote_oid).unwrap_or((0, 0));
-            (a as u32, b as u32, true)
+            (a as u32, b as u32)
         }
-        (Some(local), None) => (commits_missing_on_remote(repo, local, &remote), 0, false),
-        _ => (0, 0, false),
+        (Some(local), None) => (commits_missing_on_remote(repo, local, &remote), 0),
+        _ => (0, 0),
     };
     let plan = RepoRemotePlan {
         remote: Some(remote),
@@ -271,10 +271,16 @@ fn plan_push(repo: &Repository, target: &SyncTarget, base: RepoRemotePlan) -> Re
         sets_upstream,
         ..base
     };
-    // 원격 브랜치가 이미 있고 보낼 커밋도 없고 추적 브랜치도 그대로면 할 일이 없다.
-    // 원격에 브랜치가 없거나 추적 브랜치를 새로 연결하면(단일 저장소 툴바의 Publish와 같음)
-    // 커밋이 0개여도 push에 의미가 있다.
-    if remote_has_branch && ahead == 0 && !sets_upstream {
+    // 「할 일 없음」은 단일 저장소 툴바(SyncZone)의 Push 버튼과 같은 기준으로 판단한다:
+    // 브랜치에 (git이 인식하는) 추적 브랜치가 있고, 그 추적 브랜치 대비 앞선 커밋이 없으면
+    // 건너뛴다. 추적 브랜치가 origin/main처럼 실제 push 대상(origin/feat)과 다른 이름이어도
+    // 마찬가지다 — push 대상에 원격 브랜치가 아직 없어도(위 `ahead`는 push 대상 기준의 다른
+    // 값), 추적 브랜치 대비로 보낼 커밋이 없으면 여전히 할 일이 없다(빈 브랜치만 새로 생긴다).
+    // 추적 브랜치 자체가 없으면(git이 upstream을 찾지 못하면) 첫 게시(Publish)이므로 커밋이
+    // 0개여도 건너뛰지 않는다.
+    let branch_name = target.branch.as_deref().unwrap_or_default();
+    let up_to_date = matches!(upstream_ahead_behind(repo, branch_name), Some((0, _)));
+    if up_to_date {
         plan.skipped(RemotePlanSkipReason::UpToDate)
     } else {
         plan
@@ -471,6 +477,29 @@ mod tests {
         let pull = plan_repo(p(&work), RemotePlanOp::Pull);
         assert!(pull.skip);
         assert_eq!(pull.skip_reason, Some(RemotePlanSkipReason::UpToDate));
+    }
+
+    /// W5 리뷰에서 찾은 버그: `git switch -c feat origin/main`처럼 추적 브랜치 이름이
+    /// push 대상과 다르면(`autoSetupMerge`가 `branch.feat.merge=refs/heads/main`을 잡고
+    /// `origin/feat`는 아직 없음), push 대상에는 원격 브랜치가 없어 예전 로직이 이를
+    /// 「할 일 있음(첫 게시)」으로 취급해 기본으로 체크했다. 하지만 실제로는 보낼 커밋이
+    /// 없고, 단일 저장소 툴바는 이 상태에서 Push를 비활성화한다(`hasUpstream && ahead===0`).
+    /// 계획도 같은 기준으로 건너뛰어야 한다.
+    #[test]
+    fn push_with_a_differently_named_upstream_and_no_new_commits_is_skipped() {
+        let root = tmp_dir("renamed-upstream");
+        let (_, work) = clone_with_origin(&root);
+        git(&work, &["switch", "-q", "-c", "feat", "origin/main"]);
+
+        let plan = plan_repo(p(&work), RemotePlanOp::Push);
+        assert_eq!(plan.command.as_deref(), Some("git push -u origin feat"));
+        assert!(plan.sets_upstream);
+        assert_eq!(plan.commits, 0, "origin/main과 같은 커밋이라 보낼 게 없다");
+        assert!(
+            plan.skip,
+            "추적 브랜치(origin/main) 대비 앞선 커밋이 없으면 건너뛰어야 한다"
+        );
+        assert_eq!(plan.skip_reason, Some(RemotePlanSkipReason::UpToDate));
     }
 
     #[test]

@@ -89,6 +89,11 @@ export function useBranchDivergence(repoPath: string | null, enabled: boolean) {
 /**
  * fetch·pull·push 뒤 원격 상태와 작업 트리에 기대는 쿼리를 모두 무효화한다.
  * 툴바 동기화 버튼과 원격 자동 최신화가 함께 쓴다.
+ *
+ * `reviewStatus`·`workspaceHistory`도 포함한다. 워크스페이스 리뷰 화면의 그래프는
+ * `reviewStatus`(HEAD oid)와 `["workspaceHistory", path, headOid]`로 만드는데, 빠지면
+ * pull·push 뒤에도 `REVIEW_POLL_MS`(20초)까지 옛 HEAD·원격 라벨·병합 기준점을 그대로
+ * 보여 준다(W5 리뷰에서 찾음).
  */
 export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> {
   return Promise.all(
@@ -100,6 +105,8 @@ export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> 
       "mergeState",
       "fileDiff",
       "remoteTags",
+      "reviewStatus",
+      "workspaceHistory",
     ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
   );
 }

@@ -112,6 +112,28 @@ describe("MultiRepoRemoteDialog", () => {
     expect(screen.getByText(/xames-app couldn't fetch/)).toBeTruthy();
   });
 
+  it("does not warn about a stale fetch for a repository skipped for a structural reason", async () => {
+    // W5 리뷰에서 찾은 버그: 원격이 없는 저장소는 열 때 돈 fetch가 항상 실패한다(원격이 없으니까).
+    // 그 실패는 네트워크 문제가 아니라 애초에 fetch할 원격이 없다는 뜻이라, "마지막 fetch 기준"
+    // 경고를 보이면 안 된다.
+    commands.gitFetch.mockImplementation((path: string) =>
+      path === "/repos/xames-design" ? Promise.reject(new Error("no remote")) : Promise.resolve(),
+    );
+    commands.planRemoteOp.mockImplementation(() =>
+      Promise.resolve(
+        PUSH_PLANS.map((p) =>
+          p.path === "/repos/xames-design"
+            ? { ...p, command: null, commits: 0, skip: true, skipReason: "noRemote" as const }
+            : p,
+        ),
+      ),
+    );
+    renderDialog();
+    const row = await screen.findByTestId("plan-row-xames-design");
+    expect(within(row).queryByTestId("stale-fetch")).toBeNull();
+    expect(within(row).getByText("No remote")).toBeTruthy();
+  });
+
   it("dates the stale label by the last successful fetch when the failed fetch left no time", async () => {
     const twoHoursAgo = Math.floor(Date.now() / 1000) - 2 * 3600;
     useSyncStore.setState({ lastFetchedByRepo: { "/repos/xames-app": twoHoursAgo } });

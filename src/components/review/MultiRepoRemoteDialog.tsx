@@ -224,7 +224,7 @@ function PlanRow({ row, op, checked, locked, result, onToggle }: PlanRowProps) {
         </span>
         <span className="min-w-0 flex flex-col">
           <code className="font-mono text-[11.5px] text-foreground/80 break-all">{plan.command ?? "—"}</code>
-          {row.fetchFailed && (
+          {row.fetchFailed && (!plan.skip || isStaleUpToDate(row)) && (
             <span className="flex items-center gap-1 text-[11px] text-warning" data-testid="stale-fetch">
               <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />
               {row.lastFetchedAt
