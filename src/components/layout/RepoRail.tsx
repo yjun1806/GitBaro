@@ -7,7 +7,6 @@ import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { useSettings } from "@/api/queries";
 import { RepoSyncIndicator } from "@/components/repository/RepoSyncIndicator";
 import { RepoHeaderContextMenu } from "@/components/repository/RepoHeaderContextMenu";
-import { RepoListView } from "@/components/repository/RepoListView";
 import { RepoTree } from "@/components/sidebar/RepoTree";
 import { useSidebarTreeData } from "@/components/sidebar/useSidebarTreeData";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
@@ -195,7 +194,8 @@ interface RepoRailProps {
 /**
  * 왼쪽 사이드바. 펼치면 계정 → 워크스페이스 → 저장소 → 워크트리 트리(`RepoTree`)를, 접으면 저장소
  * 아바타 줄을 보여 준다. 펼침·접힘·마우스를 올리면 펼침 세 모드는 사이드바 설정 버튼으로 고른다.
- * 모든 저장소 목록(`RepoListView`)도 여기서 연다.
+ * 맨 위 버튼은 모든 저장소 목록(`RepoListView`)을 열고 닫는다(`repoListOpen`). 목록 자체는
+ * 메인 칸이 그린다(사이드바 안에 한 벌 더 그리지 않는다).
  */
 export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps) {
   const { t } = useTranslation();
@@ -214,8 +214,7 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
   const [tip, setTip] = useState<{ name: string; y: number } | null>(null);
   const [menu, setMenu] = useState<{ repo: RepoInfo; x: number; y: number } | null>(null);
 
-  // 모든 저장소 목록을 여는 동안에는 마우스가 벗어나도 접지 않는다.
-  const isExpanded = railMode === "expanded" || (railMode === "hover" && (hovered || repoListOpen));
+  const isExpanded = railMode === "expanded" || (railMode === "hover" && hovered);
   const flowWidth = railFlowWidth(railMode, expandedWidth);
   const panelWidth = isExpanded ? expandedWidth : COLLAPSED_WIDTH;
   const isOverlay = railMode === "hover" && isExpanded;
@@ -273,27 +272,20 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
           <ListTree className="w-4 h-4 shrink-0" />
           {isExpanded && (
             <span className="text-xs font-semibold uppercase tracking-wider truncate">
-              {repoListOpen ? t("rail.allRepos") : t("rail.repositories")}
+              {t("rail.allRepos")}
             </span>
           )}
         </button>
 
         {isExpanded ? (
-          repoListOpen ? (
-            <div className="flex-1 min-h-0">
-              <RepoListView onSelectRepo={selectRepo} />
-            </div>
-          ) : (
-            <div className="flex-1 min-h-0 px-[var(--g)] pt-2.5 pb-1">
-              <RepoTree
-                data={treeData}
-                fetchingPath={fetchingPath}
-                onSelectRepo={selectRepo}
-                onRepoContextMenu={openMenu}
-                onAddRepo={() => setRepoListOpen(true)}
-              />
-            </div>
-          )
+          <div className="flex-1 min-h-0 px-[var(--g)] pt-2.5 pb-1">
+            <RepoTree
+              data={treeData}
+              fetchingPath={fetchingPath}
+              onSelectRepo={selectRepo}
+              onRepoContextMenu={openMenu}
+            />
+          </div>
         ) : (
           <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-1.5">
             {railGroups.map((group, gi) => (

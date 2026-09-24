@@ -1,17 +1,26 @@
 import { useMemo, useState, type MouseEvent } from "react";
-import { ChevronsDownUp, ChevronsUpDown, Plus, Search } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { repoNodeKey, workspaceNodeKey, type AccountNode, type RepoNode } from "@/lib/repo-tree";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
 import type { RepoInfo } from "@/types";
 import { AccountHeader } from "./AccountHeader";
+import { AddRepoButton } from "./AddRepoButton";
 import { LiveNowSection } from "./LiveNowSection";
 import { QuietReposRow } from "./QuietReposRow";
 import { RepoRow, type LiveState } from "./RepoRow";
 import { WorkspaceRow } from "./WorkspaceRow";
-import { collapsibleKeys, filterTree, liveEntries, workspaceTotals, type LiveEntry } from "./tree-model";
-import type { SidebarTreeData } from "./useSidebarTreeData";
+import {
+  collapsibleKeys,
+  expandedWorktreePaths,
+  filterTree,
+  isWatchedPath,
+  liveEntries,
+  workspaceTotals,
+  type LiveEntry,
+} from "./tree-model";
+import { useSidebarWatchPaths, type SidebarTreeData } from "./useSidebarTreeData";
 
 /** 「지금 바뀌는 곳」 칸의 접힘 상태를 저장하는 키(워크스페이스 스토어의 `collapsed`). */
 export const LIVE_SECTION_KEY = "live";
@@ -19,10 +28,12 @@ export const LIVE_SECTION_KEY = "live";
 interface RepoTreeProps {
   data: SidebarTreeData;
   fetchingPath: string | null;
-  /** 저장소를 연다(`useSelectRepo`). 기억해 둔 워크트리가 있으면 그 워크트리로 연다. */
+  /**
+   * 저장소를 연다(`useSelectRepo`). `useSelectRepo`는 기억해 둔 워크트리가 있으면 그리로 여므로,
+   * 트리는 부르기 전에 열 곳(메인 작업 트리 또는 고른 워크트리)을 먼저 기억시킨다.
+   */
   onSelectRepo: (path: string) => void;
   onRepoContextMenu: (repo: RepoInfo, e: MouseEvent) => void;
-  onAddRepo: () => void;
 }
 
 function accountRepoCount(account: AccountNode): number {
@@ -41,11 +52,14 @@ export function RepoTree({
   fetchingPath,
   onSelectRepo,
   onRepoContextMenu,
-  onAddRepo,
 }: RepoTreeProps) {
   const { t } = useTranslation();
   const repos = useRepositoryStore((s) => s.repos);
   const activePath = useRepositoryStore((s) => s.activeRepoPath);
+  // 워크트리를 보는 중이면 activeRepoPath는 워크트리 경로다. 그 워크트리 행이 가려져 있을 때
+  // 저장소 행에 선택 표시를 남기려고 소유 저장소도 읽는다.
+  const activeOwnerPath = useRepositoryStore((s) => s.activeRepo?.path ?? null);
+  const favoriteRepos = useRepositoryStore((s) => s.favoriteRepos);
   const ownerTypes = useRepositoryStore((s) => s.ownerTypes);
   const collapsed = useWorkspaceStore((s) => s.collapsed);
   const toggleCollapsed = useWorkspaceStore((s) => s.toggleCollapsed);
@@ -53,7 +67,7 @@ export function RepoTree({
   const [query, setQuery] = useState("");
   const [openQuiet, setOpenQuiet] = useState<string[]>([]);
 
-  const { tree, signals, lastChangedAt, overflow, now, branchOf, worktreesByRepo } = data;
+  const { tree, signals, lastChangedAt, watched, overflow, now, branchOf, worktreesByRepo } = data;
   const searching = query.trim().length > 0;
   const closed = useMemo(() => new Set(collapsed), [collapsed]);
   const isOpen = (key: string) => searching || !closed.has(key);
@@ -63,17 +77,27 @@ export function RepoTree({
     () => liveEntries(lastChangedAt, now, repos, worktreesByRepo, branchOf),
     [lastChangedAt, now, repos, worktreesByRepo, branchOf],
   );
-  const liveState: LiveState = { lastChangedAt, overflow, now };
+  const liveState: LiveState = { lastChangedAt, watched, overflow, now };
 
-  const foldable = useMemo(() => collapsibleKeys(tree), [tree]);
+  // 화면에 워크트리 행이 보이는 저장소만 감시 대상에 더한다(검색으로 펼친 것, 연 조용한 저장소 포함).
+  const watchPaths = useMemo(
+    () => expandedWorktreePaths(visibleTree, (key) => searching || !closed.has(key), openQuiet),
+    [visibleTree, searching, closed, openQuiet],
+  );
+  useSidebarWatchPaths(watchPaths);
+
+  // 모두 접기: 계정·워크스페이스·워크트리가 있는 저장소와 「지금 바뀌는 곳」 칸.
+  const foldable = useMemo(() => [LIVE_SECTION_KEY, ...collapsibleKeys(tree)], [tree]);
   const allFolded = foldable.length > 0 && foldable.every((k) => closed.has(k));
   const handleToggleAll = () => {
     if (allFolded) setCollapsed(collapsed.filter((k) => !foldable.includes(k)));
     else setCollapsed([...collapsed, ...foldable]);
   };
 
-  // 저장소 행은 메인 작업 트리를, 워크트리 행은 그 워크트리를 연다. 둘 다 `useSelectRepo`를 거쳐
-  // 계정 전환과 첫 fetch를 그대로 받는다(열 곳을 먼저 기억시킨 뒤 저장소를 고른다).
+  // 트리는 작업 트리마다 행이 따로 있어서, 행이 가리키는 곳을 그대로 연다. 저장소 행은 메인 작업
+  // 트리를, 워크트리 행은 그 워크트리를 연다. 기억(`activeWorktrees`)은 「이 저장소에서 마지막으로 본
+  // 작업 트리」라서 메인을 열면 비운다. 접힌 줄처럼 워크트리 행이 없는 곳은 이 기억으로 마지막 곳을
+  // 다시 연다. 둘 다 `useSelectRepo`를 거쳐 계정 전환과 첫 fetch를 그대로 받는다.
   const selectRepo = (repo: RepoInfo) => {
     useRepositoryStore.getState().rememberWorktree(repo.path, null);
     onSelectRepo(repo.path);
@@ -100,6 +124,8 @@ export function RepoTree({
       signals={signals}
       liveState={liveState}
       activePath={activePath}
+      activeOwnerPath={activeOwnerPath}
+      favorite={favoriteRepos.includes(node.repo.path)}
       expanded={isOpen(repoNodeKey(node.repo.path))}
       fetching={fetchingPath === node.repo.path}
       onToggle={() => toggleCollapsed(repoNodeKey(node.repo.path))}
@@ -142,7 +168,7 @@ export function RepoTree({
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1">
         <LiveNowSection
           entries={live}
-          overflow={overflow}
+          isWatched={(path) => isWatchedPath(path, watched, overflow)}
           now={now}
           activePath={activePath}
           expanded={!closed.has(LIVE_SECTION_KEY)}
@@ -205,14 +231,7 @@ export function RepoTree({
         )}
       </div>
 
-      <button
-        type="button"
-        onClick={onAddRepo}
-        className="mt-1 shrink-0 flex items-center gap-2 h-[30px] px-2.5 rounded-[var(--radius-item)] text-xs text-muted-foreground hover:bg-[color-mix(in_srgb,var(--panel)_60%,transparent)] hover:text-foreground"
-      >
-        <Plus className="w-[13px] h-[13px]" aria-hidden="true" />
-        {t("sidebarTree.addRepo")}
-      </button>
+      <AddRepoButton onAdded={onSelectRepo} />
     </div>
   );
 }

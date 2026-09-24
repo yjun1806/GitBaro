@@ -20,7 +20,10 @@ interface WorktreeRowProps {
   onSelect: () => void;
 }
 
-/** 워크트리 행: 브랜치 이름과 「어디서 갈라졌는지」(`WorktreeBaseLabel`), 오른쪽 표시. */
+/**
+ * 워크트리 행: 브랜치 이름과 「어디서 갈라졌는지」(`WorktreeBaseLabel`), 오른쪽 표시.
+ * 시안(`gen_d.py`의 `wt_row`)대로 커밋하지 않은 파일 수와 새 커밋 수만 보이고 ↑↓는 그리지 않는다.
+ */
 export function WorktreeRow({
   path,
   branch,
@@ -51,12 +54,7 @@ export function WorktreeRow({
         <span className="font-mono text-[11.5px] text-[var(--fg2)] truncate">{name}</span>
         {base && <WorktreeBaseLabel base={base} />}
       </span>
-      <RowBadges
-        dirty={signals?.dirtyCount}
-        newCommits={signals?.newCommits}
-        ahead={signals?.ahead}
-        behind={signals?.behind}
-      />
+      <RowBadges dirty={signals?.dirtyCount} newCommits={signals?.newCommits} />
     </TreeRowFrame>
   );
 }

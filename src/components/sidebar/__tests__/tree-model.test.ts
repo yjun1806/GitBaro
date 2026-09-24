@@ -7,6 +7,7 @@ import {
   collapsibleKeys,
   expandedWorktreePaths,
   filterTree,
+  isWatchedPath,
   liveEntries,
   repoTotals,
   workspaceTotals,
@@ -151,20 +152,59 @@ describe("filterTree", () => {
 });
 
 describe("collapsibleKeys", () => {
-  it("lists workspaces and repositories with worktrees, not accounts", () => {
-    expect(collapsibleKeys(tree()).sort()).toEqual([`repo:${API}`, "ws:w1"]);
+  it("lists accounts, workspaces and repositories with worktrees", () => {
+    expect(collapsibleKeys(tree()).sort()).toEqual(["acct:acme", `repo:${API}`, "ws:w1"]);
   });
 });
 
 describe("expandedWorktreePaths", () => {
+  const openExcept = (closed: string[]) => (key: string) => !closed.includes(key);
+
   it("returns worktrees of expanded repositories only", () => {
-    expect(expandedWorktreePaths(tree(), [])).toEqual([WT]);
-    expect(expandedWorktreePaths(tree(), [`repo:${API}`])).toEqual([]);
+    expect(expandedWorktreePaths(tree(), openExcept([]))).toEqual([WT]);
+    expect(expandedWorktreePaths(tree(), openExcept([`repo:${API}`]))).toEqual([]);
   });
 
   it("ignores repositories hidden under a folded workspace or account", () => {
-    expect(expandedWorktreePaths(tree(), ["ws:w1"])).toEqual([]);
-    expect(expandedWorktreePaths(tree(), ["acct:acme"])).toEqual([]);
+    expect(expandedWorktreePaths(tree(), openExcept(["ws:w1"]))).toEqual([]);
+    expect(expandedWorktreePaths(tree(), openExcept(["acct:acme"]))).toEqual([]);
+  });
+
+  it("counts a quiet repository only while its account's quiet row is open", () => {
+    const quietTree = buildRepoTree({
+      repos,
+      accounts: [],
+      workspaces: [],
+      orderByParent: {},
+      sortModeByAccount: {},
+      signals: { [API]: { dirtyCount: 0 }, [WT]: { dirtyCount: 0 } },
+      worktreesByRepo: { [API]: [{ path: WT, branch: "feat/login" }] },
+      now: NOW,
+    });
+    expect(quietTree[0].quietRepos.map((r) => r.repo.path)).toContain(API);
+    expect(expandedWorktreePaths(quietTree, openExcept([]))).toEqual([]);
+    expect(expandedWorktreePaths(quietTree, openExcept([]), ["acme"])).toEqual([WT]);
+  });
+
+  it("follows the caller's open check, so a search that forces rows open counts them", () => {
+    const branchOf = (p: string) => (p === WT ? "feat/login" : "main");
+    const searched = filterTree(tree(), "login", branchOf);
+    const saved = ["ws:w1", `repo:${API}`];
+    expect(expandedWorktreePaths(searched, openExcept(saved))).toEqual([]);
+    expect(expandedWorktreePaths(searched, () => true)).toEqual([WT]);
+  });
+});
+
+describe("isWatchedPath", () => {
+  it("is true only for paths the backend reports as watched", () => {
+    expect(isWatchedPath(WT, [API, WT], [WEB])).toBe(true);
+    expect(isWatchedPath(WEB, [API, WT], [WEB])).toBe(false);
+    // 감시 목록에서 빠진 경로(접은 저장소의 워크트리 등)는 폴링도 되지 않으므로 흐리게 그린다.
+    expect(isWatchedPath("/r/api/.worktrees/old", [API], [])).toBe(false);
+  });
+
+  it("assumes watched before the backend has answered once", () => {
+    expect(isWatchedPath(WT, [], [])).toBe(true);
   });
 });
 

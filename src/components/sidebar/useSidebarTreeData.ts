@@ -8,7 +8,7 @@ import { useLiveChangesStore } from "@/stores/live-changes";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
 import type { RepoReviewStatus, RepoSyncStatus } from "@/types";
-import { buildSignals, expandedWorktreePaths, worktreesByRepoFrom } from "./tree-model";
+import { buildSignals, worktreesByRepoFrom } from "./tree-model";
 
 /** 사이드바가 활동 감시 대상에 경로를 더할 때 쓰는 키. */
 export const SIDEBAR_WATCH_KEY = "sidebar";
@@ -35,6 +35,8 @@ export interface SidebarTreeData {
   reviewRepos: RepoReviewStatus[];
   worktreesByRepo: Record<string, WorktreeInput[]>;
   lastChangedAt: Record<string, number>;
+  /** 백엔드가 실시간 감시 중인 경로(`repo:activity`가 오는 곳). */
+  watched: string[];
   /** 실시간 감시 상한(40곳)을 넘겨 20초 폴링으로만 채우는 경로. */
   overflow: string[];
   now: number;
@@ -49,7 +51,9 @@ export interface SidebarTreeData {
  * - 커밋하지 않은 파일 수와 ↑↓: 저장소와 링크된 워크트리 경로 전체를 `repo_sync_status` 한 번의
  *   묶음 호출로 읽는다(20초). 저장소가 늘어도 호출 수는 늘지 않는다.
  * - 파일 변경 시각: `live-changes` 스토어.
- * - 펼친 저장소의 워크트리 경로를 활동 감시 대상(`sidebar` 키)으로 등록한다.
+ *
+ * 감시 대상 등록은 화면의 펼침 상태(검색, 조용한 저장소 줄)를 아는 `RepoTree`가
+ * `useSidebarWatchPaths`로 한다.
  */
 export function useSidebarTreeData(): SidebarTreeData {
   const repos = useRepositoryStore((s) => s.repos);
@@ -57,11 +61,9 @@ export function useSidebarTreeData(): SidebarTreeData {
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const orderByParent = useWorkspaceStore((s) => s.orderByParent);
   const sortModeByAccount = useWorkspaceStore((s) => s.sortModeByAccount);
-  const collapsed = useWorkspaceStore((s) => s.collapsed);
   const lastChangedAt = useLiveChangesStore((s) => s.lastChangedAt);
   const overflow = useLiveChangesStore((s) => s.overflow);
-  const registerWatchPaths = useActivityTargetsStore((s) => s.registerWatchPaths);
-  const unregisterWatchPaths = useActivityTargetsStore((s) => s.unregisterWatchPaths);
+  const watched = useLiveChangesStore((s) => s.watched);
   const now = useNow(NOW_TICK_MS);
 
   const repoPathList = useMemo(() => repos.map((r) => r.path), [repos]);
@@ -99,15 +101,6 @@ export function useSidebarTreeData(): SidebarTreeData {
     [repos, accounts, workspaces, orderByParent, sortModeByAccount, signals, worktreesByRepo, now],
   );
 
-  const watchPaths = useMemo(() => expandedWorktreePaths(tree, collapsed), [tree, collapsed]);
-  const watchKey = watchPaths.join("\u0000");
-  useEffect(() => {
-    registerWatchPaths(SIDEBAR_WATCH_KEY, watchPaths);
-    // watchKey가 내용을 대신 비교한다(트리가 15초마다 새로 만들어져도 같은 목록이면 다시 등록하지 않는다).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchKey, registerWatchPaths]);
-  useEffect(() => () => unregisterWatchPaths(SIDEBAR_WATCH_KEY), [unregisterWatchPaths]);
-
   const reviewByPath = review.byPath;
   const branchOf = useCallback(
     (path: string) => syncByPath[path]?.branch || reviewByPath[path]?.branch || null,
@@ -122,8 +115,25 @@ export function useSidebarTreeData(): SidebarTreeData {
     reviewRepos: review.repos,
     worktreesByRepo,
     lastChangedAt,
+    watched,
     overflow,
     now,
     branchOf,
   };
+}
+
+/**
+ * 화면에 워크트리 행이 보이는 경로를 활동 감시 대상(`sidebar` 키)으로 등록하고, 목록이 바뀌면
+ * 덮어쓴다. 사이드바 트리가 사라지면(접힌 줄로 바뀌거나 화면이 닫히면) 등록을 지운다.
+ */
+export function useSidebarWatchPaths(paths: string[]): void {
+  const registerWatchPaths = useActivityTargetsStore((s) => s.registerWatchPaths);
+  const unregisterWatchPaths = useActivityTargetsStore((s) => s.unregisterWatchPaths);
+  const key = paths.join("\u0000");
+  useEffect(() => {
+    registerWatchPaths(SIDEBAR_WATCH_KEY, paths);
+    // key가 내용을 대신 비교한다(트리가 15초마다 새로 만들어져도 같은 목록이면 다시 등록하지 않는다).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, registerWatchPaths]);
+  useEffect(() => () => unregisterWatchPaths(SIDEBAR_WATCH_KEY), [unregisterWatchPaths]);
 }

@@ -770,6 +770,7 @@
     "quietRepos_one": "{{count}} quiet repository ({{names}})",
     "quietRepos_other": "{{count}} quiet repositories ({{names}})",
     "worktree": "Worktree",
+    "favorite": "Favorite",
     "badge": {
       "uncommitted_one": "{{count}} uncommitted file",
       "uncommitted_other": "{{count}} uncommitted files",
@@ -780,7 +781,7 @@
       "behind_one": "{{count}} commit to pull",
       "behind_other": "{{count}} commits to pull",
       "live": "Files changed in the last 10 minutes",
-      "liveNotWatched": "Files changed recently (not watched live, checked every 20 seconds)"
+      "liveNotWatched": "Files changed recently (not watched live right now, so later changes may show up late or not at all)"
     },
     "live": {
       "title": "Files changing now",

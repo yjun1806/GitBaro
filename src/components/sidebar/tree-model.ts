@@ -1,6 +1,5 @@
 import { LIVE_CHANGE_STALE_MS } from "@/stores/live-changes";
 import {
-  accountNodeKey,
   repoNodeKey,
   workspaceNodeKey,
   type AccountNode,
@@ -126,8 +125,8 @@ export function filterTree(
 }
 
 /**
- * 「모두 접기」가 접는 키: 워크스페이스와 워크트리가 있는 저장소. 계정 머리글은 접지 않는다
- * (다 접으면 계정 이름만 남아 어디에 무엇이 있는지 보이지 않는다).
+ * 「모두 접기」가 접는 키: 계정 머리글, 워크스페이스, 워크트리가 있는 저장소.
+ * 「지금 바뀌는 곳」 칸의 키는 화면(`RepoTree`)이 따로 더한다.
  */
 export function collapsibleKeys(tree: AccountNode[]): string[] {
   const keys: string[] = [];
@@ -135,6 +134,7 @@ export function collapsibleKeys(tree: AccountNode[]): string[] {
     if (r.worktrees.length > 0) keys.push(repoNodeKey(r.repo.path));
   };
   for (const account of tree) {
+    keys.push(account.key);
     for (const child of account.children) {
       if (child.kind === "repo") repoKey(child);
       else {
@@ -185,22 +185,40 @@ export function liveEntries(
 }
 
 /**
- * 화면에서 펼쳐 둔 저장소의 링크된 워크트리 경로. 활동 감시 대상에 더한다.
- * 계정·워크스페이스가 접혀 있으면 그 안의 저장소는 펼친 것으로 치지 않는다.
- * 조용한 저장소는 뺀다(접힌 줄 안에 있고, 바뀌면 조용한 저장소에서 빠져 다시 잡힌다).
+ * 화면에 워크트리 행이 보이는 저장소의 링크된 워크트리 경로. 활동 감시 대상에 더한다.
+ *
+ * `tree`는 화면에 그리는 트리(검색으로 거른 뒤)를, `isOpen`은 화면이 쓰는 펼침 판정(검색 중이면
+ * 모두 펼침)을 그대로 넘긴다. 조용한 저장소는 그 계정의 「조용한 저장소」 줄을 연 경우
+ * (`openQuietAccounts`에 계정 키가 있을 때)에만 보이므로 그때만 센다.
  */
-export function expandedWorktreePaths(tree: AccountNode[], collapsed: string[]): string[] {
-  const closed = new Set(collapsed);
+export function expandedWorktreePaths(
+  tree: AccountNode[],
+  isOpen: (key: string) => boolean,
+  openQuietAccounts: readonly string[] = [],
+): string[] {
   const out: string[] = [];
   const visit = (r: RepoNode) => {
-    if (!closed.has(repoNodeKey(r.repo.path))) out.push(...r.worktrees.map((w) => w.path));
+    if (r.worktrees.length > 0 && isOpen(repoNodeKey(r.repo.path))) {
+      out.push(...r.worktrees.map((w) => w.path));
+    }
   };
   for (const account of tree) {
-    if (closed.has(accountNodeKey(account.accountKey))) continue;
+    if (!isOpen(account.key)) continue;
     for (const child of account.children) {
       if (child.kind === "repo") visit(child);
-      else if (!closed.has(workspaceNodeKey(child.workspace.id))) child.repos.forEach(visit);
+      else if (isOpen(workspaceNodeKey(child.workspace.id))) child.repos.forEach(visit);
     }
+    if (openQuietAccounts.includes(account.accountKey)) account.quietRepos.forEach(visit);
   }
   return out;
+}
+
+/**
+ * 경로가 실시간 감시(`repo:activity`) 중인지. 백엔드가 알려 준 감시 목록(`watched`)에 있으면 참,
+ * 상한을 넘긴 목록(`overflow`)에 있거나 둘 다에 없으면(감시 대상에서 빠진 경로) 거짓이다.
+ * 아직 백엔드 응답이 한 번도 오지 않아 두 목록이 모두 비어 있으면 참으로 본다.
+ */
+export function isWatchedPath(path: string, watched: readonly string[], overflow: readonly string[]): boolean {
+  if (watched.includes(path)) return true;
+  return watched.length === 0 && overflow.length === 0;
 }

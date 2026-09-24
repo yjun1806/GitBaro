@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@testing-library/jest-dom/vitest";
 import "@/i18n/config";
 import { buildRepoTree, type PathSignals, type Workspace } from "@/lib/repo-tree";
+import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
 import type { RepoInfo, RepoSyncStatus, WorktreeInfo } from "@/types";
@@ -12,10 +13,11 @@ import type { RepoInfo, RepoSyncStatus, WorktreeInfo } from "@/types";
 vi.mock("@/api/commands", () => ({
   getWorktrees: vi.fn(),
 }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), ask: vi.fn() }));
 
 import { getWorktrees } from "@/api/commands";
 import { RepoTree } from "../RepoTree";
-import type { SidebarTreeData } from "../useSidebarTreeData";
+import { SIDEBAR_WATCH_KEY, type SidebarTreeData } from "../useSidebarTreeData";
 
 const NOW = 2_000_000_000_000;
 
@@ -24,6 +26,7 @@ const WEB = "/r/web";
 const SOLO = "/r/solo";
 const QUIET = "/r/quiet";
 const WT = "/r/api/.worktrees/feat";
+const QUIET_WT = "/r/quiet/.worktrees/spike";
 
 function repo(path: string): RepoInfo {
   const name = path.split("/").pop() ?? path;
@@ -44,9 +47,17 @@ const workspaces: Workspace[] = [
 
 function makeData(
   signals: Record<string, PathSignals>,
-  opts: { lastChangedAt?: Record<string, number>; overflow?: string[] } = {},
+  opts: {
+    lastChangedAt?: Record<string, number>;
+    watched?: string[];
+    overflow?: string[];
+    quietWorktree?: boolean;
+  } = {},
 ): SidebarTreeData {
-  const worktreesByRepo = { [API]: [{ path: WT, branch: "feat/login" }] };
+  const worktreesByRepo = {
+    [API]: [{ path: WT, branch: "feat/login" }],
+    ...(opts.quietWorktree ? { [QUIET]: [{ path: QUIET_WT, branch: "spike" }] } : {}),
+  };
   const syncByPath: Record<string, RepoSyncStatus> = {};
   const branches: Record<string, string> = { [API]: "main", [WEB]: "fix/nav", [WT]: "feat/login" };
   return {
@@ -66,6 +77,7 @@ function makeData(
     reviewRepos: [],
     worktreesByRepo,
     lastChangedAt: opts.lastChangedAt ?? {},
+    watched: opts.watched ?? [],
     overflow: opts.overflow ?? [],
     now: NOW,
     branchOf: (p) => branches[p] ?? null,
@@ -96,18 +108,25 @@ function renderTree(data: SidebarTreeData, onSelectRepo = vi.fn()) {
         fetchingPath={null}
         onSelectRepo={onSelectRepo}
         onRepoContextMenu={vi.fn()}
-        onAddRepo={vi.fn()}
       />
     </QueryClientProvider>,
   );
-  return { onSelectRepo };
+  return { onSelectRepo, client };
 }
 
 const item = (name: string) => screen.getByRole("treeitem", { name });
 
 beforeEach(() => {
+  vi.mocked(getWorktrees).mockReset();
   vi.mocked(getWorktrees).mockResolvedValue(worktreeInfos);
-  useRepositoryStore.setState({ repos, activeRepoPath: null, activeRepo: null, activeWorktrees: {} });
+  useRepositoryStore.setState({
+    repos,
+    activeRepoPath: null,
+    activeRepo: null,
+    activeWorktrees: {},
+    favoriteRepos: [],
+  });
+  useActivityTargetsStore.setState({ extraByKey: {} });
   useWorkspaceStore.setState({ workspaces, collapsed: [], orderByParent: {}, sortModeByAccount: {} });
 });
 
@@ -116,7 +135,7 @@ afterEach(cleanup);
 // SOLO에만 신호를 주고 QUIET은 모두 0이라 조용한 저장소로 접힌다.
 const baseSignals: Record<string, PathSignals> = {
   [API]: { dirtyCount: 2, newCommits: 1, ahead: 3, behind: 0 },
-  [WT]: { dirtyCount: 1, newCommits: 4 },
+  [WT]: { dirtyCount: 1, newCommits: 4, ahead: 6 },
   [WEB]: { dirtyCount: 0, newCommits: 0 },
   [SOLO]: { dirtyCount: 0, newCommits: 0, ahead: 0, behind: 2 },
   [QUIET]: { dirtyCount: 0, newCommits: 0 },
@@ -135,6 +154,17 @@ describe("RepoTree — indentation levels", () => {
 
     // 워크트리 행은 기반 브랜치(WorktreeBaseLabel)를 보여 준다.
     await waitFor(() => expect(within(item("feat/login")).getByText(/main/)).toBeInTheDocument());
+  });
+
+  it("reads worktree bases once per expanded repository, not on every toolbar worktree refresh", async () => {
+    const { client } = renderTree(makeData(baseSignals));
+    await waitFor(() => expect(within(item("feat/login")).getByText(/main/)).toBeInTheDocument());
+    const calls = vi.mocked(getWorktrees).mock.calls.length;
+    expect(vi.mocked(getWorktrees).mock.calls.every(([p]) => p === API)).toBe(true);
+
+    // useRepoWatcher가 git 폴더 변경마다 부르는 무효화
+    await client.invalidateQueries({ queryKey: ["worktrees"] });
+    expect(vi.mocked(getWorktrees).mock.calls.length).toBe(calls);
   });
 
   it("hides children when a node is folded and shows the fold state", () => {
@@ -172,6 +202,8 @@ describe("RepoTree — badges", () => {
     const wt = within(item("feat/login"));
     expect(wt.getByRole("img", { name: "1 uncommitted file" })).toBeInTheDocument();
     expect(wt.getByRole("img", { name: "4 new commits" })).toBeInTheDocument();
+    // 워크트리 행은 시안대로 ↑↓를 그리지 않는다.
+    expect(wt.queryByRole("img", { name: /to push|to pull/ })).toBeNull();
 
     // 모두 0이면 표시 없음
     expect(within(item("web")).queryAllByRole("img")).toHaveLength(0);
@@ -189,7 +221,11 @@ describe("RepoTree — badges", () => {
 
   it("marks recently changed rows with a live dot, faded when the path is not watched live", () => {
     renderTree(
-      makeData(baseSignals, { lastChangedAt: { [WEB]: NOW - 5_000, [SOLO]: NOW - 30_000 }, overflow: [SOLO] }),
+      makeData(baseSignals, {
+        lastChangedAt: { [WEB]: NOW - 5_000, [SOLO]: NOW - 30_000 },
+        watched: [API, WEB, WT, QUIET],
+        overflow: [SOLO],
+      }),
     );
     const webDot = within(item("web")).getByRole("img", { name: /last 10 minutes/ });
     expect(webDot).toHaveAttribute("data-watched", "true");
@@ -197,6 +233,23 @@ describe("RepoTree — badges", () => {
     expect(soloDot).toHaveAttribute("data-watched", "false");
     expect(soloDot.className).toContain("opacity-40");
     expect(within(item("api")).queryByRole("img", { name: /last 10 minutes|not watched/ })).toBeNull();
+  });
+
+  it("fades the dot of a path that is no longer watched, such as a folded repository's worktree", () => {
+    useWorkspaceStore.setState({ collapsed: [`repo:${API}`] });
+    renderTree(
+      makeData(baseSignals, {
+        lastChangedAt: { [WT]: NOW - 5_000 },
+        watched: [API, WEB, SOLO, QUIET],
+        overflow: [],
+      }),
+    );
+    const section = screen.getByRole("region", { name: "Files changing now" });
+    expect(within(section).getByRole("img", { name: /not watched live/ })).toHaveAttribute(
+      "data-watched",
+      "false",
+    );
+    expect(within(item("api")).getByRole("img", { name: /not watched live/ })).toBeInTheDocument();
   });
 
   it("does not mark changes older than 10 minutes as live", () => {
@@ -234,12 +287,67 @@ describe("RepoTree — live section, search and selection", () => {
     expect(screen.queryByRole("treeitem", { name: "solo" })).toBeNull();
   });
 
-  it("collapses and expands everything below the accounts", () => {
+  it("collapses and expands everything, including accounts and the live section", () => {
     renderTree(makeData(baseSignals));
     fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
     expect(screen.queryByRole("treeitem", { name: "api" })).toBeNull();
-    expect(item("acme")).toHaveAttribute("aria-expanded", "true");
+    expect(item("acme")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: /Files changing now/ })).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     expect(item("feat/login")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Files changing now/ })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("keeps the owning repository selected while its open worktree row is hidden", () => {
+    useRepositoryStore.setState({ activeRepoPath: WT, activeRepo: repos[0], activeWorktrees: { [API]: WT } });
+    renderTree(makeData(baseSignals));
+    expect(item("feat/login")).toHaveAttribute("aria-selected", "true");
+    expect(item("api")).toHaveAttribute("aria-selected", "false");
+
+    fireEvent.keyDown(item("api"), { key: "ArrowLeft" });
+    expect(item("api")).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("marks favorite repositories", () => {
+    useRepositoryStore.setState({ favoriteRepos: [SOLO] });
+    renderTree(makeData(baseSignals));
+    expect(within(item("solo")).getByRole("img", { name: "Favorite" })).toBeInTheDocument();
+    expect(within(item("web")).queryByRole("img", { name: "Favorite" })).toBeNull();
+  });
+
+  it("opens the add-repository choice (clone or local folder) from the add button", () => {
+    renderTree(makeData(baseSignals));
+    fireEvent.click(screen.getByRole("button", { name: "Add repository" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Clone a Repository")).toBeInTheDocument();
+    expect(within(dialog).getByText("Add Local Repository")).toBeInTheDocument();
+  });
+});
+
+describe("RepoTree — watch targets", () => {
+  const sidebarPaths = () => useActivityTargetsStore.getState().extraByKey[SIDEBAR_WATCH_KEY];
+
+  it("registers worktrees shown on screen and drops them when their repository is folded", () => {
+    renderTree(makeData(baseSignals));
+    expect(sidebarPaths()).toEqual([WT]);
+    fireEvent.keyDown(item("api"), { key: "ArrowLeft" });
+    expect(sidebarPaths()).toEqual([]);
+  });
+
+  it("adds a quiet repository's worktrees once the quiet row is opened", () => {
+    renderTree(makeData({ ...baseSignals, [QUIET_WT]: { dirtyCount: 0 } }, { quietWorktree: true }));
+    expect(sidebarPaths()).toEqual([WT]);
+    fireEvent.click(screen.getByRole("treeitem", { name: /quiet repositor/ }));
+    expect(sidebarPaths()).toEqual([WT, QUIET_WT]);
+  });
+
+  it("adds worktrees of repositories that a search forces open", () => {
+    useWorkspaceStore.setState({ collapsed: [`repo:${API}`] });
+    renderTree(makeData(baseSignals));
+    expect(sidebarPaths()).toEqual([]);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Find repository or branch" }), {
+      target: { value: "login" },
+    });
+    expect(sidebarPaths()).toEqual([WT]);
   });
 });

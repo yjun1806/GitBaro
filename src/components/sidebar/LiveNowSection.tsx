@@ -7,7 +7,8 @@ import type { LiveEntry } from "./tree-model";
 
 interface LiveNowSectionProps {
   entries: LiveEntry[];
-  overflow: string[];
+  /** 경로가 실시간 감시 중인지. 아니면 작업 중 점을 흐리게 그린다. */
+  isWatched: (path: string) => boolean;
   now: number;
   /** 지금 보고 있는 경로. 같은 줄을 선택된 것으로 그린다. */
   activePath: string | null;
@@ -19,7 +20,7 @@ interface LiveNowSectionProps {
 /** 「지금 파일이 바뀌는 곳」: 10분 안에 파일이 바뀐 저장소·워크트리를 최근 순으로 보여 준다. */
 export function LiveNowSection({
   entries,
-  overflow,
+  isWatched,
   now,
   activePath,
   expanded,
@@ -68,7 +69,7 @@ export function LiveNowSection({
       {expanded && (
         <ul id={listId} className="flex flex-col">
           {entries.length === 0 && (
-            <li className="pl-[22px] pr-2 h-6 flex items-center text-[11.5px] text-[var(--faint)]">
+            <li className="pl-[22px] pr-2 min-h-[var(--row)] flex items-center text-[11.5px] text-[var(--faint)]">
               {t("sidebarTree.live.empty")}
             </li>
           )}
@@ -79,13 +80,13 @@ export function LiveNowSection({
                 onClick={() => onSelect(entry)}
                 title={entry.path}
                 className={cn(
-                  "w-full flex items-center gap-2 h-6 pl-[22px] pr-2 rounded-[var(--radius-item)] text-left",
+                  "w-full flex items-center gap-2 min-h-[var(--row)] pl-[22px] pr-2 rounded-[var(--radius-item)] text-left",
                   activePath === entry.path
                     ? "bg-card shadow-[var(--shadow-sm)]"
                     : "hover:bg-[color-mix(in_srgb,var(--panel)_60%,transparent)]",
                 )}
               >
-                <LiveDot watched={!overflow.includes(entry.path)} className="shrink-0" />
+                <LiveDot watched={isWatched(entry.path)} className="shrink-0" />
                 <span className="flex-1 min-w-0 truncate text-xs text-[var(--fg2)]">
                   {entry.repo.name}
                   {entry.branch && (

@@ -1,6 +1,6 @@
 import type { MouseEvent } from "react";
-import { GitBranch, Loader2 } from "lucide-react";
-import { useWorktrees } from "@/api/queries";
+import { GitBranch, Loader2, Star } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import type { PathSignals, RepoNode } from "@/lib/repo-tree";
 import { cn } from "@/lib/utils";
@@ -8,11 +8,14 @@ import type { RepoInfo } from "@/types";
 import { LiveDot, RowBadges } from "./RowBadges";
 import { TreeRowFrame } from "./TreeRowFrame";
 import { WorktreeRow } from "./WorktreeRow";
-import { isLivePath, repoPaths, repoTotals } from "./tree-model";
+import { isLivePath, isWatchedPath, repoPaths, repoTotals } from "./tree-model";
+import { useWorktreeBases } from "./useWorktreeBases";
 
 /** 행이 「작업 중」인지와, 실시간 감시로 알게 된 것인지. */
 export interface LiveState {
   lastChangedAt: Record<string, number>;
+  /** 백엔드가 실시간 감시 중인 경로. */
+  watched: string[];
   overflow: string[];
   now: number;
 }
@@ -21,7 +24,7 @@ function liveOf(paths: string[], live: LiveState): { live: boolean; watched: boo
   const livePaths = paths.filter((p) => isLivePath(p, live.lastChangedAt, live.now));
   return {
     live: livePaths.length > 0,
-    watched: livePaths.some((p) => !live.overflow.includes(p)),
+    watched: livePaths.some((p) => isWatchedPath(p, live.watched, live.overflow)),
   };
 }
 
@@ -35,6 +38,12 @@ interface RepoRowProps {
   liveState: LiveState;
   /** 지금 보고 있는 경로(`activeRepoPath`). 저장소나 워크트리 중 하나와 같으면 그 행이 선택된다. */
   activePath: string | null;
+  /**
+   * 지금 보고 있는 경로를 가진 저장소(`activeRepo.path`). 이 저장소의 워크트리를 보는 중인데
+   * 워크트리 행이 보이지 않으면(접힘) 저장소 행을 선택된 것으로 그린다.
+   */
+  activeOwnerPath: string | null;
+  favorite: boolean;
   expanded: boolean;
   fetching: boolean;
   onToggle: () => void;
@@ -55,6 +64,8 @@ export function RepoRow({
   signals,
   liveState,
   activePath,
+  activeOwnerPath,
+  favorite,
   expanded,
   fetching,
   onToggle,
@@ -62,16 +73,24 @@ export function RepoRow({
   onSelectWorktree,
   onContextMenu,
 }: RepoRowProps) {
+  const { t } = useTranslation();
   const { repo, worktrees } = node;
   const hasWorktrees = worktrees.length > 0;
   const showWorktrees = hasWorktrees && expanded;
-  // 워크트리의 기반 브랜치는 펼친 저장소만 읽는다(`useWorktrees`는 저장소마다 한 번 조회).
-  const { data: worktreeInfos = [] } = useWorktrees(showWorktrees ? repo.path : null);
+  // 워크트리의 기반 브랜치는 펼친 저장소만 읽는다(오래 캐시하는 별도 조회 — `useWorktreeBases`).
+  const bases = useWorktreeBases(
+    showWorktrees ? repo.path : null,
+    worktrees.map((w) => w.path),
+  );
   const color = avatarColor(repo.path);
   const totals = repoTotals(node, signals);
   const own = signals[repo.path];
   const { live, watched } = liveOf(repoPaths(node), liveState);
-  const selected = activePath === repo.path;
+  const viewingHiddenWorktree =
+    activeOwnerPath === repo.path &&
+    activePath !== repo.path &&
+    !(showWorktrees && worktrees.some((w) => w.path === activePath));
+  const selected = activePath === repo.path || viewingHiddenWorktree;
 
   return (
     <>
@@ -106,6 +125,13 @@ export function RepoRow({
             )}
           >
             {repo.name}
+            {favorite && (
+              <Star
+                className="inline-block ml-1 w-2.5 h-2.5 align-[-1px] fill-current text-[var(--faint)]"
+                role="img"
+                aria-label={t("sidebarTree.favorite")}
+              />
+            )}
           </span>
           {branch && (
             <span className="flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground min-w-0">
@@ -130,7 +156,7 @@ export function RepoRow({
               key={wt.key}
               path={wt.path}
               branch={wt.branch}
-              base={worktreeInfos.find((w) => w.path === wt.path)?.base ?? null}
+              base={bases[wt.path] ?? null}
               level={level + 1}
               depth={depth + 1}
               signals={signals[wt.path]}

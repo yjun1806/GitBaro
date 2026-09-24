@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { cleanup, renderHook } from "@testing-library/react";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
@@ -44,7 +44,7 @@ vi.mock("@/hooks/useReviewStatus", () => ({
   useReviewStatus: () => ({ repos: reviewRepos, byPath: {}, markSeen: () => {}, isLoading: false }),
 }));
 
-import { SIDEBAR_WATCH_KEY, useSidebarTreeData } from "../useSidebarTreeData";
+import { SIDEBAR_WATCH_KEY, useSidebarTreeData, useSidebarWatchPaths } from "../useSidebarTreeData";
 
 const repo: RepoInfo = {
   path: API,
@@ -72,11 +72,20 @@ describe("useSidebarTreeData", () => {
     expect(result.current.branchOf(WT)).toBe("feat/login");
   });
 
-  it("registers worktrees of expanded repositories as watch targets and drops them when folded", () => {
-    const { unmount } = renderHook(() => useSidebarTreeData());
+  it("does not register watch targets itself (the tree does, from what it shows)", () => {
+    renderHook(() => useSidebarTreeData());
+    expect(useActivityTargetsStore.getState().extraByKey[SIDEBAR_WATCH_KEY]).toBeUndefined();
+  });
+});
+
+describe("useSidebarWatchPaths", () => {
+  it("registers the given paths, replaces them when they change and removes them on unmount", () => {
+    const { rerender, unmount } = renderHook(({ paths }) => useSidebarWatchPaths(paths), {
+      initialProps: { paths: [WT] },
+    });
     expect(useActivityTargetsStore.getState().extraByKey[SIDEBAR_WATCH_KEY]).toEqual([WT]);
 
-    act(() => useWorkspaceStore.getState().toggleCollapsed(`repo:${API}`));
+    rerender({ paths: [] });
     expect(useActivityTargetsStore.getState().extraByKey[SIDEBAR_WATCH_KEY]).toEqual([]);
 
     unmount();
