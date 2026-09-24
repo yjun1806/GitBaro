@@ -756,5 +756,37 @@
     },
     "worktreeNote": "워크트리에서는 자동으로 받지 않고 확인만 합니다.",
     "openSettings": "자동 최신화 설정 열기"
+  },
+  "sidebarTree": {
+    "search": "저장소·브랜치 찾기",
+    "collapseAll": "모두 접기",
+    "expandAll": "모두 펼치기",
+    "tree": "저장소",
+    "addRepo": "저장소 추가",
+    "noMatch": "「{{query}}」와 맞는 저장소가 없습니다",
+    "empty": "아직 저장소가 없습니다",
+    "workspaceSubtitle_one": "워크스페이스 · 저장소 {{count}}",
+    "workspaceSubtitle_other": "워크스페이스 · 저장소 {{count}}",
+    "quietRepos_one": "조용한 저장소 {{count}}개 ({{names}})",
+    "quietRepos_other": "조용한 저장소 {{count}}개 ({{names}})",
+    "worktree": "워크트리",
+    "badge": {
+      "uncommitted_one": "커밋하지 않은 파일 {{count}}개",
+      "uncommitted_other": "커밋하지 않은 파일 {{count}}개",
+      "newCommits_one": "새 커밋 {{count}}개",
+      "newCommits_other": "새 커밋 {{count}}개",
+      "ahead_one": "올릴 커밋 {{count}}개",
+      "ahead_other": "올릴 커밋 {{count}}개",
+      "behind_one": "받을 커밋 {{count}}개",
+      "behind_other": "받을 커밋 {{count}}개",
+      "live": "최근 10분 안에 파일이 바뀜",
+      "liveNotWatched": "최근에 파일이 바뀜(실시간 감시 밖이라 20초마다 확인)"
+    },
+    "live": {
+      "title": "지금 파일이 바뀌는 곳",
+      "empty": "최근 10분 안에 바뀐 파일이 없습니다",
+      "seconds": "{{count}}초",
+      "minutes": "{{count}}분"
+    }
   }
 }
