@@ -183,11 +183,12 @@ fn merge_accounts(fetched: &[(String, Option<UserInfo>)], cached: &[Value]) -> V
                     .filter(|v| !v.is_empty())
                     .map(str::to_string)
             };
-            let (email, avatar_url) = match info {
-                Some(info) => (info.email.clone(), info.avatar_url.clone()),
+            let (email, avatar_url, github_id) = match info {
+                Some(info) => (info.email.clone(), info.avatar_url.clone(), info.github_id),
                 None => (
-                    cached_field("email").unwrap_or_else(|| noreply_email(None, username)),
+                    cached_commit_email(cached_entry, username),
                     cached_field("avatarUrl").unwrap_or_default(),
+                    cached_entry.and_then(|c| c["githubId"].as_u64()),
                 ),
             };
             json!({
@@ -195,6 +196,8 @@ fn merge_accounts(fetched: &[(String, Option<UserInfo>)], cached: &[Value]) -> V
                 "username": username,
                 "email": email,
                 "avatarUrl": avatar_url,
+                // Also marks the entry as written by the noreply-aware code.
+                "githubId": github_id,
             })
         })
         .collect()
@@ -203,6 +206,22 @@ fn merge_accounts(fetched: &[(String, Option<UserInfo>)], cached: &[Value]) -> V
 struct UserInfo {
     email: String,
     avatar_url: String,
+    github_id: Option<u64>,
+}
+
+/// Commit email for a cached account entry. Only entries carrying the
+/// `githubId` key were written after the switch to noreply addresses; older
+/// ones may hold the private primary email from `/user/emails`, which GitHub
+/// rejects on push (GH007), so those fall back to the noreply address.
+pub(crate) fn cached_commit_email(entry: Option<&Value>, username: &str) -> String {
+    let trusted = entry.filter(|c| c.get("githubId").is_some());
+    trusted
+        .and_then(|c| c["email"].as_str())
+        .filter(|e| !e.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            noreply_email(trusted.and_then(|c| c["githubId"].as_u64()), username)
+        })
 }
 
 /// GitHub's noreply commit address. Accounts created after July 2017 need the
@@ -227,6 +246,7 @@ fn user_info_from_profile(user: &Value) -> UserInfo {
     UserInfo {
         email,
         avatar_url: user["avatar_url"].as_str().unwrap_or("").to_string(),
+        github_id: user["id"].as_u64(),
     }
 }
 
@@ -502,21 +522,43 @@ mod tests {
     #[test]
     fn failed_profile_fetch_keeps_cached_email() {
         let cached = vec![json!({
-            "id": "octocat", "username": "octocat",
-            "email": "583231+octocat@users.noreply.github.com", "avatarUrl": "cached"
+            "id": "octocat", "username": "octocat", "githubId": 583231,
+            "email": "octo@example.com", "avatarUrl": "cached"
         })];
         let fetched = vec![
             ("octocat".to_string(), None),
             (
                 "fresh".to_string(),
-                Some(UserInfo { email: "f@example.com".into(), avatar_url: "new".into() }),
+                Some(UserInfo {
+                    email: "f@example.com".into(),
+                    avatar_url: "new".into(),
+                    github_id: Some(7),
+                }),
             ),
             ("unknown".to_string(), None),
         ];
         let accounts = merge_accounts(&fetched, &cached);
-        assert_eq!(accounts[0]["email"], "583231+octocat@users.noreply.github.com");
+        assert_eq!(accounts[0]["email"], "octo@example.com");
         assert_eq!(accounts[0]["avatarUrl"], "cached");
+        assert_eq!(accounts[0]["githubId"], 583231);
         assert_eq!(accounts[1]["email"], "f@example.com");
+        assert_eq!(accounts[1]["githubId"], 7);
         assert_eq!(accounts[2]["email"], "unknown@users.noreply.github.com");
+    }
+
+    #[test]
+    fn legacy_cached_email_is_not_trusted() {
+        // Written before the noreply fix: may hold the private primary email.
+        let cached = vec![json!({
+            "id": "octocat", "username": "octocat",
+            "email": "private@example.com", "avatarUrl": "cached"
+        })];
+        let accounts = merge_accounts(&[("octocat".to_string(), None)], &cached);
+        assert_eq!(accounts[0]["email"], "octocat@users.noreply.github.com");
+        assert_eq!(accounts[0]["avatarUrl"], "cached");
+        assert_eq!(
+            cached_commit_email(cached.first(), "octocat"),
+            "octocat@users.noreply.github.com"
+        );
     }
 }
