@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown, ChevronRight, FileText, GitBranch, Link2, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, FileText, Folder, GitBranch, X } from "lucide-react";
 import { useChangesVsDefaultMany, useFileDiffsVsDefault } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { EmptyState } from "@/components/layout/ContentArea";
@@ -22,6 +22,7 @@ import {
 import { statusTextColors } from "@/lib/file-status";
 import { cn, getErrorMessage } from "@/lib/utils";
 import type { ActivityEvent, BranchChangedFile, BranchChanges, DiffOutput, FileStatus } from "@/types";
+import type { FilesGroupBy } from "./files-view";
 
 /** 연결된 변경을 찾으려고 diff를 읽는 파일 수의 상한(저장소를 모두 합쳐). */
 export const LINK_SCAN_FILE_LIMIT = 80;
@@ -36,11 +37,8 @@ export interface FilesByRepoRepo {
 
 export interface FilesByRepoProps {
   repos: readonly FilesByRepoRepo[];
-  /**
-   * `panels`: 파일 목록과 오른쪽 칸을 따로 떠 있는 패널 두 개로 그린다(워크스페이스 화면).
-   * `inline`: 이미 있는 패널 안을 둘로 나눈다(저장소 화면의 그래프 패널 탭).
-   */
-  variant?: "panels" | "inline";
+  /** 저장소 그룹 안을 폴더로 한 번 더 나눌지. */
+  groupBy?: FilesGroupBy;
 }
 
 interface OpenLink {
@@ -59,6 +57,18 @@ const STATUS_LETTER: Record<FileStatus, string> = {
   conflicted: "U",
 };
 
+type SelectedFile = FileRef & { oldPath: string | null; status: FileStatus };
+
+/** 내용이 같으면(원소가 모두 같은 참조면) 이전 배열을 돌려준다. `useQueries` 결과처럼 렌더마다 새로 생기는 배열용. */
+function useShallowStable<T>(items: readonly T[]): readonly T[] {
+  const ref = useRef(items);
+  const prev = ref.current;
+  if (prev !== items && (prev.length !== items.length || prev.some((item, i) => item !== items[i]))) {
+    ref.current = items;
+  }
+  return ref.current;
+}
+
 function sameFile(a: FileRef | null, b: FileRef | null): boolean {
   return a !== null && b !== null && a.repoPath === b.repoPath && a.filePath === b.filePath;
 }
@@ -74,33 +84,49 @@ function addedLinesOf(diff: DiffOutput): string[] {
 
 /**
  * 파일별 변경(D7). 저장소마다 그 저장소의 main과 갈라진 지점 이후로 바뀐 파일(커밋하지 않은 변경 포함)을
- * 묶어 보여 주고, 묶음 머리에 그 저장소의 브랜치를 단다. 서로 다른 저장소가 같은 문자열을 새로 추가했으면
+ * 저장소별 그룹으로 보여 주고, 그룹 머리에 그 저장소의 브랜치를 단다. 서로 다른 저장소가 같은 문자열을 새로 추가했으면
  * 「연결된 변경」으로 표시하고 나란히 보여 준다. 연결은 문자열 일치로 찾은 추정이다.
  */
-export function FilesByRepo({ repos, variant = "panels" }: FilesByRepoProps) {
+export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
   const { t } = useTranslation();
-  const paths = useMemo(() => repos.map((r) => r.path), [repos]);
+  // 부모가 렌더마다 새 배열을 넘겨도(워크스페이스의 보이는 저장소 목록) 경로가 같으면 같은 배열을 쓴다.
+  const paths = useShallowStable(repos.map((r) => r.path));
   const results = useChangesVsDefaultMany(paths);
   useChangesActivityRefresh(paths);
 
-  const [selected, setSelected] = useState<(FileRef & { oldPath: string | null; status: FileStatus }) | null>(null);
-  const [openLink, setOpenLink] = useState<OpenLink | null>(null);
+  const [selectedState, setSelected] = useState<SelectedFile | null>(null);
+  const [openLinkState, setOpenLink] = useState<OpenLink | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
+  // 고른 파일·연결이 지금 보이는 저장소 것이 아니면(저장소를 바꿨거나 「조용한 저장소 숨기기」로 빠졌으면) 버린다.
+  const shown = useMemo(() => new Set(paths), [paths]);
+  const selected = selectedState && shown.has(selectedState.repoPath) ? selectedState : null;
+  const openLink =
+    openLinkState &&
+    shown.has(openLinkState.from.repoPath) &&
+    openLinkState.link.others.some((o) => shown.has(o.repoPath))
+      ? openLinkState
+      : null;
+
+  // `useQueries` 결과는 렌더마다 새 배열이다. 받은 데이터(참조)가 바뀔 때만 아래 계산을 다시 한다.
+  const changesData = useShallowStable(results.map((r) => r.data));
   const changesByPath = useMemo(() => {
     const out = new Map<string, BranchChanges>();
-    results.forEach((r, i) => {
-      if (r.data) out.set(paths[i], r.data);
+    changesData.forEach((data, i) => {
+      if (data) out.set(paths[i], data);
     });
     return out;
-  }, [results, paths]);
+  }, [changesData, paths]);
+
+  const oldPathOf = (ref: FileRef): string | null =>
+    changesByPath.get(ref.repoPath)?.files.find((f) => f.path === ref.filePath)?.oldPath ?? null;
 
   // 연결은 다른 저장소와만 맺으므로 저장소가 둘 이상일 때만 diff를 읽는다.
   const scanTargets = useMemo(() => {
-    if (repos.length < 2) return [];
-    return repos
-      .flatMap((r) =>
-        (changesByPath.get(r.path)?.files ?? [])
+    if (paths.length < 2) return [];
+    return paths
+      .flatMap((repoPath) =>
+        (changesByPath.get(repoPath)?.files ?? [])
           .filter(
             (f) =>
               !f.isBinary &&
@@ -109,23 +135,22 @@ export function FilesByRepo({ repos, variant = "panels" }: FilesByRepoProps) {
               f.additions <= LINK_SCAN_MAX_ADDITIONS &&
               isLinkableFile(f.path),
           )
-          .map((f) => ({ repoPath: r.path, filePath: f.path, oldPath: f.oldPath })),
+          .map((f) => ({ repoPath, filePath: f.path, oldPath: f.oldPath })),
       )
       .slice(0, LINK_SCAN_FILE_LIMIT);
-  }, [repos, changesByPath]);
+  }, [paths, changesByPath]);
   const scanResults = useFileDiffsVsDefault(scanTargets);
+  const scanDiffs = useShallowStable(scanResults.map((r) => r.data));
 
-  // `useQueries` 결과는 렌더마다 새 배열이다. 받은 시각이 바뀔 때만 다시 계산한다.
-  const scanKey = scanResults.map((r) => r.dataUpdatedAt).join(",");
+  // 파일 수백 개의 줄을 훑는 계산이다. 대상이나 받은 diff가 바뀔 때만 다시 한다.
   const links = useMemo(() => {
     const sources: LinkSource[] = [];
     scanTargets.forEach((target, i) => {
-      const diff = scanResults[i]?.data;
+      const diff = scanDiffs[i];
       if (diff && !diff.binary) sources.push({ ...target, addedLines: addedLinesOf(diff) });
     });
     return findLinkedChanges(sources);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanTargets, scanKey]);
+  }, [scanTargets, scanDiffs]);
 
   const toggleCollapsed = (path: string) =>
     setCollapsed((prev) => {
@@ -154,7 +179,9 @@ export function FilesByRepo({ repos, variant = "panels" }: FilesByRepoProps) {
       <div className="flex flex-col gap-1 px-3 py-2.5 border-b border-(--line) shrink-0">
         <strong className="text-[12.5px] text-foreground">{t("filesByRepo.title")}</strong>
         <span className="text-[11.5px] text-muted-foreground">
-          {t("filesByRepo.subtitle", { count: repos.length })}
+          {repos.length === 1
+            ? t("filesByRepo.subtitleSingle")
+            : t("filesByRepo.subtitleMany", { count: repos.length })}
           {linksTruncated && ` · ${t("filesByRepo.linksTruncated", { count: LINK_SCAN_FILE_LIMIT })}`}
         </span>
       </div>
@@ -184,15 +211,21 @@ export function FilesByRepo({ repos, variant = "panels" }: FilesByRepoProps) {
                   {changes.files.length === 0 ? (
                     <div className="px-3 py-2 text-[11.5px] text-muted-foreground">{t("filesByRepo.noChanges")}</div>
                   ) : (
-                    changes.files.map((file) => (
-                      <FileRow
-                        key={`${file.status}:${file.path}`}
-                        file={file}
-                        links={links.get(fileKey(repo.path, file.path)) ?? []}
-                        selected={sameFile(selected, { repoPath: repo.path, filePath: file.path })}
-                        onSelect={() => handleSelect(repo.path, file)}
-                        onOpenLink={(link) => handleOpenLink(repo.path, file, link)}
-                      />
+                    groupFiles(changes.files, groupBy).map((group) => (
+                      <div key={group.dir ?? ""} role={group.dir === null ? undefined : "group"} aria-label={group.dir ?? undefined}>
+                        {group.dir !== null && <FolderHeader dir={group.dir} />}
+                        {group.files.map((file) => (
+                          <FileRow
+                            key={`${file.status}:${file.path}`}
+                            file={file}
+                            showDir={group.dir === null}
+                            links={links.get(fileKey(repo.path, file.path)) ?? []}
+                            selected={sameFile(selected, { repoPath: repo.path, filePath: file.path })}
+                            onSelect={() => handleSelect(repo.path, file)}
+                            onOpenLink={(link) => handleOpenLink(repo.path, file, link)}
+                          />
+                        ))}
+                      </div>
                     ))
                   )}
                 </>
@@ -214,6 +247,7 @@ export function FilesByRepo({ repos, variant = "panels" }: FilesByRepoProps) {
       key={`${fileKey(openLink.from.repoPath, openLink.from.filePath)}:${openLink.link.token}`}
       openLink={openLink}
       nameOf={nameOf}
+      oldPathOf={oldPathOf}
       onClose={() => setOpenLink(null)}
     />
   ) : selected ? (
@@ -222,14 +256,6 @@ export function FilesByRepo({ repos, variant = "panels" }: FilesByRepoProps) {
     <EmptyState icon={FileText} title={t("filesByRepo.selectTitle")} description={t("filesByRepo.selectHint")} />
   );
 
-  if (variant === "inline") {
-    return (
-      <div className="flex flex-1 min-h-0">
-        <div className="w-[340px] max-w-[45%] shrink-0 border-r border-(--line) min-h-0">{list}</div>
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col">{detail}</div>
-      </div>
-    );
-  }
   return (
     <div className="flex flex-1 min-h-0 gap-(--g)">
       <div className="w-[400px] max-w-[45%] shrink-0 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden">
@@ -242,7 +268,35 @@ export function FilesByRepo({ repos, variant = "panels" }: FilesByRepoProps) {
   );
 }
 
-/** 저장소 묶음 머리: 접기, 저장소 색·이름, 그 저장소의 지금 브랜치, 파일 수. */
+interface FileGroup {
+  /** 폴더별일 때 그 폴더(맨 위는 ""), 저장소별일 때 null. */
+  dir: string | null;
+  files: BranchChangedFile[];
+}
+
+/** 저장소 그룹 안의 파일을 그대로 두거나(`repo`) 폴더별로 나눈다(`folder`, 폴더 이름순). */
+function groupFiles(files: readonly BranchChangedFile[], groupBy: FilesGroupBy): FileGroup[] {
+  if (groupBy === "repo") return [{ dir: null, files: [...files] }];
+  const byDir = new Map<string, BranchChangedFile[]>();
+  for (const file of files) {
+    const { dir } = splitPath(file.path);
+    byDir.set(dir, [...(byDir.get(dir) ?? []), file]);
+  }
+  return [...byDir.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dir, dirFiles]) => ({ dir, files: dirFiles }));
+}
+
+function FolderHeader({ dir }: { dir: string }) {
+  return (
+    <div className="flex items-center gap-1.5 h-6 pl-7 pr-3 border-b border-(--line) text-[11px] text-muted-foreground">
+      <Folder className="w-3 h-3 shrink-0" aria-hidden="true" />
+      <span className="truncate">{dir || "/"}</span>
+    </div>
+  );
+}
+
+/** 저장소 그룹 머리: 접기, 저장소 색·이름, 그 저장소의 지금 브랜치, 파일 수. */
 function RepoGroupHeader({
   repo,
   changes,
@@ -309,13 +363,15 @@ function GroupNote({ t, changes }: { t: TFunction; changes: BranchChanges }) {
 
 interface FileRowProps {
   file: BranchChangedFile;
+  /** 파일 이름 옆에 폴더를 흐리게 붙일지(폴더별로 나눴으면 머리에 있으니 뺀다). */
+  showDir: boolean;
   links: readonly FileLink[];
   selected: boolean;
   onSelect: () => void;
   onOpenLink: (link: FileLink) => void;
 }
 
-function FileRow({ file, links, selected, onSelect, onOpenLink }: FileRowProps) {
+function FileRow({ file, showDir, links, selected, onSelect, onOpenLink }: FileRowProps) {
   const { t } = useTranslation();
   const { name, dir } = splitPath(file.path);
   const first = links[0];
@@ -341,7 +397,7 @@ function FileRow({ file, links, selected, onSelect, onOpenLink }: FileRowProps) 
         {STATUS_LETTER[file.status]}
       </span>
       <span className="flex-1 min-w-0 truncate text-[12.5px] text-foreground">
-        {name} {dir && <span className="text-[11px] text-(--faint)">{dir}</span>}
+        {name} {showDir && dir && <span className="text-[11px] text-(--faint)">{dir}</span>}
       </span>
       {first && (
         <button
@@ -350,11 +406,17 @@ function FileRow({ file, links, selected, onSelect, onOpenLink }: FileRowProps) 
             e.stopPropagation();
             onOpenLink(first);
           }}
-          title={t("filesByRepo.linkChipTitle", { token: first.token, count: links.length })}
+          title={
+            links.length === 1
+              ? t("filesByRepo.linkChipTitleSingle", { token: first.token })
+              : t("filesByRepo.linkChipTitleMany", { token: first.token, count: links.length })
+          }
           className="inline-flex items-center gap-1 max-w-[150px] shrink-0 px-1.5 py-px rounded-(--radius-chip) bg-(--chip) text-[10.5px] font-bold text-(--fg2) hover:bg-accent"
           data-testid="link-chip"
         >
-          <Link2 className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+          <span className="shrink-0" aria-hidden="true">
+            ⟷
+          </span>
           <span className="truncate">{first.token}</span>
           {links.length > 1 && <span className="shrink-0 text-(--faint)">+{links.length - 1}</span>}
         </button>
@@ -376,7 +438,7 @@ function FileRow({ file, links, selected, onSelect, onOpenLink }: FileRowProps) 
 }
 
 /** 고른 파일 하나를 그 저장소 main과 갈라진 지점 → 작업 트리로 비교한다. */
-function SelectedFileDiff({ file }: { file: FileRef & { oldPath: string | null; status: FileStatus } }) {
+function SelectedFileDiff({ file }: { file: SelectedFile }) {
   const { t } = useTranslation();
   const targets = useMemo(() => [file], [file]);
   const [result] = useFileDiffsVsDefault(targets);
@@ -397,22 +459,28 @@ function SelectedFileDiff({ file }: { file: FileRef & { oldPath: string | null; 
 function LinkedCompare({
   openLink,
   nameOf,
+  oldPathOf,
   onClose,
 }: {
   openLink: OpenLink;
   nameOf: (repoPath: string) => string;
+  /** 이름을 바꾼 파일의 옛 경로. 이것이 있어야 main 쪽 내용과 비교된다. */
+  oldPathOf: (ref: FileRef) => string | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const { from, link } = openLink;
   const [otherIndex, setOtherIndex] = useState(0);
   const other = link.others[Math.min(otherIndex, link.others.length - 1)];
+  const fromOld = oldPathOf(from);
+  const otherOld = oldPathOf(other);
+  // 목록에서 연결을 찾을 때 읽은 diff와 같은 키라 캐시를 그대로 쓴다.
   const sides = useMemo(
     () => [
-      { ...from, oldPath: null },
-      { ...other, oldPath: null },
+      { ...from, oldPath: fromOld },
+      { ...other, oldPath: otherOld },
     ],
-    [from, other],
+    [from, other, fromOld, otherOld],
   );
   const [mine, theirs] = useFileDiffsVsDefault(sides);
   const repoNames = [nameOf(from.repoPath), nameOf(other.repoPath)].join(", ");
@@ -509,7 +577,10 @@ function LinkedHalf({
                   <span className="whitespace-pre pr-3">
                     {splitByToken(l.content, token).map((part, j) =>
                       part.match ? (
-                        <mark key={j} className="bg-(--live-soft) text-inherit rounded-[2px]">
+                        <mark
+                          key={j}
+                          className="bg-[color-mix(in_srgb,var(--amber-400)_35%,transparent)] text-inherit rounded-[2px]"
+                        >
                           {part.text}
                         </mark>
                       ) : (

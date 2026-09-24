@@ -13,6 +13,8 @@ import { PreviewBanner } from "@/components/worktree/PreviewBanner";
 import { RepoListView } from "@/components/repository/RepoListView";
 import { GraphPanel } from "@/components/graph/GraphPanel";
 import { WorkspaceReview } from "@/components/review/WorkspaceReview";
+import { FilesByRepo } from "@/components/review/FilesByRepo";
+import { useFilesViewStore } from "@/components/review/files-view";
 import { Card, ContentArea, EmptyState } from "./ContentArea";
 
 /** "All repositories" list, opened from the sidebar. Takes over the main column. */
@@ -44,6 +46,8 @@ function RepoListCard() {
 /**
  * Right column of the two-column shell: toolbar on top, then the full-width
  * graph panel, then the file list + diff for whatever is picked in the panel.
+ * On the panel's "changes by file" tab (D7) the lower area shows that list
+ * and its diff instead.
  */
 export function MainColumn() {
   const { t } = useTranslation();
@@ -51,6 +55,9 @@ export function MainColumn() {
   const repoListOpen = useUIStore((s) => s.repoListOpen);
   const setPreviewBranch = useUIStore((s) => s.setPreviewBranch);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const activeRepoName = useRepositoryStore((s) => s.activeRepo?.name ?? null);
+  const filesOpen = useFilesViewStore((s) => s.repoTabOpen);
+  const groupBy = useFilesViewStore((s) => s.groupBy);
   const scope = useActiveScope();
   const addToast = useToastStore((s) => s.addToast);
   const queryClient = useQueryClient();
@@ -86,7 +93,16 @@ export function MainColumn() {
           // 저장소 전용 화면은 저장소를 골랐을 때만 마운트한다. 안쪽 파일은 null 경로를 보지 않는다.
           <>
             <GraphPanel />
-            <ContentArea activeTab={activeTab} />
+            {filesOpen && activeRepoPath ? (
+              // 저장소(워크트리)를 바꾸면 고른 파일·접힌 그룹을 새로 시작한다.
+              <FilesByRepo
+                key={activeRepoPath}
+                repos={[{ path: activeRepoPath, name: activeRepoName ?? activeRepoPath }]}
+                groupBy={groupBy}
+              />
+            ) : (
+              <ContentArea activeTab={activeTab} />
+            )}
           </>
         ) : scope?.kind === "workspace" ? (
           <WorkspaceReview key={scope.id} workspaceId={scope.id} paths={scope.paths} />

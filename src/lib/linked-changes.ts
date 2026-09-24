@@ -4,8 +4,12 @@
  * 판정은 추정이다. 추가된 줄에서 8자 이상의 식별자·문자열을 뽑아, 다른 저장소의 추가된 줄에도
  * 똑같이 있으면 두 파일을 잇는다. 잘못된 연결을 줄이려고 아래를 뺀다.
  * - 8자보다 짧은 것, 글자가 없는 것, 16진수 해시처럼 보이는 것
- * - 평범한 영어 낱말 하나(`settings`, `children`): 구분자(`. / - _ :`)나 camelCase가 있어야 한다
- * - import·use·require 줄(패키지 이름은 도메인 연결이 아니다), 잠금 파일·압축 파일
+ * - 코드에 그냥 쓴 낱말 하나(`children`, `function`): 구분자(`. / - _ :`)나 camelCase가 있어야 한다.
+ *   따옴표 안 문자열 전체이거나 따옴표 안 경로의 한 마디인 낱말(`@Get("settings")`,
+ *   `"/api/v1/notifications/settings"`의 `settings`)은 받는다. 라우트·키 이름은 이렇게 나뉘어 쓰인다.
+ *   이때도 흔한 값(`checkbox`, `password` 등)은 뺀다.
+ * - import·use·require 줄, 의존성 선언 파일(`package.json`, `Cargo.toml` 등)과 잠금 파일·압축 파일:
+ *   패키지 이름은 도메인 연결이 아니다
  * - 너무 많은 파일에 나오는 문자열(흔한 표현)
  * 같은 저장소 안의 파일끼리는 잇지 않는다(import 하나로 모두 이어지기 때문이다).
  */
@@ -94,14 +98,56 @@ const GENERIC_TOKENS = new Set([
   "http://",
 ]);
 
+/** 따옴표 안 낱말이라도 연결 후보가 되기에는 너무 흔한 값. */
+const COMMON_QUOTED_WORDS = new Set([
+  "function",
+  "undefined",
+  "boolean",
+  "children",
+  "checkbox",
+  "password",
+  "username",
+  "required",
+  "disabled",
+  "readonly",
+  "relative",
+  "absolute",
+  "vertical",
+  "horizontal",
+  "transparent",
+  "inherit",
+  "primary",
+  "secondary",
+  "container",
+  "description",
+  "position",
+  "optional",
+  "response",
+  "dependencies",
+  "development",
+  "production",
+  "resolved",
+  "integrity",
+  "application",
+  "keywords",
+  "repository",
+  "anonymous",
+  "noopener",
+  "noreferrer",
+]);
+
 const IMPORT_LINE = /^\s*(import\b|export\s+(\*|\{[^}]*\})\s+from\b|from\s+\S+\s+import\b|use\s+[\w:]+|#include\b|require\b|package\s+[\w.]+;?\s*$)|\brequire\s*\(/;
 
 const SKIPPED_FILE =
   /(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|Cargo\.lock|poetry\.lock|Gemfile\.lock|composer\.lock|go\.sum|bun\.lockb?)$|\.min\.(js|css)$|\.map$|\.snap$/;
 
-/** 연결을 찾을 만한 파일인가(잠금 파일, 압축·생성 파일은 뺀다). */
+/** 의존성 선언 파일. 여기 추가된 문자열은 대개 패키지 이름·버전이다. */
+const MANIFEST_FILE =
+  /(^|\/)(package\.json|Cargo\.toml|pyproject\.toml|requirements[\w.-]*\.txt|Pipfile|go\.mod|Gemfile|composer\.json|pubspec\.yaml|Podfile|pom\.xml|build\.gradle(\.kts)?|deno\.jsonc?)$/;
+
+/** 연결을 찾을 만한 파일인가(잠금 파일, 의존성 선언 파일, 압축·생성 파일은 뺀다). */
 export function isLinkableFile(filePath: string): boolean {
-  return !SKIPPED_FILE.test(filePath);
+  return !SKIPPED_FILE.test(filePath) && !MANIFEST_FILE.test(filePath);
 }
 
 /** 앞뒤의 구분 문자(`/ . - :`)를 뗀다. */
@@ -139,6 +185,15 @@ function accept(raw: string, out: Set<string>): void {
   if (isDistinctive(token)) out.add(token);
 }
 
+/** 따옴표 안에 따로 쓰인 낱말(라우트 마디, 키 이름)이면 받는다. */
+function acceptQuotedWord(word: string, out: Set<string>): void {
+  if (word.length < MIN_LINK_TOKEN_LENGTH) return;
+  if (!/^[A-Za-z][A-Za-z0-9_$-]*$/.test(word)) return;
+  if (/^[0-9a-f]+$/i.test(word) && /\d/.test(word)) return; // 해시
+  if (COMMON_QUOTED_WORDS.has(word.toLowerCase())) return;
+  out.add(word);
+}
+
 /**
  * 줄 하나에서 연결 후보 문자열을 뽑는다. 따옴표 안 문자열은 그대로(`/api/v1/x`),
  * 코드는 식별자·경로 덩어리(`notification.badge`, `NotificationSettings`)로 본다.
@@ -149,7 +204,11 @@ export function linkTokens(line: string): string[] {
   const out = new Set<string>();
   for (const m of text.matchAll(/"([^"\s]+)"|'([^'\s]+)'|`([^`\s]+)`/g)) {
     const literal = m[1] ?? m[2] ?? m[3] ?? "";
-    if (/^[A-Za-z0-9_$./:@-]+$/.test(literal)) accept(literal, out);
+    if (!/^[A-Za-z0-9_$./:@-]+$/.test(literal)) continue;
+    accept(literal, out);
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(literal)) {
+      for (const segment of literal.split("/")) acceptQuotedWord(segment, out);
+    }
   }
   for (const m of text.matchAll(/[A-Za-z0-9_$./:-]+/g)) {
     accept(trimEdges(m[0]), out);

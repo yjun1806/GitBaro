@@ -7,6 +7,7 @@ import type { ActivityEvent, BranchChangedFile, BranchChanges, FileDiffVsDefault
 
 const APP = "/work/xames-app";
 const API = "/work/xames-backend";
+const DESIGN = "/work/xames-design";
 
 function file(path: string, additions: number, status: BranchChangedFile["status"] = "added"): BranchChangedFile {
   return { path, oldPath: null, status, additions, deletions: 0, isBinary: false };
@@ -52,6 +53,9 @@ function diff(filePath: string, added: string[]): FileDiffVsDefault {
 const CHANGES: Record<string, BranchChanges> = {
   [APP]: changes(APP, "feat/noti", [file("src/api/notifications.ts", 2), file("src/theme/tokens.ts", 1, "modified")]),
   [API]: changes(API, "feat/notification-settings", [file("src/notifications/settings.controller.ts", 2)]),
+  [DESIGN]: changes(DESIGN, "feat/rename", [
+    { path: "src/new.ts", oldPath: "src/old.ts", status: "renamed", additions: 1, deletions: 0, isBinary: false },
+  ]),
 };
 
 const DIFFS: Record<string, FileDiffVsDefault> = {
@@ -65,15 +69,30 @@ const DIFFS: Record<string, FileDiffVsDefault> = {
     'const ROUTE = "/api/v1/notifications/settings";',
     "badg.fg = 2;",
   ]),
+  [`${DESIGN}:src/new.ts`]: diff("src/new.ts", ['const ROUTE = "/api/v1/notifications/settings";']),
 };
 
 const getChangesVsDefault = vi.fn(async (path: string) => CHANGES[path]);
-const getFileDiffVsDefault = vi.fn(async (path: string, filePath: string) => DIFFS[`${path}:${filePath}`]);
+const getFileDiffVsDefault = vi.fn(
+  async (path: string, filePath: string, _oldPath: string | null) => DIFFS[`${path}:${filePath}`],
+);
 vi.mock("@/api/commands", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/commands")>()),
   getChangesVsDefault: (path: string) => getChangesVsDefault(path),
-  getFileDiffVsDefault: (path: string, filePath: string) => getFileDiffVsDefault(path, filePath),
+  getFileDiffVsDefault: (path: string, filePath: string, oldPath: string | null) =>
+    getFileDiffVsDefault(path, filePath, oldPath),
 }));
+const linkScans = vi.hoisted(() => ({ count: 0 }));
+vi.mock("@/lib/linked-changes", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/linked-changes")>();
+  return {
+    ...actual,
+    findLinkedChanges: (...args: Parameters<typeof actual.findLinkedChanges>) => {
+      linkScans.count += 1;
+      return actual.findLinkedChanges(...args);
+    },
+  };
+});
 vi.mock("@/components/diff/DiffViewer", () => ({
   DiffViewer: ({ diff }: { diff: { filePath: string } }) => <div>diff-viewer {diff.filePath}</div>,
 }));
@@ -92,13 +111,16 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 const { FilesByRepo } = await import("../FilesByRepo");
 
-function renderFiles(repos: { path: string; name: string }[]) {
+function renderFiles(repos: { path: string; name: string }[], groupBy: "repo" | "folder" = "repo") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const tree = (shown: { path: string; name: string }[]) => (
     <QueryClientProvider client={client}>
-      <FilesByRepo repos={repos} />
-    </QueryClientProvider>,
+      <FilesByRepo repos={shown} groupBy={groupBy} />
+    </QueryClientProvider>
   );
+  const result = render(tree(repos));
+  /** 부모가 다시 그릴 때처럼 새 배열로 다시 그린다. */
+  return { ...result, show: (shown: { path: string; name: string }[]) => result.rerender(tree(shown)) };
 }
 
 const BOTH = [
@@ -177,5 +199,55 @@ describe("FilesByRepo", () => {
       expect(getChangesVsDefault.mock.calls.filter(([p]) => p === API).length).toBe(before + 1),
     );
     expect(getChangesVsDefault.mock.calls.filter(([p]) => p === APP)).toHaveLength(1);
+  });
+
+  it("drops the picked file when its repository is no longer shown", async () => {
+    const view = renderFiles(BOTH);
+    fireEvent.click(await screen.findByText("settings.controller.ts"));
+    expect(await screen.findByText("diff-viewer src/notifications/settings.controller.ts")).toBeTruthy();
+    view.show([{ path: APP, name: "xames-app" }]);
+    expect(screen.queryByText("diff-viewer src/notifications/settings.controller.ts")).toBeNull();
+    expect(screen.getByText("Pick a file")).toBeTruthy();
+  });
+
+  it("does not search for links again when only the view changes", async () => {
+    const view = renderFiles(BOTH);
+    await waitFor(() => expect(screen.getAllByTestId("link-chip")).toHaveLength(2));
+    const scans = linkScans.count;
+    // 새 배열이지만 같은 저장소, 파일 고르기, 그룹 접기 — 연결 계산을 다시 하지 않는다.
+    view.show(BOTH.map((r) => ({ ...r })));
+    fireEvent.click(screen.getByText("notifications.ts"));
+    fireEvent.click(screen.getByRole("button", { name: /xames-backend/ }));
+    expect(linkScans.count).toBe(scans);
+  });
+
+  it("compares a renamed file against its old path in the side-by-side view", async () => {
+    renderFiles([
+      { path: APP, name: "xames-app" },
+      { path: DESIGN, name: "xames-design" },
+    ]);
+    const design = await screen.findByRole("region", { name: "xames-design" });
+    await waitFor(() => expect(within(design).getByTestId("link-chip")).toBeTruthy());
+    fireEvent.click(within(design).getByTestId("link-chip"));
+    const compare = await screen.findByTestId("linked-compare");
+    await waitFor(() => expect(compare.querySelectorAll("mark")).toHaveLength(2));
+    const designCalls = getFileDiffVsDefault.mock.calls.filter(([p]) => p === DESIGN);
+    expect(designCalls.length).toBeGreaterThan(0);
+    expect(designCalls.every(([, , oldPath]) => oldPath === "src/old.ts")).toBe(true);
+  });
+
+  it("splits a repository's files by folder when grouped by folder", async () => {
+    renderFiles(BOTH, "folder");
+    const app = await screen.findByRole("region", { name: "xames-app" });
+    const api = await within(app).findByRole("group", { name: "src/api" });
+    expect(within(api).getByText("notifications.ts")).toBeTruthy();
+    expect(within(app).getByRole("group", { name: "src/theme" })).toBeTruthy();
+  });
+
+  it("uses the single-repository subtitle in Korean too", async () => {
+    await i18n.changeLanguage("ko");
+    renderFiles([{ path: APP, name: "xames-app" }]);
+    expect(await screen.findByText(/그 저장소의 main과 비교/)).toBeTruthy();
+    expect(screen.queryByText(/각 저장소의 main과 비교/)).toBeNull();
   });
 });

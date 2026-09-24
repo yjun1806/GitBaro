@@ -17,11 +17,13 @@ import { StashView } from "@/components/stash/StashView";
 import { ActionsView } from "@/components/actions/ActionsView";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
-import { FilesByRepo } from "@/components/review/FilesByRepo";
+import { FilesGroupByPicker } from "@/components/review/FilesGroupByPicker";
+import { useFilesViewStore } from "@/components/review/files-view";
+import { cn } from "@/lib/utils";
 
 /** Which graph-panel tab a `ui.activeTab` value belongs to. */
 export type GraphPanelTab = "graph" | "stash" | "actions";
-/** Tabs the panel shows: the stored ones plus "changes by file" (D7), which is local view state. */
+/** Tabs the panel shows: the stored ones plus "changes by file" (D7), which is unsaved view state. */
 type ShownTab = GraphPanelTab | "files";
 
 /**
@@ -39,7 +41,8 @@ export function graphPanelTabOf(activeTab: "changes" | "history" | "stash" | "ac
  * graph with a WIP row per worktree on top, new-commit dots and the "seen up
  * to here" divider), changes by file (D7, this repository against its main),
  * stash, Actions. On the graph tab the header carries the "mark N new commits
- * as seen" button.
+ * as seen" button. On "changes by file" the card shrinks to its tab header and
+ * MainColumn shows the file list and diff below it (D7 layout).
  */
 export function GraphPanel() {
   const { t } = useTranslation();
@@ -63,14 +66,14 @@ export function GraphPanel() {
   ).length;
 
   // 「파일별 변경」은 저장하지 않는 화면 상태다. 다른 탭으로 옮기거나(툴바·merge 흐름 포함)
-  // 저장된 탭이 바뀌면 닫는다.
-  const [filesOpen, setFilesOpen] = useState(false);
-  useEffect(() => setFilesOpen(false), [activeTab]);
+  // 저장된 탭이 바뀌면 닫고, 패널이 사라질 때(워크스페이스·저장소 목록으로 갈 때)도 닫는다.
+  const filesOpen = useFilesViewStore((s) => s.repoTabOpen);
+  const setFilesOpen = useFilesViewStore((s) => s.setRepoTabOpen);
+  const groupBy = useFilesViewStore((s) => s.groupBy);
+  const setGroupBy = useFilesViewStore((s) => s.setGroupBy);
+  useEffect(() => setFilesOpen(false), [activeTab, setFilesOpen]);
+  useEffect(() => () => setFilesOpen(false), [setFilesOpen]);
   const tab: ShownTab = filesOpen ? "files" : graphPanelTabOf(activeTab);
-  const filesRepos = useMemo(
-    () => (activeRepoPath ? [{ path: activeRepoPath, name: activeRepo?.name ?? activeRepoPath }] : []),
-    [activeRepoPath, activeRepo?.name],
-  );
   const worktreeFilter = useWorktreeFilter(review.wips);
   // 범위·비교 화면은 지금 연 워크트리의 커밋만 그린다 — 칩으로 고를 것이 없으니 칩 줄을 감춘다.
   const compareBranch = useUIStore((s) => s.compareBranch);
@@ -106,7 +109,10 @@ export function GraphPanel() {
   return (
     <section
       aria-label={t("shell.panelTabs")}
-      className="relative flex flex-col h-[42%] min-h-[180px] shrink-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
+      className={cn(
+        "relative flex flex-col shrink-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden",
+        tab !== "files" && "h-[42%] min-h-[180px]",
+      )}
     >
       <div className="flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)">
         <TabGroup aria-label={t("shell.panelTabs")} className="flex-1 min-w-0 gap-2 px-3 border-b-0">
@@ -154,6 +160,7 @@ export function GraphPanel() {
             {t("graph.markSeen", { count: review.newCommits.newCount })}
           </button>
         )}
+        {tab === "files" && <FilesGroupByPicker value={groupBy} onChange={setGroupBy} />}
       </div>
 
       {tab === "graph" && graphListShown && worktreeFilter.chips.length > 1 && (
@@ -163,23 +170,24 @@ export function GraphPanel() {
           onToggle={worktreeFilter.toggle}
         />
       )}
-      <div role="tabpanel" className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-        {tab === "graph" ? (
-          <CommitGraph
-            wips={worktreeFilter.wips}
-            newCommits={review.newCommits}
-            seenAt={review.seenAt}
-            worktreeHeads={worktreeFilter.heads}
-          />
-        ) : tab === "files" ? (
-          <FilesByRepo repos={filesRepos} variant="inline" />
-        ) : tab === "stash" ? (
-          <StashView />
-        ) : (
-          <ActionsView />
-        )}
-        <SwitchingOverlay />
-      </div>
+      {/* 「파일별 변경」의 목록과 diff는 이 카드 아래 칸에 그린다(MainColumn). */}
+      {tab !== "files" && (
+        <div role="tabpanel" className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+          {tab === "graph" ? (
+            <CommitGraph
+              wips={worktreeFilter.wips}
+              newCommits={review.newCommits}
+              seenAt={review.seenAt}
+              worktreeHeads={worktreeFilter.heads}
+            />
+          ) : tab === "stash" ? (
+            <StashView />
+          ) : (
+            <ActionsView />
+          )}
+          <SwitchingOverlay />
+        </div>
+      )}
     </section>
   );
 }

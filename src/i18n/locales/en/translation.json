@@ -1133,8 +1133,8 @@
   "filesByRepo": {
     "tab": "Changes by file",
     "title": "Files changed since main",
-    "subtitle_one": "{{count}} repository · compared with its main · uncommitted changes included",
-    "subtitle_other": "{{count}} repositories · each compared with its own main · uncommitted changes included",
+    "subtitleSingle": "1 repository · compared with its main · uncommitted changes included",
+    "subtitleMany": "{{count}} repositories · each compared with its own main · uncommitted changes included",
     "linksTruncated": "links searched in the first {{count}} files only",
     "loadFailed": "Couldn't read the changes: {{error}}",
     "loading": "Loading…",
@@ -1148,13 +1148,16 @@
     "noBase": "Couldn't find where this branch left {{branch}}. Showing uncommitted changes only.",
     "unborn": "No commits yet. Showing uncommitted changes only.",
     "onDefault": "On the default branch: compared with {{base}}, so these are commits not pushed yet.",
-    "linkChipTitle_one": "The same string \"{{token}}\" was added in another repository. Click to compare.",
-    "linkChipTitle_other": "The same string \"{{token}}\" was added in another repository ({{count}} links). Click to compare.",
+    "linkChipTitleSingle": "The same string \"{{token}}\" was added in another repository. Click to compare.",
+    "linkChipTitleMany": "The same string \"{{token}}\" was added in another repository ({{count}} links). Click to compare.",
     "binary": "binary",
     "linkedTitle": "Changes linked by the same string",
     "linkedSummary": "Added in {{repos}}:",
     "estimate": "a guess from matching strings",
     "pickOther": "File to compare",
-    "closeLink": "Close link"
+    "closeLink": "Close link",
+    "groupBy": "Group files",
+    "groupByRepo": "By repository",
+    "groupByFolder": "By folder"
   }
 }

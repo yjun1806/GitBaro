@@ -16,7 +16,21 @@ vi.mock("@/components/toolbar", () => ({ ToolbarRoot: () => <div>toolbar</div> }
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/components/stash/StashView", () => ({ StashView: () => <div>stash-list</div> }));
 vi.mock("@/components/actions/ActionsView", () => ({ ActionsView: () => <div>actions-list</div> }));
-vi.mock("@/components/review/FilesByRepo", () => ({ FilesByRepo: () => <div>files-by-repo</div> }));
+const filesMounts = vi.hoisted(() => ({ count: 0 }));
+vi.mock("@/components/review/FilesByRepo", async () => {
+  const { useState } = await import("react");
+  return {
+    // 마운트마다 번호를 매겨, 저장소를 바꿀 때 새로 마운트되는지(고른 파일이 남지 않는지) 본다.
+    FilesByRepo: ({ repos }: { repos: { path: string }[] }) => {
+      const [mount] = useState(() => ++filesMounts.count);
+      return (
+        <div>
+          files-by-repo {repos.map((r) => r.path).join(",")} #{mount}
+        </div>
+      );
+    },
+  };
+});
 vi.mock("@/components/commit/ChangesView", () => ({ ChangesView: () => <div>changes-view</div> }));
 vi.mock("@/components/repository/RepoListView", () => ({ RepoListView: () => <div>repo-list</div> }));
 vi.mock("@/components/diff/DiffViewer", () => ({ DiffViewer: () => <div>diff-viewer</div> }));
@@ -222,7 +236,7 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getByText("history-list")).toBeTruthy();
 
     fireEvent.click(tabs[1]);
-    expect(screen.getByText("files-by-repo")).toBeTruthy();
+    expect(screen.getByText(/^files-by-repo/)).toBeTruthy();
     expect(screen.queryByText("history-list")).toBeNull();
 
     fireEvent.click(tabs[2]);
@@ -253,6 +267,23 @@ describe("MainColumn (two-column shell)", () => {
     } finally {
       act(() => useUIStore.getState().setSwitchingBranch(false));
     }
+  });
+
+  it("shows changes by file below the tab header, and starts it over for another repository", () => {
+    const other = { ...repo, path: "/work/other", name: "other" } as RepoInfo;
+    useRepositoryStore.setState({ repos: [repo, other] });
+    renderShell();
+    fireEvent.click(screen.getByRole("tab", { name: "Changes by file" }));
+    const first = screen.getByText(/^files-by-repo \/work\/app #/).textContent;
+    // 아래 칸의 파일 목록·diff 대신 파일별 변경을 그린다.
+    expect(screen.queryByText("history-list")).toBeNull();
+    expect(screen.queryByText("changes-view")).toBeNull();
+
+    act(() => useRepositoryStore.setState({ activeRepo: other, activeRepoPath: other.path }));
+    const next = screen.getByText(/^files-by-repo \/work\/other #/).textContent;
+    // 다시 마운트됐다(마운트 번호가 다르다).
+    expect(next?.split("#")[1]).not.toBe(first?.split("#")[1]);
+    expect(screen.getByRole("tab", { name: "Changes by file" }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("keeps the stash tab when the panel remounts with an old commit selection", () => {

@@ -35,8 +35,21 @@ describe("linkTokens", () => {
     expect(linkTokens("getUser();")).toEqual([]);
   });
 
-  it("drops plain single words even when they are long enough", () => {
-    expect(linkTokens('  @Put("settings") notifications children')).toEqual([]);
+  it("drops plain single words written as code, even when they are long enough", () => {
+    expect(linkTokens("  return notifications > children;")).toEqual([]);
+    expect(linkTokens("function settings() {}")).toEqual([]);
+  });
+
+  it("keeps a quoted word of 8+ characters and the words of a quoted path", () => {
+    expect(linkTokens('  @Get("settings")')).toEqual(["settings"]);
+    expect(linkTokens('http.get("/api/v1/notifications/settings");')).toEqual(
+      expect.arrayContaining(["/api/v1/notifications/settings", "notifications", "settings"]),
+    );
+    // 7자 낱말, 흔한 값, 해시, URL의 마디는 받지 않는다.
+    expect(linkTokens('@Get("profile")')).toEqual([]);
+    expect(linkTokens('<input type="checkbox" />')).toEqual([]);
+    expect(linkTokens('rev = "deadbeef12345678";')).toEqual([]);
+    expect(linkTokens('fetch("https://example.com/somewhere")')).toEqual(["https://example.com/somewhere"]);
   });
 
   it("drops hashes, generic calls and generic prefixes", () => {
@@ -95,6 +108,28 @@ describe("findLinkedChanges", () => {
       src(`/work/repo-${i}`, "x.ts", ['log("shared.everywhere");']),
     );
     expect(findLinkedChanges(sources).size).toBe(0);
+  });
+
+  it("links a route split across a path literal and a quoted word (D7 example)", () => {
+    const links = findLinkedChanges([
+      src(APP, "src/api/notifications.ts", ['  http.get<NotificationSettings>("/api/v1/notifications/settings");']),
+      src(API, "src/notifications/settings.controller.ts", ['  @Get("settings")', "  getSettings(@User() user) {"]),
+    ]);
+    expect(tokensOf(links, API, "src/notifications/settings.controller.ts")).toEqual(["settings"]);
+    expect(tokensOf(links, APP, "src/api/notifications.ts")).toEqual(["settings"]);
+  });
+
+  it("does not link package names added to dependency manifests", () => {
+    expect(isLinkableFile("package.json")).toBe(false);
+    expect(isLinkableFile("apps/web/package.json")).toBe(false);
+    expect(isLinkableFile("src-tauri/Cargo.toml")).toBe(false);
+    const links = findLinkedChanges([
+      src(APP, "package.json", ['    "@tanstack/react-query": "^5.0.0",', '    "react-dom": "^19.0.0",']),
+      src(API, "package.json", ['    "@tanstack/react-query": "^5.0.0",', '    "react-dom": "^19.0.0",']),
+      src(APP, "Cargo.toml", ['serde_json = "1.0"']),
+      src(API, "Cargo.toml", ['serde_json = "1.0"']),
+    ]);
+    expect(links.size).toBe(0);
   });
 
   it("skips lock files", () => {

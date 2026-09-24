@@ -16,6 +16,8 @@ import { ReviewFilesPanel, type ReviewSelection } from "./ReviewFilesPanel";
 import { useWorkspaceReview, type ReviewRepo } from "./useWorkspaceReview";
 import { useReviewActivityRefresh } from "./useReviewActivityRefresh";
 import { FilesByRepo } from "./FilesByRepo";
+import { FilesGroupByPicker } from "./FilesGroupByPicker";
+import { useFilesViewStore } from "./files-view";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +41,8 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const [showAll, setShowAll] = useState(false);
   const [selection, setSelection] = useState<ReviewSelection>(null);
   const [tab, setTab] = useState<"graph" | "files">("graph");
+  const groupBy = useFilesViewStore((s) => s.groupBy);
+  const setGroupBy = useFilesViewStore((s) => s.setGroupBy);
 
   const data = useWorkspaceReview(paths, showAll);
   useReviewActivityRefresh(data.repoPaths);
@@ -106,6 +110,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                 </Tab>
               </TabGroup>
               <span className="flex-1" />
+              {tab === "files" && <FilesGroupByPicker value={groupBy} onChange={setGroupBy} />}
               <RepoLegend repos={data.visible} />
               {data.hiddenCount > 0 || showAll ? (
                 <button
@@ -162,7 +167,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
               <ReviewFilesPanel selection={selection} repoLabel={repoLabel} />
             </Card>
           ) : (
-            <FilesByRepo repos={filesRepos} variant="panels" />
+            <FilesByRepo repos={filesRepos} groupBy={groupBy} />
           )}
         </>
       )}
