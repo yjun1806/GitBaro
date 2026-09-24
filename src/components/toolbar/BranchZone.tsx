@@ -27,7 +27,7 @@ import { selectionAfterStashPushed } from "@/lib/stash-selection";
 import { runWithStashedChanges } from "./run-with-stashed-changes";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
-import { railFlowWidth } from "@/components/layout/RepoRail";
+import { mainColumnLeft } from "@/components/layout/sidebar-layout";
 
 interface BranchZoneProps {
   isOpen: boolean;
@@ -324,7 +324,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           {/* Full-height panel — 사이드바 오른쪽, 툴바 아래부터 하단까지 */}
           <div
             className="fixed z-50 flex flex-col bg-popover border-r border-border shadow-2xl"
-            style={{ left: railFlowWidth(railMode) + sidebarWidth + 1, top: 52, bottom: 0, width: '28rem' }}
+            style={{ left: mainColumnLeft(railMode, sidebarWidth), top: 52, bottom: 0, width: '28rem' }}
           >
             <BranchDropdown
               branches={branches}

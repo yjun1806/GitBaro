@@ -1,25 +1,22 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { FileText, GitCommit, GitCompare, Archive, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
-import { useToastStore } from "@/stores/toast";
 import { useSelectionStore } from "@/stores/selection";
 import { useStatus, useFileDiff, useCommitDetail, useCommitFileDiff, useCommitAvatars } from "@/api/queries";
-import { stopWorktreePreview } from "@/api/commands";
-import { useQueryClient } from "@tanstack/react-query";
-import { getErrorMessage } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { CommitDetail } from "@/components/history/CommitDetail";
 import { StashDetailView } from "@/components/stash/StashDetailView";
 import { ActionsDetailView } from "@/components/actions/ActionsDetailView";
-import { ToolbarRoot } from "@/components/toolbar";
-import { PreviewBanner } from "@/components/worktree/PreviewBanner";
+import { ChangesView } from "@/components/commit/ChangesView";
+import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import type { FileStatus } from "@/types";
 
 /* --- Empty / Placeholder States --- */
 
-function EmptyState({
+export function EmptyState({
   icon: Icon,
   title,
   description,
@@ -101,19 +98,39 @@ function CommitDetailView({ commitId }: { commitId: string }) {
   );
 }
 
+/* --- Card --- */
+
+/** A panel card from the design: panel colour, 14px corners, panel shadow. */
+export function Card({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <section
+      className={cn(
+        "relative flex flex-col min-w-0 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden",
+        className,
+      )}
+    >
+      {children}
+    </section>
+  );
+}
+
 /* --- ContentArea (main export) --- */
 
 interface ContentAreaProps {
   activeTab: "changes" | "history" | "stash" | "actions";
 }
 
+/**
+ * The area under the graph panel. What it shows follows the row picked above:
+ * - uncommitted changes row: staging list + commit box on the left, diff on the right
+ * - a commit: commit detail (its own file list + diff)
+ * - stash / Actions tab: the existing detail view
+ * Each card carries the branch-switch overlay, so staging and committing are
+ * blocked while a checkout runs (the graph panel has its own).
+ */
 export function ContentArea({ activeTab }: ContentAreaProps) {
   const { t } = useTranslation();
   const compareBranch = useUIStore((s) => s.compareBranch);
-  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
-  const setPreviewBranch = useUIStore((s) => s.setPreviewBranch);
-  const addToast = useToastStore((s) => s.addToast);
-  const queryClient = useQueryClient();
 
   const selectedFile = useSelectionStore((s) => s.selectedFile);
   const selectedFileStaged = useSelectionStore((s) => s.selectedFileStaged);
@@ -121,58 +138,15 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
   const selectedStashIndex = useSelectionStore((s) => s.selectedStashIndex);
   const selectedRunId = useSelectionStore((s) => s.selectedRunId);
 
-  const handleStopPreview = async () => {
-    if (!activeRepoPath) return;
-    try {
-      await stopWorktreePreview(activeRepoPath);
-      setPreviewBranch(null);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["branches"] }),
-        queryClient.invalidateQueries({ queryKey: ["status"] }),
-        queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
-        queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-      ]);
-      addToast(t("preview.stopped"), "success");
-    } catch (err) {
-      addToast(t("preview.failedToStop", { error: getErrorMessage(err) }), "error");
-    }
-  };
-
-  return (
-    <div className="flex flex-col h-full">
-      <ToolbarRoot />
-      <PreviewBanner onStopPreview={handleStopPreview} />
-
-      {/* Diff / Detail content */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {activeTab === "actions" ? (
-          selectedRunId !== null ? (
-            <ActionsDetailView
-              key={selectedRunId}
-              runId={selectedRunId}
-            />
-          ) : (
-            <EmptyState
-              icon={Play}
-              title={t("actions.selectRun")}
-              description={t("actions.selectRun")}
-            />
-          )
-        ) : activeTab === "stash" ? (
-          selectedStashIndex !== null ? (
-            <StashDetailView
-              key={selectedStashIndex}
-              stashIndex={selectedStashIndex}
-            />
-          ) : (
-            <EmptyState
-              icon={Archive}
-              title={t("stash.noStashSelected")}
-              description={t("stash.selectStash")}
-            />
-          )
-        ) : activeTab === "changes" ? (
-          selectedFile ? (
+  if (activeTab === "changes") {
+    return (
+      <div className="flex flex-1 min-h-0 gap-(--g)">
+        <Card className="w-[320px] shrink-0">
+          <ChangesView />
+          <SwitchingOverlay />
+        </Card>
+        <Card className="flex-1">
+          {selectedFile ? (
             <DiffContent filePath={selectedFile} staged={selectedFileStaged} />
           ) : (
             <EmptyState
@@ -180,23 +154,51 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
               title={t("diff.noFileSelected")}
               description={t("diff.selectFile")}
             />
-          )
-        ) : selectedCommitId ? (
-          <CommitDetailView key={selectedCommitId} commitId={selectedCommitId} />
-        ) : compareBranch ? (
-          <EmptyState
-            icon={GitCompare}
-            title={t("diff.noCommitSelected")}
-            description={t("compare.comparingWith", { branch: compareBranch })}
-          />
+          )}
+          <SwitchingOverlay />
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <Card className="flex-1">
+      {activeTab === "actions" ? (
+        selectedRunId !== null ? (
+          <ActionsDetailView key={selectedRunId} runId={selectedRunId} />
         ) : (
           <EmptyState
-            icon={GitCommit}
-            title={t("diff.noCommitSelected")}
-            description={t("diff.selectCommit")}
+            icon={Play}
+            title={t("actions.selectRun")}
+            description={t("actions.selectRun")}
           />
-        )}
-      </div>
-    </div>
+        )
+      ) : activeTab === "stash" ? (
+        selectedStashIndex !== null ? (
+          <StashDetailView key={selectedStashIndex} stashIndex={selectedStashIndex} />
+        ) : (
+          <EmptyState
+            icon={Archive}
+            title={t("stash.noStashSelected")}
+            description={t("stash.selectStash")}
+          />
+        )
+      ) : selectedCommitId ? (
+        <CommitDetailView key={selectedCommitId} commitId={selectedCommitId} />
+      ) : compareBranch ? (
+        <EmptyState
+          icon={GitCompare}
+          title={t("diff.noCommitSelected")}
+          description={t("compare.comparingWith", { branch: compareBranch })}
+        />
+      ) : (
+        <EmptyState
+          icon={GitCommit}
+          title={t("diff.noCommitSelected")}
+          description={t("shell.selectCommitOrChanges")}
+        />
+      )}
+      <SwitchingOverlay />
+    </Card>
   );
 }

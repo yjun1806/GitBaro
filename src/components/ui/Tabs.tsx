@@ -3,6 +3,12 @@ import { cn } from "@/lib/utils";
 
 type TabColor = "primary" | "info" | "success";
 type TabSize = "sm" | "md";
+/**
+ * "fill": tabs share the bar width equally (side panels).
+ * "inline": tabs sit side by side at their own width, like the graph panel
+ * header in the design (12.5px, underline in the accent colour).
+ */
+type TabVariant = "fill" | "inline";
 
 const colorClasses: Record<
   TabColor,
@@ -33,12 +39,14 @@ const sizeClasses: Record<TabSize, { text: string; badge: string }> = {
 interface TabGroupProps {
   children: ReactNode;
   className?: string;
+  "aria-label"?: string;
 }
 
-export function TabGroup({ children, className }: TabGroupProps) {
+export function TabGroup({ children, className, "aria-label": ariaLabel }: TabGroupProps) {
   return (
     <div
       role="tablist"
+      aria-label={ariaLabel}
       className={cn("flex border-b border-border", className)}
     >
       {children}
@@ -55,6 +63,7 @@ interface TabProps {
   color?: TabColor;
   size?: TabSize;
   disabled?: boolean;
+  variant?: TabVariant;
   className?: string;
 }
 
@@ -67,6 +76,7 @@ export function Tab({
   color = "primary",
   size = "md",
   disabled = false,
+  variant = "fill",
   className,
 }: TabProps) {
   const colors = colorClasses[color];
@@ -79,8 +89,10 @@ export function Tab({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "relative flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 font-medium transition-colors",
-        sizes.text,
+        "relative flex items-center justify-center gap-1.5 px-3 transition-colors",
+        variant === "fill"
+          ? cn("flex-1 py-2.5 font-medium", sizes.text)
+          : cn("h-8 shrink-0 text-[12.5px]", active ? "font-bold" : "font-medium"),
         active
           ? colors.activeText
           : "text-muted-foreground hover:text-foreground",
@@ -104,7 +116,8 @@ export function Tab({
       {active && (
         <span
           className={cn(
-            "absolute bottom-0 inset-x-2 h-0.5 rounded-full",
+            "absolute bottom-0 h-0.5",
+            variant === "fill" ? "inset-x-2 rounded-full" : "inset-x-0",
             colors.indicator,
           )}
         />
