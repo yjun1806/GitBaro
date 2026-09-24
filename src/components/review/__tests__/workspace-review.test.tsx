@@ -114,6 +114,7 @@ vi.mock("@/api/queries", () => ({
     isLoading: false,
     isError: false,
   }),
+  fetchFileDiff: () => new Promise(() => {}),
   useWorktrees: () => ({ data: [] }),
 }));
 

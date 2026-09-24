@@ -1080,7 +1080,15 @@
     "loadFailed": "바뀐 파일을 읽지 못했어요.",
     "waiting": "파일이 바뀌기를 기다리는 중",
     "footerHint": "에이전트가 커밋할 때까지 기다리거나 직접 커밋할 수 있어요.",
-    "openStaging": "스테이징·커밋…",
-    "openWorktree": "이 워크트리 열기"
+    "openWorktree": "이 워크트리 열기",
+    "partlyStaged": "일부 스테이지됨",
+    "showUnstaged": "스테이지 안 됨",
+    "showStaged": "스테이지됨",
+    "modifiedSecondsAgo_other": "{{count}}초 전 수정",
+    "modifiedAt": "{{when}} 수정",
+    "pickedGone": "{{file}}에 더 이상 커밋하지 않은 변경이 없어요.",
+    "stageAll": "모두 스테이지",
+    "commit": "커밋…",
+    "stash": "Stash"
   }
 }

@@ -47,7 +47,11 @@ const historyPages = {
   ],
 };
 
+/** 지금 연 저장소가 병합·pull 충돌 등으로 멈췄는지(`useMergeState`). */
+let mergeStateValue: string | null = null;
+
 vi.mock("@/api/queries", () => ({
+  useMergeState: () => ({ data: mergeStateValue }),
   useStatus: (path: string | null) => ({ data: path ? statusEntries : [] }),
   useCommitHistoryInfinite: () => ({
     data: historyPages,
@@ -95,6 +99,8 @@ vi.mock("@/api/queries", () => ({
     isLoading: false,
     isError: false,
   }),
+  fetchFileDiff: () => new Promise(() => {}),
+  useStashMutations: () => ({ push: { mutateAsync: vi.fn() } }),
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
 
@@ -111,11 +117,14 @@ const repo: RepoInfo = {
 
 function renderShell() {
   const client = new QueryClient();
-  return render(
+  const tree = () => (
     <QueryClientProvider client={client}>
       <MainColumn />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const result = render(tree());
+  /** 모의 조회 값이 바뀐 뒤 다시 그린다. */
+  return { ...result, refresh: () => result.rerender(tree()) };
 }
 
 // jsdom has no scrollIntoView; the graph's keyboard nav scrolls the picked row into view.
@@ -127,6 +136,7 @@ beforeEach(async () => {
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: repo.path });
   useFollowStore.getState().stop();
+  mergeStateValue = null;
 });
 
 afterEach(cleanup);
@@ -156,8 +166,29 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getAllByText("Following").length).toBeGreaterThan(0);
     expect(screen.queryByText("changes-view")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Stage & commit…" }));
+    // The D4 footer: stage all / commit… / stash. "Commit…" ends following and shows the staging list.
+    expect(screen.getByRole("button", { name: "Stage all" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stash" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Commit…" }));
     expect(useFollowStore.getState().target).toBeNull();
+    expect(screen.getByText("changes-view")).toBeTruthy();
+  });
+
+  it("stops following and shows the staging list (conflict banner) once a merge or pull stops on a conflict", () => {
+    const view = renderShell();
+    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes (2)" }));
+    expect(screen.getByTestId("follow-panel")).toBeTruthy();
+
+    // Pull hits a conflict: the toolbar only calls setActiveTab("changes"), which is already the tab.
+    mergeStateValue = "merge";
+    useUIStore.getState().setActiveTab("changes");
+    view.refresh();
+    expect(useFollowStore.getState().target).toBeNull();
+    expect(screen.getByText("changes-view")).toBeTruthy();
+
+    // Picking the row again during the merge still shows the staging list first.
+    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes (2)" }));
+    expect(screen.queryByTestId("follow-panel")).toBeNull();
     expect(screen.getByText("changes-view")).toBeTruthy();
   });
 

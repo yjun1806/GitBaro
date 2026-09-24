@@ -1093,7 +1093,16 @@
     "loadFailed": "Could not read the changed files.",
     "waiting": "Waiting for a file to change",
     "footerHint": "Wait for the agent to commit, or stage and commit yourself.",
-    "openStaging": "Stage & commit…",
-    "openWorktree": "Open this worktree"
+    "openWorktree": "Open this worktree",
+    "partlyStaged": "partly staged",
+    "showUnstaged": "Not staged",
+    "showStaged": "Staged",
+    "modifiedSecondsAgo_one": "Modified {{count}} second ago",
+    "modifiedSecondsAgo_other": "Modified {{count}} seconds ago",
+    "modifiedAt": "Modified {{when}}",
+    "pickedGone": "{{file}} has no uncommitted changes any more.",
+    "stageAll": "Stage all",
+    "commit": "Commit…",
+    "stash": "Stash"
   }
 }

@@ -776,13 +776,28 @@ import { getWipFiles } from "@/api/commands";
 
 /**
  * 워크트리 하나의 커밋하지 않은 변경 파일. 수정 시각이 늦은 순서다(`get_wip_files`).
- * 갱신 신호는 `repo:activity`이고, 감시 상한을 넘겨 이벤트가 오지 않는 경로만 `pollMs`로 다시 읽는다.
+ * 갱신 신호는 `repo:activity`다(따라가기가 쿼리를 무효화한다).
  */
-export function useWipFiles(path: string | null, pollMs: number | false = false) {
+export function useWipFiles(path: string | null) {
   return useQuery({
     queryKey: ["wipFiles", path],
     queryFn: () => getWipFiles(path!),
     enabled: path !== null,
-    refetchInterval: pollMs,
+  });
+}
+
+/**
+ * `useFileDiff`와 같은 캐시 항목으로 diff 하나를 읽는다. 따라가기가 시작할 때 이미 바뀌어
+ * 있던 파일의 내용을 비교 기준으로 기억해 두는 데 쓴다.
+ */
+export function fetchFileDiff(
+  queryClient: QueryClient,
+  repoPath: string,
+  filePath: string,
+  staged: boolean,
+) {
+  return queryClient.fetchQuery({
+    queryKey: ["fileDiff", repoPath, filePath, staged],
+    queryFn: () => getFileDiff(repoPath, filePath, staged),
   });
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { REPOS_KEY, selectActivityTargets, useActivityTargetsStore } from "../activity-targets";
+import { FOLLOW_KEY, REPOS_KEY, selectActivityTargets, useActivityTargetsStore } from "../activity-targets";
 
 describe("useActivityTargetsStore", () => {
   beforeEach(() => {
@@ -67,5 +67,19 @@ describe("selectActivityTargets", () => {
     });
 
     expect(merged).toEqual(["/repo/a", "/repo/b", "/wt/1"]);
+  });
+
+  // 따라가는 경로는 감시 대상에 반드시 들어가야 한다(W6-T1). 저장소가 40곳을 다 채워도
+  // 백엔드는 목록 앞에서부터 40곳을 감시하므로 맨 앞에 와야 한다.
+  it("puts the followed path ahead of every other key, even the registered repositories", () => {
+    const repos = Array.from({ length: 40 }, (_, i) => `/repo/${i}`);
+    const merged = selectActivityTargets({
+      [REPOS_KEY]: repos,
+      sidebar: ["/wt/1"],
+      [FOLLOW_KEY]: ["/wt/agent"],
+    });
+
+    expect(merged[0]).toBe("/wt/agent");
+    expect(merged.slice(0, 40)).toContain("/wt/agent");
   });
 });

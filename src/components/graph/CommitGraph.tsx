@@ -159,7 +159,7 @@ function WipRows({ wips, selection, graphWidth, headChain }: WipRowsProps) {
         return (
           <GraphWipRow
             key={wip.path}
-            leading={followed ? <FollowBadge mode={followed} /> : undefined}
+            trailing={followed ? <FollowBadge mode={followed} /> : undefined}
             wipLabel={
               wip.isCurrent
                 ? t("shell.uncommittedCount", { count: wip.count ?? 0 })
@@ -592,12 +592,8 @@ export function RepoLaneCommitGraph({
                     connectDown={false}
                     layout={row.layout}
                     colorOf={colorOf}
-                    leading={
-                      <>
-                        <RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />
-                        {followed && <FollowBadge mode={followed} />}
-                      </>
-                    }
+                    leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
+                    trailing={followed ? <FollowBadge mode={followed} /> : undefined}
                     onSelect={() => {
                       startFollow(row.wip.path);
                       onSelectWip(row.wip, row.key);

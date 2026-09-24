@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FileQuestion } from "lucide-react";
 import { DiffFile } from "@git-diff-view/core";
@@ -56,6 +56,8 @@ interface DiffViewerProps {
   freshLines?: ReadonlySet<number>;
   /** 줄 보기에서 이 새 쪽 줄 번호가 보이도록 스크롤한다(따라가기). */
   revealLine?: number | null;
+  /** diff 머리의 줄 수 앞에 둘 것(따라가기의 「4초 전 수정」, 스테이지 쪽 고르기). */
+  headerExtra?: ReactNode;
 }
 
 export function DiffViewer({
@@ -64,6 +66,7 @@ export function DiffViewer({
   staged = false,
   freshLines,
   revealLine = null,
+  headerExtra,
 }: DiffViewerProps) {
   const { t } = useTranslation();
   const lineMode = useUIStore((s) => s.diffLineMode);
@@ -208,6 +211,7 @@ export function DiffViewer({
           viewMode={viewMode}
           modes={modes}
           onSelectMode={handleSelectMode}
+          extra={headerExtra}
         />
         <div className="flex-1 min-h-0 overflow-auto">
           {diff.binaryPreview ? (
@@ -236,6 +240,7 @@ export function DiffViewer({
         viewMode={viewMode}
         modes={modes}
         onSelectMode={handleSelectMode}
+        extra={headerExtra}
       />
 
       {viewMode !== "document" && !wantHighlight && (

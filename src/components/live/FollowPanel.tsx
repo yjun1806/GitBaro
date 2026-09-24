@@ -1,30 +1,40 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
-import { useFileDiff, useWipFiles, useWorktrees } from "@/api/queries";
+import { fetchFileDiff, useFileDiff, useStashMutations, useWipFiles, useWorktrees } from "@/api/queries";
+import { stageFiles } from "@/api/commands";
 import { useRepositoryStore } from "@/stores/repository";
+import { useSelectionStore } from "@/stores/selection";
+import { useToastStore } from "@/stores/toast";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
+import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useFollowStore, type FollowMode } from "@/stores/follow";
-import { useActivityTargetsStore } from "@/stores/activity-targets";
+import { FOLLOW_KEY, useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { diffDelta, type DiffDelta } from "@/lib/diff-delta";
 import { FileStatusBadge } from "@/lib/file-status";
-import { cn, formatRelativeTime } from "@/lib/utils";
+import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
+import { normalizePath } from "@/components/graph/graph-model";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import type { ActivityEvent, DiffOutput, WipFile } from "@/types";
 
-/** `registerWatchPaths`에 쓰는 이 화면의 key. */
-export const FOLLOW_WATCH_KEY = "follow";
-/** 감시 상한(40곳)을 넘겨 `repo:activity`가 오지 않는 경로만 이 주기로 다시 읽는다. */
-const OVERFLOW_POLL_MS = 5_000;
+/** `registerWatchPaths`에 쓰는 이 화면의 key. 감시 대상 목록에서 맨 앞에 온다. */
+export const FOLLOW_WATCH_KEY = FOLLOW_KEY;
+/**
+ * 감시에 들어가지 못해 `repo:activity`가 오지 않는 경로만(상한 초과 또는 감시 실패)
+ * 이 주기로 파일 목록과 diff를 다시 읽는다.
+ */
+export const OVERFLOW_POLL_MS = 5_000;
+/** 따라가기를 시작할 때 비교 기준으로 내용을 기억해 두는 파일 수의 상한(최근 수정 순). */
+const BASELINE_LIMIT = 30;
 /** 「방금 N행이 추가됐어요」 안내를 띄워 두는 시간. 줄 강조는 다음 변경까지 남는다. */
 const TOAST_MS = 8_000;
 
 function samePath(a: string, b: string): boolean {
-  return a.replace(/\/+$/, "") === b.replace(/\/+$/, "");
+  return normalizePath(a) === normalizePath(b);
 }
 
 /** 「따라가는 중」·「따라가기 멈춤」 알약. WIP 행과 파일 목록 머리에 붙는다. */
@@ -48,12 +58,19 @@ export function FollowBadge({ mode }: { mode: FollowMode }) {
   );
 }
 
+/** 따라가는 경로의 파일 목록과 diff를 모두 다시 읽게 한다. */
+function refreshFollowed(queryClient: QueryClient, path: string): void {
+  void queryClient.invalidateQueries({ queryKey: ["wipFiles", path] });
+  void queryClient.invalidateQueries({ queryKey: ["fileDiff", path] });
+}
+
 /**
  * 따라가는 경로의 `repo:activity`를 받아 파일 목록과 diff를 다시 읽는다. 활동 감시는
  * 가장 깊은 감시 경로에만 기록하므로(W1-T3) 워크트리 경로와 같은 이벤트만 본다.
- * 활성 저장소가 아니어도 된다 — 따라가는 경로를 감시 대상에 직접 넣는다.
+ * 활성 저장소가 아니어도 된다 — 따라가는 경로를 감시 대상에 직접 넣는다(맨 앞 순위).
+ * 그래도 감시에 들어가지 못하면(`polled`) 목록과 diff를 함께 주기적으로 다시 읽는다.
  */
-function useFollowRefresh(path: string): void {
+function useFollowRefresh(path: string, polled: boolean): void {
   const queryClient = useQueryClient();
   const registerWatchPaths = useActivityTargetsStore((s) => s.registerWatchPaths);
   const unregisterWatchPaths = useActivityTargetsStore((s) => s.unregisterWatchPaths);
@@ -68,21 +85,36 @@ function useFollowRefresh(path: string): void {
     let unlisten: (() => void) | undefined;
     listen<ActivityEvent>("repo:activity", (event) => {
       if (!mounted || !samePath(event.payload.path, path)) return;
-      void queryClient.invalidateQueries({ queryKey: ["wipFiles", path] });
-      void queryClient.invalidateQueries({ queryKey: ["fileDiff", path] });
+      refreshFollowed(queryClient, path);
     })
       .then((fn) => {
         if (mounted) unlisten = fn;
         else fn();
       })
       .catch(() => {
-        /* 이벤트를 못 받으면 감시 상한 때와 같은 주기 읽기도 없다 — 다음에 고를 때 다시 읽는다 */
+        /* 이벤트를 못 받으면 다음에 고를 때 다시 읽는다 */
       });
     return () => {
       mounted = false;
       unlisten?.();
     };
   }, [path, queryClient]);
+
+  useEffect(() => {
+    if (!polled) return;
+    const id = setInterval(() => refreshFollowed(queryClient, path), OVERFLOW_POLL_MS);
+    return () => clearInterval(id);
+  }, [polled, path, queryClient]);
+}
+
+/** 스냅숏·diff를 가리키는 키: 경로 + 스테이징 쪽. */
+function sideKey(path: string, staged: boolean): string {
+  return `${path}\u0000${staged}`;
+}
+
+/** 목록 행 하나를 처음 보여 줄 때의 스테이징 쪽. 스테이징만 하고 작업 트리는 그대로인 파일만 스테이징 쪽이다. */
+function defaultStaged(f: WipFile): boolean {
+  return f.staged && !f.unstaged;
 }
 
 interface FreshChange {
@@ -93,10 +125,18 @@ interface FreshChange {
 }
 
 /**
- * 같은 파일을 다시 읽을 때마다 직전 내용과 비교해 새로 생긴 줄을 찾는다.
- * 목록에 처음 나타난 파일(방금까지 깨끗했던 파일)은 비교 기준이 HEAD·인덱스 쪽 내용(`oldContent`)이다.
+ * 같은 파일을 다시 읽을 때마다 직전 내용과 비교해 새로 생긴 줄을 찾는다. 비교 기준:
+ * - 이미 본 적 있는 파일: 마지막으로 본 내용.
+ * - 따라가기를 시작할 때 이미 바뀌어 있던 파일: 시작할 때 미리 읽어 둔 내용(최근 순 `BASELINE_LIMIT`개).
+ * - 따라가는 동안 목록에 새로 나타난 파일(방금까지 깨끗했던 파일): HEAD·인덱스 쪽 내용(`oldContent`).
  */
-function useFreshLines(files: WipFile[] | undefined, key: string | null, diff: DiffOutput | undefined) {
+function useFreshLines(
+  path: string,
+  files: WipFile[] | undefined,
+  key: string | null,
+  diff: DiffOutput | undefined,
+) {
+  const queryClient = useQueryClient();
   // 파일마다 마지막으로 본 내용. 화면 상태가 아니라 비교용 기억이라 ref에 둔다.
   const snapshots = useRef<ReadonlyMap<string, string>>(new Map());
   // 경로 → 첫 목록부터 있었는지(initial), 따라가는 동안 새로 나타났는지(appeared).
@@ -116,13 +156,42 @@ function useFreshLines(files: WipFile[] | undefined, key: string | null, diff: D
     snapshots.current = new Map([...snapshots.current].filter(([k]) => listed.has(k.split("\u0000")[0])));
   }, [files]);
 
+  // 시작할 때 이미 바뀌어 있던 파일의 지금 내용을 기억해 둔다. 그래야 그 파일이 나중에
+  // 다시 바뀌어 화면에 올라올 때 처음부터 새 줄을 가려낼 수 있다(시안 D4의 첫 장면).
+  const baselineTaken = useRef(false);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!files || baselineTaken.current) return;
+    baselineTaken.current = true;
+    for (const f of files.slice(0, BASELINE_LIMIT)) {
+      if (f.status === "deleted") continue;
+      const staged = defaultStaged(f);
+      const k = sideKey(f.path, staged);
+      fetchFileDiff(queryClient, path, f.path, staged)
+        .then((d) => {
+          if (!alive.current || d.binary || d.filePath !== f.path || snapshots.current.has(k)) return;
+          if (origins.current.get(f.path) !== "initial") return;
+          snapshots.current = new Map(snapshots.current).set(k, d.newContent);
+        })
+        .catch(() => {
+          /* 기준을 못 읽은 파일은 다음 변경부터 강조한다 */
+        });
+    }
+  }, [files, path, queryClient]);
+
   useEffect(() => {
     if (!key || !diff || diff.binary) return;
-    const path = key.split("\u0000")[0];
-    if (diff.filePath !== path) return;
+    const filePath = key.split("\u0000")[0];
+    if (diff.filePath !== filePath) return;
     const prev =
       snapshots.current.get(key) ??
-      (origins.current.get(path) === "appeared" ? diff.oldContent : undefined);
+      (origins.current.get(filePath) === "appeared" ? diff.oldContent : undefined);
     snapshots.current = new Map(snapshots.current).set(key, diff.newContent);
     if (prev === undefined || prev === diff.newContent) return;
     const delta = diffDelta(prev, diff.newContent);
@@ -143,6 +212,45 @@ function useNow(intervalMs: number): number {
   return now;
 }
 
+/** diff 머리의 「4초 전 수정」(시안 D4). 1분 안이면 작업 중 색으로 초 단위를 센다. */
+function ModifiedAgo({ at }: { at: number }) {
+  const { t } = useTranslation();
+  const now = useNow(1_000);
+  const seconds = Math.max(0, Math.floor(now / 1000 - at));
+  return seconds < 60 ? (
+    <span className="text-[11.5px] font-semibold text-(--live)">{t("live.modifiedSecondsAgo", { count: seconds })}</span>
+  ) : (
+    <span className="text-[11.5px] text-muted-foreground">{t("live.modifiedAt", { when: formatRelativeTime(at) })}</span>
+  );
+}
+
+/** 일부만 스테이징한 파일에서 스테이지 안 된 쪽과 스테이지된 쪽 중 무엇을 볼지 고른다. */
+function StagedSideToggle({ staged, onChange }: { staged: boolean; onChange: (staged: boolean) => void }) {
+  const { t } = useTranslation();
+  const options = [
+    { value: false, label: t("live.showUnstaged") },
+    { value: true, label: t("live.showStaged") },
+  ];
+  return (
+    <div role="group" className="flex p-0.5 rounded-[7px] bg-(--chip)">
+      {options.map((o) => (
+        <button
+          key={String(o.value)}
+          type="button"
+          aria-pressed={staged === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "h-[20px] px-2 rounded-[5px] text-[11px] transition-colors",
+            staged === o.value ? "bg-card font-semibold text-foreground shadow-(--shadow-sm)" : "text-muted-foreground",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function FollowFileList({
   files,
   selected,
@@ -154,8 +262,15 @@ function FollowFileList({
 }) {
   const { t } = useTranslation();
   const now = useNow(1_000);
+  const selectedIndex = selected === null ? -1 : files.findIndex((f) => f.path === selected);
+  // 위아래 화살표로 파일을 옮겨 고른다(고르면 따라가기가 멈춘다).
+  const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
+    items: files,
+    onSelect: (f) => onPick(f.path),
+    selectedIndex,
+  });
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto" role="list">
+    <div className="flex-1 min-h-0 overflow-y-auto" role="list" aria-label={t("live.uncommitted")} {...containerProps}>
       {files.map((f, index) => {
         const seconds = f.modifiedAt === null ? null : Math.max(0, Math.floor(now / 1000 - f.modifiedAt));
         const recent = seconds !== null && seconds < 60;
@@ -165,6 +280,7 @@ function FollowFileList({
         return (
           <button
             key={f.path}
+            ref={itemRef(index)}
             type="button"
             role="listitem"
             title={f.path}
@@ -172,7 +288,11 @@ function FollowFileList({
             onClick={() => onPick(f.path)}
             className={cn(
               "w-full flex items-center gap-2 min-h-(--row) px-3 text-left border-b border-(--line) transition-colors",
-              f.path === selected ? "bg-(--acc-sel)" : "hover:bg-accent",
+              f.path === selected
+                ? "bg-(--acc-sel)"
+                : activeIndex === index
+                  ? "bg-accent ring-1 ring-inset ring-primary/30"
+                  : "hover:bg-accent",
             )}
           >
             <FileStatusBadge status={f.status} />
@@ -180,8 +300,10 @@ function FollowFileList({
               <span>{name}</span>
               {dir && <span className="ml-1.5 text-[11px] text-(--faint)">{dir}</span>}
             </span>
-            {f.staged && !f.unstaged && (
-              <span className="shrink-0 text-[10.5px] text-(--faint)">{t("live.staged")}</span>
+            {f.staged && (
+              <span className="shrink-0 text-[10.5px] text-(--faint)">
+                {f.unstaged ? t("live.partlyStaged") : t("live.staged")}
+              </span>
             )}
             {seconds !== null && (
               <span
@@ -242,22 +364,35 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
   const isTarget = target !== null && samePath(target, path);
   const following = isTarget && mode === "following";
 
-  useFollowRefresh(path);
-  const watched = useLiveChangesStore((s) => !s.overflow.includes(path));
-  const { data: files, isLoading, isError } = useWipFiles(path, watched ? false : OVERFLOW_POLL_MS);
+  // 감시에 들어가지 못한 경로(상한 초과·감시 실패)는 이벤트가 없으니 목록과 diff를 주기적으로 읽는다.
+  const polled = useLiveChangesStore((s) => s.overflow.some((p) => samePath(p, path)));
+  useFollowRefresh(path, polled);
+  const { data: files, isLoading, isError } = useWipFiles(path);
   const list = useMemo(() => files ?? [], [files]);
 
-  const wanted = following ? list[0]?.path : isTarget ? pickedFile : null;
-  const shown = list.find((f) => f.path === wanted) ?? list[0] ?? null;
-  // 스테이징만 하고 작업 트리는 그대로인 파일은 스테이징 쪽을 보여 준다.
-  const staged = shown !== null && shown.staged && !shown.unstaged;
+  // 멈춘 동안 보던 파일이 목록에서 빠지면(커밋·되돌림) 다른 파일로 넘어가지 않는다 —
+  // 넘어가면 「멈춤」인데도 가장 최근 파일을 따라가는 것과 같아진다.
+  const pausedOn = isTarget && mode === "paused" ? pickedFile : null;
+  const pausedGone = pausedOn !== null && files !== undefined && !list.some((f) => f.path === pausedOn);
+  const wanted = following ? list[0]?.path : pausedOn;
+  const shown = pausedGone ? null : (list.find((f) => f.path === wanted) ?? list[0] ?? null);
+
+  // 일부만 스테이징한 파일은 diff 머리에서 어느 쪽을 볼지 고른다(기본은 스테이지 안 된 쪽).
+  const [sidePick, setSidePick] = useState<{ path: string; staged: boolean } | null>(null);
+  const partlyStaged = shown !== null && shown.staged && shown.unstaged;
+  const staged =
+    shown === null
+      ? false
+      : partlyStaged
+        ? sidePick !== null && sidePick.path === shown.path && sidePick.staged
+        : defaultStaged(shown);
   const { data: diff, isLoading: diffLoading, isError: diffError } = useFileDiff(
     path,
     shown?.path ?? null,
     staged,
   );
-  const diffKey = shown ? `${shown.path}\u0000${staged}` : null;
-  const fresh = useFreshLines(files, diffKey, diff);
+  const diffKey = shown ? sideKey(shown.path, staged) : null;
+  const fresh = useFreshLines(path, files, diffKey, diff);
   const freshLines = useMemo(() => (fresh ? new Set(fresh.delta.added) : undefined), [fresh]);
 
   // 안내는 변경이 들어오면 바로 띄우고, 일정 시간이 지나면 그 변경의 안내만 닫는다.
@@ -270,7 +405,7 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
   }, [fresh]);
   const toastOpen = fresh !== null && closedAt !== fresh.at;
 
-  const handlePause = () => pause(shown?.path ?? null);
+  const handlePause = () => pause(shown?.path ?? pausedOn);
   const handleResume = () => (isTarget ? resume() : start(path));
 
   // 사용자가 diff를 직접 움직이면(휠, 스크롤바·본문 누르기, 키) 따라가기를 멈춘다.
@@ -336,7 +471,20 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
       {shown === null ? (
         <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
           <FileText className="w-8 h-8" aria-hidden="true" />
-          <p className="text-sm">{t("live.waiting")}</p>
+          {pausedGone ? (
+            <>
+              <p className="text-sm">{t("live.pickedGone", { file: pausedOn })}</p>
+              <button
+                type="button"
+                onClick={handleResume}
+                className="h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--live) hover:bg-accent transition-colors"
+              >
+                {t("live.resume")}
+              </button>
+            </>
+          ) : (
+            <p className="text-sm">{t("live.waiting")}</p>
+          )}
         </div>
       ) : diffError ? (
         <div className="flex-1 flex items-center justify-center text-sm text-danger">{t("diff.failedToLoad")}</div>
@@ -351,6 +499,21 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
           staged={staged}
           freshLines={freshLines}
           revealLine={following && fresh ? (fresh.delta.ranges[0]?.start ?? null) : null}
+          headerExtra={
+            <>
+              {partlyStaged && (
+                <StagedSideToggle
+                  staged={staged}
+                  onChange={(next) => {
+                    // 볼 쪽을 고르는 것도 사용자가 화면을 잡는 것이다 — 그 파일에 머문다.
+                    if (following) handlePause();
+                    setSidePick({ path: shown.path, staged: next });
+                  }}
+                />
+              )}
+              {shown.modifiedAt !== null && <ModifiedAgo at={shown.modifiedAt} />}
+            </>
+          }
         />
       )}
       {toastOpen && fresh && (
@@ -395,28 +558,108 @@ export function FollowPanel({ path, variant, header, footer }: FollowPanelProps)
   );
 }
 
+const FOOTER_BUTTON =
+  "h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors disabled:opacity-50 disabled:pointer-events-none";
+
+/** 「모두 스테이지」가 넘길 경로: 스테이지 안 된 변경이 있는 파일(충돌 파일은 하나씩 해결하므로 뺀다). */
+export function stageAllPaths(files: WipFile[]): string[] {
+  const paths = new Set<string>();
+  for (const f of files) {
+    if (!f.unstaged || f.status === "conflicted") continue;
+    paths.add(f.path);
+    if (f.status === "renamed" && f.origPath) paths.add(f.origPath);
+  }
+  return [...paths];
+}
+
 /**
- * 저장소 화면의 따라가기 칸 아래 버튼. 지금 연 워크트리면 따라가기를 끝내 스테이징 목록으로
- * 돌아가고, 다른 워크트리면 그 워크트리를 연다(열리면 활성 경로가 바뀌어 따라가기가 끝나고
+ * 저장소 화면의 따라가기 칸 아래(시안 D4). 지금 연 워크트리면 「모두 스테이지 / 커밋… / Stash」를
+ * 바로 쓴다. 「커밋…」은 따라가기를 끝내 커밋 입력이 있는 스테이징 목록을 보여 준다.
+ * 다른 워크트리면 그 워크트리를 연다(열리면 활성 경로가 바뀌어 따라가기가 끝나고
  * 그 워크트리의 스테이징 목록이 보인다).
  */
 export function FollowRepoFooter({ path }: { path: string }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const addToast = useToastStore((s) => s.addToast);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const stop = useFollowStore((s) => s.stop);
   const { data: worktreeList = [] } = useWorktrees(activeRepoPath);
   const openWorktree = useOpenWorktree(activeRepoPath, worktreeList);
+  const { data: files = [] } = useWipFiles(path);
+  const stashMutations = useStashMutations(activeRepoPath);
+  const [busy, setBusy] = useState(false);
   const isCurrent = activeRepoPath !== null && samePath(activeRepoPath, path);
+  const toStage = stageAllPaths(files);
+
+  const handleStageAll = async () => {
+    if (toStage.length === 0) return;
+    setBusy(true);
+    try {
+      await stageFiles(path, toStage);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["status"] }),
+        queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
+        queryClient.invalidateQueries({ queryKey: ["wipFiles", path] }),
+      ]);
+    } catch (err) {
+      addToast(t("commit.stageFailed", { error: getErrorMessage(err) }), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 툴바의 Stash와 같은 결과를 낸다(메시지 없이 전부 넣는다).
+  const handleStash = async () => {
+    setBusy(true);
+    try {
+      const oid = await stashMutations.push.mutateAsync(undefined);
+      if (oid === null) {
+        addToast(t("stash.nothingToSave"), "info");
+        return;
+      }
+      useSelectionStore.getState().clearFileSelection();
+      await queryClient.invalidateQueries({ queryKey: ["wipFiles", path] });
+      addToast(t("stash.saved"), "success");
+    } catch (err) {
+      addToast(t("stash.failedToSave", { error: getErrorMessage(err) }), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <>
       <span className="text-[11.5px] text-muted-foreground">{t("live.footerHint")}</span>
-      <button
-        type="button"
-        onClick={() => (isCurrent ? stop() : void openWorktree(path))}
-        className="self-start h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
-      >
-        {isCurrent ? t("live.openStaging") : t("live.openWorktree")}
-      </button>
+      <div className="flex flex-wrap gap-1.5">
+        {isCurrent ? (
+          <>
+            <button
+              type="button"
+              disabled={busy || toStage.length === 0}
+              onClick={() => void handleStageAll()}
+              className={FOOTER_BUTTON}
+            >
+              {t("live.stageAll")}
+            </button>
+            <button type="button" onClick={stop} className={FOOTER_BUTTON}>
+              {t("live.commit")}
+            </button>
+            <button
+              type="button"
+              disabled={busy || files.length === 0}
+              onClick={() => void handleStash()}
+              className={FOOTER_BUTTON}
+            >
+              {t("live.stash")}
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={() => void openWorktree(path)} className={FOOTER_BUTTON}>
+            {t("live.openWorktree")}
+          </button>
+        )}
+      </div>
     </>
   );
 }

@@ -217,12 +217,14 @@ interface GraphWipRowProps {
   colorOf?: (chain: number) => string;
   /** 설명 칸 맨 앞에 둘 것(저장소 표시). */
   leading?: ReactNode;
+  /** 파일 수 뒤에 둘 것(따라가기의 「따라가는 중」 알약, 시안 D4). */
+  trailing?: ReactNode;
   onSelect: () => void;
 }
 
 /**
  * 워크트리 하나의 커밋하지 않은 변경(WIP) 행. 그래프 칸에는 점선 원을 그린다.
- * 고르면 아래 칸에 그 워크트리의 스테이징 목록(`ChangesView`)이 열린다.
+ * 고르면 아래 칸에서 그 워크트리를 따라간다(D4, `FollowPanel`).
  */
 export function GraphWipRow({
   wipLabel,
@@ -236,6 +238,7 @@ export function GraphWipRow({
   layout,
   colorOf,
   leading,
+  trailing,
   onSelect,
 }: GraphWipRowProps) {
   const { t } = useTranslation();
@@ -295,6 +298,7 @@ export function GraphWipRow({
           <span className="text-[11.5px] text-muted-foreground shrink-0">
             {count === null ? "…" : t("graph.fileCount", { count })}
           </span>
+          {trailing}
         </span>
         <span />
         <span className="truncate text-[12px] text-muted-foreground">

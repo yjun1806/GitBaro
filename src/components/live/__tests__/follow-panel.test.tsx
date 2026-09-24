@@ -6,6 +6,7 @@ import i18n from "@/i18n/config";
 import { useFollowStore } from "@/stores/follow";
 import { useRepositoryStore } from "@/stores/repository";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
+import { useLiveChangesStore } from "@/stores/live-changes";
 import type { ActivityEvent, DiffOutput, WipFile } from "@/types";
 
 const REPO = "/work/app";
@@ -33,37 +34,55 @@ const lines = (n: number, extra: Record<number, string[]> = {}) =>
 const backend = {
   files: [] as WipFile[],
   contents: {} as Record<string, string>,
+  /** 스테이징 쪽 diff의 새 내용(일부만 스테이징한 파일). */
+  stagedContents: {} as Record<string, string>,
 };
 
 const getWipFiles = vi.fn(async (_path: string) => backend.files);
 const getFileDiff = vi.fn(
-  async (_repoPath: string, filePath: string): Promise<DiffOutput> => ({
+  async (_repoPath: string, filePath: string, staged: boolean): Promise<DiffOutput> => ({
     filePath,
     oldContent: lines(30),
-    newContent: backend.contents[filePath] ?? "",
+    newContent: (staged ? backend.stagedContents[filePath] : backend.contents[filePath]) ?? "",
     binary: false,
     hunks: [],
   }),
 );
+const stageFiles = vi.fn(async (_repoPath: string, _paths: string[]) => {});
+const openWorktree = vi.fn(async (_path: string) => {});
 
 vi.mock("@/api/commands", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/commands")>()),
   getWipFiles: (path: string) => getWipFiles(path),
-  getFileDiff: (repoPath: string, filePath: string) => getFileDiff(repoPath, filePath),
+  getFileDiff: (repoPath: string, filePath: string, staged: boolean) => getFileDiff(repoPath, filePath, staged),
+  stageFiles: (repoPath: string, paths: string[]) => stageFiles(repoPath, paths),
+  getWorktrees: async () => [],
 }));
+
+vi.mock("@/hooks/useOpenWorktree", () => ({ useOpenWorktree: () => openWorktree }));
+
+// jsdom has no scrollIntoView; the file list's keyboard nav scrolls the picked row into view.
+Element.prototype.scrollIntoView = vi.fn();
 
 vi.mock("@/components/diff/DiffViewer", () => ({
   DiffViewer: ({
     diff,
+    staged,
     freshLines,
     revealLine,
+    headerExtra,
   }: {
     diff: DiffOutput | null;
+    staged?: boolean;
     freshLines?: ReadonlySet<number>;
     revealLine?: number | null;
+    headerExtra?: React.ReactNode;
   }) => (
-    <div data-testid="diff-viewer" data-reveal={revealLine ?? ""}>
-      {`${diff?.filePath ?? "none"} fresh=${[...(freshLines ?? [])].join(",")}`}
+    <div>
+      <div data-testid="diff-header">{headerExtra}</div>
+      <div data-testid="diff-viewer" data-reveal={revealLine ?? ""} data-staged={String(staged ?? false)}>
+        {`${diff?.filePath ?? "none"} fresh=${[...(freshLines ?? [])].join(",")}`}
+      </div>
     </div>
   ),
 }));
@@ -80,7 +99,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 
-const { FollowPanel } = await import("../FollowPanel");
+const { FollowPanel, FollowRepoFooter, OVERFLOW_POLL_MS } = await import("../FollowPanel");
 
 function renderFollow(path = WT) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -104,14 +123,21 @@ beforeEach(async () => {
   handlers.length = 0;
   getWipFiles.mockClear();
   getFileDiff.mockClear();
+  stageFiles.mockClear();
+  openWorktree.mockClear();
   backend.files = [wipFile("src/b.ts", nowSecs() - 4), wipFile("src/a.ts", nowSecs() - 40)];
   backend.contents = { "src/a.ts": lines(10), "src/b.ts": lines(30) };
+  backend.stagedContents = {};
+  useLiveChangesStore.setState({ watched: [], overflow: [] });
   useRepositoryStore.setState({ activeRepoPath: REPO });
   useActivityTargetsStore.setState({ extraByKey: {} });
   useFollowStore.getState().start(WT);
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("FollowPanel", () => {
   it("lists files by modification time and shows the most recent one while following", async () => {
@@ -228,5 +254,133 @@ describe("FollowPanel — starting from a clean worktree", () => {
     backend.files = [wipFile("src/a.ts", nowSecs())];
     await emit(WT);
     await waitFor(() => expect(diffText()).toContain("src/a.ts fresh=3"));
+  });
+});
+
+describe("FollowPanel — review fixes", () => {
+  it("marks new lines in a file that was already changed when following began (D4 first scene)", async () => {
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    // a.ts was dirty before following started and has not been shown yet. Its content is kept as the baseline.
+    await waitFor(() => expect(getFileDiff).toHaveBeenCalledWith(WT, "src/a.ts", false));
+
+    // The agent now edits a.ts: three lines after line 3. It moves to the top and is shown.
+    backend.contents["src/a.ts"] = lines(10, { 3: ["x", "y", "z"] });
+    backend.files = [wipFile("src/a.ts", nowSecs()), wipFile("src/b.ts", nowSecs() - 10)];
+    await emit(WT);
+
+    await waitFor(() => expect(diffText()).toContain("src/a.ts fresh=4,5,6"));
+    expect(screen.getByRole("status").textContent).toContain("Just added at line 4–6");
+  });
+
+  it("re-reads the list and the shown diff on a timer when the followed path is not watched", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    useLiveChangesStore.setState({ watched: [], overflow: [WT] });
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+
+    // No repo:activity event arrives for an overflowed path.
+    backend.contents["src/b.ts"] = lines(30, { 23: ["a", "b", "c"] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(OVERFLOW_POLL_MS);
+    });
+
+    await waitFor(() => expect(diffText()).toContain("fresh=24,25,26"));
+  });
+
+  it("does not poll a path that gets activity events", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    const calls = getWipFiles.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(OVERFLOW_POLL_MS * 2);
+    });
+    expect(getWipFiles.mock.calls.length).toBe(calls);
+  });
+
+  it("stays paused on a file that left the list instead of jumping to the newest one", async () => {
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    fireEvent.click(screen.getByTitle("src/a.ts"));
+    await waitFor(() => expect(diffText()).toContain("src/a.ts"));
+
+    // a.ts is committed, then c.ts changes.
+    backend.files = [wipFile("src/c.ts", nowSecs()), wipFile("src/b.ts", nowSecs() - 10)];
+    await emit(WT);
+
+    await screen.findByText("src/a.ts has no uncommitted changes any more.");
+    expect(screen.queryByTestId("diff-viewer")).toBeNull();
+    expect(useFollowStore.getState()).toMatchObject({ mode: "paused", file: "src/a.ts" });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Follow again" })[0]);
+    await waitFor(() => expect(diffText()).toContain("src/c.ts"));
+  });
+
+  it("moves between files with the arrow keys, which pauses following", async () => {
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    fireEvent.keyDown(screen.getByRole("list"), { key: "ArrowDown" });
+    expect(useFollowStore.getState()).toMatchObject({ mode: "paused", file: "src/a.ts" });
+    await waitFor(() => expect(diffText()).toContain("src/a.ts"));
+  });
+
+  it("lets the staged half of a partly staged file be viewed", async () => {
+    backend.files = [wipFile("src/b.ts", nowSecs() - 4, { staged: true, unstaged: true })];
+    backend.stagedContents["src/b.ts"] = lines(29);
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.getByText("partly staged")).toBeTruthy();
+    expect(screen.getByTestId("diff-viewer").getAttribute("data-staged")).toBe("false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Staged" }));
+    await waitFor(() => expect(screen.getByTestId("diff-viewer").getAttribute("data-staged")).toBe("true"));
+    expect(getFileDiff).toHaveBeenCalledWith(WT, "src/b.ts", true);
+    // Picking a side is the user taking over.
+    expect(useFollowStore.getState().mode).toBe("paused");
+  });
+
+  it("shows when the shown file was last modified in the diff header", async () => {
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.getByTestId("diff-header").textContent).toBe("Modified 4 seconds ago");
+  });
+});
+
+describe("FollowRepoFooter", () => {
+  function renderFooter(path: string) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <FollowRepoFooter path={path} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("offers stage all, commit and stash for the open worktree (D4 footer)", async () => {
+    useFollowStore.getState().start(REPO);
+    backend.files = [
+      wipFile("src/b.ts", nowSecs()),
+      wipFile("src/new.ts", nowSecs(), { status: "renamed", origPath: "src/old.ts" }),
+      wipFile("src/only-staged.ts", nowSecs(), { staged: true, unstaged: false }),
+      wipFile("src/c.ts", nowSecs(), { status: "conflicted" }),
+    ];
+    renderFooter(REPO);
+    const stageAll = screen.getByRole("button", { name: "Stage all" });
+    await waitFor(() => expect((stageAll as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(stageAll);
+    await waitFor(() => expect(stageFiles).toHaveBeenCalledTimes(1));
+    expect(stageFiles).toHaveBeenCalledWith(REPO, ["src/b.ts", "src/new.ts", "src/old.ts"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Commit…" }));
+    expect(useFollowStore.getState().target).toBeNull();
+    expect(screen.getByRole("button", { name: "Stash" })).toBeTruthy();
+  });
+
+  it("opens another worktree from its follow panel", () => {
+    renderFooter(WT);
+    expect(screen.queryByRole("button", { name: "Stage all" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open this worktree" }));
+    expect(openWorktree).toHaveBeenCalledWith(WT);
   });
 });
