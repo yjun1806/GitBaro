@@ -200,6 +200,20 @@ describe("보안 — 임의 저장소의 README를 앱 메인 컨텍스트에 �
     expect(el.innerHTML).not.toContain("position:fixed");
   });
 
+  it("class·id 속성을 걷어낸다", () => {
+    // 문서가 앱 스타일시트를 공유하므로 앱의 Tailwind 클래스만으로 창 전체를 덮을 수 있고,
+    // 이 뷰의 변경 표시(d-*)도 흉내 낼 수 있다.
+    const el = render(
+      "문단.\n",
+      '문단.\n\n<div class="fixed inset-0 z-50 d-ins" id="app">덮개</div>\n\n```ts\nconst a = 1;\n```\n',
+    );
+    expect(el.innerHTML).not.toContain("fixed inset-0");
+    expect(el.querySelector("#app")).toBeNull();
+    expect(el.querySelector("code[class]")).toBeNull();
+    // 이 뷰가 직접 붙이는 표시는 살아 있어야 한다.
+    expect(el.querySelector(".d-blk")).not.toBeNull();
+  });
+
   it("폼 요소를 걷어낸다", () => {
     // 앱 창 안에서 동작하는 자격증명 입력창이 된다. CSP에 form-action이 없어 제출도 막히지 않는다.
     const el = render(

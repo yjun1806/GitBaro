@@ -33,9 +33,14 @@ const INLINE_DELETE_LIMIT = 2;
  *   가운데 정렬 같은 정당한 용도는 `align` 속성으로 이미 동작한다.
  * - 폼 요소: README 안에서 **실제로 동작하는** 자격증명 입력창이 된다. 앱 CSP에
  *   `form-action`이 없어 제출도 막히지 않는다.
+ * - `class`·`id` 속성: 문서가 앱과 같은 스타일시트를 보므로 `class="fixed inset-0 z-50"`
+ *   같은 앱의 Tailwind 클래스로 `style` 없이도 창 전체를 덮을 수 있고, `d-ins` 같은
+ *   이 뷰의 변경 표시를 흉내 낼 수도 있다. 렌더에 필요한 클래스(`d-*`)는 살균 **뒤에**
+ *   이 파일이 직접 붙이고, markdown-it이 붙이는 `language-*`는 쓰는 곳이 없다.
+ *   GitHub도 README의 class·id를 걷어낸다.
  */
 const SANITIZE: Parameters<typeof DOMPurify.sanitize>[1] = {
-  FORBID_ATTR: ["style"],
+  FORBID_ATTR: ["style", "class", "id"],
   FORBID_TAGS: ["form", "input", "button", "select", "textarea"],
 };
 
