@@ -494,10 +494,13 @@ pub async fn revert_commit(
     app_handle: tauri::AppHandle,
     repo_path: String,
     oid: String,
+    account_id: Option<String>,
 ) -> Result<(), AppError> {
     crate::git::commit::validate_commit_oid(&oid)?;
+    let identity = crate::commands::git::resolve_commit_identity(account_id.as_deref()).await;
     let engine =
-        crate::git::cli::GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+        crate::git::cli::GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
+            .with_identity(identity);
     engine.revert_commit(&oid).await?;
     tracing::info!("Reverted commit: {}", oid);
     Ok(())
@@ -509,10 +512,13 @@ pub async fn cherry_pick_commit(
     app_handle: tauri::AppHandle,
     repo_path: String,
     oid: String,
+    account_id: Option<String>,
 ) -> Result<(), AppError> {
     crate::git::commit::validate_commit_oid(&oid)?;
+    let identity = crate::commands::git::resolve_commit_identity(account_id.as_deref()).await;
     let engine =
-        crate::git::cli::GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+        crate::git::cli::GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
+            .with_identity(identity);
     engine.cherry_pick_commit(&oid).await?;
     tracing::info!("Cherry-picked commit: {}", oid);
     Ok(())

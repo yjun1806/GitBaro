@@ -2,6 +2,7 @@ export interface AppError {
   type:
     | "Git"
     | "GitCli"
+    | "MergeConflict"
     | "Auth"
     | "TokenExpired"
     | "Keychain"

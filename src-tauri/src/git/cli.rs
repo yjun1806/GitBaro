@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use serde::Serialize;
 use tauri::Emitter;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use uuid::Uuid;
 
@@ -40,6 +40,11 @@ pub struct GitCliEngine {
     /// 사용자가 직접 실행한 작업이 아니라 앱이 주기적으로 도는 작업인지.
     /// 프론트엔드는 이 값을 보고 성공한 자동 작업을 활동 로그에서 제외한다.
     automatic: bool,
+    /// 저장소에 지정된 계정의 (이름, 이메일). 설정되면 이 엔진이 실행하는 모든
+    /// 로컬 명령과 pull에 `GIT_AUTHOR_*`/`GIT_COMMITTER_*` 환경변수로 넘긴다.
+    /// merge·revert·squash처럼 커밋을 만드는 명령이 전역 `user.*` 대신 이 계정으로
+    /// 기록된다. rebase·cherry-pick은 원래 작성자를 그대로 두고 커미터만 바뀐다.
+    identity: Option<(String, String)>,
 }
 
 impl GitCliEngine {
@@ -48,6 +53,7 @@ impl GitCliEngine {
             repo_path: repo_path.to_path_buf(),
             app_handle: None,
             automatic: false,
+            identity: None,
         }
     }
 
@@ -56,6 +62,7 @@ impl GitCliEngine {
             repo_path: repo_path.into(),
             app_handle: Some(app_handle),
             automatic: false,
+            identity: None,
         }
     }
 
@@ -63,6 +70,40 @@ impl GitCliEngine {
     pub fn with_automatic(mut self, automatic: bool) -> Self {
         self.automatic = automatic;
         self
+    }
+
+    /// 커밋을 만드는 명령에 쓸 저장소 계정 신원을 지정한다. `None`이면 git 설정을 따른다.
+    pub fn with_identity(mut self, identity: Option<(String, String)>) -> Self {
+        self.identity = identity;
+        self
+    }
+
+    /// `identity`를 git이 읽는 작성자·커미터 환경변수로 바꾼다.
+    fn identity_envs(&self) -> Vec<(&'static str, String)> {
+        identity_envs(self.identity.as_ref().map(|(n, e)| (n.as_str(), e.as_str())))
+    }
+
+    /// 새 git 프로세스를 만든다. 저장소 경로·프롬프트 차단·계정 신원을 공통으로 건다.
+    fn git_command(&self) -> Command {
+        let mut cmd = Command::new("git");
+        cmd.current_dir(&self.repo_path)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .envs(self.identity_envs());
+        cmd
+    }
+}
+
+/// 계정 신원을 작성자·커미터 환경변수 목록으로 바꾼다. `create_commit`이
+/// `--author`와 `GIT_COMMITTER_*`로 거는 것과 같은 신원이 된다.
+pub(crate) fn identity_envs(identity: Option<(&str, &str)>) -> Vec<(&'static str, String)> {
+    match identity {
+        Some((name, email)) => vec![
+            ("GIT_AUTHOR_NAME", name.to_string()),
+            ("GIT_AUTHOR_EMAIL", email.to_string()),
+            ("GIT_COMMITTER_NAME", name.to_string()),
+            ("GIT_COMMITTER_EMAIL", email.to_string()),
+        ],
+        None => Vec::new(),
     }
 }
 
@@ -162,10 +203,9 @@ impl GitCliEngine {
 
         self.emit_command_start(&id, args, operation, started_at);
 
-        let output = Command::new("git")
+        let output = self
+            .git_command()
             .args(args)
-            .current_dir(&self.repo_path)
-            .env("GIT_TERMINAL_PROMPT", "0")
             .output()
             .await
             .map_err(map_io_err)?;
@@ -198,10 +238,8 @@ impl GitCliEngine {
 
         self.emit_command_start(&id, args, operation, started_at);
 
-        let mut cmd = Command::new("git");
-        cmd.args(args)
-            .current_dir(&self.repo_path)
-            .env("GIT_TERMINAL_PROMPT", "0");
+        let mut cmd = self.git_command();
+        cmd.args(args);
         for (key, value) in envs {
             cmd.env(*key, value.as_str());
         }
@@ -237,10 +275,9 @@ impl GitCliEngine {
 
         self.emit_command_start(&id, args, operation, started_at);
 
-        let output = Command::new("git")
+        let output = self
+            .git_command()
             .args(args)
-            .current_dir(&self.repo_path)
-            .env("GIT_TERMINAL_PROMPT", "0")
             .output()
             .await
             .map_err(map_io_err)?;
@@ -260,11 +297,7 @@ impl GitCliEngine {
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
         } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(AppError::GitCli {
-                message: parse_git_error(&stderr),
-                exit_code: output.status.code(),
-            })
+            Err(git_failure(&output))
         }
     }
 
@@ -308,11 +341,7 @@ impl GitCliEngine {
         }
         let output = self.run_local_with_env(&args, &envs).await?;
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(AppError::GitCli {
-                message: parse_git_error(&stderr),
-                exit_code: output.status.code(),
-            });
+            return Err(git_failure(&output));
         }
         self.run_local_checked(&["rev-parse", "HEAD"]).await
     }
@@ -465,11 +494,7 @@ impl GitCliEngine {
         if output.status.success() {
             Ok(())
         } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(AppError::GitCli {
-                message: parse_git_error(&stderr),
-                exit_code: output.status.code(),
-            })
+            Err(git_failure(&output))
         }
     }
 
@@ -782,47 +807,41 @@ impl GitCliEngine {
         let automatic = self.automatic;
 
         let stderr_task = tokio::spawn(async move {
-            if let Some(stderr) = stderr_handle {
-                let reader = BufReader::new(stderr);
-                let mut lines = reader.lines();
-
-                let temp_engine = GitCliEngine {
-                    repo_path,
-                    app_handle,
-                    automatic,
+            let Some(mut stderr) = stderr_handle else { return };
+            let temp_engine = GitCliEngine {
+                repo_path,
+                app_handle,
+                automatic,
+                identity: None,
+            };
+            let mut splitter = ProgressSplitter::default();
+            let mut buf = [0u8; 8192];
+            loop {
+                // 바이트 단위로 읽는다. 줄 단위(`lines()`)로 읽으면 UTF-8이 아닌 줄에서
+                // 오류가 나 읽기가 멈추고, 파이프가 차서 git이 멈출 수 있다.
+                let n = match stderr.read(&mut buf).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => n,
                 };
-
-                while let Ok(Some(line)) = lines.next_line().await {
-                    let segments: Vec<&str> = line.split('\r').collect();
-                    let last_segment = segments.last().copied().unwrap_or("").trim();
-
-                    if last_segment.is_empty() {
-                        continue;
-                    }
-
-                    stderr_clone.lock().unwrap().push(last_segment.to_string());
-
-                    // Parse percent: "Receiving objects: 45% (123/273)"
-                    let percent = last_segment.find('%').and_then(|pos| {
-                        let before = &last_segment[..pos];
-                        before
-                            .rsplit(|c: char| !c.is_ascii_digit())
-                            .next()
-                            .and_then(|n| n.parse::<u32>().ok())
-                    });
-
-                    temp_engine.emit_progress(&self_id, &self_op, last_segment, percent);
+                for segment in splitter.push(&buf[..n]) {
+                    record_progress_segment(&temp_engine, &stderr_clone, &self_id, &self_op, segment);
                 }
+            }
+            if let Some(segment) = splitter.finish() {
+                record_progress_segment(&temp_engine, &stderr_clone, &self_id, &self_op, segment);
             }
         });
 
         let output = child.wait_with_output().await.map_err(map_io_err)?;
         let _ = stderr_task.await;
 
-        let collected = collected_stderr.lock().unwrap();
+        let collected = collected_stderr
+            .lock()
+            .map(|lines| lines.join("\n"))
+            .unwrap_or_default();
         let mut final_output = output;
         if !collected.is_empty() {
-            final_output.stderr = collected.join("\n").into_bytes();
+            final_output.stderr = collected.into_bytes();
         }
 
         Ok(final_output)
@@ -1034,9 +1053,11 @@ impl GitRemoteEngine for GitCliEngine {
 
         log_output(&output);
         let duration_ms = start.elapsed().as_millis() as u64;
+        // `branch`는 `local` 또는 `local:upstream` 형태의 refspec이다.
+        let local_branch = branch.split(':').next().unwrap_or(branch);
         let summary = output_parser::parse_push_output(
             &String::from_utf8_lossy(&output.stderr),
-            branch,
+            local_branch,
             remote,
         );
         self.emit_command_complete(&id, "push", &output, duration_ms, summary);
@@ -1052,31 +1073,23 @@ impl GitRemoteEngine for GitCliEngine {
     ) -> Result<(), AppError> {
         let askpass = AskpassScript::create(token).await?;
 
-        let mut args = vec!["-c", "credential.helper=", "pull"];
-        if rebase {
-            args.push("--rebase");
-        }
-        args.push(remote);
-        args.push(branch);
+        // 방식을 늘 명시한다. 아무것도 넘기지 않으면 `pull.rebase`를 설정하지 않은
+        // 사용자(git 기본값)는 갈라진 브랜치에서 "Need to specify how to reconcile
+        // divergent branches"로 실패한다. GitHub Desktop도 같은 이유로 명시한다.
+        let mode = pull_mode_flag(rebase);
+        let args = ["-c", "credential.helper=", "pull", mode, remote, branch];
 
         let id = Uuid::new_v4().to_string();
         let start = Instant::now();
         let started_at = chrono::Utc::now().timestamp_millis();
-        let mut display_args = vec!["pull"];
-        if rebase {
-            display_args.push("--rebase");
-        }
-        display_args.push(remote);
-        display_args.push(branch);
+        let display_args = ["pull", mode, remote, branch];
 
         tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
         self.emit_command_start(&id, &display_args, "pull", started_at);
 
-        let mut cmd = Command::new("git");
-        cmd.args(&args)
-            .current_dir(&self.repo_path)
-            .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_ASKPASS", askpass.path());
+        // pull은 merge 커밋을 만들 수 있으므로 저장소 계정 신원을 건다(git_command).
+        let mut cmd = self.git_command();
+        cmd.args(args).env("GIT_ASKPASS", askpass.path());
         let output = self.run_remote_with_progress(&mut cmd, &id, "pull").await?;
 
         log_output(&output);
@@ -1088,6 +1101,94 @@ impl GitRemoteEngine for GitCliEngine {
         self.emit_command_complete(&id, "pull", &output, duration_ms, summary);
         check_output(output)
     }
+}
+
+// ── Progress stream helpers ─────────────────────────────────────────────────
+
+/// git 진행률 출력의 한 조각. `\r`로 끝나면 같은 줄을 덮어쓰는 중간 진행률이고,
+/// `\n`으로 끝나면 확정된 줄이다.
+#[derive(Debug, PartialEq, Eq)]
+struct ProgressSegment {
+    text: String,
+    is_final_line: bool,
+}
+
+/// stderr 바이트를 `\r`/`\n` 기준으로 잘라 조각으로 돌려준다. 잘못된 UTF-8은
+/// 대체 문자로 바꿔 계속 읽는다.
+#[derive(Default)]
+struct ProgressSplitter {
+    pending: Vec<u8>,
+    /// 직전에 `\r`로 끝난 조각. 곧바로 `\n`이 오면(`\r\n`) 이 조각이 확정된 줄이다.
+    last_overwritten: Option<String>,
+}
+
+impl ProgressSplitter {
+    fn push(&mut self, chunk: &[u8]) -> Vec<ProgressSegment> {
+        let mut segments = Vec::new();
+        for &byte in chunk {
+            match byte {
+                b'\r' => {
+                    let text = self.take_pending();
+                    if !text.is_empty() {
+                        self.last_overwritten = Some(text.clone());
+                        segments.push(ProgressSegment { text, is_final_line: false });
+                    }
+                }
+                b'\n' => {
+                    let text = self.take_pending();
+                    let text = if text.is_empty() {
+                        self.last_overwritten.take().unwrap_or_default()
+                    } else {
+                        text
+                    };
+                    self.last_overwritten = None;
+                    if !text.is_empty() {
+                        segments.push(ProgressSegment { text, is_final_line: true });
+                    }
+                }
+                _ => self.pending.push(byte),
+            }
+        }
+        segments
+    }
+
+    fn take_pending(&mut self) -> String {
+        let bytes = std::mem::take(&mut self.pending);
+        String::from_utf8_lossy(&bytes).trim().to_string()
+    }
+
+    /// 줄바꿈 없이 끝난 마지막 조각.
+    fn finish(self) -> Option<ProgressSegment> {
+        let text = String::from_utf8_lossy(&self.pending).trim().to_string();
+        (!text.is_empty()).then_some(ProgressSegment { text, is_final_line: true })
+    }
+}
+
+/// 진행률 조각을 이벤트로 내보내고, 확정된 줄만 오류 해석용 stderr에 모은다.
+/// 중간 진행률(`\r`)까지 모으면 stderr가 진행률 줄로 가득 찬다.
+fn record_progress_segment(
+    engine: &GitCliEngine,
+    collected: &Mutex<Vec<String>>,
+    id: &str,
+    operation: &str,
+    segment: ProgressSegment,
+) {
+    if segment.is_final_line {
+        if let Ok(mut lines) = collected.lock() {
+            lines.push(segment.text.clone());
+        }
+    }
+    let percent = parse_progress_percent(&segment.text);
+    engine.emit_progress(id, operation, &segment.text, percent);
+}
+
+/// "Receiving objects: 45% (123/273)" → 45
+fn parse_progress_percent(line: &str) -> Option<u32> {
+    let pos = line.find('%')?;
+    line[..pos]
+        .rsplit(|c: char| !c.is_ascii_digit())
+        .next()
+        .and_then(|n| n.parse::<u32>().ok())
 }
 
 // ── GIT_ASKPASS helper ────────────────────────────────────────────────────────
@@ -1213,34 +1314,171 @@ fn log_output(output: &std::process::Output) {
     tracing::info!("[git] exit: {}", output.status);
 }
 
-/// Check command output and convert non-zero exit to `AppError::GitCli`.
+/// Check command output and convert non-zero exit to an `AppError`.
 fn check_output(output: std::process::Output) -> Result<(), AppError> {
     if output.status.success() {
         Ok(())
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        Err(AppError::GitCli {
-            message: parse_git_error(&stderr),
-            exit_code: output.status.code(),
-        })
+        Err(git_failure(&output))
     }
 }
 
-/// Strip "error: " / "fatal: " prefixes from git stderr output.
+/// `git pull`에 넘길 병합 방식 플래그.
+fn pull_mode_flag(rebase: bool) -> &'static str {
+    if rebase {
+        "--rebase"
+    } else {
+        "--no-rebase"
+    }
+}
+
+/// 실패한 git 명령의 출력을 `AppError`로 바꾼다. stderr와 stdout을 함께 본다.
+/// merge 충돌 문구(`CONFLICT ...`)는 stdout에만 찍히기 때문이다.
+/// 충돌이면 `AppError::MergeConflict`로 돌려 화면이 문구 비교 없이 알아채게 한다.
+pub(crate) fn git_failure(output: &std::process::Output) -> AppError {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    git_failure_from_text(&stderr, &stdout, output.status.code())
+}
+
+fn git_failure_from_text(stderr: &str, stdout: &str, exit_code: Option<i32>) -> AppError {
+    let message = parse_git_output_error(stderr, stdout);
+    if is_conflict_output(stderr, stdout) {
+        AppError::MergeConflict(message)
+    } else {
+        AppError::GitCli { message, exit_code }
+    }
+}
+
+/// stderr만으로 오류 문구를 고른다. stdout이 없는 호출부를 위한 형태.
 pub(crate) fn parse_git_error(stderr: &str) -> String {
-    for line in stderr.lines() {
-        let trimmed = line.trim();
-        if let Some(msg) = trimmed.strip_prefix("error: ") {
-            return msg.to_string();
-        }
-        if let Some(msg) = trimmed.strip_prefix("fatal: ") {
-            return msg.to_string();
-        }
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
+    parse_git_output_error(stderr, "")
+}
+
+/// 출력 줄을 `\r`까지 나눠 정리한다. 진행률 뒤에 오류가 붙는 경우가 있다
+/// (`Rebasing (1/1)\rerror: could not apply ...`).
+fn output_lines<'a>(stderr: &'a str, stdout: &'a str) -> Vec<&'a str> {
+    stderr
+        .lines()
+        .chain(stdout.lines())
+        .flat_map(|line| line.split('\r'))
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect()
+}
+
+fn is_conflict_line(line: &str) -> bool {
+    line.starts_with("CONFLICT (")
+        || line.starts_with("Automatic merge failed")
+        || line.starts_with("error: could not apply")
+        || line.starts_with("Could not apply")
+}
+
+fn is_conflict_output(stderr: &str, stdout: &str) -> bool {
+    output_lines(stderr, stdout).into_iter().any(is_conflict_line)
+}
+
+/// 인증 실패를 뜻하는 git·GitHub 문구가 들어 있는지. 명령 출력 전체와
+/// 이미 고른 오류 문구 양쪽에 쓴다.
+pub(crate) fn is_auth_failure_text(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    const PATTERNS: [&str; 10] = [
+        "authentication failed",
+        "invalid username or token",
+        "invalid username or password",
+        "could not read username",
+        "could not read password",
+        "invalid credentials",
+        "bad credentials",
+        "returned error: 401",
+        "returned error: 403",
+        "password authentication is not supported",
+    ];
+    PATTERNS.iter().any(|p| lower.contains(p))
+        || (lower.contains("permission to") && lower.contains("denied to"))
+}
+
+/// 사람이 읽을 오류 한 줄을 고른다. 우선순위:
+/// 1. merge 충돌 (`CONFLICT (...)`)
+/// 2. push 거부 (`! [rejected]`) — 거부 이유를 설명하는 첫 hint 문장과 함께
+/// 3. 인증 실패 문구 (출력 어디에 있든) — `is_auth_error`가 알아볼 수 있도록
+/// 4. 처음 나오는 `fatal:`/`error:` 줄
+/// 5. 그 밖의 첫 줄 (hint·`To`/`From` 머리줄 제외)
+fn parse_git_output_error(stderr: &str, stdout: &str) -> String {
+    let lines = output_lines(stderr, stdout);
+
+    if let Some(line) = lines.iter().find(|l| l.starts_with("CONFLICT (")) {
+        return line.to_string();
+    }
+
+    if let Some(rejected) = lines
+        .iter()
+        .find(|l| l.starts_with("! [rejected]") || l.starts_with("! [remote rejected]"))
+    {
+        let rejected = collapse_whitespace(rejected.trim_start_matches("! "));
+        return match first_hint_sentence(&lines) {
+            Some(reason) => format!("{} ({})", reason, rejected),
+            None => rejected,
+        };
+    }
+
+    if lines.iter().any(|l| is_auth_failure_text(l)) {
+        let auth_line = lines
+            .iter()
+            .find(|l| l.starts_with("fatal:") && is_auth_failure_text(l))
+            .or_else(|| lines.iter().find(|l| is_auth_failure_text(l)));
+        if let Some(line) = auth_line {
+            return strip_git_prefix(line).to_string();
         }
     }
-    stderr.trim().to_string()
+
+    if let Some(line) = lines
+        .iter()
+        .find(|l| l.starts_with("fatal:") || l.starts_with("error:"))
+    {
+        return strip_git_prefix(line).to_string();
+    }
+
+    lines
+        .iter()
+        .find(|l| {
+            !l.starts_with("hint:") && !l.starts_with("To ") && !l.starts_with("From ")
+        })
+        .or_else(|| lines.first())
+        .map(|l| strip_git_prefix(l).to_string())
+        .unwrap_or_default()
+}
+
+fn strip_git_prefix(line: &str) -> &str {
+    ["fatal: ", "error: ", "remote: "]
+        .iter()
+        .find_map(|p| line.strip_prefix(p))
+        .unwrap_or(line)
+        .trim()
+}
+
+fn collapse_whitespace(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// 첫 hint 문단을 이어 붙여 첫 문장만 돌려준다.
+/// "hint: Updates were rejected because the tip of your current branch is behind
+///  hint: its remote counterpart. ..." → "Updates were rejected ... counterpart."
+fn first_hint_sentence(lines: &[&str]) -> Option<String> {
+    let start = lines.iter().position(|l| l.starts_with("hint:"))?;
+    let paragraph: Vec<&str> = lines[start..]
+        .iter()
+        .map_while(|l| l.strip_prefix("hint:"))
+        .map(str::trim)
+        .take_while(|l| !l.is_empty())
+        .collect();
+    let text = paragraph.join(" ");
+    let sentence = match text.find(". ") {
+        Some(end) => &text[..=end],
+        None => text.as_str(),
+    };
+    let sentence = sentence.trim();
+    (!sentence.is_empty()).then(|| sentence.to_string())
 }
 
 #[cfg(test)]
@@ -1309,5 +1547,295 @@ branch refs/heads/feat
         assert!(entries[0].is_locked);
         assert!(!entries[0].is_prunable);
         assert_eq!(entries[0].lock_reason.as_deref(), Some("in use elsewhere"));
+    }
+
+    // ── Error parsing (real captured git output, git 2.54) ──────────────────
+
+    const PUSH_REJECTED_STDERR: &str = "\
+To github.com:owner/repo.git
+ ! [rejected]        main -> main (fetch first)
+error: failed to push some refs to 'github.com:owner/repo.git'
+hint: Updates were rejected because the remote contains work that you do not
+hint: have locally. This is usually caused by another repository pushing to
+hint: the same ref. If you want to integrate the remote changes, use
+hint: 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+";
+
+    const PULL_DIVERGENT_STDERR: &str = "\
+From github.com:owner/repo
+ * branch            main       -> FETCH_HEAD
+hint: You have divergent branches and need to specify how to reconcile them.
+hint: You can do so by running one of the following commands sometime before
+hint: your next pull:
+hint:
+hint:   git config pull.rebase false  # merge
+fatal: Need to specify how to reconcile divergent branches.
+";
+
+    const MERGE_CONFLICT_STDOUT: &str = "\
+Auto-merging f
+CONFLICT (content): Merge conflict in f
+Automatic merge failed; fix conflicts and then commit the result.
+";
+
+    const REBASE_CONFLICT_STDERR: &str = "Rebasing (1/1)\rerror: could not apply d654f3a... a
+hint: Resolve all conflicts manually, mark them as resolved with
+hint: \"git add/rm <conflicted_files>\", then run \"git rebase --continue\".
+Could not apply d654f3a... # a
+";
+
+    /// GitHub가 만료·폐기된 토큰에 돌려주는 출력. 첫 줄이 `remote:`로 시작한다.
+    const EXPIRED_TOKEN_STDERR: &str = "\
+remote: Invalid username or token. Password authentication is not supported for Git operations.
+fatal: Authentication failed for 'https://github.com/owner/repo.git/'
+";
+
+    fn failure(stderr: &str, stdout: &str) -> AppError {
+        git_failure_from_text(stderr, stdout, Some(1))
+    }
+
+    fn message_of(err: &AppError) -> String {
+        match err {
+            AppError::GitCli { message, .. } | AppError::MergeConflict(message) => message.clone(),
+            other => other.to_string(),
+        }
+    }
+
+    #[test]
+    fn push_rejection_explains_why_instead_of_showing_the_to_line() {
+        let msg = parse_git_error(PUSH_REJECTED_STDERR);
+        assert_eq!(
+            msg,
+            "Updates were rejected because the remote contains work that you do not have locally. \
+             ([rejected] main -> main (fetch first))"
+        );
+    }
+
+    #[test]
+    fn remote_rejection_keeps_the_server_reason() {
+        let stderr = "To github.com:o/r.git\n ! [remote rejected] main -> main (push declined due to email privacy restrictions)\nerror: failed to push some refs to 'github.com:o/r.git'\n";
+        assert_eq!(
+            parse_git_error(stderr),
+            "[remote rejected] main -> main (push declined due to email privacy restrictions)"
+        );
+    }
+
+    #[test]
+    fn divergent_pull_reports_the_fatal_line() {
+        assert_eq!(
+            parse_git_error(PULL_DIVERGENT_STDERR),
+            "Need to specify how to reconcile divergent branches."
+        );
+    }
+
+    #[test]
+    fn merge_conflict_on_stdout_becomes_a_typed_conflict() {
+        let err = failure("", MERGE_CONFLICT_STDOUT);
+        assert!(matches!(err, AppError::MergeConflict(_)), "{:?}", err);
+        assert_eq!(message_of(&err), "CONFLICT (content): Merge conflict in f");
+    }
+
+    #[test]
+    fn pull_merge_conflict_is_a_conflict_even_with_fetch_noise_on_stderr() {
+        let stderr = "From github.com:o/r\n * branch            main       -> FETCH_HEAD\n";
+        let err = failure(stderr, MERGE_CONFLICT_STDOUT);
+        assert!(matches!(err, AppError::MergeConflict(_)));
+    }
+
+    #[test]
+    fn rebase_conflict_is_a_typed_conflict() {
+        let stdout = "Auto-merging f\nCONFLICT (content): Merge conflict in f\n";
+        let err = failure(REBASE_CONFLICT_STDERR, stdout);
+        assert!(matches!(err, AppError::MergeConflict(_)));
+        assert_eq!(message_of(&err), "CONFLICT (content): Merge conflict in f");
+    }
+
+    #[test]
+    fn error_after_carriage_return_progress_is_found() {
+        let err = failure(REBASE_CONFLICT_STDERR, "");
+        assert!(matches!(err, AppError::MergeConflict(_)));
+        assert_eq!(message_of(&err), "could not apply d654f3a... a");
+    }
+
+    #[test]
+    fn non_conflict_failure_stays_git_cli() {
+        let stderr = "error: Your local changes to the following files would be overwritten by merge:\n\tf\nPlease commit your changes or stash them before you merge.\nAborting\n";
+        let err = failure(stderr, "Updating abc..def\n");
+        assert!(matches!(err, AppError::GitCli { .. }));
+        assert_eq!(
+            message_of(&err),
+            "Your local changes to the following files would be overwritten by merge:"
+        );
+    }
+
+    #[test]
+    fn expired_token_message_keeps_auth_wording() {
+        let msg = parse_git_error(EXPIRED_TOKEN_STDERR);
+        assert_eq!(msg, "Authentication failed for 'https://github.com/owner/repo.git/'");
+        assert!(is_auth_failure_text(&msg));
+    }
+
+    #[test]
+    fn auth_wording_on_a_remote_line_is_kept_when_fatal_is_generic() {
+        let stderr = "remote: Invalid username or token. Password authentication is not supported for Git operations.\nfatal: unable to access 'https://github.com/o/r.git/': The requested URL returned error: 400\n";
+        let msg = parse_git_error(stderr);
+        assert!(is_auth_failure_text(&msg), "{}", msg);
+    }
+
+    #[test]
+    fn http_403_and_permission_denied_are_auth_failures() {
+        let msg = parse_git_error("remote: Permission to o/r.git denied to someone.\nfatal: unable to access 'https://github.com/o/r.git/': The requested URL returned error: 403\n");
+        assert!(is_auth_failure_text(&msg), "{}", msg);
+        assert!(is_auth_failure_text("could not read Username for 'https://github.com': terminal prompts disabled"));
+        assert!(!is_auth_failure_text("pathspec 'a403b' did not match any file(s) known to git"));
+    }
+
+    #[test]
+    fn falls_back_to_first_meaningful_line() {
+        assert_eq!(parse_git_error("hint: something\nsomething odd happened\n"), "something odd happened");
+        assert_eq!(parse_git_error(""), "");
+    }
+
+    #[test]
+    fn pull_always_names_a_reconcile_mode() {
+        assert_eq!(pull_mode_flag(false), "--no-rebase");
+        assert_eq!(pull_mode_flag(true), "--rebase");
+    }
+
+    #[test]
+    fn identity_sets_author_and_committer() {
+        let envs = identity_envs(Some(("octo", "octo@users.noreply.github.com")));
+        let keys: Vec<&str> = envs.iter().map(|(k, _)| *k).collect();
+        assert_eq!(
+            keys,
+            ["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"]
+        );
+        assert!(identity_envs(None).is_empty());
+    }
+
+    // ── Progress reader ─────────────────────────────────────────────────────
+
+    #[test]
+    fn progress_splitter_survives_invalid_utf8() {
+        let mut splitter = ProgressSplitter::default();
+        let mut out = splitter.push(b"remote: caf\xe9 \xff\n");
+        out.extend(splitter.push(b"Receiving objects: 100% (3/3), done.\n"));
+        assert_eq!(out.len(), 2);
+        assert!(out[0].text.starts_with("remote: caf"));
+        assert_eq!(out[1].text, "Receiving objects: 100% (3/3), done.");
+        assert!(out.iter().all(|s| s.is_final_line));
+    }
+
+    #[test]
+    fn progress_splitter_treats_carriage_return_as_overwrite() {
+        let mut splitter = ProgressSplitter::default();
+        let out = splitter.push(b"Receiving objects:  45% (1/3)\rReceiving objects: 100% (3/3), done.\n");
+        assert_eq!(
+            out,
+            vec![
+                ProgressSegment { text: "Receiving objects:  45% (1/3)".into(), is_final_line: false },
+                ProgressSegment { text: "Receiving objects: 100% (3/3), done.".into(), is_final_line: true },
+            ]
+        );
+        assert_eq!(parse_progress_percent(&out[0].text), Some(45));
+    }
+
+    #[test]
+    fn progress_splitter_keeps_crlf_lines_and_split_chunks() {
+        let mut splitter = ProgressSplitter::default();
+        let mut out = splitter.push(b"remote: Invalid username");
+        out.extend(splitter.push(b" or token.\r\nfatal: Authentication failed"));
+        let last = splitter.finish();
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[1], ProgressSegment { text: "remote: Invalid username or token.".into(), is_final_line: true });
+        assert_eq!(last, Some(ProgressSegment { text: "fatal: Authentication failed".into(), is_final_line: true }));
+    }
+
+    // ── Pull / merge against real repositories ──────────────────────────────
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .output()
+            .expect("git 실행 실패");
+        assert!(out.status.success(), "git {:?}: {}", args, String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// 원격(bare)과 서로 갈라진 클론 하나를 만든다. `conflicting`이면 같은 줄을 고친다.
+    fn diverged_clone(name: &str, conflicting: bool) -> (PathBuf, PathBuf) {
+        let tmp = std::env::temp_dir().join(format!("gitbaro-cli-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        git(&tmp, &["init", "-q", "--bare", "-b", "main", "remote.git"]);
+        for clone in ["a", "b"] {
+            git(&tmp, &["clone", "-q", "remote.git", clone]);
+            let dir = tmp.join(clone);
+            git(&dir, &["config", "user.name", "Global"]);
+            git(&dir, &["config", "user.email", "global@example.com"]);
+            if clone == "a" {
+                std::fs::write(dir.join("f"), "base\n").unwrap();
+                git(&dir, &["add", "f"]);
+                git(&dir, &["commit", "-qm", "init"]);
+                git(&dir, &["push", "-q", "origin", "main"]);
+            }
+        }
+        let b = tmp.join("b");
+        git(&b, &["pull", "-q", "origin", "main"]);
+        std::fs::write(b.join(if conflicting { "f" } else { "g" }), "from b\n").unwrap();
+        git(&b, &["add", "-A"]);
+        git(&b, &["commit", "-qm", "b"]);
+        git(&b, &["push", "-q", "origin", "main"]);
+
+        let a = tmp.join("a");
+        std::fs::write(a.join("f"), "from a\n").unwrap();
+        git(&a, &["commit", "-qam", "a"]);
+        (tmp, a)
+    }
+
+    #[tokio::test]
+    async fn pull_merges_divergent_branches_as_the_repo_account() {
+        let (tmp, a) = diverged_clone("pull-ok", false);
+        let engine = GitCliEngine::new(&a)
+            .with_identity(Some(("octo".into(), "octo@example.com".into())));
+
+        let result = engine.pull("origin", "refs/heads/main", "unused-token", false).await;
+        let author = git(&a, &["log", "-1", "--format=%an <%ae>|%cn <%ce>|%P"]);
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        result.expect("갈라진 브랜치 pull이 실패함");
+        let parts: Vec<&str> = author.split('|').collect();
+        assert_eq!(parts[0], "octo <octo@example.com>");
+        assert_eq!(parts[1], "octo <octo@example.com>");
+        assert_eq!(parts[2].split(' ').count(), 2, "merge 커밋이 아님");
+    }
+
+    #[tokio::test]
+    async fn pull_conflict_surfaces_as_merge_conflict() {
+        let (tmp, a) = diverged_clone("pull-conflict", true);
+        let engine = GitCliEngine::new(&a);
+
+        let result = engine.pull("origin", "refs/heads/main", "unused-token", false).await;
+        let merging = a.join(".git/MERGE_HEAD").exists();
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        assert!(matches!(result, Err(AppError::MergeConflict(_))), "{:?}", result);
+        assert!(merging);
+    }
+
+    #[tokio::test]
+    async fn merge_conflict_from_local_merge_is_typed() {
+        let (tmp, a) = diverged_clone("merge-conflict", true);
+        git(&a, &["fetch", "-q", "origin"]);
+        let engine = GitCliEngine::new(&a);
+
+        let result = engine.merge_branch("origin/main", true).await;
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        assert!(matches!(result, Err(AppError::MergeConflict(_))), "{:?}", result);
     }
 }

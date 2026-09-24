@@ -315,25 +315,27 @@ pub async fn create_commit(
     amend: bool,
     account_id: Option<String>,
 ) -> Result<String, AppError> {
-    // If an account is provided, look up its name/email for the commit signature
-    let account_info: Option<(String, String)> = if let Some(ref id) = account_id {
-        let cache = crate::commands::auth::load_accounts_cache()
-            .await
-            .unwrap_or_default();
-        cache.iter().find(|a| a["id"].as_str() == Some(id.as_str())).map(|a| {
-            let name = a["username"].as_str().unwrap_or("Unknown").to_string();
-            let email = a["email"].as_str().unwrap_or("").to_string();
-            (name, email)
-        })
-    } else {
-        None
-    };
+    let account_info = resolve_commit_identity(account_id.as_deref()).await;
 
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     let author = account_info.as_ref().map(|(n, e)| (n.as_str(), e.as_str()));
     let oid = engine.commit(&message, amend, author).await?;
     tracing::info!("Committed {}", oid);
     Ok(oid)
+}
+
+/// 계정의 커밋 신원(이름, 이메일)을 계정 캐시에서 찾는다. 계정이 없거나 이메일을
+/// 모르면 `None`을 돌려 git 설정의 `user.*`를 따르게 한다.
+/// create_commit과 merge·revert·cherry-pick·pull이 같은 신원을 쓰도록 공유한다.
+pub(crate) async fn resolve_commit_identity(account_id: Option<&str>) -> Option<(String, String)> {
+    let id = account_id?;
+    let cache = crate::commands::auth::load_accounts_cache()
+        .await
+        .unwrap_or_default();
+    let account = cache.iter().find(|a| a["id"].as_str() == Some(id))?;
+    let name = account["username"].as_str().unwrap_or("Unknown").to_string();
+    let email = account["email"].as_str().unwrap_or("").to_string();
+    (!email.is_empty()).then_some((name, email))
 }
 
 #[tauri::command]
@@ -399,18 +401,130 @@ pub async fn discard_changes(repo_path: String, paths: Vec<String>) -> Result<()
 }
 
 /// Check if a git CLI error is an authentication failure.
+///
+/// `GitCli` 오류 문구는 `parse_git_output_error`가 고른 한 줄이다. 출력 어딘가에
+/// 인증 실패 문구가 있으면 그 줄을 고르도록 되어 있어서, 여기서는 문구만 보면
+/// 전체 stderr를 본 것과 같다(예: 첫 줄이 `remote: Invalid username or token`).
 pub(crate) fn is_auth_error(err: &AppError) -> bool {
     match err {
-        AppError::GitCli { message, .. } => {
-            let msg = message.to_lowercase();
-            msg.contains("authentication failed")
-                || msg.contains("could not read username")
-                || msg.contains("invalid credentials")
-                || msg.contains("401")
-                || msg.contains("403")
-        }
+        AppError::GitCli { message, .. } => crate::git::cli::is_auth_failure_text(message),
         _ => false,
     }
+}
+
+// ── Remote resolution ───────────────────────────────────────────────────────
+// 원격 이름을 "origin"으로 고정하지 않는다. 브랜치 설정(branch.<name>.remote /
+// branch.<name>.merge)을 따르고, 없으면 기본 원격을 고른다.
+
+/// 현재 체크아웃 상태에서 동기화 대상을 정하는 데 필요한 설정.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SyncTarget {
+    /// 체크아웃된 로컬 브랜치. detached HEAD나 빈 저장소면 `None`.
+    branch: Option<String>,
+    /// `(branch.<name>.remote, branch.<name>.merge)`. merge는 `refs/heads/x` 형태.
+    upstream: Option<(String, String)>,
+    /// 저장소에 등록된 원격 이름.
+    remotes: Vec<String>,
+}
+
+fn remote_error(code: &str) -> AppError {
+    AppError::GitCli {
+        message: code.to_string(),
+        exit_code: None,
+    }
+}
+
+fn detached_head_error() -> AppError {
+    remote_error("HEAD is detached")
+}
+
+impl SyncTarget {
+    /// 브랜치 설정이 가리키는 원격 (로컬 추적 `.`은 제외).
+    fn upstream_remote(&self) -> Option<&str> {
+        self.upstream
+            .as_ref()
+            .map(|(remote, _)| remote.as_str())
+            .filter(|remote| *remote != ".")
+    }
+
+    /// 추적 설정이 없을 때 쓸 원격: `origin`, 없으면 유일한 원격.
+    /// 둘 이상이면 어느 쪽에 토큰을 보낼지 알 수 없으므로 고르지 않는다.
+    fn default_remote(&self) -> Result<String, AppError> {
+        if self.remotes.iter().any(|r| r == "origin") {
+            return Ok("origin".to_string());
+        }
+        match self.remotes.as_slice() {
+            [only] => Ok(only.clone()),
+            [] => Err(remote_error("no_remote")),
+            _ => Err(remote_error("multiple_remotes")),
+        }
+    }
+
+    /// fetch·원격 태그 조회 대상. `--all`은 쓰지 않는다. 계정 토큰은 GitHub 계정
+    /// 하나의 것이라 다른 원격(다른 호스트일 수 있음)에 보내면 안 된다.
+    fn fetch_remote(&self) -> Result<String, AppError> {
+        match self.upstream_remote() {
+            Some(remote) => Ok(remote.to_string()),
+            None => self.default_remote(),
+        }
+    }
+
+    /// push 대상 `(원격, refspec)`. 추적 브랜치가 있으면 그 이름으로 올린다
+    /// (`local:upstream`). 없으면 기본 원격에 같은 이름으로 게시한다.
+    fn push_target(&self) -> Result<(String, String), AppError> {
+        let branch = self.branch.as_ref().ok_or_else(detached_head_error)?;
+        match (&self.upstream, self.upstream_remote()) {
+            (Some((_, merge)), Some(remote)) => {
+                let upstream_name = merge.strip_prefix("refs/heads/").unwrap_or(merge);
+                let refspec = if upstream_name == branch {
+                    branch.clone()
+                } else {
+                    format!("{}:{}", branch, merge)
+                };
+                Ok((remote.to_string(), refspec))
+            }
+            _ => Ok((self.default_remote()?, branch.clone())),
+        }
+    }
+
+    /// pull 대상 `(원격, merge ref)`. 추적 설정이 없으면 `no_upstream:<branch>`.
+    fn pull_target(&self) -> Result<(String, String), AppError> {
+        let branch = self.branch.as_ref().ok_or_else(detached_head_error)?;
+        self.upstream
+            .clone()
+            .ok_or_else(|| remote_error(&format!("no_upstream:{}", branch)))
+    }
+}
+
+async fn resolve_sync_target(repo_path: &str) -> Result<SyncTarget, AppError> {
+    let rp = repo_path.to_string();
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&rp)?;
+        let branch = repo
+            .head()
+            .ok()
+            .filter(|h| h.is_branch())
+            .and_then(|h| h.shorthand().map(|s| s.to_string()));
+        let config = repo.config()?;
+        let upstream = branch.as_ref().and_then(|name| {
+            let remote = config.get_string(&format!("branch.{}.remote", name)).ok()?;
+            let merge = config.get_string(&format!("branch.{}.merge", name)).ok()?;
+            Some((remote, merge))
+        });
+        let remotes = repo
+            .remotes()?
+            .iter()
+            .flatten()
+            .map(|r| r.to_string())
+            .collect();
+        Ok::<_, AppError>(SyncTarget {
+            branch,
+            upstream,
+            remotes,
+        })
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
 }
 
 #[tauri::command]
@@ -422,18 +536,19 @@ pub async fn git_fetch(
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
+    let remote = resolve_sync_target(&repo_path).await?.fetch_remote()?;
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
         .with_automatic(automatic.unwrap_or(false));
 
-    match engine.fetch("origin", &token).await {
+    match engine.fetch(&remote, &token).await {
         Ok(()) => {
-            tracing::info!("Fetched origin for {}", repo_path);
+            tracing::info!("Fetched {} for {}", remote, repo_path);
         }
         Err(e) if is_auth_error(&e) => {
             tracing::warn!("Fetch auth failed, refreshing token for {}", account_id);
             let new_token = token_store.refresh_token(&account_id).await?;
-            engine.fetch("origin", &new_token).await?;
-            tracing::info!("Fetched origin for {} (after token refresh)", repo_path);
+            engine.fetch(&remote, &new_token).await?;
+            tracing::info!("Fetched {} for {} (after token refresh)", remote, repo_path);
         }
         Err(e) => return Err(e),
     }
@@ -515,55 +630,6 @@ async fn fast_forward_local_branches(engine: &GitCliEngine, repo_path: &str) {
     }
 }
 
-/// Resolve the current HEAD branch name. Returns error if HEAD is detached.
-async fn resolve_head_branch(repo_path: &str) -> Result<String, AppError> {
-    let rp = repo_path.to_string();
-    tokio::task::spawn_blocking(move || {
-        let repo = git2::Repository::open(&rp)?;
-        let head = repo.head()?;
-        head.shorthand()
-            .map(|s| s.to_string())
-            .ok_or_else(|| AppError::GitCli {
-                message: "HEAD is detached".to_string(),
-                exit_code: None,
-            })
-    })
-    .await
-    .map_err(|e| AppError::Channel(e.to_string()))?
-}
-
-/// Resolve the upstream remote branch name for the current HEAD.
-/// Returns error with "no_upstream:<branch>" prefix if no upstream is configured.
-async fn resolve_upstream_branch(repo_path: &str) -> Result<String, AppError> {
-    let rp = repo_path.to_string();
-    tokio::task::spawn_blocking(move || {
-        let repo = git2::Repository::open(&rp)?;
-        let head = repo.head()?;
-        let local_name = head
-            .shorthand()
-            .ok_or_else(|| AppError::GitCli {
-                message: "HEAD is detached".to_string(),
-                exit_code: None,
-            })?
-            .to_string();
-        let branch = repo.find_branch(&local_name, git2::BranchType::Local)?;
-        let upstream = branch.upstream().map_err(|_| AppError::GitCli {
-            message: format!("no_upstream:{}", local_name),
-            exit_code: None,
-        })?;
-        let name = upstream
-            .name()?
-            .unwrap_or("")
-            .to_string();
-        Ok(name
-            .strip_prefix("origin/")
-            .unwrap_or(&name)
-            .to_string())
-    })
-    .await
-    .map_err(|e| AppError::Channel(e.to_string()))?
-}
-
 #[tauri::command]
 pub async fn git_push(
     repo_path: String,
@@ -573,29 +639,29 @@ pub async fn git_push(
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
-    let branch = resolve_head_branch(&repo_path).await?;
+    let (remote, refspec) = resolve_sync_target(&repo_path).await?.push_target()?;
 
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     let force_flag = force.unwrap_or(false);
 
-    match engine.push("origin", &branch, &token, force_flag).await {
+    match engine.push(&remote, &refspec, &token, force_flag).await {
         Ok(()) => {
-            tracing::info!("Pushed {} to origin for {}", branch, repo_path);
+            tracing::info!("Pushed {} to {} for {}", refspec, remote, repo_path);
             Ok(())
         }
         Err(e) if is_auth_error(&e) => {
             tracing::warn!("Push auth failed, refreshing token for {}", account_id);
             let new_token = token_store.refresh_token(&account_id).await?;
-            engine.push("origin", &branch, &new_token, force_flag).await?;
-            tracing::info!("Pushed {} to origin for {} (after token refresh)", branch, repo_path);
+            engine.push(&remote, &refspec, &new_token, force_flag).await?;
+            tracing::info!("Pushed {} to {} for {} (after token refresh)", refspec, remote, repo_path);
             Ok(())
         }
         Err(e) => Err(e),
     }
 }
 
-/// Tag names present on `origin`, used to mark local-only tags in the history
-/// timeline. Read-only network call; retries once on auth failure.
+/// Tag names present on the branch's remote, used to mark local-only tags in
+/// the history timeline. Read-only network call; retries once on auth failure.
 #[tauri::command]
 pub async fn list_remote_tags(
     repo_path: String,
@@ -604,14 +670,15 @@ pub async fn list_remote_tags(
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<Vec<String>, AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
+    let remote = resolve_sync_target(&repo_path).await?.fetch_remote()?;
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
 
-    match engine.list_remote_tags("origin", &token).await {
+    match engine.list_remote_tags(&remote, &token).await {
         Ok(tags) => Ok(tags),
         Err(e) if is_auth_error(&e) => {
             tracing::warn!("ls-remote auth failed, refreshing token for {}", account_id);
             let new_token = token_store.refresh_token(&account_id).await?;
-            engine.list_remote_tags("origin", &new_token).await
+            engine.list_remote_tags(&remote, &new_token).await
         }
         Err(e) => Err(e),
     }
@@ -626,21 +693,23 @@ pub async fn git_pull(
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
     let token = resolve_token(&token_store, &account_id).await?;
-    let branch = resolve_upstream_branch(&repo_path).await?;
+    let (remote, merge_ref) = resolve_sync_target(&repo_path).await?.pull_target()?;
+    let identity = resolve_commit_identity(Some(&account_id)).await;
 
-    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
+        .with_identity(identity);
     let rebase_flag = rebase.unwrap_or(false);
 
-    match engine.pull("origin", &branch, &token, rebase_flag).await {
+    match engine.pull(&remote, &merge_ref, &token, rebase_flag).await {
         Ok(()) => {
-            tracing::info!("Pulled {} from origin for {}", branch, repo_path);
+            tracing::info!("Pulled {} from {} for {}", merge_ref, remote, repo_path);
             Ok(())
         }
         Err(e) if is_auth_error(&e) => {
             tracing::warn!("Pull auth failed, refreshing token for {}", account_id);
             let new_token = token_store.refresh_token(&account_id).await?;
-            engine.pull("origin", &branch, &new_token, rebase_flag).await?;
-            tracing::info!("Pulled {} from origin for {} (after token refresh)", branch, repo_path);
+            engine.pull(&remote, &merge_ref, &new_token, rebase_flag).await?;
+            tracing::info!("Pulled {} from {} for {} (after token refresh)", merge_ref, remote, repo_path);
             Ok(())
         }
         Err(e) => Err(e),
@@ -836,5 +905,114 @@ mod tests {
 
         assert!(paths.contains(&"README.md".to_string()), "수정 파일 누락: {:?}", paths);
         assert!(paths.contains(&"new-file.txt".to_string()), "새 파일 누락: {:?}", paths);
+    }
+
+    fn target(branch: Option<&str>, upstream: Option<(&str, &str)>, remotes: &[&str]) -> SyncTarget {
+        SyncTarget {
+            branch: branch.map(String::from),
+            upstream: upstream.map(|(r, m)| (r.to_string(), m.to_string())),
+            remotes: remotes.iter().map(|r| r.to_string()).collect(),
+        }
+    }
+
+    fn code(err: AppError) -> String {
+        match err {
+            AppError::GitCli { message, .. } => message,
+            other => other.to_string(),
+        }
+    }
+
+    #[test]
+    fn push_uses_the_tracked_remote_and_branch_name() {
+        let t = target(Some("feature"), Some(("upstream", "refs/heads/main")), &["origin", "upstream"]);
+        assert_eq!(
+            t.push_target().unwrap(),
+            ("upstream".to_string(), "feature:refs/heads/main".to_string())
+        );
+        let same = target(Some("main"), Some(("origin", "refs/heads/main")), &["origin"]);
+        assert_eq!(same.push_target().unwrap(), ("origin".to_string(), "main".to_string()));
+    }
+
+    #[test]
+    fn first_publish_prefers_origin_then_the_only_remote() {
+        let with_origin = target(Some("new"), None, &["fork", "origin"]);
+        assert_eq!(with_origin.push_target().unwrap().0, "origin");
+        let single = target(Some("new"), None, &["github"]);
+        assert_eq!(single.push_target().unwrap(), ("github".to_string(), "new".to_string()));
+        assert_eq!(code(target(Some("new"), None, &[]).push_target().unwrap_err()), "no_remote");
+        assert_eq!(
+            code(target(Some("new"), None, &["a", "b"]).push_target().unwrap_err()),
+            "multiple_remotes"
+        );
+    }
+
+    #[test]
+    fn pull_needs_an_upstream_and_follows_it() {
+        let t = target(Some("feature"), Some(("upstream", "refs/heads/main")), &["origin", "upstream"]);
+        assert_eq!(
+            t.pull_target().unwrap(),
+            ("upstream".to_string(), "refs/heads/main".to_string())
+        );
+        assert_eq!(
+            code(target(Some("x"), None, &["origin"]).pull_target().unwrap_err()),
+            "no_upstream:x"
+        );
+        assert!(target(None, None, &["origin"]).push_target().is_err());
+    }
+
+    #[test]
+    fn fetch_follows_the_upstream_remote_or_the_default() {
+        let t = target(Some("f"), Some(("upstream", "refs/heads/main")), &["origin", "upstream"]);
+        assert_eq!(t.fetch_remote().unwrap(), "upstream");
+        let local = target(Some("f"), Some((".", "refs/heads/main")), &["origin"]);
+        assert_eq!(local.fetch_remote().unwrap(), "origin");
+        let detached = target(None, None, &["github"]);
+        assert_eq!(detached.fetch_remote().unwrap(), "github");
+    }
+
+    /// origin이 없고, 로컬 브랜치 이름과 추적 브랜치 이름이 다른 저장소에서
+    /// 브랜치 설정을 그대로 읽어야 한다.
+    #[tokio::test]
+    async fn reads_branch_tracking_config_without_origin() {
+        let tmp = std::env::temp_dir().join(format!("gitbaro-sync-target-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        git(&tmp, &["init", "-q", "--bare", "-b", "main", "remote.git"]);
+        let repo = tmp.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        git(&repo, &["init", "-q", "-b", "work"]);
+        git(&repo, &["config", "user.email", "t@t"]);
+        git(&repo, &["config", "user.name", "t"]);
+        std::fs::write(repo.join("a"), "a\n").unwrap();
+        git(&repo, &["add", "a"]);
+        git(&repo, &["commit", "-qm", "init"]);
+        git(&repo, &["remote", "add", "upstream", tmp.join("remote.git").to_str().unwrap()]);
+        git(&repo, &["push", "-q", "upstream", "work:main"]);
+        git(&repo, &["branch", "-q", "--set-upstream-to=upstream/main"]);
+
+        let t = resolve_sync_target(repo.to_str().unwrap()).await;
+        let _ = std::fs::remove_dir_all(&tmp);
+        let t = t.expect("sync target 조회 실패");
+
+        assert_eq!(t.branch.as_deref(), Some("work"));
+        assert_eq!(t.upstream, Some(("upstream".to_string(), "refs/heads/main".to_string())));
+        assert_eq!(t.push_target().unwrap(), ("upstream".to_string(), "work:refs/heads/main".to_string()));
+        assert_eq!(t.fetch_remote().unwrap(), "upstream");
+    }
+
+    #[test]
+    fn auth_errors_are_detected_from_the_chosen_message() {
+        let err = AppError::GitCli {
+            message: crate::git::cli::parse_git_error(
+                "remote: Invalid username or token. Password authentication is not supported for Git operations.\nfatal: Authentication failed for 'https://github.com/o/r.git/'\n",
+            ),
+            exit_code: Some(128),
+        };
+        assert!(is_auth_error(&err));
+        let not_auth = AppError::GitCli {
+            message: "Need to specify how to reconcile divergent branches.".into(),
+            exit_code: Some(128),
+        };
+        assert!(!is_auth_error(&not_auth));
     }
 }

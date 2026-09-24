@@ -477,9 +477,12 @@ pub async fn merge_branch_into_current(
     repo_path: String,
     branch: String,
     strategy: MergeStrategy,
+    account_id: Option<String>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, AppError> {
-    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    let identity = crate::commands::git::resolve_commit_identity(account_id.as_deref()).await;
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
+        .with_identity(identity);
     let branch_name = branch.clone();
 
     match strategy {
@@ -530,9 +533,12 @@ pub async fn abort_merge_or_rebase(
 #[tauri::command]
 pub async fn continue_merge_or_rebase(
     repo_path: String,
+    account_id: Option<String>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), AppError> {
-    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
+    let identity = crate::commands::git::resolve_commit_identity(account_id.as_deref()).await;
+    let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
+        .with_identity(identity);
     match engine.operation_in_progress().await? {
         Some("rebase") => engine.rebase_continue().await,
         Some("merge") => engine.merge_continue().await,

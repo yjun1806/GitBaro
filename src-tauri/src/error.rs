@@ -11,6 +11,10 @@ pub enum AppError {
         exit_code: Option<i32>,
     },
 
+    /// merge·rebase·pull 등이 충돌로 멈췄다. 작업 트리에 충돌 파일이 남아 있다.
+    #[error("Merge conflict: {0}")]
+    MergeConflict(String),
+
     #[error("Authentication error: {0}")]
     Auth(String),
 
@@ -67,6 +71,7 @@ impl serde::Serialize for AppError {
         let (error_type, message) = match self {
             AppError::Git(e) => ("Git", e.to_string()),
             AppError::GitCli { message, .. } => ("GitCli", message.clone()),
+            AppError::MergeConflict(msg) => ("MergeConflict", msg.clone()),
             AppError::Auth(msg) => ("Auth", msg.clone()),
             AppError::TokenExpired { account_id } => {
                 ("TokenExpired", format!("Token expired for {}", account_id))
