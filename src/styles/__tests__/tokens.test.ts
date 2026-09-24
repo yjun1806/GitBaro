@@ -98,6 +98,55 @@ describe("리뷰 개편 시각 토큰 (globals.css)", () => {
     expect(new Set(darkNames)).toEqual(new Set(lightNames));
   });
 
+  // 위 두 테스트는 REQUIRED_REVIEW_TOKENS로 걸러낸 부분집합만 비교하므로, 두 블록 중
+  // 한쪽에만 있는 이름(예: 새 토큰을 한쪽에만 추가)은 걸러지지 않는다. 전체 이름 집합을
+  // 그대로 비교해 그런 누락을 잡는다.
+  it("Light와 Dark 블록의 커스텀 프로퍼티 전체 이름 집합이 같다", () => {
+    expect(customPropertyNames(darkBlock)).toEqual(customPropertyNames(lightBlock));
+  });
+
+  it("Light 블록의 색·그림자·모서리 토큰이 원천 값 그대로다 (plans/design/README.md:43~53)", () => {
+    expect(lightBlock).toMatch(/--canvas:\s*#efefee/);
+    expect(lightBlock).toMatch(/--panel:\s*#ffffff/);
+    expect(lightBlock).toMatch(/--line:\s*#ebebea/);
+    expect(lightBlock).toMatch(/--line2:\s*#d4d4d2/);
+    expect(lightBlock).toMatch(/--chip:\s*#f3f3f2/);
+    expect(lightBlock).toMatch(/--fg:\s*#1a1a19/);
+    expect(lightBlock).toMatch(/--fg2:\s*#3d3d3b/);
+    expect(lightBlock).toMatch(/--muted:\s*#62625f/);
+    expect(lightBlock).toMatch(/--faint:\s*#8a8a86/);
+    expect(lightBlock).toMatch(/--ln:\s*#b6b6b2/);
+    expect(lightBlock).toMatch(/--acc:\s*#16181d/);
+    expect(lightBlock).toMatch(/--live:\s*#e5700b/);
+    expect(lightBlock).toMatch(/--shadow:\s*0 1px 2px rgba\(0,\s*0,\s*0,\s*0\.04\),\s*0 6px 20px rgba\(0,\s*0,\s*0,\s*0\.05\)/);
+    expect(lightBlock).toMatch(/--shadow-sm:\s*0 1px 3px rgba\(0,\s*0,\s*0,\s*0\.07\)/);
+    expect(lightBlock).toMatch(/--radius-panel:\s*14px/);
+    expect(lightBlock).toMatch(/--radius-item:\s*8px/);
+    expect(lightBlock).toMatch(/--radius-chip:\s*6px/);
+    expect(lightBlock).toMatch(/--radius-pill:\s*9999px/);
+  });
+
+  it("acc-sel/acc-faint/acc-line은 강조색을 각각 8%/4%/35%로 섞는다 (README 47줄)", () => {
+    expect(lightBlock).toMatch(/--acc-sel:\s*color-mix\(in srgb,\s*var\(--acc\)\s*8%,\s*var\(--panel\)\)/);
+    expect(lightBlock).toMatch(/--acc-faint:\s*color-mix\(in srgb,\s*var\(--acc\)\s*4%,\s*var\(--panel\)\)/);
+    expect(lightBlock).toMatch(/--acc-line:\s*color-mix\(in srgb,\s*var\(--acc\)\s*35%,\s*transparent\)/);
+  });
+
+  it("@theme의 --color-muted는 배경 별칭 --muted-bg를 가리킨다 (Tailwind bg-muted 보존)", () => {
+    // W1-T1은 새 디자인 토큰 --muted(보조 글자색, #62625f)와 기존 배경 토큰 이름이
+    // 겹쳐 기존 쪽을 --muted-bg로 옮겼다. 이 별칭이 --muted(글자색)를 도로 가리키게
+    // 되돌아가면 bg-muted를 쓰는 모든 화면(ChangesView 섹션 헤더 등)이 어두운 회색으로
+    // 깨진다 — 리뷰 지적.
+    const themeBlock = extractBlock(css, /@theme\s*\{/);
+    expect(themeBlock).toMatch(/--color-muted:\s*var\(--muted-bg\)/);
+  });
+
+  it("Light :root의 --primary는 새 강조색(--acc)을 가리킨다 (README: 버튼·선택·링크·포커스)", () => {
+    // 리뷰 지적: --primary가 여전히 --primary-700(Violet)을 가리켜 버튼·링크·포커스
+    // 링(--ring은 --primary의 별칭)이 새 강조색 #16181D로 바뀌지 않았었다.
+    expect(lightBlock).toMatch(/--primary:\s*var\(--acc\)/);
+  });
+
   it("간격 토큰이 촘촘 밀도 값과 diff 줄 높이 21px를 따른다", () => {
     expect(lightBlock).toMatch(/--g:\s*8px/);
     expect(lightBlock).toMatch(/--row:\s*28px/);

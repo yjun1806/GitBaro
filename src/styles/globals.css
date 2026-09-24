@@ -111,8 +111,8 @@
 }
 
 /* ── Light 테마 ── */
-/* 키컬러: Violet — 버튼, 선택, 링크, 포커스에만 사용
-   WCAG AA 전체 통과 */
+/* 키컬러: #16181D(--acc) — 버튼, 선택, 링크, 포커스에만 사용(README 43~53줄).
+   W1-T1: 예전 Violet 키컬러를 리뷰 개편 강조색으로 교체. */
 :root {
   --background: var(--canvas);
   --foreground: var(--fg);
@@ -121,7 +121,7 @@
   --popover: var(--card);
   --popover-foreground: var(--foreground);
 
-  --primary: var(--primary-700);
+  --primary: var(--acc);
   --primary-foreground: var(--white);
   --primary-hover: var(--primary-800);
 
@@ -129,7 +129,11 @@
   --secondary-foreground: var(--foreground);
   --muted-bg: var(--chip);
   --muted-foreground: var(--muted);
-  --accent: var(--gray-200);
+  /* --accent는 hover/선택 등 일반 UI 상태 배경이다(README의 acc-sel/acc-faint와는 다른
+     용도). W1-T1: --background가 gray-200에 가까운 --canvas(#efefee)로 바뀌면서 예전
+     --gray-200(#ebebeb) 값은 배경과 거의 구분되지 않아 hover 피드백이 사라졌다(리뷰 지적).
+     대비가 뚜렷한 --line2(#d4d4d2, 이미 --border로 쓰는 값)로 바꾼다. */
+  --accent: var(--line2);
   --accent-foreground: var(--foreground);
 
   --destructive: var(--red-600);
