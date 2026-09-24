@@ -131,6 +131,9 @@ async fn get_accounts_internal(
     // gh lists every configured account, including ones whose online check
     // failed (offline, revoked token), so this is never an empty "degraded" list.
     let gh_accounts = cli::gh_auth_status().await?;
+    // Forget tokens of accounts logged out outside the app.
+    let usernames: Vec<String> = gh_accounts.iter().map(|a| a.username.clone()).collect();
+    token_store.retain_accounts(&usernames).await;
     let client = GitHubClient::new();
 
     let mut fetched = Vec::with_capacity(gh_accounts.len());
@@ -402,7 +405,8 @@ pub(crate) async fn resolve_token(
 
 /// Run a GitHub API call with the account's token. On HTTP 401 the cached token
 /// is refreshed from `gh` (it may have been rotated or re-issued) and the call
-/// is retried exactly once.
+/// is retried exactly once. Changes that do not produce a 401 (`gh auth logout`,
+/// `gh auth refresh -s <scope>`) are picked up by the TokenStore's TTL instead.
 pub(crate) async fn call_with_token_retry<T, F, Fut>(
     token_store: &TokenStore,
     account_id: &str,
