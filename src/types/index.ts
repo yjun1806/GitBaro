@@ -439,3 +439,18 @@ export interface BranchUpdate {
 
 /** A multi-step git operation that stops for conflict resolution. */
 export type GitOperation = "merge" | "rebase" | "cherryPick" | "revert" | "squash";
+
+// W1-T3
+/** Response of `set_activity_watch`: which requested paths are actually
+ * watched (capped at 40) and which overflowed to the polling fallback. */
+export interface ActivityWatchResult {
+  watched: string[];
+  overflow: string[];
+}
+
+/** Payload of the `repo:activity` event. */
+export interface ActivityEvent {
+  path: string;
+  /** Epoch ms of the emission. */
+  at: number;
+}

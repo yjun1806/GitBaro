@@ -2,6 +2,7 @@ import { useRef, useCallback } from "react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAutoSync } from "@/hooks/useAutoSync";
+import { useLiveChanges } from "@/hooks/useLiveChanges"; // W1-T3
 import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import "@/stores/selection"; // ensure cross-store subscriptions are registered
 import { RepoRail } from "./RepoRail";
@@ -22,6 +23,8 @@ export function MainLayout() {
 
   // 저장소별 설정에 따라 원격을 주기적으로 확인하고, 안전할 때만 자동으로 받는다
   useAutoSync();
+  // 여러 저장소·워크트리의 파일 변경 시각을 모은다("지금 바뀌는 곳" 등에 씀)
+  useLiveChanges();
 
   const sidebarWidth = useSidebarWidth();
 
