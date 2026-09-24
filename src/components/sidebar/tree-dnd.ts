@@ -9,7 +9,9 @@ import { useWorkspaceStore, type WorkspaceResult } from "@/stores/workspace";
  * - 다른 계정의 행 위에는 놓을 수 없다(워크스페이스는 한 계정 안에만 있다).
  * - 행 사이에 놓으면 그 부모(계정 또는 워크스페이스)의 순서를 저장한다. 순서는 지금 화면에
  *   보이는 순서에서 출발하므로, 이름순 등으로 보고 있었어도 보이던 그대로 이어서 바뀐다.
- *   순서를 저장하면 그 계정의 정렬은 「사용자 지정」이 된다(`setChildOrder`).
+ *   순서를 저장하면 그 계정의 정렬은 「사용자 지정」이 된다(`setChildOrder`). 그래서 이름순 등으로
+ *   보고 있었다면 같은 계정의 다른 부모(계정 바로 아래, 다른 워크스페이스)도 지금 보이는 순서를
+ *   함께 저장해, 건드리지 않은 목록이 예전에 저장한 순서로 돌아가지 않게 한다.
  */
 
 export type DragKind = "repo" | "workspace";
@@ -35,6 +37,11 @@ export type DropPlan =
       type: "reorder";
       parentKey: string;
       order: string[];
+      /**
+       * 같은 계정의 다른 부모마다 지금 보이는 순서. 계정 정렬이 「사용자 지정」이 아닐 때만 있다.
+       * 정렬이 바뀌어도 이 목록들이 보이던 그대로 남게 한다.
+       */
+      keepOrders?: Record<string, string[]>;
       move?:
         | {
             to: "workspace";
@@ -50,6 +57,28 @@ export type DropPlan =
 /** 계정 아래 형제: 워크스페이스와 저장소, 그 뒤에 「조용한 저장소」 줄의 저장소. */
 function accountSiblings(account: AccountNode): string[] {
   return [...account.children.map((c) => c.key), ...account.quietRepos.map((r) => r.key)];
+}
+
+/**
+ * 계정 안 모든 부모(계정 바로 아래와 각 워크스페이스)의 지금 보이는 순서.
+ * 옮기는 노드(`exclude`)와 `skipParent`는 뺀다.
+ */
+function visibleOrders(
+  account: AccountNode,
+  exclude: string,
+  skipParent: string,
+): Record<string, string[]> {
+  const parents: [string, string[]][] = [
+    [account.key, accountSiblings(account)],
+    ...account.children
+      .filter((c): c is WorkspaceNode => c.kind === "workspace")
+      .map((w): [string, string[]] => [w.key, w.repos.map((r) => r.key)]),
+  ];
+  return Object.fromEntries(
+    parents
+      .filter(([key]) => key !== skipParent)
+      .map(([key, keys]) => [key, keys.filter((k) => k !== exclude)]),
+  );
 }
 
 function workspaceLocation(account: AccountNode, ws: WorkspaceNode, siblings: string[]) {
@@ -99,19 +128,14 @@ export function locateNode(tree: AccountNode[], key: string): NodeLocation | nul
 /**
  * 포인터가 놓을 행의 어디쯤 있는지로 놓는 방식을 정한다.
  * `ratio`는 행 위쪽 0 ~ 아래쪽 1.
- * - 저장소를 워크스페이스 행에: 위 1/4은 앞, 접힌 워크스페이스의 아래 1/4은 뒤, 나머지는 안으로.
- *   펼친 워크스페이스는 바로 아래가 그 안의 첫 저장소이므로 「뒤」를 두지 않는다.
+ * - 저장소를 워크스페이스 행에: 위 1/4은 앞, 아래 1/4은 뒤, 나머지는 안으로.
+ *   펼친 워크스페이스의 「뒤」는 그 안의 저장소들 다음이다(표시선도 거기에 그린다).
  * - 그 밖: 위 절반은 앞, 아래 절반은 뒤.
  */
-export function zoneFor(
-  activeKind: DragKind,
-  overKind: DragKind,
-  ratio: number,
-  overExpanded: boolean,
-): DropZone {
+export function zoneFor(activeKind: DragKind, overKind: DragKind, ratio: number): DropZone {
   if (activeKind === "repo" && overKind === "workspace") {
     if (ratio < 0.25) return "before";
-    if (!overExpanded && ratio > 0.75) return "after";
+    if (ratio > 0.75) return "after";
     return "into";
   }
   return ratio < 0.5 ? "before" : "after";
@@ -150,10 +174,16 @@ export function planDrop(
   const at = rest.indexOf(over.key) + (zone === "after" ? 1 : 0);
   const order = [...rest.slice(0, at), active.key, ...rest.slice(at)];
 
+  const account = tree.find((a) => a.accountKey === over.accountKey);
+  const keepOrders =
+    account && account.sortMode !== "custom"
+      ? { keepOrders: visibleOrders(account, active.key, over.parentKey) }
+      : {};
+
   if (over.parentKey === active.parentKey) {
     return sameOrder(order, active.siblings)
       ? null
-      : { type: "reorder", parentKey: over.parentKey, order };
+      : { type: "reorder", parentKey: over.parentKey, order, ...keepOrders };
   }
 
   const repoPath = active.repoPath!;
@@ -164,6 +194,7 @@ export function planDrop(
     type: "reorder",
     parentKey: over.parentKey,
     order,
+    ...keepOrders,
     move: targetWorkspace
       ? { to: "workspace", workspaceId: targetWorkspace, repoPath, index: at }
       : { to: "account", repoPath },
@@ -192,7 +223,11 @@ export function applyDrop(plan: DropPlan): WorkspaceResult {
       } else if (plan.move?.to === "account") {
         store.removeRepoFromWorkspace(plan.move.repoPath);
       }
-      useWorkspaceStore.getState().setChildOrder(plan.parentKey, plan.order);
+      const { setChildOrder } = useWorkspaceStore.getState();
+      Object.entries(plan.keepOrders ?? {}).forEach(([parentKey, order]) =>
+        setChildOrder(parentKey, order),
+      );
+      setChildOrder(plan.parentKey, plan.order);
       return { ok: true };
     }
   }

@@ -65,20 +65,17 @@ beforeEach(() => {
 });
 
 describe("zoneFor", () => {
-  it("저장소를 워크스페이스 행에 올리면 위 1/4은 앞, 나머지는 안으로 넣는다", () => {
-    expect(zoneFor("repo", "workspace", 0.1, true)).toBe("before");
-    expect(zoneFor("repo", "workspace", 0.5, true)).toBe("into");
-    expect(zoneFor("repo", "workspace", 0.9, true)).toBe("into");
-  });
-
-  it("접힌 워크스페이스는 아래 1/4에 놓으면 뒤에 둔다", () => {
-    expect(zoneFor("repo", "workspace", 0.9, false)).toBe("after");
+  it("저장소를 워크스페이스 행에 올리면 위 1/4은 앞, 아래 1/4은 뒤, 나머지는 안으로 넣는다", () => {
+    expect(zoneFor("repo", "workspace", 0.1)).toBe("before");
+    expect(zoneFor("repo", "workspace", 0.5)).toBe("into");
+    expect(zoneFor("repo", "workspace", 0.7)).toBe("into");
+    expect(zoneFor("repo", "workspace", 0.9)).toBe("after");
   });
 
   it("그 밖에는 위 절반이 앞, 아래 절반이 뒤다", () => {
-    expect(zoneFor("repo", "repo", 0.3, false)).toBe("before");
-    expect(zoneFor("repo", "repo", 0.7, false)).toBe("after");
-    expect(zoneFor("workspace", "workspace", 0.5, false)).toBe("after");
+    expect(zoneFor("repo", "repo", 0.3)).toBe("before");
+    expect(zoneFor("repo", "repo", 0.7)).toBe("after");
+    expect(zoneFor("workspace", "workspace", 0.5)).toBe("after");
   });
 });
 
@@ -133,7 +130,83 @@ describe("끌어서 순서 바꾸기", () => {
   });
 });
 
+describe("이름순 등에서 「사용자 지정」으로 바뀔 때 다른 목록", () => {
+  /** 워크스페이스 안 저장소 키, 화면에 보이는 순서대로. */
+  function visibleWorkspace(id: string): string[] {
+    const node = currentTree()
+      .find((a) => a.accountKey === "mos")!
+      .children.find((c) => c.key === workspaceNodeKey(id))!;
+    return node.kind === "workspace" ? node.repos.map((r) => r.key) : [];
+  }
+
+  it("계정 바로 아래 순서를 바꿔도 워크스페이스 안은 보이던 이름순 그대로다", () => {
+    // 넣은 순서는 gamma, beta — 이름순 화면은 beta, gamma
+    const id = createWorkspace("pair", [gamma.path, beta.path]);
+    ws().setSortMode("mos", "name");
+    expect(visibleWorkspace(id)).toEqual([key(beta), key(gamma)]);
+    expect(accountChildren()).toEqual([key(alpha), key(delta), workspaceNodeKey(id)]);
+
+    drop(key(delta), key(alpha), "before");
+
+    expect(ws().sortModeByAccount.mos).toBe("custom");
+    expect(accountChildren()).toEqual([key(delta), key(alpha), workspaceNodeKey(id)]);
+    expect(visibleWorkspace(id)).toEqual([key(beta), key(gamma)]);
+  });
+
+  it("워크스페이스 안 순서를 바꿔도 계정 바로 아래는 보이던 이름순 그대로다", () => {
+    const id = createWorkspace("pair", [gamma.path, beta.path]);
+    // 예전에 저장한 사용자 순서는 이름순과 다르다.
+    ws().setChildOrder(ACCT, [key(delta), workspaceNodeKey(id), key(alpha)]);
+    ws().setSortMode("mos", "name");
+    expect(accountChildren()).toEqual([key(alpha), key(delta), workspaceNodeKey(id)]);
+
+    drop(key(gamma), key(beta), "before");
+
+    expect(visibleWorkspace(id)).toEqual([key(gamma), key(beta)]);
+    expect(accountChildren()).toEqual([key(alpha), key(delta), workspaceNodeKey(id)]);
+  });
+
+  it("워크스페이스에서 빼내도 다른 워크스페이스 안은 보이던 이름순 그대로다", () => {
+    const from = createWorkspace("from", [alpha.path, beta.path]);
+    const other = createWorkspace("other", [gamma.path, delta.path]);
+    ws().setSortMode("mos", "name");
+    expect(visibleWorkspace(other)).toEqual([key(delta), key(gamma)]);
+
+    drop(key(beta), workspaceNodeKey(other), "before");
+
+    expect(workspaceRepos(from)).toEqual([alpha.path]);
+    expect(accountChildren()).toEqual([
+      workspaceNodeKey(from),
+      key(beta),
+      workspaceNodeKey(other),
+    ]);
+    expect(visibleWorkspace(other)).toEqual([key(delta), key(gamma)]);
+  });
+
+  it("이미 「사용자 지정」이면 놓은 부모의 순서만 저장한다", () => {
+    createWorkspace("pair", [gamma.path, beta.path]);
+    const plan = planDrop(currentTree(), key(delta), key(alpha), "before");
+    expect(plan).toMatchObject({ type: "reorder", parentKey: ACCT });
+    expect(plan && "keepOrders" in plan).toBe(false);
+  });
+});
+
 describe("워크스페이스로 넣기·빼기", () => {
+  it("워크스페이스 행 「뒤」에 놓으면 펼쳐져 있어도 그 워크스페이스 다음 계정 자리로 나온다", () => {
+    const id = createWorkspace("pair", [beta.path]);
+
+    drop(key(beta), workspaceNodeKey(id), "after");
+
+    expect(workspaceRepos(id)).toEqual([]);
+    expect(accountChildren()).toEqual([
+      workspaceNodeKey(id),
+      key(beta),
+      key(alpha),
+      key(gamma),
+      key(delta),
+    ]);
+  });
+
   it("워크스페이스 행 위에 놓으면 그 워크스페이스 끝에 들어가고 계정 순서에서 빠진다", () => {
     const id = createWorkspace("pair", [alpha.path]);
     ws().setChildOrder(ACCT, [workspaceNodeKey(id), key(delta), key(beta), key(gamma)]);

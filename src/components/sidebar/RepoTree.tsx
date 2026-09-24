@@ -10,7 +10,7 @@ import { AddRepoButton } from "./AddRepoButton";
 import { LiveNowSection } from "./LiveNowSection";
 import { QuietReposRow } from "./QuietReposRow";
 import { RepoRow, type LiveState } from "./RepoRow";
-import { TreeDndProvider } from "./TreeDnd";
+import { DropAfterLine, TreeDndProvider } from "./TreeDnd";
 import { WorkspaceRow } from "./WorkspaceRow";
 import {
   collapsibleKeys,
@@ -205,6 +205,9 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
                             onToggle={() => toggleCollapsed(workspaceNodeKey(child.workspace.id))}
                           />
                           {wsOpen && child.repos.map((r) => renderRepo(r, 3, 1))}
+                          {wsOpen && child.repos.length > 0 && (
+                            <DropAfterLine id={child.key} depth={0} />
+                          )}
                         </div>
                       );
                     })}

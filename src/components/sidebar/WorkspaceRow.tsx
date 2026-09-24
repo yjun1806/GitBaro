@@ -32,13 +32,15 @@ export function WorkspaceRow({
   onToggle,
 }: WorkspaceRowProps) {
   const { t } = useTranslation();
+  const badges = <RowBadges dirty={totals.dirty} newCommits={totals.newCommits} />;
   return (
     <DraggableRow
       id={nodeKey}
       kind="workspace"
       label={name}
       depth={0}
-      expanded={expanded}
+      groupBelow={expanded && repoCount > 0}
+      badges={badges}
       disabled={!draggable}
     >
       <TreeRowFrame level={2} depth={0} label={name} expanded={expanded} onToggle={onToggle} tall>
@@ -51,7 +53,7 @@ export function WorkspaceRow({
             {t("sidebarTree.workspaceSubtitle", { count: repoCount })}
           </span>
         </span>
-        <RowBadges dirty={totals.dirty} newCommits={totals.newCommits} />
+        {badges}
       </TreeRowFrame>
     </DraggableRow>
   );

@@ -20,7 +20,7 @@ import {
   type DragStartEvent,
   type Announcements,
 } from "@dnd-kit/core";
-import { Ban, Folder, GripVertical } from "lucide-react";
+import { Ban, Folder, GitBranch, GripVertical } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AccountNode } from "@/lib/repo-tree";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
@@ -41,10 +41,12 @@ import {
 interface RowDragData {
   kind: DragKind;
   label: string;
-  /** 워크스페이스 행이 펼쳐져 있는지(놓는 자리 판단에 쓴다). */
-  expanded: boolean;
   /** 저장소 행의 아바타 색을 정하는 경로. */
   path?: string;
+  /** 미리보기에 보일 브랜치 줄(저장소 행). */
+  branch?: string | null;
+  /** 미리보기 오른쪽에 보일 표시(합계 배지). */
+  badges?: ReactNode;
 }
 
 interface DropIndicator {
@@ -81,7 +83,7 @@ function indicatorOf(
   if (!over || !activeData || !overData) return null;
   const y = pointerY(event);
   const ratio = y === null || over.rect.height <= 0 ? 0.5 : (y - over.rect.top) / over.rect.height;
-  const zone = zoneFor(activeData.kind, overData.kind, ratio, overData.expanded);
+  const zone = zoneFor(activeData.kind, overData.kind, ratio);
   const overKey = String(over.id);
   const plan = planDrop(tree, String(active.id), overKey, zone);
   return plan ? { overKey, zone, plan } : null;
@@ -204,7 +206,7 @@ function DragPreview({ data, blocked }: { data: RowDragData; blocked: boolean })
         blocked && "cursor-not-allowed",
       )}
     >
-      <span className="flex items-center gap-[var(--item)] min-w-0">
+      <span className="flex items-center gap-[var(--item)] min-w-0 w-full">
         {color ? (
           <span
             aria-hidden="true"
@@ -221,7 +223,16 @@ function DragPreview({ data, blocked }: { data: RowDragData; blocked: boolean })
             <Folder className="w-[13px] h-[13px] text-[var(--fg2)]" aria-hidden="true" />
           </span>
         )}
-        <span className="text-[12.5px] font-bold text-foreground truncate">{data.label}</span>
+        <span className="flex-1 min-w-0 flex flex-col gap-px">
+          <span className="text-[12.5px] font-bold text-foreground truncate">{data.label}</span>
+          {data.branch && (
+            <span className="flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground min-w-0">
+              <GitBranch className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{data.branch}</span>
+            </span>
+          )}
+        </span>
+        {data.badges}
       </span>
       {blocked && (
         <span role="status" className="flex items-center gap-1 text-[10.5px] text-destructive">
@@ -240,9 +251,17 @@ interface DraggableRowProps {
   label: string;
   /** 들여쓰기 단계. 손잡이와 표시선 위치에 쓴다. */
   depth: number;
-  expanded?: boolean;
+  /**
+   * 이 행에 딸린 행(펼친 워크스페이스의 저장소, 펼친 저장소의 워크트리)이 바로 아래에 보이는지.
+   * 그러면 「뒤」 표시선은 이 행 밑이 아니라 딸린 행들 다음(`DropAfterLine`)에 그린다.
+   */
+  groupBelow?: boolean;
   /** 저장소 행이면 그 경로(미리보기 아바타 색) */
   path?: string;
+  /** 미리보기에 보일 브랜치 줄 */
+  branch?: string | null;
+  /** 미리보기에 보일 합계 배지 */
+  badges?: ReactNode;
   /** 검색 중처럼 끌 수 없을 때 */
   disabled?: boolean;
   children: ReactNode;
@@ -257,19 +276,22 @@ export function DraggableRow({
   kind,
   label,
   depth,
-  expanded = false,
+  groupBelow = false,
   path,
+  branch,
+  badges,
   disabled = false,
   children,
 }: DraggableRowProps) {
   const { t } = useTranslation();
-  const data: RowDragData = { kind, label, expanded, path };
+  const data: RowDragData = { kind, label, path, branch, badges };
   const drag = useDraggable({ id, data, disabled });
   const drop = useDroppable({ id, data, disabled });
   const { activeKey, indicator } = useContext(TreeDndContext);
   const mine = indicator?.overKey === id ? indicator : null;
   const blocked = mine?.plan.type === "blocked";
-  const lineLeft = 8 + depth * INDENT_PX;
+  const showLine =
+    mine && !blocked && (mine.zone === "before" || (mine.zone === "after" && !groupBelow));
 
   return (
     <div
@@ -296,16 +318,7 @@ export function DraggableRow({
         </span>
       )}
       {children}
-      {mine && !blocked && mine.zone !== "into" && (
-        <span
-          aria-hidden="true"
-          className={cn(
-            "absolute right-2 h-0.5 rounded-full bg-primary pointer-events-none z-10",
-            mine.zone === "before" ? "-top-px" : "-bottom-px",
-          )}
-          style={{ left: lineLeft }}
-        />
-      )}
+      {showLine && <DropLine depth={depth} edge={mine.zone === "before" ? "top" : "bottom"} />}
       {mine && !blocked && mine.zone === "into" && (
         <span
           aria-hidden="true"
@@ -318,6 +331,41 @@ export function DraggableRow({
           className="absolute inset-0 rounded-[var(--radius-item)] border-2 border-dashed border-destructive/60 pointer-events-none"
         />
       )}
+    </div>
+  );
+}
+
+/** 놓일 자리를 알리는 2px 표시선. */
+function DropLine({ depth, edge }: { depth: number; edge: "top" | "bottom" }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "absolute right-2 h-0.5 rounded-full bg-primary pointer-events-none z-10",
+        edge === "top" ? "-top-px" : "-bottom-px",
+      )}
+      style={{ left: 8 + depth * INDENT_PX }}
+    />
+  );
+}
+
+interface DropAfterLineProps {
+  /** 딸린 행을 가진 행의 트리 노드 키 */
+  id: string;
+  depth: number;
+}
+
+/**
+ * 딸린 행이 보이는 행(`groupBelow`)의 「뒤」 표시선. 딸린 행들 바로 다음에 두어, 실제로
+ * 놓이는 자리(그 무리 다음)에 선이 보이게 한다.
+ */
+export function DropAfterLine({ id, depth }: DropAfterLineProps) {
+  const { indicator } = useContext(TreeDndContext);
+  if (indicator?.overKey !== id || indicator.zone !== "after") return null;
+  if (indicator.plan.type === "blocked") return null;
+  return (
+    <div role="none" data-drop-after={id} className="relative h-0">
+      <DropLine depth={depth} edge="top" />
     </div>
   );
 }

@@ -804,7 +804,7 @@
     }
   },
   "sidebarDnd": {
-    "handle": "Drag to reorder or move into a workspace",
+    "handle": "Drag to reorder",
     "otherAccount": "Can't move to another account",
     "accountPending": "This repository's account isn't loaded yet. Try again in a moment.",
     "failed": "Couldn't move the repository",

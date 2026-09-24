@@ -6,7 +6,7 @@ import type { PathSignals, RepoNode } from "@/lib/repo-tree";
 import { cn } from "@/lib/utils";
 import type { RepoInfo } from "@/types";
 import { LiveDot, RowBadges } from "./RowBadges";
-import { DraggableRow } from "./TreeDnd";
+import { DraggableRow, DropAfterLine } from "./TreeDnd";
 import { TreeRowFrame } from "./TreeRowFrame";
 import { WorktreeRow } from "./WorktreeRow";
 import { isLivePath, isWatchedPath, repoPaths, repoTotals } from "./tree-model";
@@ -95,6 +95,14 @@ export function RepoRow({
     activePath !== repo.path &&
     !(showWorktrees && worktrees.some((w) => w.path === activePath));
   const selected = activePath === repo.path || viewingHiddenWorktree;
+  const rowBadges = (
+    <RowBadges
+      dirty={totals.dirty}
+      newCommits={totals.newCommits}
+      ahead={own?.ahead}
+      behind={own?.behind}
+    />
+  );
 
   return (
     <>
@@ -104,6 +112,9 @@ export function RepoRow({
         label={repo.name}
         depth={depth}
         path={repo.path}
+        branch={branch}
+        badges={rowBadges}
+        groupBelow={showWorktrees}
         disabled={!draggable}
       >
         <TreeRowFrame
@@ -156,12 +167,7 @@ export function RepoRow({
             )}
           </span>
           {fetching && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />}
-          <RowBadges
-            dirty={totals.dirty}
-            newCommits={totals.newCommits}
-            ahead={own?.ahead}
-            behind={own?.behind}
-          />
+          {rowBadges}
         </TreeRowFrame>
       </DraggableRow>
       {showWorktrees &&
@@ -183,6 +189,7 @@ export function RepoRow({
             />
           );
         })}
+      {showWorktrees && <DropAfterLine id={node.key} depth={depth} />}
     </>
   );
 }

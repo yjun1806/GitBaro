@@ -164,7 +164,7 @@ afterEach(cleanup);
 describe("RepoTree — 끌어서 놓기", () => {
   it("저장소·워크스페이스 행에 손잡이가 있고, 검색하는 동안에는 없다", () => {
     renderTree();
-    const handle = "Drag to reorder or move into a workspace";
+    const handle = "Drag to reorder";
     const soloRow = item("solo").parentElement!;
     expect(within(soloRow).getByTitle(handle)).toBeInTheDocument();
     expect(within(item("product").parentElement!).getByTitle(handle)).toBeInTheDocument();
@@ -196,6 +196,49 @@ describe("RepoTree — 끌어서 놓기", () => {
       workspaceNodeKey(wsId),
     ]);
     expect(s.sortModeByAccount.acme).toBe("custom");
+    // 다른 부모(워크스페이스 안)도 보이던 순서가 함께 저장된다.
+    expect(s.orderByParent[workspaceNodeKey(wsId)]).toEqual([
+      repoNodeKey(api.path),
+      repoNodeKey(web.path),
+    ]);
+  });
+
+  it("펼친 워크스페이스 행 아래쪽에 끌면 표시선이 그 안 저장소들 다음에 보이고, 그 자리에 놓인다", () => {
+    renderTree();
+    // 이름순 화면: extra, product(api, web), solo
+    const startY = rowCenterY("extra");
+    const endY = rowCenterY("product", 0.9);
+    act(() => {
+      fireEvent.pointerDown(item("extra"), { clientX: 20, clientY: startY, button: 0 });
+    });
+    act(() => {
+      fireEvent.pointerMove(document, { clientX: 20, clientY: startY + 10 });
+    });
+    act(() => {
+      fireEvent.pointerMove(document, { clientX: 20, clientY: endY });
+    });
+
+    const productRow = item("product").parentElement!;
+    expect(productRow).toHaveAttribute("data-drop", "after");
+    // 워크스페이스 행 바로 밑에는 선을 그리지 않는다.
+    expect(productRow.querySelector(".bg-primary")).toBeNull();
+    const line = document.querySelector(`[data-drop-after="${workspaceNodeKey(wsId)}"]`)!;
+    expect(line).not.toBeNull();
+    expect(
+      item("web").compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      line.compareDocumentPosition(item("solo")) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    act(() => {
+      fireEvent.pointerUp(document, { clientX: 20, clientY: endY });
+    });
+    expect(useWorkspaceStore.getState().orderByParent["acct:acme"]).toEqual([
+      workspaceNodeKey(wsId),
+      repoNodeKey(extra.path),
+      repoNodeKey(solo.path),
+    ]);
   });
 
   it("다른 계정의 워크스페이스 위에서는 놓을 수 없다고 알리고 아무것도 바꾸지 않는다", () => {
