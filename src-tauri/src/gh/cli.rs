@@ -90,10 +90,18 @@ pub fn find_gh_binary() -> Result<PathBuf, AppError> {
     Err(AppError::GhCliNotFound)
 }
 
+/// [`find_gh_binary`] 를 blocking 스레드에서 돌린다. `which` 를 동기로 실행하므로 async 코드에서는
+/// 이것을 쓴다(tokio 작업 스레드를 막지 않게).
+pub async fn locate_gh() -> Result<PathBuf, AppError> {
+    tokio::task::spawn_blocking(find_gh_binary)
+        .await
+        .map_err(|e| AppError::Channel(e.to_string()))?
+}
+
 /// Verify gh is installed and meets the minimum version requirement.
 /// Returns the version string (e.g. "2.62.0") on success.
 pub async fn check_gh_version() -> Result<String, AppError> {
-    let gh = find_gh_binary()?;
+    let gh = locate_gh().await?;
 
     let output = tokio::process::Command::new(&gh)
         .arg("--version")
@@ -134,7 +142,7 @@ pub async fn check_gh_version() -> Result<String, AppError> {
 
 /// List all logged-in GitHub accounts by parsing `gh auth status`.
 pub async fn gh_auth_status() -> Result<Vec<GhAccount>, AppError> {
-    let gh = find_gh_binary()?;
+    let gh = locate_gh().await?;
 
     let output = tokio::process::Command::new(&gh)
         .args(["auth", "status"])
@@ -208,7 +216,7 @@ fn extract_logged_in_account(line: &str) -> Option<String> {
 
 /// Get the OAuth token for a specific account via `gh auth token --user`.
 pub async fn gh_auth_token(username: &str) -> Result<String, AppError> {
-    let gh = find_gh_binary()?;
+    let gh = locate_gh().await?;
 
     let output = tokio::process::Command::new(&gh)
         .args(["auth", "token", "--user", username])
@@ -260,7 +268,7 @@ async fn run_gh_login_inner(
     mut cancel: tokio::sync::oneshot::Receiver<()>,
     on_device_code: impl FnOnce(String, String) + Send,
 ) -> Result<Option<GhLoginResult>, AppError> {
-    let gh = find_gh_binary()?;
+    let gh = locate_gh().await?;
 
     let mut child = tokio::process::Command::new(&gh)
         .args([
@@ -411,7 +419,7 @@ fn extract_logged_in_username(text: &str) -> Option<String> {
 
 /// Remove an account via `gh auth logout --user USERNAME`.
 pub async fn gh_auth_logout(username: &str) -> Result<(), AppError> {
-    let gh = find_gh_binary()?;
+    let gh = locate_gh().await?;
 
     let output = tokio::process::Command::new(&gh)
         .args([
