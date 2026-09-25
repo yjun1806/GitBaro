@@ -70,6 +70,15 @@ impl GitHubClient {
         }
     }
 
+    /// A client aimed at a local test server instead of api.github.com.
+    #[cfg(test)]
+    pub(crate) fn with_base_url(base_url: &str) -> Self {
+        GitHubClient {
+            http: shared_http_client(),
+            base_url: base_url.to_string(),
+        }
+    }
+
     fn auth_headers(&self, token: &str) -> Result<reqwest::header::HeaderMap, AppError> {
         let mut headers = reqwest::header::HeaderMap::new();
         // 정적 문자열은 항상 유효하므로 unwrap 허용.

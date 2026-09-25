@@ -1,19 +1,31 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { useQueries } from "@tanstack/react-query";
+import { focusManager, useQueries } from "@tanstack/react-query";
 import { listWorkflowRuns } from "@/api/commands";
 import { useBackgroundReviewStatus } from "@/hooks/useBackgroundReviewStatus";
 import { useRepositoryStore } from "@/stores/repository";
 import { repoNameNow } from "@/hooks/useRepoDisplay";
 import { gitHubRepoUrl } from "@/lib/utils";
+import { createConcurrencyLimit } from "@/lib/concurrency-limit";
 import { EMPTY_CI_SEEN, forgetUnwatchedRepos, pickNewFailures, type CiSeen } from "@/lib/notify/ci-failures";
 import { deliverNotification } from "@/lib/notify/deliver";
 import { isRepoNotifyOn } from "@/lib/notify/repo-override";
 import { useNotifyStore } from "@/stores/notify";
 import type { WorkflowRun } from "@/types";
 
-/** GitHub Actions 실행 목록을 읽는 주기. 저장소마다 한 번씩 API 를 부른다. */
-const CI_POLL_MS = 60_000;
+/** GitHub Actions 실행 목록을 읽는 주기. 저장소마다 한 번씩 API 를 부른다(바뀌지 않았으면 304). */
+const CI_POLL_FOCUSED_MS = 60_000;
+/** 창이 뒤에 있을 때의 주기. 알림은 계속 받되 요청을 줄인다. */
+const CI_POLL_BACKGROUND_MS = 5 * 60_000;
+/** 한 번에 읽는 저장소 수. 저장소가 많아도 요청이 한꺼번에 몰리지 않게 한다. */
+const CI_POLL_CONCURRENCY = 4;
+
+/** 다음에 읽을 때까지의 시간. 창이 앞에 있으면 1분, 뒤에 있으면 5분. */
+export function ciPollInterval(focused: boolean): number {
+  return focused ? CI_POLL_FOCUSED_MS : CI_POLL_BACKGROUND_MS;
+}
+
+const limitCiPoll = createConcurrencyLimit(CI_POLL_CONCURRENCY);
 
 /**
  * 등록된 GitHub 저장소에서 지금 체크아웃한 브랜치(메인 작업 트리와 워크트리 모두)의 Actions 실행이
@@ -42,9 +54,10 @@ export function useCiFailureNotifications(enabled: boolean): void {
   const runs = useQueries({
     queries: targets.map((repo) => ({
       queryKey: ["workflowRuns", repo.path, repo.accountId],
-      queryFn: () => listWorkflowRuns(repo.path, repo.accountId as string),
+      queryFn: () => limitCiPoll(() => listWorkflowRuns(repo.path, repo.accountId as string)),
       enabled,
-      refetchInterval: CI_POLL_MS,
+      // 매번 읽은 뒤 다음 주기를 정한다. 창이 앞으로 오면 refetchOnWindowFocus가 바로 한 번 읽는다.
+      refetchInterval: () => ciPollInterval(focusManager.isFocused()),
       refetchIntervalInBackground: true,
       staleTime: 10_000,
       retry: false,
