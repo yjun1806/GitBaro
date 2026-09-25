@@ -13,6 +13,7 @@ use crate::git::commit::{build_ref_map, commit_to_info};
 use crate::git::merge_base::{divergence_point, BaseStatus};
 use crate::git::worktree_base::default_branch_with_fallback;
 use crate::git::engine::{CommitInfo, RefLabel};
+use crate::git::walk::newest_first;
 
 /// `limit_per_repo` 를 주지 않았을 때 저장소마다 돌려줄 커밋 수.
 pub const DEFAULT_LIMIT_PER_REPO: usize = 100;
@@ -127,6 +128,10 @@ fn with_refs(ref_map: &HashMap<Oid, Vec<RefLabel>>, commit: &git2::Commit) -> Co
 }
 
 /// `head` 에서 닿되 `stop` 에서 닿지 않는 커밋(`stop..head`)을 최신 순으로 `limit` 개까지.
+/// 둘째 값은 `limit` 보다 많아 잘렸는가.
+///
+/// `stop` 이 없으면(기본 브랜치를 못 찾았거나 이력이 따로면) HEAD 의 이력 전체가 대상이다.
+/// 이때 revwalk 을 정렬하면 libgit2 가 전체 이력을 먼저 훑으므로 `limit + 1` 개만 읽는다.
 fn commits_since(
     repo: &Repository,
     ref_map: &HashMap<Oid, Vec<RefLabel>>,
@@ -134,23 +139,22 @@ fn commits_since(
     stop: Option<Oid>,
     limit: usize,
 ) -> Result<(Vec<CommitInfo>, bool), git2::Error> {
-    let mut walk = repo.revwalk()?;
-    walk.set_sorting(Sort::TOPOLOGICAL | Sort::TIME)?;
-    walk.push(head)?;
-    if let Some(stop) = stop {
-        walk.hide(stop)?;
-    }
-
-    let mut commits = Vec::new();
-    let mut truncated = false;
-    for oid in walk {
-        let oid = oid?;
-        if commits.len() == limit {
-            truncated = true;
-            break;
+    let mut oids = match stop {
+        None => newest_first(repo, &[head], limit + 1)?,
+        Some(stop) => {
+            let mut walk = repo.revwalk()?;
+            walk.set_sorting(Sort::TOPOLOGICAL | Sort::TIME)?;
+            walk.push(head)?;
+            walk.hide(stop)?;
+            walk.take(limit + 1).collect::<Result<Vec<_>, _>>()?
         }
-        commits.push(with_refs(ref_map, &repo.find_commit(oid)?));
-    }
+    };
+    let truncated = oids.len() > limit;
+    oids.truncate(limit);
+    let commits = oids
+        .into_iter()
+        .map(|oid| repo.find_commit(oid).map(|c| with_refs(ref_map, &c)))
+        .collect::<Result<_, _>>()?;
     Ok((commits, truncated))
 }
 
@@ -457,6 +461,21 @@ mod tests {
         assert_eq!(base.summary, "main 1");
         assert!(base.timestamp > 0);
         assert!(base.refs.iter().any(|r| r.name == "main"));
+    }
+
+    #[test]
+    fn without_a_default_branch_only_the_limit_is_read() {
+        use crate::git::walk::tests::{delete_commit_object, linear_repo};
+        let dir = tmp_dir("no-default-bounded");
+        // `trunk` 는 기본 브랜치 규칙(origin/HEAD, main, master)에 걸리지 않는다.
+        let oids = linear_repo(&dir, 10);
+        delete_commit_object(&dir, oids[6]);
+        let h = repo_history(dir.to_str().unwrap(), 3);
+        assert_eq!(h.error, None);
+        assert_eq!(h.base_status, Some(BaseStatus::NoDefaultBranch));
+        assert_eq!(summaries(&h), vec!["c9", "c8", "c7"]);
+        assert!(h.truncated);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
