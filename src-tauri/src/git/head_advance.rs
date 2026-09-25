@@ -4,7 +4,7 @@
 use git2::{Oid, Repository, Sort};
 use serde::Serialize;
 
-/// 알림에 싣는 커밋 제목의 최대 개수(오래된 것부터).
+/// 알림에 싣는 커밋 제목의 최대 개수(최근 것부터).
 pub const HEAD_ADVANCE_SUBJECT_LIMIT: usize = 5;
 
 /// `from` → `to` 로 옮긴 HEAD 가 앞으로만 나아갔는지.
@@ -13,9 +13,10 @@ pub const HEAD_ADVANCE_SUBJECT_LIMIT: usize = 5;
 pub struct HeadAdvance {
     /// `to` 가 `from` 의 자손인가(`from` 에서 이어 쌓은 커밋인가). 같은 커밋이면 false.
     pub is_descendant: bool,
-    /// `from` 에서 닿지 않고 `to` 에서만 닿는 커밋 수. 자손이 아니면 0.
+    /// `to` 에서 첫 부모만 따라가며 `from` 에서 닿지 않는 커밋 수. 자손이 아니면 0.
+    /// `git merge main`·`git pull` 로 끌어온 다른 사람의 커밋은 세지 않는다(병합 커밋 하나로 센다).
     pub count: u32,
-    /// 새 커밋의 제목, 오래된 것부터 많아야 [`HEAD_ADVANCE_SUBJECT_LIMIT`]개.
+    /// 새 커밋의 제목, 최근 것부터 많아야 [`HEAD_ADVANCE_SUBJECT_LIMIT`]개.
     pub subjects: Vec<String>,
 }
 
@@ -35,7 +36,8 @@ pub fn head_advance(repo: &Repository, from: Oid, to: Oid) -> Result<HeadAdvance
         return Ok(HeadAdvance::none());
     }
     let mut walk = repo.revwalk()?;
-    walk.set_sorting(Sort::TOPOLOGICAL | Sort::REVERSE)?;
+    walk.set_sorting(Sort::TOPOLOGICAL)?;
+    walk.simplify_first_parent()?;
     walk.push(to)?;
     walk.hide(from)?;
     let mut count = 0u32;
@@ -89,14 +91,34 @@ mod tests {
     }
 
     #[test]
-    fn new_commits_on_top_count_as_an_advance_oldest_subject_first() {
+    fn new_commits_on_top_count_as_an_advance_newest_subject_first() {
         let dir = repo("forward");
         let base = commit(&dir, "base");
         commit(&dir, "first");
         let tip = commit(&dir, "second");
         assert_eq!(
             advance(&dir, base, tip),
-            HeadAdvance { is_descendant: true, count: 2, subjects: vec!["first".into(), "second".into()] }
+            HeadAdvance { is_descendant: true, count: 2, subjects: vec!["second".into(), "first".into()] }
+        );
+    }
+
+    #[test]
+    fn commits_merged_in_from_another_branch_are_not_counted() {
+        // 에이전트가 `git merge main` 으로 동료 커밋 여럿을 끌어오면 새로 쌓은 것은 병합 커밋 하나다.
+        let dir = repo("merge");
+        commit(&dir, "base");
+        git(&dir, &["checkout", "-q", "-b", "feature"]);
+        let before = commit(&dir, "my work");
+        git(&dir, &["checkout", "-q", "main"]);
+        for i in 0..6 {
+            commit(&dir, &format!("teammate {}", i));
+        }
+        git(&dir, &["checkout", "-q", "feature"]);
+        git(&dir, &["merge", "-q", "--no-edit", "-m", "Merge main", "main"]);
+        let merged = Oid::from_str(&git(&dir, &["rev-parse", "HEAD"])).unwrap();
+        assert_eq!(
+            advance(&dir, before, merged),
+            HeadAdvance { is_descendant: true, count: 1, subjects: vec!["Merge main".into()] }
         );
     }
 
@@ -150,6 +172,6 @@ mod tests {
         let result = advance(&dir, base, tip);
         assert_eq!(result.count as usize, HEAD_ADVANCE_SUBJECT_LIMIT + 2);
         assert_eq!(result.subjects.len(), HEAD_ADVANCE_SUBJECT_LIMIT);
-        assert_eq!(result.subjects[0], "c0");
+        assert_eq!(result.subjects[0], format!("c{}", HEAD_ADVANCE_SUBJECT_LIMIT + 1));
     }
 }

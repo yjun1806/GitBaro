@@ -306,9 +306,9 @@ export interface NotificationSettings {
 /** `get_head_advance`: HEAD 가 옛 커밋에서 새 커밋으로 앞으로만 나아갔는지. */
 export interface HeadAdvance {
   isDescendant: boolean;
-  /** 새로 쌓인 커밋 수. 자손이 아니면 0. */
+  /** 새로 쌓인 커밋 수(첫 부모 줄기만 — 병합으로 끌어온 커밋은 세지 않는다). 자손이 아니면 0. */
   count: number;
-  /** 새 커밋 제목, 오래된 것부터 많아야 5개. */
+  /** 새 커밋 제목, 최근 것부터 많아야 5개. */
   subjects: string[];
 }
 

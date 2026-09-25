@@ -9,8 +9,8 @@ export interface CommitAdvance {
   /** 새 HEAD. */
   to: string;
   count: number;
-  /** 새 커밋 중 가장 오래된 것의 제목. */
-  firstSubject: string | null;
+  /** 새 커밋 중 가장 최근 것의 제목(첫 부모 줄기 기준). */
+  latestSubject: string | null;
 }
 
 /** 아직 알리지 않은 묶음. */
@@ -19,7 +19,7 @@ export interface CommitBurst {
   worktreePath: string;
   branch: string | null;
   count: number;
-  firstSubject: string | null;
+  latestSubject: string | null;
   /** 묶음에 든 마지막 HEAD. 알림을 누르면 이 커밋을 고른다. */
   latestOid: string;
   /** 묶음을 시작한 시각. 이로부터 `COMMIT_BURST_WINDOW_MS` 뒤에 알린다. */
@@ -37,7 +37,7 @@ export function addToBurst(bursts: CommitBursts, advance: CommitAdvance, now: nu
         ...current,
         branch: advance.branch,
         count: current.count + advance.count,
-        firstSubject: current.firstSubject ?? advance.firstSubject,
+        latestSubject: advance.latestSubject ?? current.latestSubject,
         latestOid: advance.to,
       }
     : {
@@ -45,7 +45,7 @@ export function addToBurst(bursts: CommitBursts, advance: CommitAdvance, now: nu
         worktreePath: advance.worktreePath,
         branch: advance.branch,
         count: advance.count,
-        firstSubject: advance.firstSubject,
+        latestSubject: advance.latestSubject,
         latestOid: advance.to,
         startedAt: now,
       };
