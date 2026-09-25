@@ -289,6 +289,27 @@ export interface AppSettings {
   defaultShell: string;
   defaultAiCli: string;
   language: string;
+  /** 알림 설정. 옛 설정 파일이나 불러오기 실패로 빠질 수 있어, 없으면 기본값을 쓴다. */
+  notifications?: NotificationSettings;
+}
+
+/** 알림 설정(Rust: `commands::settings::NotificationSettings`). */
+export interface NotificationSettings {
+  /** 감시 중인 저장소·워크트리에 새 커밋이 생기면 알린다. */
+  newCommits: boolean;
+  /** 지금 브랜치의 GitHub Actions 실행이 실패하면 알린다. */
+  ciFailures: boolean;
+  /** 앱이 앞에 있을 때도 시스템 알림을 보낸다. 끄면 그때는 앱 안 토스트로 알린다. */
+  whenFocused: boolean;
+}
+
+/** `get_head_advance`: HEAD 가 옛 커밋에서 새 커밋으로 앞으로만 나아갔는지. */
+export interface HeadAdvance {
+  isDescendant: boolean;
+  /** 새로 쌓인 커밋 수. 자손이 아니면 0. */
+  count: number;
+  /** 새 커밋 제목, 오래된 것부터 많아야 5개. */
+  subjects: string[];
 }
 
 export type Theme = "light" | "dark" | "system";

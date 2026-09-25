@@ -2,6 +2,7 @@ import { useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { DEFAULT_SIDEBAR_WIDTH, useUIStore } from "@/stores/ui";
 import { useAutoSync } from "@/hooks/useAutoSync";
+import { useNotifications } from "@/hooks/useNotifications";
 import { useLiveChanges } from "@/hooks/useLiveChanges"; // W1-T3
 import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import "@/stores/selection"; // ensure cross-store subscriptions are registered
@@ -30,6 +31,8 @@ export function MainLayout() {
   useAutoSync();
   // 여러 저장소·워크트리의 파일 변경 시각을 모은다("지금 바뀌는 곳" 등에 씀)
   useLiveChanges();
+  // 감시 중인 저장소의 새 커밋·CI 실패를 macOS 알림으로 알린다
+  useNotifications();
 
   const sidebarWidth = useSidebarWidth();
   // 사이드바를 고정으로 펼친 모드에서만 폭을 사용자가 조절한다. 접힘·hover 모드는

@@ -862,6 +862,15 @@ export async function getWorkflowRunJobs(
   return invoke("get_workflow_run_jobs", { repoPath, accountId, runId });
 }
 
+// ── Notifications ──
+
+import type { HeadAdvance } from "@/types";
+
+/** 워크트리의 HEAD 가 `from` 에서 `to` 로 옮긴 것이 새 커밋을 얹은 것인지. */
+export async function getHeadAdvance(repoPath: string, from: string, to: string): Promise<HeadAdvance> {
+  return invoke("get_head_advance", { repoPath, from, to });
+}
+
 // ── FS Watcher ──
 
 export async function startRepoWatch(repoPath: string, token: number): Promise<void> {
