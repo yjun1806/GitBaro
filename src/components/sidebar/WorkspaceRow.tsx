@@ -1,9 +1,12 @@
-import { useRef, useState, type MouseEvent } from "react";
+import { useMemo, useRef, useState, type MouseEvent } from "react";
 import { Download, Layers, LayoutPanelTop, Pencil, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ContextMenu, contextMenuPoint } from "@/components/ui/ContextMenu";
 import { MultiRepoRemoteDialog } from "@/components/review/MultiRepoRemoteDialog";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { useRepositoryStore } from "@/stores/repository";
+import { useAccountStore } from "@/stores/account";
+import { workspaceMemberRepos } from "@/hooks/useActiveScope";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { cn } from "@/lib/utils";
 import { NEUTRAL_TILE, ROW_TITLE, TILE_ICON } from "./row-style";
@@ -71,7 +74,14 @@ export function WorkspaceRow({
   const renameWorkspace = useWorkspaceStore((s) => s.renameWorkspace);
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace);
   const selected = useWorkspaceStore((s) => s.activeWorkspaceId === workspaceId);
-  const memberPaths = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId)?.repoPaths);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const repos = useRepositoryStore((s) => s.repos);
+  const accounts = useAccountStore((s) => s.accounts);
+  // 저장된 경로가 아니라 트리에 보이는 저장소만(계정이 바뀌었거나 목록에서 뺀 저장소 제외) 가져온다.
+  const memberPaths = useMemo(
+    () => workspaceMemberRepos(workspaceId, workspaces, repos, accounts).map((r) => r.path),
+    [workspaceId, workspaces, repos, accounts],
+  );
   const { selectWorkspace } = useSelectRepo();
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const [dialog, setDialog] = useState<OpenDialog>(null);
@@ -131,7 +141,7 @@ export function WorkspaceRow({
                   label: t("menu.fetchAll"),
                   icon: <Download className="w-3.5 h-3.5" />,
                   onClick: () => setDialog("fetch"),
-                  disabled: (memberPaths?.length ?? 0) === 0,
+                  disabled: memberPaths.length === 0,
                 },
               ],
             },
@@ -166,7 +176,7 @@ export function WorkspaceRow({
           onClose={() => setDialog(null)}
         />
       )}
-      {dialog === "fetch" && memberPaths && (
+      {dialog === "fetch" && memberPaths.length > 0 && (
         <MultiRepoRemoteDialog paths={memberPaths} op="fetch" onClose={() => setDialog(null)} />
       )}
       {dialog === "delete" && (

@@ -74,6 +74,19 @@ describe("RepoHeaderContextMenu", () => {
     expect(useRepositoryStore.getState().favoriteRepos).toEqual([API]);
   });
 
+  it("offers taking the repository out only of the workspace it actually belongs to", () => {
+    // w2's account differs from the repository's, so the tree does not show it there.
+    useWorkspaceStore.setState({
+      workspaces: [
+        { id: "w1", name: "product", accountKey: "acme", repoPaths: [] },
+        { id: "w2", name: "other", accountKey: "someone-else", repoPaths: [API] },
+      ],
+    });
+    renderMenu(repo(API));
+    expect(labels()).not.toContain("Take out of other");
+    expect(labels()).toContain("Move to product");
+  });
+
   it("moves the repository only into a workspace of the same account", () => {
     renderMenu(repo(API));
     expect(labels()).toContain("Move to product");

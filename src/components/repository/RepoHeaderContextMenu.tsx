@@ -23,7 +23,7 @@ import { useAutoSyncStore } from "@/stores/auto-sync";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { repoAccountsByPath } from "@/lib/repo-tree";
+import { repoAccountsByPath, workspaceMembership } from "@/lib/repo-tree";
 import { useFetchRepo } from "@/hooks/useFetchRepo";
 import type { RepoInfo, AppSettings } from "@/types";
 
@@ -82,8 +82,12 @@ export function RepoHeaderContextMenu({
   const fetchRepo = useFetchRepo();
 
   // 워크스페이스는 한 계정 안에만 있다. 같은 계정의 다른 워크스페이스로만 옮길 수 있다.
-  const account = repoAccountsByPath(repos, accounts).get(repo.path);
-  const currentWorkspace = workspaces.find((w) => w.repoPaths.includes(repo.path)) ?? null;
+  const accountByPath = repoAccountsByPath(repos, accounts);
+  const account = accountByPath.get(repo.path);
+  // 사이드바 트리와 같은 규칙으로, 이 저장소가 지금 실제로 든 워크스페이스를 찾는다.
+  const { membersById } = workspaceMembership(workspaces, repos, accountByPath);
+  const currentWorkspace =
+    workspaces.find((w) => membersById.get(w.id)?.some((r) => r.path === repo.path)) ?? null;
   const moveTargets =
     account && !account.pending
       ? workspaces.filter((w) => w.accountKey === account.key && w.id !== currentWorkspace?.id)
