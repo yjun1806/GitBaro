@@ -35,6 +35,7 @@ import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { useCurrentPlaceMenu } from "./useCurrentPlaceMenu";
+import { useMenuActions } from "@/hooks/useMenuActions";
 
 /**
  * 툴바 오른쪽 [브랜치 · Merge · Stash] 묶음의 「브랜치」 버튼. 왼쪽 브랜치 칸과 같은
@@ -84,6 +85,8 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
+  // 복사는 결과를 기다려 성공·실패를 알린다(다른 메뉴와 같은 동작).
+  const actions = useMenuActions();
   const activeRepoName = useRepositoryStore((s) => s.activeRepo?.name ?? "");
   const { mainWorktree, currentWorktree, isInWorktree } = useWorktreeContext(activeRepoPath, worktrees);
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
@@ -260,10 +263,6 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     onClose();
   };
 
-  const handleCopyName = (branchName: string) => {
-    navigator.clipboard.writeText(branchName);
-    addToast(t("branch.copiedName"), "success");
-  };
 
   const placeMenu = useCurrentPlaceMenu(currentBranch);
   const repoTitle = mainWorktree?.path.split("/").filter(Boolean).pop() ?? activeRepoName;
@@ -345,7 +344,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           onMerge={handleMerge}
           onRename={setPendingRename}
           onDelete={handleDelete}
-          onCopyName={handleCopyName}
+          onCopyName={actions.copy}
           onCreateBranch={() => setShowCreateDialog(true)}
           onClose={onClose}
         />

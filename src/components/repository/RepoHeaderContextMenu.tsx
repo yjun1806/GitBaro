@@ -25,6 +25,7 @@ import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { repoAccountsByPath, workspaceMembership } from "@/lib/repo-tree";
 import { useFetchRepo } from "@/hooks/useFetchRepo";
+import { useMenuActions } from "@/hooks/useMenuActions";
 import type { RepoInfo, AppSettings } from "@/types";
 
 const AI_CLI_DISPLAY_NAMES: Record<string, string> = {
@@ -80,6 +81,7 @@ export function RepoHeaderContextMenu({
   const addRepoToWorkspace = useWorkspaceStore((s) => s.addRepoToWorkspace);
   const removeRepoFromWorkspace = useWorkspaceStore((s) => s.removeRepoFromWorkspace);
   const fetchRepo = useFetchRepo();
+  const actions = useMenuActions();
 
   // 워크스페이스는 한 계정 안에만 있다. 같은 계정의 다른 워크스페이스로만 옮길 수 있다.
   const accountByPath = repoAccountsByPath(repos, accounts);
@@ -171,16 +173,12 @@ export function RepoHeaderContextMenu({
         {
           label: t("repo.contextMenu.copyName"),
           icon: <Copy className={icon} />,
-          onClick: () => {
-            navigator.clipboard.writeText(repo.name);
-          },
+          onClick: () => actions.copy(repo.name),
         },
         {
           label: t("repo.contextMenu.copyPath"),
           icon: <Copy className={icon} />,
-          onClick: () => {
-            navigator.clipboard.writeText(repo.path);
-          },
+          onClick: () => actions.copy(repo.path),
         },
       ],
     },
