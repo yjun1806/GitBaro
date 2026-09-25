@@ -29,7 +29,9 @@ export function AccountZone({
   const currentAccount = accounts.find((a) => a.id === repoAccountId);
 
   return (
-    <div ref={zoneRef} className="relative shrink-0">
+    // flex로 감싸야 한다. 블록 상자 안의 inline-flex 버튼은 글자 줄 높이만큼 상자를 키워
+    // 이 카드만 다른 카드보다 높아진다.
+    <div ref={zoneRef} className="relative flex shrink-0">
       <button
         onClick={onToggle}
         aria-haspopup="menu"

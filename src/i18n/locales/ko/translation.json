@@ -969,7 +969,8 @@
     "mergeTitle": "{{branch}}에 Merge",
     "close": "닫기",
     "fetchOptions": "Fetch 방식",
-    "fetchNow": "지금 Fetch"
+    "fetchNow": "지금 Fetch",
+    "openGroup": "저장소 열기"
   },
   "multiRepoRemote": {
     "title": {

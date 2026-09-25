@@ -35,7 +35,7 @@ import { makeRepo } from "@/lib/__tests__/repo-tree-fixtures";
 const { ToolbarRoot } = await import("@/components/toolbar/ToolbarRoot");
 
 const xames = makeRepo("xames", "mos");
-const ALL_ACTIONS = ["fetch", "pull", "push", "branch", "terminal"];
+const ALL_ACTIONS = ["fetch", "pull", "push", "branch", "editor", "terminal", "finder", "github"];
 
 function renderToolbar() {
   return render(
@@ -103,6 +103,7 @@ describe("ToolbarRoot — scope", () => {
       useWorkspaceStore.getState().setActiveWorkspace("w1");
     });
     renderToolbar();
-    expect(screen.getAllByTitle("저장소를 고르세요")).toHaveLength(2);
+    // 브랜치 하나와 저장소 열기 묶음의 버튼 넷이 꺼진다.
+    expect(screen.getAllByTitle("저장소를 고르세요")).toHaveLength(5);
   });
 });

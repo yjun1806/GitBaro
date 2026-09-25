@@ -971,7 +971,8 @@
     "mergeTitle": "Merge into {{branch}}",
     "close": "Close",
     "fetchOptions": "Fetch options",
-    "fetchNow": "Fetch now"
+    "fetchNow": "Fetch now",
+    "openGroup": "Open repository"
   },
   "multiRepoRemote": {
     "title": {

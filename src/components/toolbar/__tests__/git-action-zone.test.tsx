@@ -21,7 +21,12 @@ const commands = vi.hoisted(() => ({
   // 여러 저장소 확인 창(W5-T2)이 여는 계획. 창이 열리는지만 보므로 빈 계획을 돌려준다.
   planRemoteOp: vi.fn(() => Promise.resolve([])),
   openInTerminal: vi.fn(() => Promise.resolve()),
+  openRepoInEditor: vi.fn(() => Promise.resolve()),
+  revealInFinder: vi.fn(() => Promise.resolve()),
+  openInEditor: vi.fn(() => Promise.resolve()),
 }));
+const opener = vi.hoisted(() => ({ openUrl: vi.fn(() => Promise.resolve()) }));
+vi.mock("@tauri-apps/plugin-opener", () => opener);
 
 vi.mock("@/api/commands", () => commands);
 vi.mock("@/api/queries", () => ({
@@ -134,6 +139,30 @@ describe("GitActionZone — repository mode", () => {
     await waitFor(() => expect(commands.openInTerminal).toHaveBeenCalledWith(repo.path));
   });
 
+  it("opens the repository in the editor, Finder and on GitHub from its own card", async () => {
+    useRepositoryStore.setState({
+      activeRepo: { ...repo, remotes: [{ name: "origin", url: "git@github.com:mos/xames.git" }] },
+    });
+    renderZone(<GitActionZone mode="repo" />);
+
+    const group = screen.getByRole("group", { name: "Open repository" });
+    const actions = Array.from(group.querySelectorAll("[data-action]")).map((el) => el.getAttribute("data-action"));
+    expect(actions).toEqual(["editor", "terminal", "finder", "github"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open in editor" }));
+    await waitFor(() => expect(commands.openRepoInEditor).toHaveBeenCalledWith(repo.path));
+    fireEvent.click(screen.getByRole("button", { name: "Reveal in Finder" }));
+    await waitFor(() => expect(commands.revealInFinder).toHaveBeenCalledWith(repo.path));
+    fireEvent.click(screen.getByRole("button", { name: "View on GitHub" }));
+    await waitFor(() => expect(opener.openUrl).toHaveBeenCalledWith("https://github.com/mos/xames"));
+  });
+
+  it("turns GitHub off when the repository has no GitHub remote", () => {
+    useRepositoryStore.setState({ activeRepo: { ...repo, remotes: [] } });
+    renderZone(<GitActionZone mode="repo" />);
+    expect(screen.getByRole("button", { name: "View on GitHub" })).toHaveProperty("disabled", true);
+  });
+
   it("turns Pull and Push off on a detached HEAD", () => {
     data.detached = true;
     data.branches = [];
@@ -208,9 +237,9 @@ describe("GitActionZone — workspace mode", () => {
     expect(screen.getByRole("button", { name: "Fetch" })).toBeTruthy();
   });
 
-  it("keeps branch and the terminal off", () => {
+  it("keeps branch and the open-repository buttons off", () => {
     renderZone(<GitActionZone mode="workspace" paths={paths} />);
-    for (const label of ["Branch", "Open in Terminal"]) {
+    for (const label of ["Branch", "Open in editor", "Open in Terminal", "Reveal in Finder", "View on GitHub"]) {
       expect(screen.getByRole("button", { name: `${label} — Pick a repository` })).toHaveProperty("disabled", true);
     }
   });
