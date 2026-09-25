@@ -61,6 +61,27 @@ function covers(root: string, path: string): boolean {
   return path === r || path.startsWith(`${r}/`);
 }
 
+/**
+ * 한 워크트리를 한 저장소에만 둔다. 링크된 워크트리를 저장소로도 등록하면 두 저장소가 같은
+ * 워크트리 목록을 돌려줘 WIP 행·파일 칸·수가 두 번 나온다. 앞 저장소가 이미 가진 워크트리는
+ * 뒤 저장소에서 빼고, 저장소 경로 자체가 앞 저장소의 워크트리면 그 저장소를 통째로 뺀다.
+ * 입력 순서(워크스페이스에 적힌 순서)를 지킨다.
+ */
+export function dedupeReviewMembers<T extends { path: string; worktrees: readonly { path: string }[] }>(
+  members: readonly T[],
+): T[] {
+  const claimed = new Set<string>();
+  const out: T[] = [];
+  for (const member of members) {
+    if (claimed.has(trimSlash(member.path))) continue;
+    const worktrees = member.worktrees.filter((w) => !claimed.has(trimSlash(w.path)));
+    worktrees.forEach((w) => claimed.add(trimSlash(w.path)));
+    claimed.add(trimSlash(member.path));
+    out.push({ ...member, worktrees });
+  }
+  return out;
+}
+
 /** 활동 이벤트가 가리키는 워크트리(메인 작업 트리 포함)와 그 저장소. */
 export interface ActivityTarget {
   repoPath: string;
