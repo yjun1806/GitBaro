@@ -5,26 +5,51 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useHistoryViewStore, viewTargetFor } from "@/stores/history-view";
 import type { BranchChanges, ChangesScope } from "@/types";
 import { trimTrailingSlash } from "@/lib/utils";
+import { repoDefaultBase } from "@/lib/repo-prefs";
+import { useReviewStatus } from "@/hooks/useReviewStatus";
 
 interface CompareBaseState {
-  /** 저장소(워크트리) 경로 → 사용자가 고른 비교 기준 브랜치. 없으면 기본 브랜치. */
-  baseByPath: Readonly<Record<string, string>>;
-  /** `base`가 null이면 기본 브랜치로 돌아간다. */
-  setBase: (path: string, base: string | null) => void;
+  /**
+   * 저장소(워크트리) 경로 → 사용자가 이 화면에서 고른 비교 기준 브랜치. null은 「기본 브랜치」를
+   * 일부러 고른 것이다. 항목이 없으면 저장소 설정의 기본 비교 기준, 그것도 없으면 기본 브랜치.
+   */
+  baseByPath: Readonly<Record<string, string | null>>;
+  /**
+   * `base`가 null이면 기본 브랜치로 돌아간다. 저장소 설정에 기본 비교 기준이 있으면(`hasRepoDefault`)
+   * 그 기준 대신 기본 브랜치를 쓰도록 null을 적어 둔다.
+   */
+  setBase: (path: string, base: string | null, hasRepoDefault?: boolean) => void;
 }
 
 /**
- * 「main 대비 변경」의 비교 기준. 저장소(워크트리)마다 따로 기억하고, 앱을 다시 켜면 기본 브랜치로 돌아간다.
+ * 「main 대비 변경」의 비교 기준. 저장소(워크트리)마다 따로 기억하고, 앱을 다시 켜면 저장소 설정의
+ * 기본 비교 기준(없으면 기본 브랜치)으로 돌아간다.
  */
 export const useCompareBaseStore = create<CompareBaseState>()((set) => ({
   baseByPath: {},
-  setBase: (path, base) =>
+  setBase: (path, base, hasRepoDefault = false) =>
     set((state) => {
       const key = trimTrailingSlash(path);
       const rest = Object.fromEntries(Object.entries(state.baseByPath).filter(([p]) => p !== key));
-      return { baseByPath: base ? { ...rest, [key]: base } : rest };
+      return { baseByPath: base || hasRepoDefault ? { ...rest, [key]: base } : rest };
     }),
 }));
+
+/**
+ * 경로마다 저장소 설정의 기본 비교 기준. 워크트리 경로는 소유 저장소 설정을 쓴다(워크트리 목록으로 찾는다).
+ * 기본 비교 기준을 정한 저장소가 없으면 워크트리 목록을 읽지 않는다.
+ */
+export function useRepoDefaultBases(paths: readonly string[]): (string | null)[] {
+  const prefs = useRepositoryStore((s) => s.repoPrefs);
+  const repos = useRepositoryStore((s) => s.repos);
+  const anyDefault = useMemo(() => Object.values(prefs).some((p) => p.compareBase), [prefs]);
+  const repoPaths = useMemo(() => (anyDefault ? repos.map((r) => r.path) : []), [anyDefault, repos]);
+  const { byPath } = useReviewStatus(repoPaths);
+  return useMemo(
+    () => paths.map((path) => repoDefaultBase(prefs, path, (p) => byPath[p]?.repoPath)),
+    [paths, prefs, byPath],
+  );
+}
 
 /**
  * 경로마다의 비교 범위. 고른 기준 브랜치와, 지금 연 저장소에서 체크아웃하지 않고 보는 브랜치
@@ -32,6 +57,7 @@ export const useCompareBaseStore = create<CompareBaseState>()((set) => ({
  */
 export function useChangesScopes(paths: readonly string[]): (ChangesScope | null)[] {
   const baseByPath = useCompareBaseStore((s) => s.baseByPath);
+  const repoDefaults = useRepoDefaultBases(paths);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   // 체크아웃한 브랜치를 보게 된 보기는 그래프 쪽(`useHistoryView`)이 곧 지운다.
   const target = useHistoryViewStore((s) => viewTargetFor(s, activeRepoPath));
@@ -39,13 +65,13 @@ export function useChangesScopes(paths: readonly string[]): (ChangesScope | null
   const active = activeRepoPath ? trimTrailingSlash(activeRepoPath) : null;
   return useMemo(
     () =>
-      paths.map((path) => {
+      paths.map((path, i) => {
         const key = trimTrailingSlash(path);
-        const base = baseByPath[key] ?? null;
+        const base = Object.prototype.hasOwnProperty.call(baseByPath, key) ? baseByPath[key] : repoDefaults[i];
         const scopeTarget = key === active ? viewed : null;
         return base || scopeTarget ? { base, target: scopeTarget } : null;
       }),
-    [paths, baseByPath, active, viewed],
+    [paths, baseByPath, repoDefaults, active, viewed],
   );
 }
 

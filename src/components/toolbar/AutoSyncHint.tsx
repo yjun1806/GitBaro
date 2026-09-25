@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
 import { useAutoSyncStore, type AutoSyncResult } from "@/stores/auto-sync";
+import { useRepoSettingsStore } from "@/stores/repo-settings";
+import { usePreferencesStore } from "@/stores/preferences";
 import { canAutoSync, resolveAutoSync } from "@/lib/auto-sync";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
@@ -25,8 +27,9 @@ export function AutoSyncHint() {
   useNowTick();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const ownerPath = useOwnerRepoPath();
+  const fallback = usePreferencesStore((s) => s.defaultAutoSync);
   const setting = useRepositoryStore((s) =>
-    ownerPath ? resolveAutoSync(s.autoSyncByRepo, ownerPath) : null,
+    ownerPath ? resolveAutoSync(s.autoSyncByRepo, ownerPath, fallback) : null,
   );
   // 계정과 원격이 있어야 자동 최신화가 돈다(canAutoSync). 없으면 안내도 하지 않는다.
   const canRun = useRepositoryStore((s) => {
@@ -36,7 +39,7 @@ export function AutoSyncHint() {
   const lastResult = useAutoSyncStore((s) =>
     ownerPath ? s.lastResultByRepo[ownerPath] ?? null : null,
   );
-  const openSettings = useAutoSyncStore((s) => s.openSettings);
+  const openRepoSettings = useRepoSettingsStore((s) => s.open);
 
   if (!ownerPath || !setting || setting.mode === "off" || !canRun) return null;
 
@@ -57,7 +60,7 @@ export function AutoSyncHint() {
   return (
     <button
       type="button"
-      onClick={() => openSettings(ownerPath)}
+      onClick={() => openRepoSettings(ownerPath, "sync")}
       title={tooltip}
       className="flex flex-col items-end justify-center gap-px h-7 px-2 rounded-md leading-[12px] text-(--fg2) hover:bg-(--frame-hover) transition-colors"
     >

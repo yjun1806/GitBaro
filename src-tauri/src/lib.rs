@@ -106,6 +106,7 @@ pub fn run() {
             commands::settings::open_repo_in_editor,
             commands::settings::detect_installed_terminals,
             commands::settings::detect_installed_ai_clis,
+            commands::environment::get_environment_info,
             commands::settings::open_ai_cli_in_terminal,
             commands::worktree::get_worktrees,
             commands::worktree::add_worktree,

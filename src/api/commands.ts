@@ -14,6 +14,7 @@ import type {
   CoAuthor,
   RefLabel,
   GitHubAccount,
+  EnvironmentInfo,
   GhStatus,
   AppSettings,
   Theme,
@@ -810,6 +811,17 @@ export async function detectInstalledTerminals(): Promise<TerminalInfo[]> {
 // AI CLIs
 export async function detectInstalledAiClis(): Promise<AiCliInfo[]> {
   return invoke("detect_installed_ai_clis");
+}
+
+/** 앱 버전(tauri.conf.json의 version). */
+export async function getAppVersion(): Promise<string> {
+  const { getVersion } = await import("@tauri-apps/api/app");
+  return getVersion();
+}
+
+/** 설정 파일 위치와 찾은 git·gh 경로·버전(설정 화면 「정보」). */
+export async function getEnvironmentInfo(): Promise<EnvironmentInfo> {
+  return invoke("get_environment_info");
 }
 
 export async function openAiCliInTerminal(repoPath: string, cliId: string): Promise<void> {

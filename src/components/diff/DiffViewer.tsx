@@ -17,6 +17,7 @@ import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { MarkdownDiffView } from "./MarkdownDiffView";
 import { availableModes, defaultMode, diffResetKey, type DiffViewMode } from "./view-mode";
 import { useUIStore } from "@/stores/ui";
+import { usePreferencesStore } from "@/stores/preferences";
 import { useToastStore } from "@/stores/toast";
 
 const EXT_LANG_MAP: Record<string, string> = {
@@ -94,6 +95,7 @@ export function DiffViewer({
     defaultMode(diff?.filePath, diff?.binary ?? false, lineMode),
   );
   const theme = useUIStore((s) => s.theme);
+  const codeFontSize = usePreferencesStore((s) => s.codeFontSize);
   const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   const addToast = useToastStore((s) => s.addToast);
   const actions = useMenuActions();
@@ -335,7 +337,7 @@ export function DiffViewer({
           viewMode={viewMode}
           isDark={isDark}
           highlight={wantHighlight}
-          fontSize={12}
+          fontSize={codeFontSize}
           freshLines={freshLines}
           revealLine={revealLine}
           onLineContextMenu={openMenu}

@@ -8,6 +8,8 @@ import { useAutoSyncStore } from "@/stores/auto-sync";
 import { useToastStore } from "@/stores/toast";
 import { autoFastForward, getAutoSyncSnapshot, gitFetch } from "@/api/commands";
 import { invalidateAfterSync } from "@/api/queries";
+import { usePreferencesStore } from "@/stores/preferences";
+import { repoNameNow } from "@/hooks/useRepoDisplay";
 import { decideAutoSync, pickDueRepos, resolveAutoSync } from "@/lib/auto-sync";
 import { getErrorMessage } from "@/lib/utils";
 import type { AutoSyncSetting, RepoInfo } from "@/types";
@@ -102,7 +104,8 @@ export function useAutoSync() {
       const { repos, autoSyncByRepo } = useRepositoryStore.getState();
       const { syncingByRepo } = useSyncStore.getState();
       const idle = repos.filter((r) => syncingByRepo[r.path] === undefined);
-      const due = pickDueRepos(idle, autoSyncByRepo, lastRunTimes(), Date.now());
+      const fallback = usePreferencesStore.getState().defaultAutoSync;
+      const due = pickDueRepos(idle, autoSyncByRepo, lastRunTimes(), Date.now(), fallback);
       if (due.length === 0) return;
 
       running = true;
@@ -113,6 +116,7 @@ export function useAutoSync() {
           const setting = resolveAutoSync(
             useRepositoryStore.getState().autoSyncByRepo,
             repo.path,
+            usePreferencesStore.getState().defaultAutoSync,
           );
           if (setting.mode === "off") continue;
           const commits = await autoSyncRepo(repo, setting);
@@ -120,7 +124,7 @@ export function useAutoSync() {
             useToastStore
               .getState()
               .addToast(
-                i18n.t("autoSync.fastForwardedToast", { repo: repo.name, count: commits }),
+                i18n.t("autoSync.fastForwardedToast", { repo: repoNameNow(repo), count: commits }),
                 "info",
               );
           }

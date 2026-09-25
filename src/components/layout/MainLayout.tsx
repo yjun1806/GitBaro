@@ -13,7 +13,7 @@ import { HEADER_HEIGHT_PX } from "@/lib/layout-tokens";
 import { SplitHandle } from "./SplitHandle";
 import { useDiffMaximizeEscape } from "./useDiffMaximize";
 import { ActivityLogPanel } from "./ActivityLogPanel";
-import { AutoSyncSettingsDialogHost } from "@/components/repository/AutoSyncSettingsDialog";
+import { RepoSettingsHost } from "@/components/settings/repo/RepoSettingsDialog";
 import { clampSidebarWidth } from "@/lib/sidebar-width";
 
 /**
@@ -83,8 +83,8 @@ export function MainLayout() {
       {/* 작업 기록. git 상태 줄의 작업 기록 버튼으로 연다. */}
       {isActivityLogOpen && <ActivityLogPanel />}
 
-      {/* 저장소 메뉴에서 여는 원격 자동 최신화 설정 */}
-      <AutoSyncSettingsDialogHost />
+      {/* 머리 줄 저장소 칸·저장소 메뉴에서 여는 저장소 설정 */}
+      <RepoSettingsHost />
     </div>
   );
 }

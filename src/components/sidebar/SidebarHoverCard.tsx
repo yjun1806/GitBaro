@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
 import { cn } from "@/lib/utils";
+import { useRepositoryStore } from "@/stores/repository";
 import { isLivePath } from "./tree-model";
 import { useWorktreeBases } from "./useWorktreeBases";
 import type { SidebarTreeData } from "./useSidebarTreeData";
@@ -224,8 +225,14 @@ function RepoDetails({ subject, data }: { subject: Extract<HoverSubject, { kind:
   const dirty = sum((p) => data.signals[p]?.dirtyCount ?? 0);
   const ahead = sum((p) => data.signals[p]?.ahead ?? 0);
   const behind = data.signals[subject.repoPath]?.behind ?? 0;
+  const repo = useRepositoryStore((s) => s.repos.find((r) => r.path === subject.repoPath));
+  const alias = useRepositoryStore((s) => s.repoPrefs[subject.repoPath]?.alias);
   return (
     <>
+      {repo && (
+        <p className="text-[12px] font-semibold text-foreground break-words">{alias ?? repo.name}</p>
+      )}
+      {repo && alias && <Line muted>{t("sidebarTree.card.folderName", { name: repo.name })}</Line>}
       <Line muted mono>
         {subject.repoPath}
       </Line>

@@ -23,12 +23,19 @@ export interface AvatarColor {
  * 채도/명도를 고정해 라이트·다크 테마 모두에서 읽히도록 한다.
  */
 export function avatarColor(seed: string): AvatarColor {
-  const hue = hashString(seed) % 360;
+  return avatarColorFromHue(hashString(seed) % 360);
+}
+
+/** 색상(hue)만 정해 같은 채도·명도로 아바타 색을 만든다. 저장소 설정에서 고른 색에 쓴다. */
+export function avatarColorFromHue(hue: number): AvatarColor {
   return {
     background: `hsl(${hue}, 55%, 45%)`,
     foreground: "hsl(0, 0%, 100%)",
   };
 }
+
+/** 저장소 설정에서 고를 수 있는 아바타 색상(hue). 서로 잘 구별되는 것만 골랐다. */
+export const AVATAR_HUES: readonly number[] = [0, 24, 45, 95, 150, 185, 210, 245, 280, 320];
 
 /** 저장소 이름에서 이니셜 1글자를 뽑는다. */
 export function avatarInitial(name: string): string {

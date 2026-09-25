@@ -19,7 +19,15 @@ import { statusTextColors } from "@/lib/file-status";
 import { cn, getErrorMessage, trimTrailingSlash } from "@/lib/utils";
 import type { BranchChangedFile, BranchChanges, ChangesScope, FileStatus } from "@/types";
 import type { FilesGroupBy } from "./files-view";
-import { changesSummary, comparisonBaseName, tabBaseName, useChangesScopes, useCompareBaseStore } from "./compare-base";
+import { useRepoName } from "@/hooks/useRepoDisplay";
+import {
+  changesSummary,
+  comparisonBaseName,
+  tabBaseName,
+  useChangesScopes,
+  useCompareBaseStore,
+  useRepoDefaultBases,
+} from "./compare-base";
 import { BasePicker } from "./BasePicker";
 import { ViewedCheckbox } from "@/components/ui/ViewedCheckbox";
 import { ViewedProgress } from "./ViewedProgress";
@@ -109,6 +117,8 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
   const scopes = useChangesScopes(paths);
   const results = useChangesVsDefaultMany(paths, scopes);
   const setBase = useCompareBaseStore((s) => s.setBase);
+  const repoDefaults = useRepoDefaultBases(paths);
+  const repoName = useRepoName();
   const scopeOf = (repoPath: string): ChangesScope | null => scopes[paths.indexOf(repoPath)] ?? null;
   useChangesActivityRefresh(paths);
 
@@ -216,7 +226,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
       status: file.status,
       additions: file.isBinary ? null : file.additions,
       deletions: file.isBinary ? null : file.deletions,
-      group: repos.length > 1 ? repo.name : undefined,
+      group: repos.length > 1 ? repoName(repo) : undefined,
       viewed: isFileViewed(repo.path, file.path),
     })),
     selectedKey: selected ? fileKey(selected.repoPath, selected.filePath) : null,
@@ -278,7 +288,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
           const shownFiles =
             changes && hiddenViewed > 0 ? changes.files.filter((f) => !viewedHere.has(f.path)) : changes?.files ?? [];
           return (
-            <section key={repo.path} aria-label={repo.name} data-repo={repo.path}>
+            <section key={repo.path} aria-label={repoName(repo)} data-repo={repo.path}>
               {changes && <FileReviewUpkeep repoPath={repo.path} changes={changes} scope={scopes[i] ?? null} />}
               <RepoGroupHeader
                 repo={repo}
@@ -286,7 +296,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
                 scope={scopes[i] ?? null}
                 collapsed={isCollapsed}
                 onToggle={() => toggleCollapsed(repo.path)}
-                onBaseChange={(base) => setBase(repo.path, base)}
+                onBaseChange={(base) => setBase(repo.path, base, repoDefaults[paths.indexOf(repo.path)] !== null)}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   folderMenu.open({ path: repo.path, branch: changes?.branch ?? null }, contextMenuPoint(e));
@@ -434,6 +444,7 @@ function RepoGroupHeader({
 }) {
   const { t } = useTranslation();
   const color = repoLaneColor(repo.path);
+  const name = useRepoName()(repo);
   const Chevron = collapsed ? ChevronRight : ChevronDown;
   return (
     <div className="flex items-center gap-2 pr-3 bg-(--acc-faint) border-b border-(--line)" onContextMenu={onContextMenu}>
@@ -450,9 +461,9 @@ function RepoGroupHeader({
         style={{ background: `color-mix(in srgb, ${color} 18%, transparent)`, color }}
         aria-hidden="true"
       >
-        {repo.name.slice(0, 1).toUpperCase()}
+        {name.slice(0, 1).toUpperCase()}
       </span>
-      <strong className="text-[12px] text-foreground truncate">{repo.name}</strong>
+      <strong className="text-[12px] text-foreground truncate">{name}</strong>
       {changes && (
         <span
           className="inline-flex items-center gap-1 min-w-0 font-mono text-[10.5px] text-muted-foreground"

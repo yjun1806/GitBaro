@@ -314,6 +314,15 @@ export interface HeadAdvance {
 
 export type Theme = "light" | "dark" | "system";
 
+/** `get_environment_info`: 설정 파일 위치와 찾은 git·gh. 못 찾으면 null. */
+export interface EnvironmentInfo {
+  settingsPath: string;
+  gitPath: string | null;
+  gitVersion: string | null;
+  ghPath: string | null;
+  ghVersion: string | null;
+}
+
 export interface EditorInfo {
   id: string;
   name: string;

@@ -7,6 +7,8 @@ import { pathsFromWatchKey, useActivityTargetsStore, watchPathsKey } from "@/sto
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { usePreferencesStore } from "@/stores/preferences";
+import { useRepoName } from "@/hooks/useRepoDisplay";
 import type { DefaultBranch, RepoReviewStatus, RepoSyncStatus } from "@/types";
 import { buildSignals, syncStatusPaths, worktreesByRepoFrom } from "./tree-model";
 
@@ -78,6 +80,9 @@ export function useSidebarTreeData(): SidebarTreeData {
   const overflow = useLiveChangesStore((s) => s.overflow);
   const watched = useLiveChangesStore((s) => s.watched);
   const now = useNow(NOW_TICK_MS);
+  const quietMinutes = usePreferencesStore((s) => s.quietMinutes);
+  const collapseQuietRepos = usePreferencesStore((s) => s.collapseQuietRepos);
+  const repoName = useRepoName();
 
   const repoPathList = useMemo(() => repos.map((r) => r.path), [repos]);
   const review = useReviewStatus(repoPathList);
@@ -110,6 +115,9 @@ export function useSidebarTreeData(): SidebarTreeData {
         worktreesByRepo,
         now,
         activeRepoPath,
+        quietWindowMs: quietMinutes * 60_000,
+        collapseQuiet: collapseQuietRepos,
+        nameOf: repoName,
       }),
     [
       repos,
@@ -121,6 +129,9 @@ export function useSidebarTreeData(): SidebarTreeData {
       worktreesByRepo,
       now,
       activeRepoPath,
+      quietMinutes,
+      collapseQuietRepos,
+      repoName,
     ],
   );
 

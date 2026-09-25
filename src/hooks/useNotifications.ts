@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getSettings } from "@/api/commands";
 import { useNotifyStore } from "@/stores/notify";
+import { useRepositoryStore } from "@/stores/repository";
+import { isNotifyNeeded } from "@/lib/notify/repo-override";
 import { notificationSettingsOf, targetToOpenOnFocus } from "@/lib/notify/target";
 import { openNotificationTarget } from "@/lib/notify/open-target";
 import { useCommitNotifications } from "./useCommitNotifications";
@@ -26,8 +28,12 @@ export function useNotifications(): void {
       });
   }, [setSettings]);
 
-  useCommitNotifications(settings.newCommits);
-  useCiFailureNotifications(settings.ciFailures);
+  // 앱 설정을 꺼도 알림을 켠 저장소가 있으면 감시는 돌아야 한다(저장소 설정 › 알림).
+  const repos = useRepositoryStore((s) => s.repos);
+  const repoPrefs = useRepositoryStore((s) => s.repoPrefs);
+  const repoPaths = useMemo(() => repos.map((r) => r.path), [repos]);
+  useCommitNotifications(isNotifyNeeded(settings, repoPrefs, repoPaths, "newCommits"));
+  useCiFailureNotifications(isNotifyNeeded(settings, repoPrefs, repoPaths, "ciFailures"));
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;

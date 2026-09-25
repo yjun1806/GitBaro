@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useRepositoryStore } from "@/stores/repository";
+import { useRepoName } from "@/hooks/useRepoDisplay";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { useReviewStatus } from "@/hooks/useReviewStatus";
 import { useRepoSyncStatuses, useStatusMany, useWorkspaceHistories } from "@/api/queries";
@@ -56,12 +57,13 @@ const DEFAULT_BRANCH_FALLBACK = "main";
  */
 export function useWorkspaceReview(memberPaths: readonly string[], showAll: boolean): WorkspaceReviewData {
   const allRepos = useRepositoryStore((s) => s.repos);
+  const repoName = useRepoName();
   const allRepoPaths = useMemo(() => allRepos.map((r) => r.path), [allRepos]);
   const review = useReviewStatus(allRepoPaths);
 
   const members = useMemo(() => {
     const scanByRepo = new Map(review.repos.map((r) => [r.repoPath, r]));
-    const nameByPath = new Map(allRepos.map((r) => [r.path, r.name]));
+    const nameByPath = new Map(allRepos.map((r) => [r.path, repoName(r)]));
     const scanned = memberPaths.map((path) => {
       const found = scanByRepo.get(path)?.worktrees;
       const worktrees: ReviewWorktree[] =
@@ -73,7 +75,7 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
       ...m,
       main: m.worktrees.find((w) => w.isMain) ?? m.worktrees[0],
     }));
-  }, [memberPaths, review.repos, allRepos]);
+  }, [memberPaths, review.repos, allRepos, repoName]);
 
   const histories = useWorkspaceHistories(
     useMemo(() => members.map((m) => ({ path: m.path, headOid: m.main.headOid })), [members]),

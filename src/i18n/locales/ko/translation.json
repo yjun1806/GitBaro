@@ -11,7 +11,8 @@
     "confirm": "확인",
     "settings": "설정",
     "proceed": "실행",
-    "commandPreview": "실행할 명령어:"
+    "commandPreview": "실행할 명령어:",
+    "close": "닫기"
   },
   "welcome": {
     "title": "GitBaro에 오신 것을 환영합니다",
@@ -386,7 +387,9 @@
       "title": "GitBaro",
       "body": "알림이 잘 옵니다.",
       "sent": "보냈습니다. 알림이 보이지 않으면 시스템 설정 › 알림에서 GitBaro를 허용하세요.",
-      "denied": "알림이 허용되지 않았습니다. 시스템 설정 › 알림에서 GitBaro를 허용하세요."
+      "denied": "알림이 허용되지 않았습니다. 시스템 설정 › 알림에서 GitBaro를 허용하세요.",
+      "description": "시스템 알림을 하나 보내 알림 권한을 확인합니다.",
+      "send": "보내기"
     }
   },
   "settings": {
@@ -819,7 +822,8 @@
       "folderCount_other": "작업 폴더 {{count}}개",
       "workspaceTitle_one": "{{name}} · 저장소 {{count}}개",
       "workspaceTitle_other": "{{name}} · 저장소 {{count}}개",
-      "organization": "{{name}} (조직)"
+      "organization": "{{name}} (조직)",
+      "folderName": "폴더 이름: {{name}}"
     }
   },
   "sidebarDnd": {
@@ -1380,6 +1384,139 @@
       "noGitHubRemote": "origin 원격 주소로 GitHub 저장소를 찾지 못했습니다",
       "network": "GitHub에 연결하지 못했습니다. 네트워크를 확인하세요",
       "other": "{{error}}"
+    }
+  },
+  "settingsPanel": {
+    "subtitle": "앱 전체에 적용",
+    "useDefault": "기본값으로",
+    "copyPath": "경로 복사",
+    "revealInFinder": "Finder에서 보기",
+    "nav": {
+      "general": "일반",
+      "appearance": "모양",
+      "accounts": "계정",
+      "tools": "편집기·터미널",
+      "notifications": "알림",
+      "sync": "동기화",
+      "about": "정보"
+    },
+    "general": {
+      "sidebar": "사이드바",
+      "collapseQuiet": "조용한 저장소 접기",
+      "collapseQuietDescription": "변경도, 올리거나 받을 커밋도 없는 저장소를 계정 맨 아래 한 줄로 접습니다.",
+      "quietMinutes": "조용하다고 볼 시간",
+      "quietMinutesDescription": "이 시간 동안 파일이 바뀌지 않으면 조용한 저장소로 봅니다.",
+      "minutes_one": "{{count}}분",
+      "minutes_other": "{{count}}분",
+      "worktrees": "워크트리",
+      "worktreeDir": "새 워크트리를 만들 위치",
+      "worktreeDirDescription": "워크트리를 만들 때 제안하는 폴더입니다. 만들 때 바꿀 수 있습니다.",
+      "worktreeDirDefault": "저장소 폴더 옆 (기본)",
+      "chooseFolder": "폴더 고르기…"
+    },
+    "appearance": {
+      "diff": "변경 내용(diff)",
+      "diffLayout": "기본 보기",
+      "diffLayoutDescription": "줄 단위 diff를 처음 열 때의 보기입니다. diff 머리에서 바꿔도 여기에 저장됩니다.",
+      "codeFontSize": "코드 글자 크기",
+      "codeSample": "const agent = review(changes);"
+    },
+    "accounts": {
+      "description": "GitHub CLI(gh)에 로그인한 계정입니다. 저장소마다 쓸 계정은 저장소 설정에서 고릅니다.",
+      "empty": "로그인한 계정이 없습니다."
+    },
+    "sync": {
+      "title": "원격 자동 최신화 기본값",
+      "description": "저장소마다 따로 정하지 않았으면 이 값을 씁니다. 새로 추가한 저장소도 이 값으로 시작합니다."
+    },
+    "about": {
+      "version": "GitBaro 버전",
+      "checking": "확인하는 중…",
+      "notFound": "찾지 못했습니다",
+      "gitDescription": "커밋·전환·원격 작업에 쓰는 git입니다.",
+      "ghDescription": "로그인과 토큰에 쓰는 GitHub CLI입니다.",
+      "settingsFile": "설정 파일",
+      "settingsFileDescription": "테마·언어·편집기·알림 설정이 저장되는 파일입니다."
+    }
+  },
+  "repoSettings": {
+    "menuItem": "저장소 설정…",
+    "open": "저장소 설정",
+    "subtitle": "이 저장소에만 적용",
+    "nav": {
+      "name": "이름",
+      "account": "GitHub 계정",
+      "sync": "원격 동기화",
+      "compare": "비교 기준",
+      "list": "목록",
+      "notifications": "알림",
+      "info": "정보",
+      "danger": "목록에서 제거"
+    },
+    "name": {
+      "description": "GitBaro 안에서만 쓰는 이름과 색입니다. 폴더, 원격, GitHub 저장소 이름은 바뀌지 않습니다.",
+      "alias": "표시 이름",
+      "folderName": "비워 두면 폴더 이름({{name}})을 씁니다.",
+      "useFolderName": "폴더 이름 쓰기",
+      "color": "아바타 색",
+      "colorDescription": "사이드바와 머리 줄의 저장소 아바타 색입니다.",
+      "colorAuto": "자동",
+      "colorOption": "색 {{number}}"
+    },
+    "account": {
+      "description": "이 저장소의 fetch·pull·push와 PR·CI 조회에 쓰는 계정입니다.",
+      "label": "계정",
+      "none": "계정이 없으면 원격 작업과 자동 최신화를 하지 않습니다.",
+      "noAccount": "연결 안 함",
+      "invalid": "이 계정의 토큰으로 저장소에 접근할 수 없습니다.",
+      "canPush": "이 계정으로 push할 수 있습니다.",
+      "readOnly": "이 계정은 읽기만 할 수 있습니다."
+    },
+    "sync": {
+      "description": "원격을 주기적으로 확인합니다. 바꾸면 바로 적용합니다.",
+      "notRunnable": "계정과 원격이 있어야 자동으로 확인합니다. 설정은 미리 해 둘 수 있습니다.",
+      "followDefault": "앱 기본값 따르기",
+      "followDefaultDescription": "켜 두면 설정 › 동기화의 기본값을 씁니다. 끄면 이 저장소만 따로 정합니다."
+    },
+    "compare": {
+      "description": "「{base} 대비 변경」 탭이 처음 비교할 브랜치입니다. 기본 폴더와 워크트리 모두에 씁니다.",
+      "label": "기본 비교 기준",
+      "hint": "탭에서 바꾼 기준은 앱을 다시 켜면 이 값으로 돌아옵니다."
+    },
+    "list": {
+      "favorite": "즐겨찾기",
+      "favoriteDescription": "사이드바에서 이름 옆에 별을 달고, 저장소 목록 맨 위에 둡니다.",
+      "workspace": "워크스페이스",
+      "workspaceDescription": "{{account}} 계정의 워크스페이스로만 옮길 수 있습니다.",
+      "workspaceNoAccount": "계정을 알아야 워크스페이스에 넣을 수 있습니다.",
+      "noWorkspace": "없음 (계정 바로 아래)",
+      "moveFailed": "이 워크스페이스로 옮길 수 없습니다."
+    },
+    "notify": {
+      "description": "이 저장소만 알림을 켜거나 끕니다. 「앱 설정」이면 설정 › 알림을 따릅니다.",
+      "appOn": "앱 설정: 켜짐",
+      "appOff": "앱 설정: 꺼짐",
+      "on": "켬",
+      "inherit": "앱 설정",
+      "off": "끔"
+    },
+    "info": {
+      "folder": "폴더 위치",
+      "remotes": "원격",
+      "noRemotes": "원격이 없습니다",
+      "copyUrl": "URL 복사",
+      "defaultBranch": "기본 브랜치",
+      "worktrees": "워크트리",
+      "worktreeCount_one": "{{count}}개",
+      "worktreeCount_other": "{{count}}개",
+      "account": "계정",
+      "open": "열기",
+      "openEditor": "편집기에서 열기",
+      "openTerminal": "터미널에서 열기"
+    },
+    "danger": {
+      "removeDescription": "GitBaro 목록에서만 뺍니다. 폴더와 파일, 원격은 그대로 둡니다. 다시 추가하면 돌아옵니다.",
+      "removeButton": "제거…"
     }
   }
 }

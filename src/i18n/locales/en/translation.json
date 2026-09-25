@@ -11,7 +11,8 @@
     "confirm": "Confirm",
     "settings": "Settings",
     "proceed": "Proceed",
-    "commandPreview": "Command to execute:"
+    "commandPreview": "Command to execute:",
+    "close": "Close"
   },
   "welcome": {
     "title": "Welcome to GitBaro",
@@ -387,7 +388,9 @@
       "title": "GitBaro",
       "body": "Notifications are working.",
       "sent": "Sent. If nothing appeared, allow notifications for GitBaro in System Settings › Notifications.",
-      "denied": "Notifications are not allowed. Allow them for GitBaro in System Settings › Notifications."
+      "denied": "Notifications are not allowed. Allow them for GitBaro in System Settings › Notifications.",
+      "description": "Sends one system notification to check that GitBaro may notify you.",
+      "send": "Send"
     }
   },
   "settings": {
@@ -820,7 +823,8 @@
       "folderCount_other": "{{count}} working folders",
       "workspaceTitle_one": "{{name}} · {{count}} repository",
       "workspaceTitle_other": "{{name}} · {{count}} repositories",
-      "organization": "{{name}} (organization)"
+      "organization": "{{name}} (organization)",
+      "folderName": "Folder name: {{name}}"
     }
   },
   "sidebarDnd": {
@@ -1401,6 +1405,139 @@
       "noGitHubRemote": "Could not find the GitHub repository from the origin remote",
       "network": "Could not reach GitHub. Check the network",
       "other": "{{error}}"
+    }
+  },
+  "settingsPanel": {
+    "subtitle": "Applies to the whole app",
+    "useDefault": "Use default",
+    "copyPath": "Copy path",
+    "revealInFinder": "Show in Finder",
+    "nav": {
+      "general": "General",
+      "appearance": "Appearance",
+      "accounts": "Accounts",
+      "tools": "Editor & terminal",
+      "notifications": "Notifications",
+      "sync": "Sync",
+      "about": "About"
+    },
+    "general": {
+      "sidebar": "Sidebar",
+      "collapseQuiet": "Fold quiet repositories",
+      "collapseQuietDescription": "Repositories with no changes and nothing to push or pull fold into one row at the bottom of their account.",
+      "quietMinutes": "Quiet after",
+      "quietMinutesDescription": "A repository counts as quiet when no file changed for this long.",
+      "minutes_one": "{{count}} minute",
+      "minutes_other": "{{count}} minutes",
+      "worktrees": "Worktrees",
+      "worktreeDir": "New worktree location",
+      "worktreeDirDescription": "The folder suggested when you create a worktree. You can still change it there.",
+      "worktreeDirDefault": "Next to the repository folder (default)",
+      "chooseFolder": "Choose folder…"
+    },
+    "appearance": {
+      "diff": "Diffs",
+      "diffLayout": "Default layout",
+      "diffLayoutDescription": "How line diffs open. Switching in the diff header also saves it here.",
+      "codeFontSize": "Code font size",
+      "codeSample": "const agent = review(changes);"
+    },
+    "accounts": {
+      "description": "Accounts signed in to the GitHub CLI (gh). Pick the account for each repository in its repository settings.",
+      "empty": "No accounts signed in."
+    },
+    "sync": {
+      "title": "Default remote auto sync",
+      "description": "Used by every repository that has no setting of its own, including newly added ones."
+    },
+    "about": {
+      "version": "GitBaro version",
+      "checking": "Checking…",
+      "notFound": "Not found",
+      "gitDescription": "The git used for commits, switching and remote work.",
+      "ghDescription": "The GitHub CLI used for sign-in and tokens.",
+      "settingsFile": "Settings file",
+      "settingsFileDescription": "Where theme, language, editor and notification settings are saved."
+    }
+  },
+  "repoSettings": {
+    "menuItem": "Repository settings…",
+    "open": "Repository settings",
+    "subtitle": "Applies to this repository only",
+    "nav": {
+      "name": "Name",
+      "account": "GitHub account",
+      "sync": "Remote sync",
+      "compare": "Compare base",
+      "list": "List",
+      "notifications": "Notifications",
+      "info": "Info",
+      "danger": "Remove from list"
+    },
+    "name": {
+      "description": "A name and color used only inside GitBaro. The folder, remotes and GitHub repository keep their names.",
+      "alias": "Display name",
+      "folderName": "Leave empty to use the folder name ({{name}}).",
+      "useFolderName": "Use folder name",
+      "color": "Avatar color",
+      "colorDescription": "The color of this repository's avatar in the sidebar and header.",
+      "colorAuto": "Automatic",
+      "colorOption": "Color {{number}}"
+    },
+    "account": {
+      "description": "The account used for fetch, pull, push and for pull requests and CI in this repository.",
+      "label": "Account",
+      "none": "Without an account, remote work and auto sync are off.",
+      "noAccount": "None",
+      "invalid": "This account's token cannot reach the repository.",
+      "canPush": "This account can push.",
+      "readOnly": "This account can only read."
+    },
+    "sync": {
+      "description": "Checks the remote on a schedule. Changes apply right away.",
+      "notRunnable": "Auto sync runs once the repository has an account and a remote. You can set it up now.",
+      "followDefault": "Use the app default",
+      "followDefaultDescription": "On: use Settings › Sync. Off: set this repository on its own."
+    },
+    "compare": {
+      "description": "The branch the “Changes vs {base}” tab compares with first, in the main folder and every worktree.",
+      "label": "Default compare base",
+      "hint": "A base picked in the tab goes back to this one when the app restarts."
+    },
+    "list": {
+      "favorite": "Favorite",
+      "favoriteDescription": "Shows a star next to the name and keeps it at the top of the repository list.",
+      "workspace": "Workspace",
+      "workspaceDescription": "Only workspaces of the {{account}} account can hold it.",
+      "workspaceNoAccount": "The account must be known before it can join a workspace.",
+      "noWorkspace": "None (directly under the account)",
+      "moveFailed": "Can't move it to that workspace."
+    },
+    "notify": {
+      "description": "Turn notifications on or off for this repository only. “App setting” follows Settings › Notifications.",
+      "appOn": "App setting: on",
+      "appOff": "App setting: off",
+      "on": "On",
+      "inherit": "App setting",
+      "off": "Off"
+    },
+    "info": {
+      "folder": "Folder",
+      "remotes": "Remotes",
+      "noRemotes": "No remotes",
+      "copyUrl": "Copy URL",
+      "defaultBranch": "Default branch",
+      "worktrees": "Worktrees",
+      "worktreeCount_one": "{{count}}",
+      "worktreeCount_other": "{{count}}",
+      "account": "Account",
+      "open": "Open",
+      "openEditor": "Open in editor",
+      "openTerminal": "Open in terminal"
+    },
+    "danger": {
+      "removeDescription": "Removes it from GitBaro's list only. The folder, files and remotes stay. Add it again to bring it back.",
+      "removeButton": "Remove…"
     }
   }
 }

@@ -27,3 +27,5 @@ pub mod unpushed;
 pub mod notify;
 // Read-only PR viewer
 pub mod pull_request;
+// settings screen info
+pub mod environment;

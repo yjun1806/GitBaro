@@ -7,11 +7,14 @@ import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { useBackgroundReviewStatus } from "@/hooks/useBackgroundReviewStatus";
 import { useActivityStore } from "@/stores/activity";
 import { useRepositoryStore } from "@/stores/repository";
+import { repoNameNow } from "@/hooks/useRepoDisplay";
 import { truncateHash } from "@/lib/utils";
 import { diffHeads, type HeadSnapshot } from "@/lib/notify/head-moves";
 import { EMPTY_IN_APP_OPS, isCausedInApp, opEnded, opStarted, type InAppOps } from "@/lib/notify/in-app-ops";
 import { addToBurst, takeDueBursts, type CommitBurst, type CommitBursts } from "@/lib/notify/commit-burst";
 import { deliverNotification } from "@/lib/notify/deliver";
+import { isRepoNotifyOn } from "@/lib/notify/repo-override";
+import { useNotifyStore } from "@/stores/notify";
 
 /** 묶음이 찼는지 보는 주기. */
 const BURST_CHECK_MS = 1_000;
@@ -92,9 +95,10 @@ export function useCommitNotifications(enabled: boolean): void {
   useEffect(() => {
     if (!enabled) return;
     const describe = (burst: CommitBurst) => {
-      const repoName = useRepositoryStore.getState().repos.find((r) => r.path === burst.repoPath)?.name
-        ?? burst.repoPath.split("/").pop()
-        ?? burst.repoPath;
+      const repo = useRepositoryStore.getState().repos.find((r) => r.path === burst.repoPath);
+      const repoName = repo
+        ? repoNameNow(repo)
+        : burst.repoPath.split("/").pop() ?? burst.repoPath;
       const where = burst.branch ?? truncateHash(burst.latestOid);
       return {
         title: t("notify.newCommitsTitle", { repo: repoName, branch: where, count: burst.count }),
@@ -111,7 +115,12 @@ export function useCommitNotifications(enabled: boolean): void {
       const { due, rest } = takeDueBursts(bursts.current, Date.now());
       if (due.length === 0) return;
       bursts.current = rest;
-      for (const burst of due) void deliverNotification(describe(burst));
+      // 저장소 설정에서 이 저장소만 끈 알림은 보내지 않는다.
+      const settings = useNotifyStore.getState().settings;
+      const prefs = useRepositoryStore.getState().repoPrefs;
+      for (const burst of due) {
+        if (isRepoNotifyOn(settings, prefs, burst.repoPath, "newCommits")) void deliverNotification(describe(burst));
+      }
     }, BURST_CHECK_MS);
     return () => clearInterval(timer);
   }, [enabled, t]);

@@ -105,6 +105,12 @@ export interface BuildRepoTreeInput {
    * 트리 어디에도 선택 표시가 없어진다(QuietReposRow는 선택 상태를 표시하지 않는다).
    */
   activeRepoPath?: string | null;
+  /** 이 시간(ms) 안에 파일이 바뀐 저장소는 조용하지 않다. 기본 `QUIET_WINDOW_MS`(앱 설정에서 바꾼다). */
+  quietWindowMs?: number;
+  /** false면 조용한 저장소를 따로 접지 않고 다른 저장소와 같이 둔다. 기본 true. */
+  collapseQuiet?: boolean;
+  /** 이름순 정렬에 쓸 저장소 이름(표시 이름). 기본은 폴더 이름. */
+  nameOf?: (repo: RepoInfo) => string;
 }
 
 /** 이 시간 안에 파일이 바뀐 저장소는 조용하지 않다(질문 2 기본값). */
@@ -204,8 +210,12 @@ function nodePaths(node: WorkspaceNode | RepoNode): string[] {
   return node.kind === "repo" ? repoPathsOf(node) : node.repos.flatMap(repoPathsOf);
 }
 
-function nodeName(node: WorkspaceNode | RepoNode): string {
-  return node.kind === "repo" ? node.repo.name : node.workspace.name;
+type RepoNameOf = (repo: RepoInfo) => string;
+
+const folderName: RepoNameOf = (repo) => repo.name;
+
+function nodeName(node: WorkspaceNode | RepoNode, nameOf: RepoNameOf): string {
+  return node.kind === "repo" ? nameOf(node.repo) : node.workspace.name;
 }
 
 function nodeTodo(node: WorkspaceNode | RepoNode, signals: Record<string, PathSignals>): number {
@@ -222,8 +232,10 @@ function nodeLastChanged(
   return times.length > 0 ? Math.max(...times) : null;
 }
 
-const byName = <T extends WorkspaceNode | RepoNode>(a: T, b: T) =>
-  nodeName(a).localeCompare(nodeName(b), undefined, { sensitivity: "base" });
+const byNameWith =
+  (nameOf: RepoNameOf) =>
+  <T extends WorkspaceNode | RepoNode>(a: T, b: T) =>
+    nodeName(a, nameOf).localeCompare(nodeName(b, nameOf), undefined, { sensitivity: "base" });
 
 /**
  * 형제 노드를 정렬한다. 입력 배열은 바꾸지 않는다.
@@ -237,7 +249,9 @@ export function sortSiblings<T extends WorkspaceNode | RepoNode>(
   mode: SortMode,
   savedOrder: string[] | undefined,
   signals: Record<string, PathSignals>,
+  nameOf: RepoNameOf = folderName,
 ): T[] {
+  const byName = byNameWith(nameOf);
   switch (mode) {
     case "custom": {
       const rank = new Map((savedOrder ?? []).map((key, i) => [key, i]));
@@ -271,13 +285,14 @@ export function sortSiblings<T extends WorkspaceNode | RepoNode>(
 
 /**
  * 조용한 저장소: 저장소와 그 워크트리 모두 커밋하지 않은 파일·↑↓가 0이고,
- * 10분 안에 파일 변경이 없다. 신호를 아직 하나도 받지 못한 저장소는 조용하다고
+ * `windowMs`(기본 10분) 안에 파일 변경이 없다. 신호를 아직 하나도 받지 못한 저장소는 조용하다고
  * 판단하지 않는다(모르는 것을 숨기지 않는다).
  */
 export function isQuietRepo(
   node: RepoNode,
   signals: Record<string, PathSignals>,
   now: number,
+  windowMs: number = QUIET_WINDOW_MS,
 ): boolean {
   const paths = repoPathsOf(node);
   if (!paths.some((p) => signals[p] !== undefined)) return false;
@@ -286,7 +301,7 @@ export function isQuietRepo(
     if (!s) return true;
     if (todoScore(s) > 0) return false;
     const at = s.lastChangedAt;
-    return typeof at !== "number" || now - at > QUIET_WINDOW_MS;
+    return typeof at !== "number" || now - at > windowMs;
   });
 }
 
@@ -310,6 +325,9 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
     worktreesByRepo = {},
     now = Date.now(),
     activeRepoPath = null,
+    quietWindowMs = QUIET_WINDOW_MS,
+    collapseQuiet = true,
+    nameOf = folderName,
   } = input;
 
   const accountByPath = repoAccountsByPath(repos, accounts);
@@ -363,14 +381,14 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
     const sortMode = sortModeByAccount[accountKey] ?? "custom";
     const wsNodes = (workspaceNodes.get(accountKey) ?? []).map((ws) => ({
       ...ws,
-      repos: sortSiblings(ws.repos, sortMode, orderByParent[ws.key], signals),
+      repos: sortSiblings(ws.repos, sortMode, orderByParent[ws.key], signals, nameOf),
     }));
     const looseRepos = repos
       .filter((r) => accountByPath.get(r.path)?.key === accountKey && !claimedBy.has(r.path))
       .map(makeRepoNode);
-    const quietRepos = looseRepos.filter(
-      (n) => n.repo.path !== activeRepoPath && isQuietRepo(n, signals, now),
-    );
+    const quietRepos = collapseQuiet
+      ? looseRepos.filter((n) => n.repo.path !== activeRepoPath && isQuietRepo(n, signals, now, quietWindowMs))
+      : [];
     const activeRepos = looseRepos.filter((n) => !quietRepos.includes(n));
     const key = accountNodeKey(accountKey);
     const order = orderByParent[key];
@@ -386,8 +404,9 @@ export function buildRepoTree(input: BuildRepoTreeInput): AccountNode[] {
         sortMode,
         order,
         signals,
+        nameOf,
       ),
-      quietRepos: sortSiblings(quietRepos, sortMode, order, signals),
+      quietRepos: sortSiblings(quietRepos, sortMode, order, signals, nameOf),
     };
   });
 }
