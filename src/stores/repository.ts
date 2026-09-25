@@ -107,11 +107,12 @@ export function useRepoViewPath(): (repoPath: string) => string {
 
 export const REPOS_STORAGE_KEY = "gitbaro-repos";
 /**
- * v0: `version` 없이 저장하던 값(zustand 기본값 0).
- * v1: 워크스페이스 선택(W4-T1)과 함께 버전을 매기기 시작했다. 모양은 v0과 같고,
- *     `activeRepoPath`가 null이면 「워크스페이스를 고른 상태」일 수 있다는 뜻이 더해졌다.
+ * 저장 형식 버전. 모양이 바뀌지 않았으므로 0(zustand 기본값)에 둔다.
+ * 버전을 올리면 migrate가 없는 이전 빌드로 되돌렸을 때 그 빌드가 저장값을 읽지 못하고
+ * 빈 목록으로 덮어쓴다. 깨진 필드는 버전 대신 `merge`에서 걸러 낸다.
+ * 잠시 v1로 저장한 빌드가 있었으므로 v1 값도 그대로 읽는다(`migrate`는 통과만 한다).
  */
-export const REPOS_STORAGE_VERSION = 1;
+export const REPOS_STORAGE_VERSION = 0;
 
 /** 저장하는 필드. `partialize`와 변환 함수가 같은 목록을 쓴다. */
 export type RepositoryPersistedState = Pick<
@@ -133,13 +134,9 @@ const isStrings = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((x) => typeof x === "string");
 
 /**
- * 저장값을 v1로 옮긴다. 모양이 맞는 필드는 그대로 두고, 깨진 필드만 기본값으로 바꾼다.
- * v0과 v1은 모양이 같으므로 옮기면서 값이 사라지지 않는다. 모르는 필드는 버린다.
+ * 저장값에서 모양이 맞는 필드만 남긴다. 깨진 필드는 빼서 기본값을 쓰게 하고, 모르는 필드는 버린다.
  */
-export function migrateRepositoryState(
-  persisted: unknown,
-  _fromVersion: number,
-): Partial<RepositoryPersistedState> {
+export function sanitizeRepositoryState(persisted: unknown): Partial<RepositoryPersistedState> {
   const src = isPlainRecord(persisted) ? persisted : {};
   const out: Partial<RepositoryPersistedState> = {};
   if (Array.isArray(src.repos)) out.repos = src.repos as RepoInfo[];
@@ -310,8 +307,9 @@ export const useRepositoryStore = create<RepositoryState>()(
       name: REPOS_STORAGE_KEY,
       version: REPOS_STORAGE_VERSION,
       storage: createJSONStorage(() => createSafeStorage()),
-      migrate: (persisted, version) =>
-        migrateRepositoryState(persisted, version) as RepositoryState,
+      // v1 값(모양은 v0과 같다)을 버리지 않고 그대로 넘긴다. 거르기는 merge가 한다.
+      migrate: (persisted) => persisted as RepositoryState,
+      merge: (persisted, current) => ({ ...current, ...sanitizeRepositoryState(persisted) }),
       partialize: (state): RepositoryPersistedState => ({
         repos: state.repos,
         activeRepoPath: state.activeRepoPath,
