@@ -257,7 +257,7 @@ function CommitGraphList({
     [accounts],
   );
 
-  // 레인은 불러온 전체 이력으로 계산한다(1만 행도 100ms 안, `graph-lanes` 테스트).
+  // 레인은 불러온 전체 이력으로 계산한다(1만 행 속도는 `graph-lanes` 테스트가 잰다).
   // 페이지가 밀려 같은 커밋이 두 번 오면 레인 계산이 뺀 커밋을 목록에서도 뺀다.
   // WIP 행마다 제 레인을 연다(D5). 부모는 그 워크트리의 HEAD — 지금 연 워크트리는 제 이력의 첫 커밋.
   const ownHead = historyData?.pages[0]?.[0]?.id ?? null;
