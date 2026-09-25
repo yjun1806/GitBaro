@@ -11,6 +11,23 @@ pub struct AppSettings {
     pub default_shell: String,
     pub default_ai_cli: String,
     pub language: String,
+    pub notifications: NotificationSettings,
+}
+
+/// 알림 설정. 옛 설정 파일에 없으면 기본값(새 커밋·CI 실패 알림 켬, 앱이 앞에 있을 때는 끔)을 쓴다.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct NotificationSettings {
+    pub new_commits: bool,
+    pub ci_failures: bool,
+    /// 앱이 앞에 있을 때도 시스템 알림을 보낼지. 끄면 그때는 앱 안의 토스트로 알린다.
+    pub when_focused: bool,
+}
+
+impl Default for NotificationSettings {
+    fn default() -> Self {
+        NotificationSettings { new_commits: true, ci_failures: true, when_focused: false }
+    }
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -50,6 +67,7 @@ impl Default for AppSettings {
             default_shell: "terminal".to_string(),
             default_ai_cli: "claude".to_string(),
             language: "en".to_string(),
+            notifications: NotificationSettings::default(),
         }
     }
 }
@@ -658,6 +676,18 @@ mod tests {
         let settings = parse_settings("{\"theme\": \"dark\"}");
         assert_eq!(settings.theme, "dark");
         assert_eq!(settings.language, AppSettings::default().language);
+    }
+
+    #[test]
+    fn settings_saved_before_notifications_get_the_notification_defaults() {
+        let settings = parse_settings("{\"theme\": \"dark\"}");
+        assert_eq!(settings.notifications, NotificationSettings::default());
+        assert!(settings.notifications.new_commits && settings.notifications.ci_failures);
+        assert!(!settings.notifications.when_focused);
+
+        let partial = parse_settings("{\"notifications\": {\"ciFailures\": false}}");
+        assert!(partial.notifications.new_commits);
+        assert!(!partial.notifications.ci_failures);
     }
 
     #[test]

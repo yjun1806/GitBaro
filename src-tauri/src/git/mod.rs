@@ -25,3 +25,4 @@ pub use engine::{
 pub mod review_worktrees;
 // W4-T2
 pub mod merge_base;
+pub mod head_advance;
