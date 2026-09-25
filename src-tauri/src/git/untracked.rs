@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn counts_text_and_refuses_large_or_binary_files() {
-        let dir = std::env::temp_dir().join(format!("gitbaro-untracked-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("gitbaro-untracked-lines-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("a.txt"), "1\n2\n3").unwrap();
