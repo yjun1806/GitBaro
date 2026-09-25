@@ -33,7 +33,7 @@ export function Dialog({
   labelledBy,
   ariaLabel,
   className,
-  overlayClassName = "z-50 bg-black/40",
+  overlayClassName = "z-50 bg-(--overlay)",
   dismissible = true,
   closeOnBackdrop = false,
   children,

@@ -98,7 +98,6 @@ export function StashList({
         <Dialog
           onClose={() => setConfirmDrop(null)}
           labelledBy={dropTitleId}
-          overlayClassName="z-50 bg-black/50"
           className="bg-popover border border-border rounded-xl shadow-2xl p-6 w-[360px]"
         >
             <h3 id={dropTitleId} className="text-sm font-semibold">{t("stash.dropConfirm")}</h3>

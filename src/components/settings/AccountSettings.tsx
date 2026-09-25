@@ -91,7 +91,7 @@ export function AccountSettings({
         <Dialog
           onClose={() => setConfirmLogoutId(null)}
           labelledBy={logoutTitleId}
-          overlayClassName="z-[60] bg-black/50"
+          overlayClassName="z-[60] bg-(--overlay)"
           className="bg-card rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col items-center gap-4"
         >
             <AccountAvatar account={confirmAccount} size="lg" />

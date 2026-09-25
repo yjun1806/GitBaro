@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // W1-T1: 리뷰 개편 시각 토큰이 :root(라이트)와 .dark(다크) 양쪽에
@@ -62,6 +62,7 @@ const REQUIRED_REVIEW_TOKENS = [
   "--shadow",
   "--shadow-sm",
   "--shadow-float",
+  "--overlay",
   "--radius-panel",
   "--radius-item",
   "--radius-chip",
@@ -179,3 +180,16 @@ describe("리뷰 개편 시각 토큰 (globals.css)", () => {
     expect(lightBlock).toMatch(/--diff-del-fg:\s*#8e211b/);
   });
 });
+
+describe("modal overlay colour", () => {
+  it("comes from the --overlay token, not a hard-coded black", () => {
+    const root = fileURLToPath(new URL("../../components/", import.meta.url));
+    const files = readdirSync(root, { recursive: true })
+      .map(String)
+      .filter((f) => f.endsWith(".tsx") && !f.includes("__tests__"));
+    for (const file of files) {
+      expect(readFileSync(`${root}${file}`, "utf8"), file).not.toMatch(/bg-black\/\d+/);
+    }
+  });
+});
+

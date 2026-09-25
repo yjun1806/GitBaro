@@ -85,7 +85,6 @@ export function StashSaveDialog({ onSave, onClose }: StashSaveDialogProps) {
     <Dialog
       onClose={onClose}
       labelledBy={titleId}
-      overlayClassName="z-50 bg-black/50"
       className="bg-popover border border-border rounded-xl shadow-2xl w-[440px] max-h-[80vh] flex flex-col"
     >
         {/* Header */}
