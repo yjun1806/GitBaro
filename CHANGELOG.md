@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [2.0.0](https://github.com/yjun1806/GitBaro/compare/v0.1.7...v2.0.0) (2026-09-25)
+
+GitBaro 2.0 is rebuilt around one job: reviewing what coding agents changed across your repositories and worktrees. Every commit that is not on any remote is a review target.
+
+### ⚠ BREAKING CHANGES
+
+* The sidebar, header and main screen were redesigned. The old tab layout, the bottom status bar, the collapsed icon rail and hover-to-expand sidebar are gone; the sidebar is either shown or hidden (⌘\).
+* The toolbar no longer has Merge and Stash buttons. Merge from the branch panel or a branch's right-click menu; stash from the Stash tab or the right-click menu of the uncommitted-changes row in the graph.
+* Worktree preview and the old branch-compare view were removed. Use "view branch without checkout" and the range compare in the commit graph instead.
+
+### Features
+
+* **sidebar:** account › workspace › repository › worktree tree drawn as one card per repository or workspace, with one-line rows, an orange dot for uncommitted changes, ↑N for commits to push, a hover card with details, drag to reorder, sort menu and a view-only row for the default branch.
+* **workspaces:** group related repositories of one GitHub account and review them together in one graph with a lane per repository.
+* **header:** a path card (repository › folder › branch) that opens the worktree and branch panels, grouped Fetch · Pull · Push buttons with counts ("Push 3", "Publish 3"), and an "Open repository" card (editor, terminal, Finder, GitHub).
+* **graph:** commit graph with one color per worktree, a "worktrees shown together" legend, uncommitted-changes rows per worktree, marks for commits not on any remote and a boundary at the first pushed commit.
+* **review:** view any branch without checking it out; a git status line; "changes vs base" for the whole branch with a base picker and per-file "viewed" marks that clear when the file changes again; working changes and commit detail as an explicit switch.
+* **live:** follow files as an agent edits them, with just-changed lines highlighted; activity watching across all registered repositories, including commits made outside the app.
+* **diff:** find inside the diff (⌘F), open a file at a line in your editor, maximize the diff with an animated transition and a side file list.
+* **menus:** right-click menus for sidebar rows, graph commits, branch and tag labels, worktree chips, file lists, diff lines, stashes, branches and Actions runs.
+* **notifications:** macOS notifications for new commits from agents and for failed CI runs, with per-repository overrides.
+* **pull requests:** a read-only PR tab with the list, description, checks, commits, changed files and review threads.
+* **settings:** repository settings (display name, avatar color, GitHub account, sync mode, compare base, notifications) and a rebuilt app settings screen (default sync, diff view and code font size, quiet repositories, worktree location, environment info).
+* **sync:** per-repository automatic fetch or fast-forward pull, with a per-repository plan shown before multi-repository Fetch · Pull · Push.
+* **theme:** light theme with layered surfaces, raspberry brand color for emphasis, Pretendard for the interface and D2Coding for code.
+
+### Bug Fixes
+
+* **merge:** switching repositories or restarting no longer aborts a merge in progress.
+* **staging:** staging and status now use the git CLI, so LFS filters, submodules, symlinks and sparse checkouts behave like git.
+* **checkout:** checking out a remote branch whose local branch already exists no longer stashes your changes for nothing.
+* **worktree:** removing the open worktree outside the app returns to the primary folder instead of showing every file as deleted.
+* **push:** push and pull from the status line work inside linked worktrees.
+* **diff:** fixed the diff viewer jittering while scrolling.
+* **security:** PR descriptions and markdown diffs can no longer inject styles into the app.
+* **storage:** upgrading keeps your repositories, favorites, accounts and workspaces; downgrading no longer wipes the repository list.
+
+### Development
+
+* ESLint 9 now runs, and a pre-commit hook checks types and lint. AGENTS.md is the single project guide (CLAUDE.md imports it).
+
 ## [0.1.7](https://github.com/yjun1806/GitBaro/compare/v0.1.6...v0.1.7) (2026-07-30)
 
 
