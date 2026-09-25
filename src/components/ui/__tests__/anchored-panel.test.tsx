@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AnchoredPanel } from "@/components/ui/AnchoredPanel";
 
 afterEach(cleanup);
@@ -65,6 +65,32 @@ describe("AnchoredPanel", () => {
     // point of this test is that `maxHeight` gets set at all (wired through
     // from `clampPanelToViewport`), not the specific jsdom value.
     expect(panel.style.maxHeight).not.toBe("");
+  });
+
+  it("grows back to its natural height when the window gets taller", () => {
+    const NATURAL = 400;
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const capped = this.getAttribute("role") === "dialog" && this.style.maxHeight !== "";
+      const height = capped ? Math.min(NATURAL, parseFloat(this.style.maxHeight)) : this.getAttribute("role") === "dialog" ? NATURAL : 20;
+      return { left: 0, top: 0, right: 100, bottom: height, width: 100, height, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    const innerHeight = vi.spyOn(window, "innerHeight", "get").mockReturnValue(200);
+    try {
+      render(<Harness />);
+      openPanel();
+      const panel = screen.getByRole("dialog");
+      const small = parseFloat(panel.style.maxHeight);
+      expect(small).toBeLessThan(NATURAL);
+
+      innerHeight.mockReturnValue(1000);
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      expect(parseFloat(panel.style.maxHeight)).toBe(NATURAL);
+    } finally {
+      rect.mockRestore();
+      innerHeight.mockRestore();
+    }
   });
 
   it("moves focus into the panel and back to the opener on Escape", () => {

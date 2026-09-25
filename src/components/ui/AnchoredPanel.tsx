@@ -52,7 +52,12 @@ export function AnchoredPanel({
       const panel = panelRef.current;
       if (!anchor || !panel) return;
       const a = anchor.getBoundingClientRect();
+      // 지금 붙은 maxHeight로 줄어든 높이가 아니라 내용 그대로의 높이를 잰다. 그래야 창이 커지거나
+      // 내용이 늘었을 때 다시 커진다. 재고 나면 되돌린다(같은 값이면 React가 다시 쓰지 않는다).
+      const applied = panel.style.maxHeight;
+      panel.style.maxHeight = "";
       const p = panel.getBoundingClientRect();
+      panel.style.maxHeight = applied;
       setPosition(
         clampPanelToViewport(
           { left: a.left, top: a.top, bottom: a.bottom, width: a.width },
@@ -63,7 +68,15 @@ export function AnchoredPanel({
     };
     update();
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    // 목록을 읽어 오거나 검색으로 줄면 내용 높이가 바뀐다. 패널 안 요소의 크기 변화로 다시 잰다.
+    const panel = panelRef.current;
+    const observer =
+      panel && typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => update()) : null;
+    if (panel && observer) Array.from(panel.children).forEach((child) => observer.observe(child));
+    return () => {
+      window.removeEventListener("resize", update);
+      observer?.disconnect();
+    };
   }, [anchorRef]);
 
   return (
@@ -87,7 +100,8 @@ export function AnchoredPanel({
         // visible/in the accessibility tree rather than hidden behind it.
         //
         // `maxHeight` is the room actually available below (or above) the
-        // anchor inside the window — always `<= panel.height` — so the panel
+        // anchor inside the window — always `<=` the panel's natural height,
+        // measured with `maxHeight` lifted so it can grow back — so the panel
         // never renders past the window's bottom; its header/search stay
         // fixed and its list scrolls to make up the difference (see
         // `clampPanelToViewport`). Once measured it overrides any static
