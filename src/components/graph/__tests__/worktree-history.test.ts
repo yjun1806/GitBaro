@@ -63,4 +63,12 @@ describe("withWipLanes", () => {
     const [wip] = withWipLanes([{ path: "/x", head: null }], commits);
     expect(wip.parentIds).toEqual([]);
   });
+
+  it("leaves a WIP row unconnected when its HEAD is not in the loaded commits", () => {
+    const input = withWipLanes([{ path: "/old", head: "gone" }], commits);
+    expect(input[0].parentIds).toEqual([]);
+    // No lane stays open below the last row for a parent that never comes.
+    const rows = computeGraphLanes(input).rows;
+    expect(rows[rows.length - 1].edges.some((e) => e.kind === "out" || e.kind === "pass")).toBe(false);
+  });
 });

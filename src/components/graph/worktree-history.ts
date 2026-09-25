@@ -67,14 +67,16 @@ export interface WipLaneInput {
 /**
  * 그래프 맨 위 WIP 행들을 커밋 목록 앞에 가짜 커밋으로 붙인다(D5). 각 WIP 행의 부모는
  * 그 워크트리의 HEAD라서, 레인 계산이 WIP 행마다 제 레인을 열고 그 워크트리의 커밋까지
- * 잇는다. HEAD를 모르면 부모 없이 둔다(선을 긋지 않는다).
+ * 잇는다. HEAD를 모르거나 HEAD가 목록에 없으면(바탕 이력의 불러온 범위보다 오래됨) 부모 없이 둔다.
+ * 없는 부모를 이으면 그 레인이 그래프 맨 아래까지 이어진다.
  */
 export function withWipLanes(
   wips: readonly WipLaneInput[],
   commits: readonly { id: string; parentIds: readonly string[] }[],
 ): GraphCommitInput[] {
+  const ids = new Set(commits.map((c) => c.id));
   return [
-    ...wips.map((w) => ({ oid: wipLaneOid(w.path), parentIds: w.head ? [w.head] : [] })),
+    ...wips.map((w) => ({ oid: wipLaneOid(w.path), parentIds: w.head && ids.has(w.head) ? [w.head] : [] })),
     ...commits.map((c) => ({ oid: c.id, parentIds: c.parentIds })),
   ];
 }
