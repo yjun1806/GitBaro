@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, type ReactNode } from "react";
+import { useState, useMemo, useCallback, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FileQuestion } from "lucide-react";
 import { DiffFile } from "@git-diff-view/core";
@@ -33,6 +33,12 @@ function getFileLang(filePath: string): string {
 // 다만 initSyntax는 파일 전체를 메인 스레드에서 파싱하므로, 큰 diff는 하이라이팅을
 // 기본 off로 두고(HIGHLIGHT_LIMIT) 사용자가 필요할 때 켤 수 있게 한다.
 const HIGHLIGHT_LIMIT = 2000;
+
+// DiffFile 캐시 — 같은 diff 객체에 대해 initRaw/initSyntax를 반복하지 않음.
+// 키가 diff 객체라 뷰어 인스턴스끼리 나눠 써도 안전하고, WeakMap이므로 diff 객체가 GC되면 캐시도 자동 정리.
+const diffFileCache = new WeakMap<DiffOutput, DiffFile>();
+// syntax가 이미 빌드된 파일 추적 — 하이라이팅 토글 시 중복 파싱 방지.
+const syntaxInitedFiles = new WeakSet<DiffFile>();
 
 function hunksToUnifiedDiff(filePath: string, hunks: DiffHunk[]): string {
   const lines: string[] = [
@@ -151,12 +157,6 @@ export function DiffViewer({
   // total = 실제 렌더되는 행 수(context 포함). 임계값은 이걸 기준으로 판정.
   const wantHighlight = stats.total <= HIGHLIGHT_LIMIT || forceHighlight;
 
-  // DiffFile 캐시 — 같은 diff 객체에 대해 initRaw/initSyntax를 반복하지 않음.
-  // WeakMap이므로 diff 객체가 GC되면 캐시도 자동 정리.
-  const cacheRef = useRef(new WeakMap<DiffOutput, DiffFile>());
-  // syntax가 이미 빌드된 파일 추적 — 하이라이팅 토글 시 중복 파싱 방지.
-  const syntaxInitedRef = useRef(new WeakSet<DiffFile>());
-
   // 문서 보기는 이 파이프라인을 전혀 쓰지 않는다. 그런데도 빌드하면 `initSyntax`가 파일
   // 전체를 메인 스레드에서 파싱해, 문서 diff를 Worker로 밀어낸 이유를 그대로 되돌린다.
   // (통합 ↔ 나란히 전환에는 재실행되지 않도록 boolean으로 좁혀 의존한다.)
@@ -167,13 +167,13 @@ export function DiffViewer({
     if (!wantsLineDiff) return null;
 
     const initSyntaxOnce = (file: DiffFile) => {
-      if (wantHighlight && !syntaxInitedRef.current.has(file)) {
+      if (wantHighlight && !syntaxInitedFiles.has(file)) {
         file.initSyntax({ registerHighlighter: highlighter });
-        syntaxInitedRef.current.add(file);
+        syntaxInitedFiles.add(file);
       }
     };
 
-    const cached = cacheRef.current.get(diff);
+    const cached = diffFileCache.get(diff);
     if (cached) {
       // 테마만 갱신 (lowlight는 class 기반이라 syntax 재처리 불필요)
       cached.initTheme(isDark ? "dark" : "light");
@@ -197,7 +197,7 @@ export function DiffViewer({
     file.initTheme(isDark ? "dark" : "light");
     file.initRaw();
     initSyntaxOnce(file);
-    cacheRef.current.set(diff, file);
+    diffFileCache.set(diff, file);
     return file;
   }, [diff, isDark, wantHighlight, wantsLineDiff]);
 

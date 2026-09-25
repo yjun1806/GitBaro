@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useReviewStatusQuery } from "@/api/queries";
-import { useActivityTargetsStore } from "@/stores/activity-targets";
+import { pathsFromWatchKey, useActivityTargetsStore, watchPathsKey } from "@/stores/activity-targets";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { repoAccountsByPath, toAccountKey, workspaceMembership, type Workspace } from "@/lib/repo-tree";
@@ -140,18 +140,17 @@ export function useWorkspaceWatchPaths(scope: ActiveScope): void {
     () => (isWorkspace ? workspaceWatchPaths(members, scan ?? []) : NO_PATHS),
     [isWorkspace, members, scan],
   );
-  const pathsKey = paths.join("\u0000");
+  const pathsKey = watchPathsKey(paths);
 
   const registerWatchPaths = useActivityTargetsStore((s) => s.registerWatchPaths);
   const unregisterWatchPaths = useActivityTargetsStore((s) => s.unregisterWatchPaths);
   useEffect(() => {
-    if (paths.length === 0) {
+    if (pathsKey === "") {
       unregisterWatchPaths(WORKSPACE_WATCH_KEY);
       return;
     }
-    registerWatchPaths(WORKSPACE_WATCH_KEY, paths);
-    // pathsKey가 내용을 대신 비교한다(스캔이 20초마다 새 배열을 만들어도 같으면 다시 등록하지 않는다).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // 배열 대신 pathsKey로 내용을 비교한다(스캔이 20초마다 새 배열을 만들어도 같으면 다시 등록하지 않는다).
+    registerWatchPaths(WORKSPACE_WATCH_KEY, pathsFromWatchKey(pathsKey));
   }, [pathsKey, registerWatchPaths, unregisterWatchPaths]);
   useEffect(() => () => unregisterWatchPaths(WORKSPACE_WATCH_KEY), [unregisterWatchPaths]);
 }

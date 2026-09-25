@@ -219,7 +219,8 @@ export function CommitDetail({
   useWorkflowRuns(needRuns ? repoPath : null, accountId, { polling: true });
   const showCi = ciEnabled && runs !== undefined;
 
-  // Auto-select first file when commit changes
+  // Auto-select first file when commit changes. Keyed on commit.id only: changedFiles and
+  // onSelectFile get new identities on unrelated re-renders, which would reset the user's pick.
   useEffect(() => {
     if (changedFiles.length > 0) {
       const first = changedFiles[0].path;

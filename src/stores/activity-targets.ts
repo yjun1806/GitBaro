@@ -78,3 +78,15 @@ export function selectActivityTargets(extraByKey: Record<string, string[]>): str
   }
   return merged;
 }
+
+/**
+ * 경로 목록을 내용 비교용 문자열 하나로 만든다. 조회 결과처럼 매번 새 배열이 와도 내용이 같으면 같은
+ * 값이라, effect가 이 값에만 기대면 같은 목록을 다시 등록하지 않는다. 등록할 때는 `pathsFromWatchKey`로 되돌린다.
+ */
+export function watchPathsKey(paths: readonly string[]): string {
+  return paths.join("\u0000");
+}
+
+export function pathsFromWatchKey(key: string): string[] {
+  return key === "" ? [] : key.split("\u0000");
+}

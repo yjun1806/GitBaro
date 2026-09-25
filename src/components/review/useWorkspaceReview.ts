@@ -147,7 +147,7 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
     ...laneRepos.map((r) => `${r.path}:${r.hasBase}:${r.commits.map(commitKey).join(";")}`),
     ...wips.map((w) => `${w.path}:${w.count}:${w.changedAt ?? ""}`),
   ].join("\n");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- graphKey가 laneRepos·wips의 내용을 대신 비교한다
   const graph = useMemo(() => buildRepoLaneRows(laneRepos, wips), [graphKey]);
 
   const withBase = visible.filter((r) => r.lane?.hasBase);

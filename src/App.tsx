@@ -65,7 +65,7 @@ function AppContent() {
     } catch (err) {
       addToast(t("error.failedToLoadAccounts", { error: getErrorMessage(err) }), "error");
     }
-  }, [setAccounts, setActiveAccount, addToast]);
+  }, [setAccounts, setActiveAccount, addToast, t]);
 
   // 저장 실패는 조용히 넘어가면 사용자가 데이터 유실을 눈치채지 못한다.
   // 다른 초기화 effect보다 먼저 등록해 초기 저장 실패도 놓치지 않는다.
@@ -103,15 +103,18 @@ function AppContent() {
       }
     };
     init().finally(() => setIsLoading(false));
+    // 시작할 때 한 번만 돈다. refreshAccounts는 언어가 바뀌면 새로 만들어지는데, 그때 다시 돌면 첫 실행 안내가 또 뜬다.
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refresh persisted repos from backend on startup (to get latest remotes, etc.)
   // Also purge any worktree entries that were incorrectly added as repos.
   const removeRepo = useRepositoryStore((s) => s.removeRepo);
   useEffect(() => {
-    if (repos.length === 0) return;
+    // 시작 시점의 목록만 새로 읽는다. 이후 추가되는 저장소는 이미 최신이다.
+    const startupRepos = useRepositoryStore.getState().repos;
+    if (startupRepos.length === 0) return;
     Promise.all(
-      repos.map((r) =>
+      startupRepos.map((r) =>
         openRepository(r.path)
           .then((fresh) => {
             if (fresh.isWorktree) {
@@ -123,7 +126,7 @@ function AppContent() {
           .catch(() => { /* repo may have been removed from disk */ })
       ),
     );
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [addRepo, removeRepo]);
 
   // 워크트리를 보던 채로 앱을 종료한 뒤 그 워크트리를 지웠다면, 활성 경로가 없는
   // 폴더를 가리킨 채로 시작해 모든 git 조회가 실패한다. 시작할 때 한 번 확인한다.
@@ -132,6 +135,7 @@ function AppContent() {
     const { activeRepoPath, activeRepo } = useRepositoryStore.getState();
     if (!activeRepo || !activeRepoPath || activeRepoPath === activeRepo.path) return;
     verifyWorktree(activeRepo.path, activeRepoPath);
+    // 시작할 때 한 번만 확인한다. verifyWorktree는 언어가 바뀌면 새로 만들어진다.
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // 켜 있는 동안 앱 밖에서 지워져도(`git worktree remove`) 기본 폴더로 돌아간다.
   useActiveWorktreeGuard();
@@ -230,7 +234,7 @@ function AppContent() {
         "error",
       );
     }
-  }, [addRepo, setActiveRepo, addToast]);
+  }, [addRepo, setActiveRepo, addToast, t]);
 
   const handleAccountSelectForRepo = useCallback((accountId: string | null) => {
     // 다이얼로그 정리를 먼저 한다. 저장소 추가가 실패하더라도 다이얼로그가

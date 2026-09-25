@@ -266,16 +266,18 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const filtered = repos.filter((r) =>
-    r.name.toLowerCase().includes(filter.toLowerCase()),
-  );
-  const favRepos = filtered.filter((r) => favoriteRepos.includes(r.path));
-  const nonFavFiltered = filtered.filter((r) => !favoriteRepos.includes(r.path));
-  const ownerGroups = groupReposByOwner(nonFavFiltered, accounts);
-
-  const groups: GroupedRepos[] = favRepos.length > 0
-    ? [{ label: t("repo.favorites"), repos: favRepos }, ...ownerGroups]
-    : ownerGroups;
+  // 아래 owner 타입 조회 effect가 groups에 의존하므로, 렌더마다 새 배열이 되면 매 렌더 조회가 다시 나간다.
+  const groups = useMemo((): GroupedRepos[] => {
+    const filtered = repos.filter((r) =>
+      r.name.toLowerCase().includes(filter.toLowerCase()),
+    );
+    const favRepos = filtered.filter((r) => favoriteRepos.includes(r.path));
+    const nonFavFiltered = filtered.filter((r) => !favoriteRepos.includes(r.path));
+    const ownerGroups = groupReposByOwner(nonFavFiltered, accounts);
+    return favRepos.length > 0
+      ? [{ label: t("repo.favorites"), repos: favRepos }, ...ownerGroups]
+      : ownerGroups;
+  }, [repos, filter, favoriteRepos, accounts, t]);
 
   // Flat list of visible repos for keyboard navigation
   const flatItems = useMemo(() => {

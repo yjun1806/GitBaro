@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDefaultBranches, useRepoSyncStatuses } from "@/api/queries";
 import { useReviewStatus, type WorktreeReviewStatus } from "@/hooks/useReviewStatus";
 import { buildRepoTree, type AccountNode, type PathSignals, type WorktreeInput } from "@/lib/repo-tree";
 import { useAccountStore } from "@/stores/account";
-import { useActivityTargetsStore } from "@/stores/activity-targets";
+import { pathsFromWatchKey, useActivityTargetsStore, watchPathsKey } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
@@ -87,13 +87,11 @@ export function useSidebarTreeData(): SidebarTreeData {
     () => syncStatusPaths(repoPathList, review.repos),
     [repoPathList, review.repos],
   );
-  const { data: syncData } = useRepoSyncStatuses(statusPaths);
-  const { data: defaultBranches } = useDefaultBranches(repoPathList);
   // 워크트리 목록이 바뀌면 조회 키가 바뀌어 잠깐 결과가 비는데, 그동안 앞 결과를 보여 줘
   // 표시가 깜박이지 않게 한다.
-  const lastSync = useRef<Record<string, RepoSyncStatus>>(EMPTY_SYNC);
-  if (syncData) lastSync.current = syncData;
-  const syncByPath = syncData ?? lastSync.current;
+  const { data: syncData } = useRepoSyncStatuses(statusPaths, { keepPrevious: true });
+  const { data: defaultBranches } = useDefaultBranches(repoPathList);
+  const syncByPath = syncData ?? EMPTY_SYNC;
 
   const signals = useMemo(
     () => buildSignals(syncByPath, review.byPath, lastChangedAt),
@@ -159,11 +157,10 @@ export function useSidebarTreeData(): SidebarTreeData {
 export function useSidebarWatchPaths(paths: string[], key: string = SIDEBAR_WATCH_KEY): void {
   const registerWatchPaths = useActivityTargetsStore((s) => s.registerWatchPaths);
   const unregisterWatchPaths = useActivityTargetsStore((s) => s.unregisterWatchPaths);
-  const pathsKey = paths.join("\u0000");
+  const pathsKey = watchPathsKey(paths);
   useEffect(() => {
-    registerWatchPaths(key, paths);
-    // pathsKey가 내용을 대신 비교한다(트리가 15초마다 새로 만들어져도 같은 목록이면 다시 등록하지 않는다).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // 배열 대신 pathsKey로 내용을 비교한다(트리가 15초마다 새로 만들어져도 같은 목록이면 다시 등록하지 않는다).
+    registerWatchPaths(key, pathsFromWatchKey(pathsKey));
   }, [key, pathsKey, registerWatchPaths]);
   useEffect(() => () => unregisterWatchPaths(key), [key, unregisterWatchPaths]);
 }

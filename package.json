@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "build:install": "tauri build --bundles app && rm -rf /Applications/GitBaro.app && ditto src-tauri/target/release/bundle/macos/GitBaro.app /Applications/GitBaro.app",
-    "lint": "eslint src --ext .ts,.tsx",
+    "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -54,6 +54,7 @@
   "devDependencies": {
     "@commitlint/cli": "^20.4.2",
     "@commitlint/config-conventional": "^20.4.2",
+    "@eslint/js": "^9.39.5",
     "@tauri-apps/cli": "^2.0.0",
     "@testing-library/jest-dom": "^6.0.0",
     "@testing-library/react": "^16.0.0",
@@ -64,10 +65,15 @@
     "@vitejs/plugin-react": "^4.0.0",
     "autoprefixer": "^10.0.0",
     "commit-and-tag-version": "^12.7.3",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.12.0",
     "husky": "^9.1.7",
     "jsdom": "^25.0.0",
     "postcss": "^8.0.0",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.70.1",
     "vite": "^6.0.0",
     "vitest": "^3.0.0"
   }

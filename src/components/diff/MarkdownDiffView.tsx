@@ -78,7 +78,6 @@ export function MarkdownDiffView({ oldContent, newContent, onError }: MarkdownDi
 
   return (
     <div className="flex-1 min-h-0 overflow-auto">
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div ref={hostRef} className="md-diff" onClick={handleClick} />
     </div>
   );

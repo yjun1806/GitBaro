@@ -77,22 +77,15 @@ export function ImageDiffSwipe({ oldSrc, newSrc }: ImageDiffSwipeProps) {
           onLoad={handleImageLoad}
         />
 
-        {/* Old image (clipped from left) */}
-        <div
-          className="absolute inset-0 overflow-hidden"
-          style={{ width: `${position}%` }}
-        >
-          <img
-            src={oldSrc}
-            alt={t("diff.imageDiff.oldImage")}
-            className="w-full h-full object-contain"
-            style={{
-              width: containerRef.current?.offsetWidth ?? "100%",
-              maxWidth: "none",
-            }}
-            onLoad={handleImageLoad}
-          />
-        </div>
+        {/* Old image (clipped from left). clip-path keeps it at the container's full
+            size, so it lines up with the new image even after the container resizes. */}
+        <img
+          src={oldSrc}
+          alt={t("diff.imageDiff.oldImage")}
+          className="absolute inset-0 w-full h-full object-contain"
+          style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
+          onLoad={handleImageLoad}
+        />
 
         {/* Drag handle */}
         <div className="swipe-handle" style={{ left: `${position}%` }} />
