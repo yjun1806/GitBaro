@@ -75,7 +75,7 @@ export function isLivePath(
 }
 
 /**
- * 검색어로 트리를 거른다. 저장소 이름, 저장소의 현재 브랜치, 워크트리 브랜치 중 하나에
+ * 검색어로 트리를 거른다. 저장소 폴더 이름·표시 이름(`nameOf`), 저장소의 현재 브랜치, 워크트리 브랜치 중 하나에
  * 검색어가 들어 있으면 남긴다. 워크스페이스는 이름이 맞으면 통째로, 아니면 맞는 저장소만 남긴다.
  * 검색하는 동안에는 조용한 저장소도 찾아야 하므로 맞는 것은 계정 바로 아래로 올린다.
  * 입력 트리는 바꾸지 않는다.
@@ -84,12 +84,14 @@ export function filterTree(
   tree: AccountNode[],
   query: string,
   branchOf: (path: string) => string | null,
+  nameOf: (repo: RepoNode["repo"]) => string = (repo) => repo.name,
 ): AccountNode[] {
   const q = query.trim().toLowerCase();
   if (!q) return tree;
   const hit = (s: string | null | undefined) => !!s && s.toLowerCase().includes(q);
   const repoMatches = (node: RepoNode) =>
     hit(node.repo.name) ||
+    hit(nameOf(node.repo)) ||
     hit(branchOf(node.repo.path)) ||
     node.worktrees.some((w) => hit(w.branch));
 

@@ -152,6 +152,7 @@ beforeEach(() => {
     activeRepo: null,
     activeWorktrees: {},
     favoriteRepos: [],
+    repoPrefs: {},
   });
   useActivityTargetsStore.setState({ extraByKey: {} });
   useWorkspaceStore.setState({ workspaces, collapsed: [], orderByParent: {}, sortModeByAccount: {} });
@@ -405,6 +406,26 @@ describe("RepoTree — search and selection", () => {
     expect(item("web")).toBeInTheDocument();
     expect(screen.queryByRole("treeitem", { name: "api" })).toBeNull();
     expect(screen.queryByRole("treeitem", { name: "solo" })).toBeNull();
+  });
+
+  it("shows a repository's display name instead of its folder name, and finds it by either", async () => {
+    useRepositoryStore.setState({ repoPrefs: { [SOLO]: { alias: "Solo App" } } });
+    renderTree(makeData(baseSignals));
+    expect(item("Solo App")).toHaveAttribute("aria-level", "2");
+    expect(screen.queryByRole("treeitem", { name: "solo" })).toBeNull();
+
+    // 머리 줄에 올리면 표시 이름과 함께 실제 폴더 이름을 보인다.
+    fireEvent.mouseEnter(item("Solo App"));
+    const card = await screen.findByTestId("sidebar-hover-card");
+    expect(card).toHaveTextContent("Solo App");
+    expect(card).toHaveTextContent("Folder name: solo");
+    fireEvent.mouseLeave(item("Solo App"));
+
+    const search = screen.getByRole("searchbox", { name: "Find repository or branch" });
+    fireEvent.change(search, { target: { value: "solo app" } });
+    expect(item("Solo App")).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "solo" } });
+    expect(item("Solo App")).toBeInTheDocument();
   });
 
   it("collapses and expands everything, including accounts", () => {

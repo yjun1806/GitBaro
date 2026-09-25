@@ -4,6 +4,10 @@ import { Bell, Loader2 } from "lucide-react";
 import type { NotificationSettings as NotificationSettingsValue } from "@/types";
 import { useNotifyStore } from "@/stores/notify";
 import { deliverNotification } from "@/lib/notify/deliver";
+import { SettingsSection } from "./ui/SettingsSection";
+import { SettingsRow } from "./ui/SettingsRow";
+import { Switch } from "./ui/Switch";
+import { SETTINGS_BUTTON } from "./ui/styles";
 
 interface NotificationSettingsProps {
   value: NotificationSettingsValue;
@@ -25,8 +29,8 @@ export function NotificationSettings({ value, onChange }: NotificationSettingsPr
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"system" | "denied" | null>(null);
 
-  const handleToggle = (key: ToggleKey) => {
-    const next = { ...value, [key]: !value[key] };
+  const handleToggle = (key: ToggleKey, checked: boolean) => {
+    const next = { ...value, [key]: checked };
     setSettings(next);
     onChange(next);
   };
@@ -47,48 +51,36 @@ export function NotificationSettings({ value, onChange }: NotificationSettingsPr
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-muted-foreground">{t("notify.settings.title")}</label>
-        <p className="text-xs text-muted-foreground/70">{t("notify.settings.description")}</p>
-      </div>
-
-      <div className="flex flex-col gap-1">
+    <>
+      <SettingsSection description={t("notify.settings.description")}>
         {TOGGLES.map(({ key, labelKey, descriptionKey }) => (
-          <label
-            key={key}
-            className="flex items-start gap-3 px-3 py-2.5 rounded-lg hover:bg-accent/50 cursor-pointer"
-          >
-            <input
-              type="checkbox"
-              className="mt-0.5 accent-(--acc)"
-              checked={value[key]}
-              onChange={() => handleToggle(key)}
-            />
-            <span className="flex flex-col gap-0.5">
-              <span className="text-sm text-foreground">{t(labelKey)}</span>
-              <span className="text-xs text-muted-foreground">{t(descriptionKey)}</span>
-            </span>
-          </label>
+          <SettingsRow key={key} label={t(labelKey)} description={t(descriptionKey)}>
+            <Switch checked={value[key]} onChange={(checked) => handleToggle(key, checked)} />
+          </SettingsRow>
         ))}
-      </div>
+      </SettingsSection>
 
-      <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={handleTest}
-          disabled={testing}
-          className="self-start flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
+      <SettingsSection>
+        <SettingsRow
+          label={t("notify.test.button")}
+          description={
+            testResult ? (
+              <span role="status">{t(testResult === "denied" ? "notify.test.denied" : "notify.test.sent")}</span>
+            ) : (
+              t("notify.test.description")
+            )
+          }
         >
-          {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
-          {t("notify.test.button")}
-        </button>
-        {testResult && (
-          <p className="text-xs text-muted-foreground">
-            {t(testResult === "denied" ? "notify.test.denied" : "notify.test.sent")}
-          </p>
-        )}
-      </div>
-    </div>
+          <button type="button" onClick={handleTest} disabled={testing} className={SETTINGS_BUTTON}>
+            {testing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            ) : (
+              <Bell className="w-3.5 h-3.5" aria-hidden="true" />
+            )}
+            {t("notify.test.send")}
+          </button>
+        </SettingsRow>
+      </SettingsSection>
+    </>
   );
 }

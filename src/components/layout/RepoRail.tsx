@@ -14,7 +14,8 @@ import {
   useSidebarTreeData,
   useSidebarWatchPaths,
 } from "@/components/sidebar/useSidebarTreeData";
-import { avatarColor, avatarInitial } from "@/lib/avatar-color";
+import { avatarInitial } from "@/lib/avatar-color";
+import { useRepoAvatarColor, useRepoName } from "@/hooks/useRepoDisplay";
 import {
   HEADER_HEIGHT_CLASS,
   SIDEBAR_GUTTER_PX,
@@ -145,17 +146,18 @@ function RailItem({
   onHoverEnd?: () => void;
 }) {
   const { t } = useTranslation();
-  const color = avatarColor(repo.path);
-  const initial = avatarInitial(repo.name);
+  const color = useRepoAvatarColor()(repo.path);
+  const name = useRepoName()(repo);
+  const initial = avatarInitial(name);
 
   return (
     <button
       onClick={onSelect}
       onContextMenu={onContextMenu}
-      aria-label={repo.name}
+      aria-label={name}
       onMouseEnter={
         onHoverStart
-          ? (e) => onHoverStart(repo.name, e.currentTarget.getBoundingClientRect())
+          ? (e) => onHoverStart(name, e.currentTarget.getBoundingClientRect())
           : undefined
       }
       onMouseLeave={onHoverEnd}

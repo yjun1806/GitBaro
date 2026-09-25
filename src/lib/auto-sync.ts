@@ -19,12 +19,13 @@ export const AUTO_SYNC_MODES: readonly AutoSyncMode[] = ["off", "fetch", "pull"]
  */
 export const ACTIVITY_QUIET_MS = 2 * 60 * 1000;
 
-/** 저장소 설정을 찾는다. 없으면 기본값. */
+/** 저장소 설정을 찾는다. 없으면 `fallback`(앱 설정의 기본 원격 동기화). */
 export function resolveAutoSync(
   settings: Record<string, AutoSyncSetting>,
   repoPath: string,
+  fallback: AutoSyncSetting = DEFAULT_AUTO_SYNC,
 ): AutoSyncSetting {
-  return settings[repoPath] ?? DEFAULT_AUTO_SYNC;
+  return settings[repoPath] ?? fallback;
 }
 
 export type AutoSyncDecision = "skip" | "fetch" | "fetch+ff";
@@ -99,12 +100,13 @@ export function pickDueRepos(
   settings: Record<string, AutoSyncSetting>,
   lastRunAt: Record<string, number>,
   now: number,
+  fallback: AutoSyncSetting = DEFAULT_AUTO_SYNC,
 ): RepoInfo[] {
   return repos
     .filter(canAutoSync)
     .map((repo) => ({
       repo,
-      next: nextAutoSyncAt(resolveAutoSync(settings, repo.path), lastRunAt[repo.path] ?? null),
+      next: nextAutoSyncAt(resolveAutoSync(settings, repo.path, fallback), lastRunAt[repo.path] ?? null),
     }))
     .filter((entry): entry is { repo: RepoInfo; next: number } =>
       entry.next !== null && entry.next <= now,

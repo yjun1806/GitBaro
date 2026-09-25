@@ -20,22 +20,15 @@ interface AutoSyncState {
   lastResultByRepo: Record<string, AutoSyncResult>;
   /** 작업 트리 경로별 마지막 파일 변경 시각(ms). FS 감시 이벤트로 채운다. */
   lastActivityByPath: Record<string, number>;
-  /** 설정 창을 열어 둔 저장소 경로. null이면 닫혀 있다. */
-  settingsRepoPath: string | null;
   recordResult: (repoPath: string, result: AutoSyncResult) => void;
   markActivity: (path: string, at: number) => void;
-  openSettings: (repoPath: string) => void;
-  closeSettings: () => void;
 }
 
 export const useAutoSyncStore = create<AutoSyncState>()((set) => ({
   lastResultByRepo: {},
   lastActivityByPath: {},
-  settingsRepoPath: null,
   recordResult: (repoPath, result) =>
     set((state) => ({ lastResultByRepo: { ...state.lastResultByRepo, [repoPath]: result } })),
   markActivity: (path, at) =>
     set((state) => ({ lastActivityByPath: { ...state.lastActivityByPath, [path]: at } })),
-  openSettings: (repoPath) => set({ settingsRepoPath: repoPath }),
-  closeSettings: () => set({ settingsRepoPath: null }),
 }));

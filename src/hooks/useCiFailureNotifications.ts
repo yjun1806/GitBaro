@@ -4,9 +4,12 @@ import { useQueries } from "@tanstack/react-query";
 import { listWorkflowRuns } from "@/api/commands";
 import { useBackgroundReviewStatus } from "@/hooks/useBackgroundReviewStatus";
 import { useRepositoryStore } from "@/stores/repository";
+import { repoNameNow } from "@/hooks/useRepoDisplay";
 import { gitHubRepoUrl } from "@/lib/utils";
-import { EMPTY_CI_SEEN, pickNewFailures, type CiSeen } from "@/lib/notify/ci-failures";
+import { EMPTY_CI_SEEN, forgetUnwatchedRepos, pickNewFailures, type CiSeen } from "@/lib/notify/ci-failures";
 import { deliverNotification } from "@/lib/notify/deliver";
+import { isRepoNotifyOn } from "@/lib/notify/repo-override";
+import { useNotifyStore } from "@/stores/notify";
 import type { WorkflowRun } from "@/types";
 
 /** GitHub Actions 실행 목록을 읽는 주기. 저장소마다 한 번씩 API 를 부른다. */
@@ -20,9 +23,18 @@ const CI_POLL_MS = 60_000;
 export function useCiFailureNotifications(enabled: boolean): void {
   const { t } = useTranslation();
   const repos = useRepositoryStore((s) => s.repos);
+  const repoPrefs = useRepositoryStore((s) => s.repoPrefs);
+  const settings = useNotifyStore((s) => s.settings);
+  // 이 알림이 꺼진 저장소(저장소 설정 또는 앱 설정)는 Actions 를 읽지도 않는다. 다시 켜면 처음 읽는 것처럼 조용히 기록한다.
   const targets = useMemo(
-    () => repos.filter((r) => r.accountId !== null && gitHubRepoUrl(r.remotes) !== null),
-    [repos],
+    () =>
+      repos.filter(
+        (r) =>
+          r.accountId !== null &&
+          gitHubRepoUrl(r.remotes) !== null &&
+          isRepoNotifyOn(settings, repoPrefs, r.path, "ciFailures"),
+      ),
+    [repos, repoPrefs, settings],
   );
   const review = useBackgroundReviewStatus(enabled);
 
@@ -49,6 +61,10 @@ export function useCiFailureNotifications(enabled: boolean): void {
     handled.current = new WeakSet();
   }, [enabled]);
 
+  useEffect(() => {
+    seen.current = forgetUnwatchedRepos(seen.current, new Set(targets.map((r) => r.path)));
+  }, [targets]);
+
   const reviewRepos = review.data;
   useEffect(() => {
     // 브랜치를 모르는 채로 보면 지금 브랜치의 실패까지 「본 것」으로 적어 버린다. 워크트리 목록을 기다린다.
@@ -66,7 +82,7 @@ export function useCiFailureNotifications(enabled: boolean): void {
         const worktree = worktrees.find((wt) => wt.branch === run.headBranch);
         void deliverNotification({
           title: t("notify.ciFailedTitle", {
-            repo: repo.name,
+            repo: repoNameNow(repo),
             branch: run.headBranch,
             workflow: run.name || t("notify.ciUnnamedWorkflow"),
           }),

@@ -42,3 +42,13 @@ export function pickNewFailures(
   const initializedRepos = firstLook ? new Set([...seen.initializedRepos, repoPath]) : seen.initializedRepos;
   return { notify, seen: { initializedRepos, seenRunIds } };
 }
+
+/**
+ * 지금 살펴보는 저장소(`watching`) 밖의 저장소를 「처음 읽음」 기록에서 뺀다. 알림을 껐다 다시 켠
+ * 저장소는 처음 읽는 것처럼 그때 있던 실패를 조용히 기록하고, 꺼 둔 동안의 실패를 몰아서 알리지 않는다.
+ */
+export function forgetUnwatchedRepos(seen: CiSeen, watching: ReadonlySet<string>): CiSeen {
+  const kept = [...seen.initializedRepos].filter((path) => watching.has(path));
+  if (kept.length === seen.initializedRepos.size) return seen;
+  return { ...seen, initializedRepos: new Set(kept) };
+}

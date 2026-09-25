@@ -3,6 +3,7 @@ import { ChevronsDownUp, ChevronsUpDown, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { repoNodeKey, workspaceNodeKey, type AccountNode, type RepoNode } from "@/lib/repo-tree";
 import { useRepositoryStore } from "@/stores/repository";
+import { useRepoName } from "@/hooks/useRepoDisplay";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useHistoryViewStore, viewTargetFor, type ViewTarget } from "@/stores/history-view";
 import { useSetHistoryView } from "@/components/graph/useHistoryView";
@@ -64,6 +65,7 @@ function accountRepoCount(account: AccountNode): number {
  * 저장소·워크스페이스는 머리 줄을 끌어서 순서를 바꾸고 워크스페이스에 넣을 수 있다(`TreeDnd`). 검색 중에는 끈다.
  */
 export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }: RepoTreeProps) {
+  const repoName = useRepoName();
   const { t } = useTranslation();
   const treeRef = useRef<HTMLDivElement>(null);
   const treeKeyboard = useTreeKeyboard(treeRef);
@@ -93,7 +95,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
   const isOpen = (key: string) =>
     searching || (key.startsWith("wsrepo:") ? openWsRepos.includes(key) : !closed.has(key));
 
-  const visibleTree = useMemo(() => filterTree(tree, query, branchOf), [tree, query, branchOf]);
+  const visibleTree = useMemo(() => filterTree(tree, query, branchOf, repoName), [tree, query, branchOf, repoName]);
   // 검색은 워크스페이스 안 저장소를 맞는 것만 남긴다. 삭제 확인은 실제로 옮겨질 수를 알려야
   // 하므로 거르기 전 트리에서 센다.
   const memberCounts = useMemo(() => workspaceMemberCounts(tree), [tree]);
@@ -197,7 +199,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
         <DraggableRow
           id={node.key}
           kind="repo"
-          label={node.repo.name}
+          label={repoName(node.repo)}
           depth={1}
           path={node.repo.path}
           branch={branchOf(node.repo.path)}
@@ -317,7 +319,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
                     {accountOpen && account.quietRepos.length > 0 && (
                       <>
                         <QuietReposRow
-                          names={account.quietRepos.map((r) => r.repo.name)}
+                          names={account.quietRepos.map((r) => repoName(r.repo))}
                           expanded={quietOpen}
                           onToggle={() => toggleQuiet(account.accountKey)}
                         />

@@ -12,6 +12,7 @@ import {
   Star,
   Layers,
   LogOut,
+  Settings2,
 } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -19,11 +20,11 @@ import { ContextMenu } from "@/components/ui/ContextMenu";
 import type { ContextMenuSection } from "@/components/ui/ContextMenu";
 import { revealInFinder, openInTerminal, openRepoInEditor, openAiCliInTerminal } from "@/api/commands";
 import { getGitHubWebUrl } from "@/lib/utils";
-import { useAutoSyncStore } from "@/stores/auto-sync";
+import { useRepoSettingsStore } from "@/stores/repo-settings";
+import { useRepoName } from "@/hooks/useRepoDisplay";
 import { useRepositoryStore } from "@/stores/repository";
-import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { repoAccountsByPath, workspaceMembership } from "@/lib/repo-tree";
+import { useRepoWorkspace } from "./useRepoWorkspace";
 import { useFetchRepo } from "@/hooks/useFetchRepo";
 import { useMenuActions } from "@/hooks/useMenuActions";
 import type { RepoInfo, AppSettings } from "@/types";
@@ -73,28 +74,17 @@ export function RepoHeaderContextMenu({
   onClose,
 }: RepoHeaderContextMenuProps) {
   const { t } = useTranslation();
-  const openAutoSyncSettings = useAutoSyncStore((s) => s.openSettings);
+  const openRepoSettings = useRepoSettingsStore((s) => s.open);
+  const displayName = useRepoName()(repo);
   const favorite = useRepositoryStore((s) => s.favoriteRepos.includes(repo.path));
   const toggleFavorite = useRepositoryStore((s) => s.toggleFavorite);
-  const repos = useRepositoryStore((s) => s.repos);
-  const accounts = useAccountStore((s) => s.accounts);
-  const workspaces = useWorkspaceStore((s) => s.workspaces);
   const addRepoToWorkspace = useWorkspaceStore((s) => s.addRepoToWorkspace);
   const removeRepoFromWorkspace = useWorkspaceStore((s) => s.removeRepoFromWorkspace);
   const fetchRepo = useFetchRepo();
   const actions = useMenuActions();
 
   // 워크스페이스는 한 계정 안에만 있다. 같은 계정의 다른 워크스페이스로만 옮길 수 있다.
-  const accountByPath = repoAccountsByPath(repos, accounts);
-  const account = accountByPath.get(repo.path);
-  // 사이드바 트리와 같은 규칙으로, 이 저장소가 지금 실제로 든 워크스페이스를 찾는다.
-  const { membersById } = workspaceMembership(workspaces, repos, accountByPath);
-  const currentWorkspace =
-    workspaces.find((w) => membersById.get(w.id)?.some((r) => r.path === repo.path)) ?? null;
-  const moveTargets =
-    account && !account.pending
-      ? workspaces.filter((w) => w.accountKey === account.key && w.id !== currentWorkspace?.id)
-      : [];
+  const { current: currentWorkspace, moveTargets } = useRepoWorkspace(repo);
 
   const gitHubUrl = repo.remotes
     .map((r) => getGitHubWebUrl(r.url))
@@ -209,9 +199,18 @@ export function RepoHeaderContextMenu({
         {
           label: t("autoSync.menuItem"),
           icon: <RefreshCw className={icon} />,
-          onClick: () => openAutoSyncSettings(repo.path),
+          onClick: () => openRepoSettings(repo.path, "sync"),
           // 계정이나 원격이 없으면 자동으로 확인할 수 없다.
           disabled: repo.remotes.length === 0,
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          label: t("repoSettings.menuItem"),
+          icon: <Settings2 className={icon} />,
+          onClick: () => openRepoSettings(repo.path),
         },
       ],
     },
@@ -223,7 +222,7 @@ export function RepoHeaderContextMenu({
           variant: "danger" as const,
           onClick: async () => {
             const confirmed = await ask(
-              t("repo.contextMenu.removeConfirmDetail", { name: repo.name }),
+              t("repo.contextMenu.removeConfirmDetail", { name: displayName }),
               {
                 title: t("repo.contextMenu.removeConfirmTitle"),
                 kind: "warning",

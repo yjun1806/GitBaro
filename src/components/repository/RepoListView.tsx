@@ -33,7 +33,8 @@ import { cn, getErrorMessage, isAppErrorType, isSameFolder } from "@/lib/utils";
 import { extractOwnerFromRemoteUrl, groupReposByOwner, type GroupedRepos } from "@/lib/group-repos";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
-import { useAutoSyncStore } from "@/stores/auto-sync";
+import { useRepoSettingsStore } from "@/stores/repo-settings";
+import { useRepoName } from "@/hooks/useRepoDisplay";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import { RepoSyncIndicator } from "@/components/repository/RepoSyncIndicator";
 import { useRepoSyncStatuses } from "@/api/queries";
@@ -180,7 +181,8 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
   const repoVisibility = useRepositoryStore((s) => s.repoVisibility);
   const ownerTypes = useRepositoryStore((s) => s.ownerTypes);
   const accounts = useAccountStore((s) => s.accounts);
-  const openAutoSyncSettings = useAutoSyncStore((s) => s.openSettings);
+  const openRepoSettings = useRepoSettingsStore((s) => s.open);
+  const repoName = useRepoName();
   const [accountPickerRepo, setAccountPickerRepo] = useState<string | null>(null);
 
   const repoPermissions = useRepositoryStore((s) => s.repoPermissions);
@@ -268,8 +270,9 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
 
   // 아래 owner 타입 조회 effect가 groups에 의존하므로, 렌더마다 새 배열이 되면 매 렌더 조회가 다시 나간다.
   const groups = useMemo((): GroupedRepos[] => {
-    const filtered = repos.filter((r) =>
-      r.name.toLowerCase().includes(filter.toLowerCase()),
+    const needle = filter.toLowerCase();
+    const filtered = repos.filter(
+      (r) => r.name.toLowerCase().includes(needle) || repoName(r).toLowerCase().includes(needle),
     );
     const favRepos = filtered.filter((r) => favoriteRepos.includes(r.path));
     const nonFavFiltered = filtered.filter((r) => !favoriteRepos.includes(r.path));
@@ -277,7 +280,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
     return favRepos.length > 0
       ? [{ label: t("repo.favorites"), repos: favRepos }, ...ownerGroups]
       : ownerGroups;
-  }, [repos, filter, favoriteRepos, accounts, t]);
+  }, [repos, filter, favoriteRepos, accounts, t, repoName]);
 
   // Flat list of visible repos for keyboard navigation
   const flatItems = useMemo(() => {
@@ -500,7 +503,12 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate leading-tight">
-                              {repoOwner ? `${repoOwner}/${repo.name}` : repo.name}
+                              {/* 표시 이름이 있으면 그것만, 없으면 owner/폴더 이름 */}
+                              {repoName(repo) !== repo.name
+                                ? repoName(repo)
+                                : repoOwner
+                                  ? `${repoOwner}/${repo.name}`
+                                  : repo.name}
                             </p>
                             {repo.currentBranch && (
                               <div className="flex items-center gap-1 mt-0.5">
@@ -606,7 +614,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                             isFavorite={favoriteRepos.includes(repo.path)}
                             hasRemote={repo.remotes.length > 0}
                             onToggleFavorite={() => toggleFavorite(repo.path)}
-                            onOpenAutoSync={() => openAutoSyncSettings(repo.path)}
+                            onOpenAutoSync={() => openRepoSettings(repo.path, "sync")}
                             onSelect={async (accountId: string | null) => {
                               updateRepoAccount(repo.path, accountId);
                               setAccountPickerRepo(null);

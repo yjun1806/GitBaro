@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { gitFetch, gitPull, gitPush, planRemoteOp } from "@/api/commands";
 import { invalidateAfterSync } from "@/api/queries";
+import { repoDisplayName, type RepoPrefs } from "@/lib/repo-prefs";
 import { findOwnerRepo, useRepositoryStore } from "@/stores/repository";
 import { useSyncStore } from "@/stores/sync";
 import { getErrorMessage, isMergeConflictError } from "@/lib/utils";
@@ -201,7 +202,7 @@ function latest(a: number | null, b: number | null): number | null {
 }
 
 /**
- * 워크스페이스 경로를 등록된 저장소 정보(이름·지정 계정)로 바꾼다.
+ * 워크스페이스 경로를 등록된 저장소 정보(표시 이름·지정 계정)로 바꾼다.
  * `lastFetched`는 이 앱에서 성공한 fetch 시각(`useSyncStore.lastFetchedByRepo`)이다.
  * 워크트리 경로면 소유 저장소(`activeWorktrees`로 역추적)의 계정을 쓴다.
  */
@@ -210,13 +211,14 @@ export function targetsFor(
   repos: RepoInfo[],
   lastFetched: Readonly<Record<string, number>> = {},
   activeWorktrees: Readonly<Record<string, string>> = {},
+  prefs: Readonly<Record<string, RepoPrefs>> = {},
 ): RemoteRepoTarget[] {
   return paths.map((path) => {
     const repo =
       repos.find((r) => r.path === path) ?? findOwnerRepo(repos, path, activeWorktrees);
     return {
       path,
-      name: repo?.name ?? path.split("/").filter(Boolean).pop() ?? path,
+      name: repo ? repoDisplayName(repo, prefs) : path.split("/").filter(Boolean).pop() ?? path,
       accountId: repo?.accountId ?? null,
       lastFetchedAt: lastFetched[path] ?? null,
     };
@@ -250,6 +252,7 @@ export function useMultiRepoRemote(paths: string[], op: RemoteOp) {
       repos,
       useSyncStore.getState().lastFetchedByRepo,
       useRepositoryStore.getState().activeWorktrees,
+      useRepositoryStore.getState().repoPrefs,
     ),
   );
 

@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createSafeStorage } from "@/lib/safe-storage";
+import { sanitizeRepoPrefsMap, withRepoPrefs, type RepoPrefs } from "@/lib/repo-prefs";
 import type { AutoSyncSetting, RepoInfo, StatusEntry } from "@/types";
 import type { RepoVisibility } from "@/api/commands";
 
@@ -49,6 +50,8 @@ interface RepositoryState {
   activeWorktrees: Record<string, string>;
   /** 저장소별 원격 자동 최신화 설정. 항목이 없으면 기본값(확인만, 3분)이다. */
   autoSyncByRepo: Record<string, AutoSyncSetting>;
+  /** 저장소별 앱 안 설정(표시 이름·색·비교 기준·알림). 폴더·원격에는 쓰지 않는다. */
+  repoPrefs: Record<string, RepoPrefs>;
   /** 활성 경로를 그대로 설정한다. 워크트리라면 parentRepoPath로 소유 저장소를 알린다. */
   setActiveRepo: (path: string, parentRepoPath?: string) => void;
   /** 저장소에서 마지막으로 보던 워크트리를 기록한다. null이면 메인으로 되돌린다. */
@@ -67,6 +70,10 @@ interface RepositoryState {
   toggleGroupCollapsed: (label: string) => void;
   toggleFavorite: (path: string) => void;
   setAutoSync: (repoPath: string, setting: AutoSyncSetting) => void;
+  /** 저장소의 자동 최신화 설정을 지워 앱 기본값을 따르게 한다. */
+  resetAutoSync: (repoPath: string) => void;
+  /** 저장소 설정 일부를 바꾼다. `undefined`인 필드는 기본값으로 돌린다. */
+  updateRepoPrefs: (repoPath: string, patch: Partial<RepoPrefs>) => void;
   setStatusEntries: (entries: StatusEntry[]) => void;
   setLoading: (loading: boolean) => void;
 }
@@ -125,6 +132,7 @@ export type RepositoryPersistedState = Pick<
   | "favoriteRepos"
   | "activeWorktrees"
   | "autoSyncByRepo"
+  | "repoPrefs"
 >;
 
 const isPlainRecord = (v: unknown): v is Record<string, unknown> =>
@@ -161,6 +169,8 @@ export function sanitizeRepositoryState(persisted: unknown): Partial<RepositoryP
   if (isPlainRecord(src.autoSyncByRepo)) {
     out.autoSyncByRepo = src.autoSyncByRepo as Record<string, AutoSyncSetting>;
   }
+  // 나중에 더한 선택 필드다. 없거나 깨졌으면 빈 값(모두 기본 동작)을 쓴다.
+  if (src.repoPrefs !== undefined) out.repoPrefs = sanitizeRepoPrefsMap(src.repoPrefs);
   return out;
 }
 
@@ -179,6 +189,7 @@ export const useRepositoryStore = create<RepositoryState>()(
       favoriteRepos: [],
       activeWorktrees: {},
       autoSyncByRepo: {},
+      repoPrefs: {},
 
       setActiveRepo: (path, parentRepoPath?) => {
         const ownerPath = parentRepoPath ?? path;
@@ -221,6 +232,7 @@ export const useRepositoryStore = create<RepositoryState>()(
           const repos = state.repos.filter((r) => r.path !== path);
           const { [path]: removedWorktree, ...activeWorktrees } = state.activeWorktrees;
           const { [path]: _removedAutoSync, ...autoSyncByRepo } = state.autoSyncByRepo;
+          const { [path]: _removedPrefs, ...repoPrefs } = state.repoPrefs;
           // 그 저장소의 워크트리를 보던 중이었다면 activeRepoPath가 사라진 저장소를
           // 가리키게 되므로 함께 비운다.
           const wasActive =
@@ -232,6 +244,7 @@ export const useRepositoryStore = create<RepositoryState>()(
             activeRepo: findOwnerRepo(repos, activeRepoPath, activeWorktrees),
             activeWorktrees,
             autoSyncByRepo,
+            repoPrefs,
           };
         }),
 
@@ -299,6 +312,16 @@ export const useRepositoryStore = create<RepositoryState>()(
           autoSyncByRepo: { ...state.autoSyncByRepo, [repoPath]: setting },
         })),
 
+      resetAutoSync: (repoPath) =>
+        set((state) => {
+          if (!(repoPath in state.autoSyncByRepo)) return state;
+          const { [repoPath]: _removed, ...autoSyncByRepo } = state.autoSyncByRepo;
+          return { autoSyncByRepo };
+        }),
+
+      updateRepoPrefs: (repoPath, patch) =>
+        set((state) => ({ repoPrefs: withRepoPrefs(state.repoPrefs, repoPath, patch) })),
+
       setStatusEntries: (entries) => set({ statusEntries: entries }),
 
       setLoading: (loading) => set({ isLoading: loading }),
@@ -319,6 +342,7 @@ export const useRepositoryStore = create<RepositoryState>()(
         favoriteRepos: state.favoriteRepos,
         activeWorktrees: state.activeWorktrees,
         autoSyncByRepo: state.autoSyncByRepo,
+        repoPrefs: state.repoPrefs,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;

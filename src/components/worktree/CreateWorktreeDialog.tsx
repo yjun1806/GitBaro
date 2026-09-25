@@ -8,6 +8,8 @@ import { addWorktree } from "@/api/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { getErrorMessage } from "@/lib/utils";
+import { suggestWorktreePath } from "./worktree-path";
+import { usePreferencesStore } from "@/stores/preferences";
 import { BranchCombobox } from "@/components/ui/BranchCombobox";
 import type { BranchInfo, WorktreeInfo } from "@/types";
 import { Dialog } from "@/components/ui/Dialog";
@@ -26,15 +28,6 @@ function isValidBranchName(name: string): boolean {
   return /^[a-zA-Z0-9._/-]+$/.test(name) && !name.startsWith("/") && !name.endsWith("/");
 }
 
-function suggestWorktreePath(repoPath: string, branchName: string): string {
-  const safeBranch = branchName.replace(/\//g, "-").replace(/^-+|-+$/g, "");
-  if (!safeBranch) return "";
-  const lastSlash = repoPath.lastIndexOf("/");
-  const parentDir = lastSlash > 0 ? repoPath.slice(0, lastSlash) : repoPath;
-  const repoName = repoPath.slice(lastSlash + 1);
-  return `${parentDir}/${repoName}-${safeBranch}`;
-}
-
 export function CreateWorktreeDialog({
   repoPath,
   branches,
@@ -45,6 +38,7 @@ export function CreateWorktreeDialog({
   const titleId = useId();
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
+  const worktreeParentDir = usePreferencesStore((s) => s.worktreeParentDir);
 
   const [branchMode, setBranchMode] = useState<BranchMode>("existing");
   const [selectedBranch, setSelectedBranch] = useState("");
@@ -82,8 +76,8 @@ export function CreateWorktreeDialog({
       setWorktreePath("");
       return;
     }
-    setWorktreePath(suggestWorktreePath(repoPath, activeBranchName));
-  }, [activeBranchName, repoPath, pathIsManual]);
+    setWorktreePath(suggestWorktreePath(repoPath, activeBranchName, worktreeParentDir));
+  }, [activeBranchName, repoPath, pathIsManual, worktreeParentDir]);
 
   const branchNameError =
     branchMode === "new" && newBranchName.length > 0 && !isValidBranchName(newBranchName)

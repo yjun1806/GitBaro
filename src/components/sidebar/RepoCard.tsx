@@ -1,7 +1,8 @@
 import type { MouseEvent } from "react";
 import { Eye, GitBranch, Loader2, Star } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { avatarColor, avatarInitial } from "@/lib/avatar-color";
+import { avatarInitial } from "@/lib/avatar-color";
+import { useRepoAvatarColor, useRepoName } from "@/hooks/useRepoDisplay";
 import { middleEllipsis } from "@/lib/middle-ellipsis";
 import type { RepoNode } from "@/lib/repo-tree";
 import { cn } from "@/lib/utils";
@@ -70,14 +71,15 @@ export function viewOnlyDefaultBranch(
 }
 
 export function RepoAvatar({ repo }: { repo: RepoInfo }) {
-  const color = avatarColor(repo.path);
+  const color = useRepoAvatarColor()(repo.path);
+  const name = useRepoName()(repo);
   return (
     <span
       aria-hidden="true"
       className={`${LEADING_TILE} text-[9.5px] font-extrabold`}
       style={{ backgroundColor: color.background, color: color.foreground }}
     >
-      {avatarInitial(repo.name)}
+      {avatarInitial(name)}
     </span>
   );
 }
@@ -192,6 +194,7 @@ export function RepoCard({
   onToggle,
 }: RepoCardProps) {
   const { repo } = node;
+  const repoName = useRepoName();
   const paths = repoPaths(node);
   const headerSelected = !expanded && selection.activeOwnerPath === repo.path;
   return (
@@ -200,7 +203,7 @@ export function RepoCard({
         <DraggableRow
           id={node.key}
           kind="repo"
-          label={repo.name}
+          label={repoName(repo)}
           depth={0}
           path={repo.path}
           branch={data.branchOf(repo.path)}
@@ -263,12 +266,13 @@ export function RepoHeaderRow({
   onContextMenu,
 }: RepoHeaderRowProps) {
   const { t } = useTranslation();
+  const name = useRepoName()(repo);
   return (
     <TreeRowFrame
       level={level}
       depth={depth}
       treePath={repo.path}
-      label={repo.name}
+      label={name}
       expanded={expanded}
       selected={selected}
       hover={{ kind: "repo", repoPath: repo.path, paths }}
@@ -281,7 +285,7 @@ export function RepoHeaderRow({
     >
       <RepoAvatar repo={repo} />
       <span className={cn(ROW_TITLE, "font-semibold")}>
-        {repo.name}
+        {name}
         {favorite && (
           <Star
             className="inline-block ml-1 w-2.5 h-2.5 align-[-1px] fill-current text-[var(--faint)]"

@@ -13,7 +13,7 @@ import { useUIStore } from "@/stores/ui";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { GhLoginDialog } from "@/components/account/GhLoginDialog";
-import { SettingsPanel } from "@/components/settings/SettingsPanel";
+import { SettingsPanel, type AppSettingsSection } from "@/components/settings/SettingsPanel";
 import { HEADER_HEIGHT_CLASS } from "@/lib/layout-tokens";
 import { ToolbarDropdownContext, useToolbarDropdown } from "./useToolbarDropdown";
 import { BranchZone } from "./BranchZone";
@@ -33,6 +33,7 @@ export function ToolbarRoot() {
 
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<AppSettingsSection>("general");
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
 
   const accounts = useAccountStore((s) => s.accounts);
@@ -42,7 +43,8 @@ export function ToolbarRoot() {
   const setTheme = useUIStore((s) => s.setTheme);
   const { t, i18n } = useTranslation();
 
-  const handleOpenSettings = async () => {
+  const handleOpenSettings = async (section: AppSettingsSection = "general") => {
+    setSettingsSection(section);
     try {
       const settings = await getSettings();
       setAppSettings(settings);
@@ -170,10 +172,10 @@ export function ToolbarRoot() {
             onToggle={() => toggle("account")}
             onClose={close}
             onSignIn={() => setShowLoginDialog(true)}
-            onManageAccounts={handleOpenSettings}
+            onManageAccounts={() => void handleOpenSettings("accounts")}
           />
           <button
-            onClick={handleOpenSettings}
+            onClick={() => void handleOpenSettings()}
             className={toolbarButtonClass({ iconOnly: true })}
             title={t("common.settings")}
             aria-label={t("common.settings")}
@@ -202,6 +204,7 @@ export function ToolbarRoot() {
           }}
           onSyncAccounts={handleSyncAccounts}
           onClose={() => setShowSettings(false)}
+          initialSection={settingsSection}
         />
       )}
     </ToolbarDropdownContext.Provider>
