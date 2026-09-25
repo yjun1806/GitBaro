@@ -8,7 +8,9 @@ import "./diff-theme.css";
 import type { DiffOutput, DiffHunk, FileStatus } from "@/types";
 import { DiffHeader } from "./DiffHeader";
 import { BinaryDiffViewer } from "./BinaryDiffViewer";
-import { VirtualizedDiffView } from "./VirtualizedDiffView";
+import { VirtualizedDiffView, type DiffMenuLine } from "./VirtualizedDiffView";
+import { DiffContextMenu } from "./DiffContextMenu";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { MarkdownDiffView } from "./MarkdownDiffView";
 import { availableModes, defaultMode, diffResetKey, type DiffViewMode } from "./view-mode";
 import { useUIStore } from "@/stores/ui";
@@ -60,6 +62,8 @@ interface DiffViewerProps {
   headerExtra?: ReactNode;
   /** diff 머리에 「크게 보기」 버튼을 둘지. 목록 + diff 화면에서만 켠다. */
   maximizable?: boolean;
+  /** 파일이 든 저장소(워크트리). 주면 우클릭 메뉴에서 편집기로 파일을 연다. */
+  repoPath?: string | null;
 }
 
 export function DiffViewer({
@@ -70,6 +74,7 @@ export function DiffViewer({
   revealLine = null,
   headerExtra,
   maximizable = false,
+  repoPath = null,
 }: DiffViewerProps) {
   const { t } = useTranslation();
   const lineMode = useUIStore((s) => s.diffLineMode);
@@ -86,6 +91,14 @@ export function DiffViewer({
   const filePath = diff?.filePath;
   const binary = diff?.binary ?? false;
   const modes = useMemo(() => availableModes(filePath ?? "", binary), [filePath, binary]);
+
+  // 본문 우클릭 메뉴. 고른 글은 우클릭한 그 순간의 것을 쓴다(메뉴를 누를 때는 이미 풀려 있을 수 있다).
+  const [menu, setMenu] = useState<{ selection: string; line: DiffMenuLine | null; x: number; y: number } | null>(null);
+  const openMenu = useCallback((line: DiffMenuLine | null, e: React.MouseEvent) => {
+    e.preventDefault();
+    const selection = window.getSelection()?.toString() ?? "";
+    setMenu({ selection, line, ...contextMenuPoint(e) });
+  }, []);
 
   // 큰 diff는 하이라이팅을 기본 off로 두되, 사용자가 켤 수 있다.
   const [forceHighlight, setForceHighlight] = useState(false);
@@ -275,13 +288,15 @@ export function DiffViewer({
 
       {viewMode === "document" ? (
         // 파일이 바뀌면 새로 마운트한다 — 안 그러면 새 원문으로 계산이 끝나기 전 한 프레임
-        // 동안 이전 파일의 문서가 남는다.
-        <MarkdownDiffView
-          key={diff.filePath}
-          oldContent={diff.oldContent}
-          newContent={diff.newContent}
-          onError={handleDocError}
-        />
+        // 동안 이전 파일의 문서가 남는다. 감싼 칸은 배치에 끼지 않고(contents) 우클릭만 받는다.
+        <div className="contents" onContextMenu={(e) => openMenu(null, e)}>
+          <MarkdownDiffView
+            key={diff.filePath}
+            oldContent={diff.oldContent}
+            newContent={diff.newContent}
+            onError={handleDocError}
+          />
+        </div>
       ) : diffFile ? (
         // 파일·모드마다 새로 마운트한다. 행 키(`l3`, `h0`)는 파일·모드를 가리지 않아서,
         // 같은 가상 스크롤러를 재사용하면 이전 파일의 행 높이가 새 파일에 남아 행이 겹친다.
@@ -295,6 +310,7 @@ export function DiffViewer({
           fontSize={12}
           freshLines={freshLines}
           revealLine={revealLine}
+          onLineContextMenu={openMenu}
         />
       ) : (
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -303,6 +319,16 @@ export function DiffViewer({
           </div>
           <p className="text-sm font-medium">{t("diff.noSelection")}</p>
         </div>
+      )}
+      {menu && (
+        <DiffContextMenu
+          selection={menu.selection}
+          line={menu.line}
+          filePath={diff.filePath}
+          repoPath={repoPath}
+          position={{ x: menu.x, y: menu.y }}
+          onClose={() => setMenu(null)}
+        />
       )}
     </div>
   );

@@ -444,6 +444,7 @@ export function CommitDetail({
       detail={
         <DiffViewer
           maximizable
+          repoPath={repoPath}
           diff={selectedFileDiff ?? null}
           status={changedFiles.find((f) => f.path === selectedPath)?.status ?? "modified"}
         />

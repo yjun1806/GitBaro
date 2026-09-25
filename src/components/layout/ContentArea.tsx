@@ -79,7 +79,7 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
     );
   }
 
-  return <DiffViewer diff={diff ?? null} status={fileStatus} staged={staged} maximizable />;
+  return <DiffViewer diff={diff ?? null} status={fileStatus} staged={staged} maximizable repoPath={activeRepoPath} />;
 }
 
 function CommitDetailView({ commitId }: { commitId: string }) {

@@ -590,6 +590,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
             staged={staged}
             freshLines={freshLines}
             maximizable
+            repoPath={path}
             revealLine={following && fresh ? (fresh.delta.ranges[0]?.start ?? null) : null}
             headerExtra={
               <>

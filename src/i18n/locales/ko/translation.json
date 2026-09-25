@@ -1302,6 +1302,10 @@
     "placeMenu": "지금 폴더 메뉴",
     "copyStashMessage": "stash 메시지 복사",
     "stashMenu": "stash 메뉴",
-    "runMenu": "실행 메뉴"
+    "runMenu": "실행 메뉴",
+    "copySelection": "복사",
+    "copyLine": "{{line}}번 줄 복사",
+    "openFileInEditor": "편집기에서 파일 열기",
+    "diffMenu": "diff 메뉴"
   }
 }

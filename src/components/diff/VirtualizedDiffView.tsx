@@ -281,6 +281,23 @@ interface VirtualizedDiffViewProps {
   freshLines?: ReadonlySet<number>;
   /** 이 새 쪽 줄 번호가 보이도록 스크롤한다. 값이 바뀔 때만 움직인다. */
   revealLine?: number | null;
+  /** 줄 우클릭. 누른 곳이 코드 줄이면 그 줄, 접힌 구간 머리나 빈칸이면 null을 넘긴다. */
+  onLineContextMenu?: (line: DiffMenuLine | null, e: React.MouseEvent) => void;
+}
+
+/** 우클릭한 diff 줄. */
+export interface DiffMenuLine {
+  /** 줄 내용(+/- 표시 없이). */
+  text: string;
+  /** 그 쪽 파일에서의 줄 번호. */
+  lineNumber: number;
+  /** 옛 쪽(지운 줄)인지 새 쪽인지. */
+  side: "old" | "new";
+}
+
+/** 줄 내용 끝의 줄바꿈을 뗀다. */
+function lineText(value: string | undefined): string {
+  return (value ?? "").replace(/\r?\n$/, "");
 }
 
 /** 방금 바뀐 줄 표시: 주황 옅은 배경과 왼쪽 3px 막대(시안 D4). */
@@ -295,6 +312,7 @@ export function VirtualizedDiffView({
   fontSize,
   freshLines,
   revealLine = null,
+  onLineContextMenu,
 }: VirtualizedDiffViewProps) {
   const { t } = useTranslation();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -587,12 +605,37 @@ export function VirtualizedDiffView({
 
     return (
       <div className="flex" style={{ minHeight: rowHeight }}>
-        <span style={{ ...half, borderRight: "1px solid var(--diff-border--)" }}>
+        <span data-side="old" style={{ ...half, borderRight: "1px solid var(--diff-border--)" }}>
           {renderSplitSide(left, "old")}
         </span>
-        <span style={half}>{renderSplitSide(right, "new")}</span>
+        <span data-side="new" style={half}>
+          {renderSplitSide(right, "new")}
+        </span>
       </div>
     );
+  };
+
+  // 우클릭한 줄을 찾는다. 행은 `data-index`, 나란히 보기의 좌우는 `data-side`로 가린다.
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!onLineContextMenu || !(e.target instanceof Element)) return;
+    const rowEl = e.target.closest("[data-index]");
+    const row = rowEl ? rows[Number(rowEl.getAttribute("data-index"))] : undefined;
+    let line: DiffMenuLine | null = null;
+    if (row?.kind === "line") {
+      if (isSplit) {
+        const side = e.target.closest("[data-side]")?.getAttribute("data-side") === "old" ? "old" : "new";
+        const l = side === "old" ? diffFile.getSplitLeftLine(row.index) : diffFile.getSplitRightLine(row.index);
+        if (l.lineNumber != null) line = { text: lineText(l.value), lineNumber: l.lineNumber, side };
+      } else {
+        const l = diffFile.getUnifiedLine(row.index);
+        const lineNumber = l.newLineNumber ?? l.oldLineNumber;
+        if (lineNumber != null) {
+          line = { text: lineText(l.value), lineNumber, side: l.newLineNumber != null ? "new" : "old" };
+        }
+      }
+    }
+    e.preventDefault();
+    onLineContextMenu(line, e);
   };
 
   const renderRow = (row: DiffRow) => {
@@ -607,6 +650,7 @@ export function VirtualizedDiffView({
         className="absolute inset-0 overflow-y-auto overflow-x-hidden diff-tailwindcss-wrapper"
         style={DIFF_SCROLL_STYLE}
         data-theme={isDark ? "dark" : "light"}
+        onContextMenu={handleContextMenu}
       >
         <div
           ref={contentRef}

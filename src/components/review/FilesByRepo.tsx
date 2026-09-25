@@ -541,7 +541,7 @@ function SelectedFileDiff({ file }: { file: SelectedFile }) {
       </div>
     );
   }
-  return <DiffViewer diff={result.data} status={file.status} maximizable />;
+  return <DiffViewer diff={result.data} status={file.status} maximizable repoPath={file.repoPath} />;
 }
 
 /** 연결된 변경: 두 저장소 파일에서 같은 문자열이 추가된 부분을 나란히 보여 준다. */

@@ -256,7 +256,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
         detail={
           <>
           {selectedFilePath && fileDiff ? (
-            <DiffViewer diff={fileDiff} status="modified" maximizable />
+            <DiffViewer diff={fileDiff} status="modified" maximizable repoPath={activeRepoPath} />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
               <FileText className="w-8 h-8" />

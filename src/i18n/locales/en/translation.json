@@ -1327,6 +1327,10 @@
     "placeMenu": "Current folder menu",
     "copyStashMessage": "Copy stash message",
     "stashMenu": "Stash menu",
-    "runMenu": "Workflow run menu"
+    "runMenu": "Workflow run menu",
+    "copySelection": "Copy",
+    "copyLine": "Copy line {{line}}",
+    "openFileInEditor": "Open file in editor",
+    "diffMenu": "Diff menu"
   }
 }
