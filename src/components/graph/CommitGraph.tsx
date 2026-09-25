@@ -25,7 +25,6 @@ import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { computeGraphLanes } from "@/lib/graph-lanes";
 import { formatRelativeTime, getErrorMessage, gitHubRepoUrl } from "@/lib/utils";
-import { HistoryView } from "@/components/history/HistoryView";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { useWipRowMenu } from "./useWipRowMenu";
@@ -101,10 +100,8 @@ const NO_WORKTREE_HEADS: readonly WorktreeHead[] = [];
 /**
  * 위 패널의 커밋 그래프(단일 저장소). 전체 폭 레인 그래프로 HEAD의 이력을 그리고,
  * 맨 위에 워크트리마다 WIP 행, 새 커밋 점, 「여기까지 확인함」 구분선을 둔다.
- * 브랜치 비교를 켜면 WIP 행 아래가 기존 비교 화면(`HistoryView`)으로 바뀐다.
  */
 export function CommitGraph({ wips: allWips, ...rest }: CommitGraphProps) {
-  const compareBranch = useUIStore((s) => s.compareBranch);
   const followTarget = useFollowStore((s) => s.target);
   // 커밋하지 않은 파일이 없는 워크트리의 「커밋하지 않은 변경 · 파일 0」 행은 숨긴다.
   const wips = useMemo(() => visibleWipRows(allWips, followTarget), [allWips, followTarget]);
@@ -120,16 +117,6 @@ export function CommitGraph({ wips: allWips, ...rest }: CommitGraphProps) {
         top={<WipRows wips={props.wips} selection={selection} graphWidth={graphColumnWidth(1)} />}
         onSelectCommit={selection.selectCommit}
       />
-    );
-  }
-  // 비교 화면(선택기의 비교 해제 버튼, merge 패널 포함)은 기존 화면을 그대로 쓴다.
-  // WIP 행은 남겨 비교 중에도 스테이징 목록으로 갈 수 있게 한다.
-  if (compareBranch) {
-    return (
-      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-        <WipRows wips={props.wips} selection={selection} graphWidth={graphColumnWidth(1)} />
-        <HistoryView />
-      </div>
     );
   }
   return <CommitGraphList {...props} selection={selection} />;

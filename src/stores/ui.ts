@@ -29,7 +29,6 @@ interface UIState {
   isSidebarCollapsed: boolean;
   railMode: RailMode;
   repoListOpen: boolean;
-  compareBranch: string | null;
   isActivityLogOpen: boolean;
   /** 브랜치 전환(checkout + 재조회) 진행 중 여부. 로딩 피드백 표시에 사용. */
   isSwitchingBranch: boolean;
@@ -55,7 +54,6 @@ interface UIState {
   toggleSidebar: () => void;
   setRailMode: (mode: RailMode) => void;
   setRepoListOpen: (open: boolean) => void;
-  setCompareBranch: (branch: string | null) => void;
   setActivityLogOpen: (open: boolean) => void;
   setSwitchingBranch: (switching: boolean) => void;
   setDiffLineMode: (mode: DiffLineMode) => void;
@@ -143,7 +141,6 @@ export const useUIStore = create<UIState>()(
       // 있으면 merge()에서 그 값을 그대로 되살린다(W2-T2: rail의 접힘·hover 모드 유지).
       railMode: "expanded",
       repoListOpen: false,
-      compareBranch: null,
       isActivityLogOpen: false,
       isSwitchingBranch: false,
       diffLineMode: "unified",
@@ -167,7 +164,6 @@ export const useUIStore = create<UIState>()(
 
       setRepoListOpen: (open) => set({ repoListOpen: open }),
 
-      setCompareBranch: (branch) => set({ compareBranch: branch }),
       setActivityLogOpen: (open) => set({ isActivityLogOpen: open }),
       setSwitchingBranch: (switching) => set({ isSwitchingBranch: switching }),
       setDiffLineMode: (mode) => set({ diffLineMode: mode }),

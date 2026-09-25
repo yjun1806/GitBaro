@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { FileText, GitCommit, GitCompare, Archive, Play } from "lucide-react";
+import { FileText, GitCommit, Archive, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
-import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
 import {
   useStatus,
@@ -186,7 +185,6 @@ interface ContentAreaProps {
  */
 export function ContentArea({ activeTab }: ContentAreaProps) {
   const { t } = useTranslation();
-  const compareBranch = useUIStore((s) => s.compareBranch);
 
   const selectedFile = useSelectionStore((s) => s.selectedFile);
   const selectedFileStaged = useSelectionStore((s) => s.selectedFileStaged);
@@ -272,12 +270,6 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
         )
       ) : selectedCommitId ? (
         <CommitDetailView key={selectedCommitId} commitId={selectedCommitId} />
-      ) : compareBranch ? (
-        <EmptyState
-          icon={GitCompare}
-          title={t("diff.noCommitSelected")}
-          description={t("compare.comparingWith", { branch: compareBranch })}
-        />
       ) : (
         <EmptyState
           icon={GitCommit}

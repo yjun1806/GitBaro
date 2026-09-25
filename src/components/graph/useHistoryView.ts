@@ -72,7 +72,6 @@ export function useSetHistoryView(): (target: ViewTarget | null) => void {
       useBranchRangeStore.getState().clear();
       useSelectionStore.getState().clearCommitSelection();
       const ui = useUIStore.getState();
-      if (ui.compareBranch !== null) ui.setCompareBranch(null);
       if (target !== null) {
         useFollowStore.getState().stop();
         if (ui.activeTab === "changes") ui.setActiveTab("history");

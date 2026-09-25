@@ -30,7 +30,6 @@ import type {
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/components/stash/StashView", () => ({ StashView: () => <div>stash-list</div> }));
 vi.mock("@/components/actions/ActionsView", () => ({ ActionsView: () => <div>actions-list</div> }));
-vi.mock("@/components/history/HistoryView", () => ({ HistoryView: () => <div>compare-view</div> }));
 
 const switchTo = async (path: string) => {
   useRepositoryStore.setState({ activeRepoPath: path });
@@ -220,7 +219,7 @@ beforeEach(async () => {
   mergeMockStore.setState({ value: null });
   useBranchRangeStore.getState().clear();
   // 이 파일의 기존 시나리오는 「확인하지 않은 커밋」 기준(확인함 표시)이다. 기본 기준은 따로 본다.
-  useUIStore.setState({ activeTab: "history", compareBranch: null, repoListOpen: false, reviewBasis: "unseen" });
+  useUIStore.setState({ activeTab: "history", repoListOpen: false, reviewBasis: "unseen" });
   unpushedState.value = undefined;
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
@@ -378,14 +377,6 @@ describe("GraphPanel commit graph", () => {
     expect(useActivityTargetsStore.getState().extraByKey.graph).toBeUndefined();
   });
 
-  it("keeps the WIP rows above the compare view while a branch is compared", () => {
-    useUIStore.setState({ compareBranch: "feat/x" });
-    renderPanel();
-    expect(screen.getByText("compare-view")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes · main branch · primary folder · 1 file" }));
-    expect(useUIStore.getState().activeTab).toBe("changes");
-  });
-
   it("opens changes by file as header-only view state and closes it when another tab is picked", () => {
     renderPanel();
     fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
@@ -538,9 +529,9 @@ describe("GraphPanel worktree chips (D5)", () => {
   });
 
   it("hides the chips while the graph shows a branch comparison", () => {
-    useUIStore.setState({ compareBranch: "feat/x" });
+    branchList.push({ name: "main", isHead: true, isRemote: false }, { name: "feat/x", isHead: false, isRemote: false });
+    useBranchRangeStore.getState().setRange({ repoPath: REPO, base: "main", target: "feat/x", head: "main" });
     renderPanel();
-    expect(screen.getByText("compare-view")).toBeTruthy();
     expect(screen.queryByRole("group", { name: "Worktrees to show together in the graph" })).toBeNull();
   });
 

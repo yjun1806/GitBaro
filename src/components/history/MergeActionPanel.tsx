@@ -53,7 +53,6 @@ export function MergeActionPanel({
 }: MergeActionPanelProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const setCompareBranch = useUIStore((s) => s.setCompareBranch);
   const setActiveTab = useUIStore((s) => s.setActiveTab);
   const addToast = useToastStore((s) => s.addToast);
   const accountId = useRepoAccountId();
@@ -84,7 +83,6 @@ export function MergeActionPanel({
       await mergeBranch(repoPath, compareBranch, strategy, accountId);
       addToast(t("merge.success", { source: compareBranch, target: currentBranch }), "success");
       await invalidateAfterMerge();
-      setCompareBranch(null);
     } catch (error) {
       if (isMergeConflictError(error)) {
         // 충돌 파일과 merge 진행 상태가 이미 바뀌었다. 목록을 갱신해야 Changes 탭에
