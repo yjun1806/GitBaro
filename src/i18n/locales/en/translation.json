@@ -992,6 +992,7 @@
       "running": "Running…",
       "ok": "Done",
       "conflict": "Stopped on a conflict",
+      "busy": "Skipped: already syncing",
       "failed": "Failed"
     },
     "summary": "{{ok}} succeeded · {{failed}} failed",

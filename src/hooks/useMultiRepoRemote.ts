@@ -37,6 +37,8 @@ export type RemoteRowResult =
   | { status: "running" }
   | { status: "ok" }
   | { status: "conflict" }
+  /** 툴바 등 다른 곳에서 그 저장소의 동기화가 이미 돌고 있어 건너뛰었다. */
+  | { status: "busy" }
   | { status: "failed"; message: string };
 
 /** 실제 git 호출. 테스트에서 바꿔 끼운다. 토큰은 넘기지 않고 계정 ID만 넘긴다. */
@@ -45,15 +47,27 @@ export interface RemoteDeps {
   pull: (path: string, accountId: string) => Promise<void>;
   push: (path: string, accountId: string) => Promise<void>;
   plan: (paths: string[], op: RemoteOp) => Promise<RepoRemotePlan[]>;
+  /** 그 저장소의 동기화가 이미 도는 중인가(`useSyncStore`, 툴바와 같은 상태). */
+  isBusy: (path: string) => boolean;
 }
 
 const DEFAULT_DEPS: RemoteDeps = {
-  fetch: (path, accountId) => gitFetch(path, accountId),
+  // 계획 전 fetch도 툴바와 같은 진행 상태에 올려, 그동안 툴바에서 같은 저장소의 push를 막는다.
+  fetch: async (path, accountId) => {
+    const { startSync, finishSync } = useSyncStore.getState();
+    startSync(path, "fetch");
+    try {
+      await gitFetch(path, accountId);
+    } finally {
+      finishSync(path);
+    }
+  },
   // 방식은 사용자의 pull.rebase 설정을 따른다(계획의 명령과 같게).
   pull: (path, accountId) => gitPull(path, accountId),
   // force push는 이 창에서 제공하지 않는다.
   push: (path, accountId) => gitPush(path, accountId, false),
   plan: (paths, op) => planRemoteOp(paths, op),
+  isBusy: (path) => path in useSyncStore.getState().syncingByRepo,
 };
 
 /** 계획상 실행할 줄인가(처음부터 체크한다). 계정이 없거나 계획이 건너뛴 저장소는 아니다. */
@@ -90,7 +104,9 @@ export async function prepareRemotePlan(
 ): Promise<{ rows: RemotePlanRow[]; fetchedPaths: string[] }> {
   const fetchOutcome = await Promise.all(
     targets.map(async (target) => {
-      if (op === "fetch" || target.accountId === null) return { path: target.path, ok: false };
+      if (op === "fetch" || target.accountId === null || deps.isBusy(target.path)) {
+        return { path: target.path, ok: false };
+      }
       try {
         await deps.fetch(target.path, target.accountId);
         return { path: target.path, ok: true };
@@ -123,6 +139,7 @@ export async function prepareRemotePlan(
  * 고른 저장소마다 기존 원격 명령을 **따로** 부른다. 하나가 실패해도 나머지는 계속한다.
  * 인증 실패 시 토큰 갱신·1회 재시도는 각 명령(`git_fetch`·`git_pull`·`git_push`)이 한다.
  * `pullFirst`에 든 저장소는 Push 전에 Pull을 먼저 돌린다.
+ * 툴바에서 이미 동기화 중인 저장소는 같은 저장소에 명령이 겹치지 않도록 건너뛴다(`busy`).
  */
 export async function runRemotePlan(
   rows: RemotePlanRow[],
@@ -136,6 +153,12 @@ export async function runRemotePlan(
     const { path } = row.plan;
     if (!isSelectable(row) || row.accountId === null) continue;
     const accountId = row.accountId;
+    if (deps.isBusy(path)) {
+      const busy: RemoteRowResult = { status: "busy" };
+      results = { ...results, [path]: busy };
+      onResult(path, busy);
+      continue;
+    }
     onResult(path, { status: "running" });
     let result: RemoteRowResult;
     try {
@@ -270,7 +293,7 @@ export function useMultiRepoRemote(paths: string[], op: RemoteOp) {
     setPhase("running");
     await runRemotePlan(chosen, op, pullFirst, (path, result) => {
       if (result.status === "running") startSync(path, op);
-      else finishSync(path);
+      else if (result.status !== "busy") finishSync(path);
       if (result.status === "ok" && op !== "push") markFetched(path, Math.floor(Date.now() / 1000));
       setResults((prev) => ({ ...prev, [path]: result }));
     });

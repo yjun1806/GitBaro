@@ -984,6 +984,7 @@
       "running": "실행 중…",
       "ok": "완료",
       "conflict": "충돌로 멈춤",
+      "busy": "건너뜀: 이미 동기화 중",
       "failed": "실패"
     },
     "summary": "성공 {{ok}}곳 · 실패 {{failed}}곳",

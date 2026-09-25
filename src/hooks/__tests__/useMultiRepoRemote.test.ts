@@ -50,6 +50,7 @@ function deps(overrides: Partial<RemoteDeps> = {}): RemoteDeps & { calls: string
       calls.push(`plan ${paths.join(",")}`);
       return Promise.resolve(paths.map((p) => plan(p)));
     }),
+    isBusy: () => false,
     ...overrides,
   };
 }
@@ -142,6 +143,14 @@ describe("prepareRemotePlan", () => {
   });
 });
 
+describe("prepareRemotePlan while another sync runs", () => {
+  it("does not pre-fetch a repository that is already syncing", async () => {
+    const d = deps({ isBusy: (path) => path === "/a" });
+    await prepareRemotePlan(targets, "push", d);
+    expect(d.calls.filter((c) => c.startsWith("fetch"))).toEqual(["fetch /b acc-b"]);
+  });
+});
+
 describe("runRemotePlan", () => {
   const collect = () => {
     const events: [string, RemoteRowResult["status"]][] = [];
@@ -190,6 +199,15 @@ describe("runRemotePlan", () => {
       ["/b", "running"],
       ["/b", "conflict"],
     ]);
+  });
+
+  it("skips a repository whose sync is already running elsewhere", async () => {
+    const d = deps({ isBusy: (path) => path === "/a" });
+    const { events, onResult } = collect();
+    const results = await runRemotePlan([row("/a"), row("/b")], "push", new Set(), onResult, d);
+    expect(d.calls).toEqual(["push /b acc"]);
+    expect(results["/a"]).toEqual({ status: "busy" });
+    expect(events[0]).toEqual(["/a", "busy"]);
   });
 
   it.each<RemoteOp>(["fetch", "pull", "push"])("%s passes only the account id, never a token", async (op) => {
