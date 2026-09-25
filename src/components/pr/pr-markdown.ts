@@ -16,10 +16,29 @@ const md = new MarkdownIt({ html: true, linkify: true, breaks: true, typographer
  * (앱 화면을 덮거나 흉내 내는 마크업, 실제로 동작하는 입력창). 주소는 http(s)·mailto·같은 문서 안
  * 앵커만 남긴다 — `javascript:`·`data:`·앱 안 상대 경로로 가는 링크를 막는다. `<img>`의 `data:` 이미지는
  * DOMPurify가 따로 허용한다(그림으로만 그려지고 코드를 실행하지 않는다).
+ *
+ * `<style>`은 속성이 아니라 요소라 `FORBID_ATTR`로는 걸리지 않는다. 본문 중간이나 `<svg>` 안에 두면
+ * 앱 전체의 스타일을 바꾸므로 요소째 막는다. `<svg>`·`<math>`는 그 안에서 규칙이 달라지는 별도
+ * 네임스페이스라 통째로 막고, 문서 머리 요소(`link`·`meta`·`base`)도 막는다.
  */
 const SANITIZE = {
   FORBID_ATTR: ["style", "class", "id"],
-  FORBID_TAGS: ["form", "input", "button", "select", "textarea", "iframe", "object", "embed"],
+  FORBID_TAGS: [
+    "style",
+    "svg",
+    "math",
+    "link",
+    "meta",
+    "base",
+    "form",
+    "input",
+    "button",
+    "select",
+    "textarea",
+    "iframe",
+    "object",
+    "embed",
+  ],
   ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|#)/i,
 };
 

@@ -43,6 +43,25 @@ describe("renderPrMarkdown", () => {
     expect(el.querySelector("form, input, button")).toBeNull();
   });
 
+  it("drops <style> elements anywhere in the body, including inside svg", () => {
+    // <style>은 속성이 아니라 요소라 FORBID_ATTR로는 걸리지 않는다. 본문 중간이나 <svg> 안의 <style>은
+    // 앱 전체의 스타일을 바꾼다(예: 모든 요소를 숨김).
+    const el = dom(
+      [
+        "hi",
+        "<style>*{visibility:hidden}</style>",
+        "<svg><style>body{background:red}</style></svg>",
+        "<math><mi>x</mi></math>",
+        '<link rel="stylesheet" href="https://evil.example/x.css">',
+      ].join("\n\n"),
+    );
+    expect(el.querySelector("style")).toBeNull();
+    expect(el.innerHTML).not.toContain("visibility:hidden");
+    expect(el.innerHTML).not.toContain("background:red");
+    expect(el.querySelector("svg, math, link")).toBeNull();
+    expect(el.textContent).toContain("hi");
+  });
+
   it("keeps https links, mailto and https images", () => {
     const el = dom("[docs](https://example.com/x) <mailto:a@example.com>\n\n![logo](https://example.com/logo.png)");
     expect(el.querySelector('a[href="https://example.com/x"]')).not.toBeNull();

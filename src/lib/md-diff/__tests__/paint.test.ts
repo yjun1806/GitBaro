@@ -214,6 +214,18 @@ describe("보안 — 임의 저장소의 README를 앱 메인 컨텍스트에 �
     expect(el.querySelector(".d-blk")).not.toBeNull();
   });
 
+  it("<style> 요소를 본문 중간과 svg 안에서도 걷어낸다", () => {
+    // 속성이 아니라 요소라 FORBID_ATTR에 걸리지 않는다. 남으면 앱 전체의 스타일을 바꾼다.
+    const el = render(
+      "문단.\n",
+      "문단.\n\n<style>*{visibility:hidden}</style>\n\n<svg><style>body{background:red}</style></svg>\n\n끝.\n",
+    );
+    expect(el.querySelector("style")).toBeNull();
+    expect(el.innerHTML).not.toContain("visibility:hidden");
+    expect(el.innerHTML).not.toContain("background:red");
+    expect(el.querySelector("svg")).toBeNull();
+  });
+
   it("폼 요소를 걷어낸다", () => {
     // 앱 창 안에서 동작하는 자격증명 입력창이 된다. CSP에 form-action이 없어 제출도 막히지 않는다.
     const el = render(
