@@ -88,7 +88,7 @@
     "close": "Close",
     "stageFailed": "Stage failed: {{error}}",
     "unstageFailed": "Unstage failed: {{error}}",
-    "workingChanges": "Working changes {{count}}",
+    "workingChanges": "Working changes",
     "target": "Commit to {{branch}} · {{worktree}}",
     "addDescription": "Add description",
     "author": "Author {{name}}"
@@ -1151,11 +1151,6 @@
     "detached": "No branch · {{sha}}",
     "detachedUnknown": "No branch",
     "noUpstream": "No remote branch",
-    "clean": "No uncommitted changes",
-    "uncommitted_one": "{{count}} uncommitted change",
-    "uncommitted_other": "{{count}} uncommitted changes",
-    "uncommittedStaged_one": "{{count}} uncommitted change ({{staged}} staged)",
-    "uncommittedStaged_other": "{{count}} uncommitted changes ({{staged}} staged)",
     "viewing": "Viewing {{target}} · not checked out",
     "operation": "{{op}} in progress",
     "operationConflicts_one": "{{op}} in progress · {{count}} conflict",
@@ -1168,11 +1163,9 @@
       "revert": "Revert",
       "squash": "Squash"
     },
-    "unpushed_one": "{{count}} commit not on any remote",
-    "unpushed_other": "{{count}} commits not on any remote",
+    "hasUnpushed": "Commits not on any remote",
     "notPublished": "not published",
-    "behind_one": "{{count}} to pull",
-    "behind_other": "{{count}} to pull",
+    "hasBehind": "Commits to pull",
     "inSync": "Up to date with remote"
   },
   "workSwitcher": {

@@ -197,12 +197,10 @@ describe("GraphPanel commit graph", () => {
     ]);
   });
 
-  it("badges the graph tab with commits not on any remote", async () => {
+  it("does not repeat the unpushed commit count on the graph tab (the sidebar and Push show it)", () => {
     unpushedState.value = { count: 3, hasUpstream: false, hasRemote: true, commits: [] };
     renderPanel();
-    await screen.findByText("c1");
-    const graphTab = screen.getByRole("tab", { name: /Commit graph/ });
-    expect(graphTab.textContent).toContain("3");
+    expect(screen.getByRole("tab", { name: /Commit graph/ }).textContent).toBe("Commit graph");
   });
 
   it("opens the staging list for the open worktree's WIP row", () => {
@@ -560,13 +558,14 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     expect(rows[1]).toContain("primary folder");
   });
 
-  it("offers Working changes N on the open worktree's row and in the status line, which open the staging list", () => {
+  it("offers Working changes on the open worktree's row only, which opens the staging list", () => {
     useUIStore.setState({ activeTab: "history" });
     useSelectionStore.getState().selectCommit("c2");
     renderPanel();
-    const buttons = screen.getAllByRole("button", { name: "Working changes 1" });
-    // 행에 하나, 상태 줄에 하나. 커밋하는 버튼처럼 보이는 이름은 없다.
-    expect(buttons).toHaveLength(2);
+    // 파일 수는 같은 행이 말하므로 버튼에는 수가 없다. 상태 줄에도 두지 않는다.
+    const buttons = screen.getAllByRole("button", { name: "Working changes" });
+    expect(buttons).toHaveLength(1);
+    expect(within(screen.getByRole("status")).queryByRole("button", { name: /^Working changes/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Commit/ })).toBeNull();
     // 다른 워크트리 행에는 없다(그 워크트리를 열어야 스테이징할 수 있다).
     const featRow = screen.getAllByTestId("wip-row")[0];

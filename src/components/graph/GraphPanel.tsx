@@ -9,7 +9,6 @@ import {
   useCommitHistoryInfinite,
   useMergeState,
   useStashList,
-  useUnpushedCommits,
   useWorkflowRuns,
   useWorktrees,
 } from "@/api/queries";
@@ -82,8 +81,6 @@ export function GraphPanel() {
   // 칩)을 감춘다. 그 표시는 체크아웃한 브랜치에만 맞는 말이다.
   const { target: viewTarget, historyTarget } = useHistoryView();
   const viewing = viewTarget !== null;
-  const { data: unpushed } = useUnpushedCommits(activeRepoPath);
-  const graphBadge = unpushed?.count;
   // 「main 대비 변경」 배지: 지금 연 워크트리의 main 대비 파일 수(그 탭이 보여 줄 목록과 같은 범위).
   const { data: history } = useCommitHistoryInfinite(activeRepoPath);
   const headOid = history?.pages[0]?.[0]?.id ?? null;
@@ -157,7 +154,6 @@ export function GraphPanel() {
             active={tab === "graph"}
             onClick={openGraphTab}
             icon={<GitCommitVertical className="w-3.5 h-3.5" />}
-            count={badgeCount(graphBadge)}
           >
             {t("shell.graphTab")}
           </Tab>

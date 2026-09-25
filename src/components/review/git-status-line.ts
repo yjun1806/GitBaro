@@ -16,8 +16,8 @@ export interface GitStatusInput {
   unpushed: number;
   /** 원격 저장소가 있는지. 없으면 upstream 칸을 그리지 않는다. */
   hasRemote: boolean;
-  /** 커밋 안 한 변경(파일 단위, 스테이징 포함). */
-  uncommitted: { total: number; staged: number; conflicts: number };
+  /** 충돌한 파일 수. 진행 중인 작업의 머리 글에 쓴다. */
+  conflicts: number;
   /** 진행 중인 merge·rebase 등. */
   operation: GitOperation | null;
   /** 체크아웃하지 않고 보는 대상. */
@@ -36,27 +36,16 @@ export interface GitStatusLineModel {
   /** 체크아웃 칸. */
   checkout: string;
   /**
-   * 원격 칸. 「원격에 없는 커밋 N개」(검토 기준), 추적 브랜치가 없으면 「publish 전」, 받을 커밋.
-   * `ahead`는 원격에 없는 커밋 수다. `title`은 추적 브랜치 이름. 그리지 않으면 null.
+   * 원격 칸. 「원격에 없는 커밋 있음」(검토 기준), 추적 브랜치가 없으면 「publish 전」, 「받을 커밋 있음」.
+   * 수는 적지 않는다 — 사이드바와 Push·Pull 버튼이 말한다. `ahead`는 원격에 없는 커밋 수다.
+   * `title`은 추적 브랜치 이름. 그리지 않으면 null.
    */
   upstream: { text: string; title: string; ahead: number; behind: number; hasUpstream: boolean } | null;
-  /** 커밋 안 한 변경 칸. 변경이 없으면 「커밋 안 한 변경 없음」. */
-  uncommitted: string;
-  /** 「작업 중인 변경 N」 버튼을 보일지. 보는 중이거나 변경이 없으면 숨긴다. */
-  canCommit: boolean;
 }
 
-/** 파일 목록 → 커밋 안 한 변경 수. 같은 파일이 스테이징·작업 트리 양쪽에 있어도 한 번만 센다. */
-export function countUncommitted(entries: readonly StatusEntry[]): GitStatusInput["uncommitted"] {
-  const all = new Set<string>();
-  const staged = new Set<string>();
-  const conflicts = new Set<string>();
-  for (const e of entries) {
-    all.add(e.path);
-    if (e.staged) staged.add(e.path);
-    if (e.status === "conflicted") conflicts.add(e.path);
-  }
-  return { total: all.size, staged: staged.size, conflicts: conflicts.size };
+/** 파일 목록 → 충돌한 파일 수. 같은 파일이 스테이징·작업 트리 양쪽에 있어도 한 번만 센다. */
+export function countConflicts(entries: readonly StatusEntry[]): number {
+  return new Set(entries.filter((e) => e.status === "conflicted").map((e) => e.path)).size;
 }
 
 /** 보는 대상의 이름(「모든 브랜치」 포함). */
@@ -65,7 +54,8 @@ export function viewTargetLabel(target: ViewTarget, t: TFunction): string {
 }
 
 /**
- * 상태 줄의 글을 만든다. 왼쪽부터 작업 트리 → 체크아웃 → upstream → 커밋 안 한 변경 순서다.
+ * 상태 줄의 글을 만든다. 왼쪽부터 작업 트리 → 체크아웃 → upstream 순서다. 커밋 안 한 변경은
+ * 바로 아래 그래프의 WIP 행이 말한다.
  * 특별한 상태는 우선순위(보는 중 → 진행 중 → 분리된 HEAD)대로 하나만 머리 글과 색을 차지한다.
  */
 export function gitStatusLine(input: GitStatusInput, t: TFunction): GitStatusLineModel {
@@ -81,13 +71,7 @@ export function gitStatusLine(input: GitStatusInput, t: TFunction): GitStatusLin
 
   const upstream = input.branch && input.hasRemote ? remoteCell(input, t) : null;
 
-  const { total, staged, conflicts } = input.uncommitted;
-  const uncommitted =
-    total === 0
-      ? t("statusLine.clean")
-      : staged > 0
-        ? t("statusLine.uncommittedStaged", { count: total, staged })
-        : t("statusLine.uncommitted", { count: total });
+  const { conflicts } = input;
 
   let tone: GitStatusTone = "normal";
   let headline: string | null = null;
@@ -113,19 +97,17 @@ export function gitStatusLine(input: GitStatusInput, t: TFunction): GitStatusLin
     checkout,
     // 진행 중인 작업·보는 중에는 push/pull을 권하지 않는다.
     upstream: tone === "normal" ? upstream : null,
-    uncommitted,
-    canCommit: tone !== "viewing" && total > 0,
   };
 }
 
-/** 원격 칸의 글: 원격에 없는 커밋 · publish 전 · 받을 커밋. 할 일이 없으면 「원격과 같음」. */
+/** 원격 칸의 글: 원격에 없는 커밋 있음 · publish 전 · 받을 커밋 있음. 할 일이 없으면 「원격과 같음」. */
 function remoteCell(input: GitStatusInput, t: TFunction): NonNullable<GitStatusLineModel["upstream"]> {
   const hasUpstream = input.upstream !== null;
   const behind = input.upstream?.behind ?? 0;
   const parts = [
-    input.unpushed > 0 ? t("statusLine.unpushed", { count: input.unpushed }) : null,
+    input.unpushed > 0 ? t("statusLine.hasUnpushed") : null,
     hasUpstream ? null : t("statusLine.notPublished"),
-    behind > 0 ? t("statusLine.behind", { count: behind }) : null,
+    behind > 0 ? t("statusLine.hasBehind") : null,
   ].filter((p): p is string => p !== null);
   return {
     text: parts.length > 0 ? parts.join(" · ") : t("statusLine.inSync"),

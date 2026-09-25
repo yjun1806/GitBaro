@@ -88,7 +88,7 @@
     "close": "닫기",
     "stageFailed": "Stage 실패: {{error}}",
     "unstageFailed": "Unstage 실패: {{error}}",
-    "workingChanges": "작업 중인 변경 {{count}}",
+    "workingChanges": "작업 중인 변경",
     "target": "{{branch}}에 커밋 · {{worktree}}",
     "addDescription": "설명 추가",
     "author": "작성자 {{name}}"
@@ -1132,9 +1132,6 @@
     "detached": "브랜치 없음 · {{sha}}",
     "detachedUnknown": "브랜치 없음",
     "noUpstream": "원격 브랜치 없음",
-    "clean": "커밋 안 한 변경 없음",
-    "uncommitted_other": "커밋 안 한 변경 {{count}}개",
-    "uncommittedStaged_other": "커밋 안 한 변경 {{count}}개 (스테이징 {{staged}})",
     "viewing": "{{target}} 보는 중 · 체크아웃 안 함",
     "operation": "{{op}} 진행 중",
     "operationConflicts_other": "{{op}} 진행 중 · 충돌 {{count}}개",
@@ -1146,9 +1143,9 @@
       "revert": "revert",
       "squash": "squash"
     },
-    "unpushed_other": "원격에 없는 커밋 {{count}}개",
+    "hasUnpushed": "원격에 없는 커밋 있음",
     "notPublished": "publish 전",
-    "behind_other": "받을 커밋 {{count}}개",
+    "hasBehind": "받을 커밋 있음",
     "inSync": "원격과 같음"
   },
   "workSwitcher": {
