@@ -6,6 +6,7 @@ import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useHistoryViewStore } from "@/stores/history-view";
+import { useCommitDraftStore } from "@/stores/commit-draft";
 import type { RepoInfo, StatusEntry } from "@/types";
 
 const REPO = "/work/app";
@@ -47,6 +48,7 @@ beforeEach(async () => {
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
   useUIStore.setState({ workingFocusAt: null });
   useHistoryViewStore.getState().reset();
+  useCommitDraftStore.setState({ drafts: {} });
 });
 
 afterEach(cleanup);
@@ -96,10 +98,12 @@ describe("ChangesView composer", () => {
     expect(screen.getByTestId("commit-target")).toBeTruthy();
   });
 
-  it("keeps the composer during a merge even without files", () => {
-    state.merge = { kind: "merge" };
+  it("keeps the composer during a merge even without files and lets it conclude the merge", () => {
+    state.merge = "merge";
     renderView();
     expect(screen.queryByTestId("changes-empty")).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText("Summary (required)"), { target: { value: "Merge branch 'feat'" } });
+    expect(screen.getByRole("button", { name: "Commit to feat/x" })).toHaveProperty("disabled", false);
   });
 
   it("says which branch and worktree the commit goes to", () => {
