@@ -10,6 +10,8 @@ import { EmptyState } from "@/components/layout/ContentArea";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import type { MaximizedFiles } from "@/components/layout/maximized-files";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import { useFileMenu } from "@/components/commit/useFileMenu";
 import { RepoLaneTag } from "@/components/graph/CommitGraph";
 import { normalizePath } from "@/components/graph/graph-model";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
@@ -199,6 +201,14 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
     setSelected({ repoPath, filePath: file.path, oldPath: file.oldPath, status: file.status, scope: null });
   };
 
+  // 파일 우클릭: 그 파일을 고르고 파일 메뉴(편집기·Finder·경로 복사)를 연다.
+  const fileMenu = useFileMenu();
+  const openFileMenu = (repoPath: string, file: BranchChangedFile, e: React.MouseEvent) => {
+    e.preventDefault();
+    handleSelect(repoPath, file);
+    fileMenu.open({ repoPath, filePath: file.path, exists: file.status !== "deleted" }, contextMenuPoint(e));
+  };
+
   const handleOpenLink = (repoPath: string, file: BranchChangedFile, link: FileLink) => {
     setSelected({ repoPath, filePath: file.path, oldPath: file.oldPath, status: file.status, scope: null });
     setOpenLink({ from: { repoPath, filePath: file.path }, link });
@@ -223,6 +233,10 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
     onSelect: (key) => {
       const hit = maximizedEntries.find(({ repo, file }) => fileKey(repo.path, file.path) === key);
       if (hit) handleSelect(hit.repo.path, hit.file);
+    },
+    onContextMenu: (key, e) => {
+      const hit = maximizedEntries.find(({ repo, file }) => fileKey(repo.path, file.path) === key);
+      if (hit) openFileMenu(hit.repo.path, hit.file, e);
     },
   };
 
@@ -287,6 +301,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
                             links={links.get(fileKey(repo.path, file.path)) ?? []}
                             selected={sameFile(selected, { repoPath: repo.path, filePath: file.path })}
                             onSelect={() => handleSelect(repo.path, file)}
+                            onContextMenu={(e) => openFileMenu(repo.path, file, e)}
                             onOpenLink={(link) => handleOpenLink(repo.path, file, link)}
                           />
                         ))}
@@ -327,6 +342,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
       {/* 다른 화면(ContentArea, FollowPanel)과 달리 이 탭에는 전환 덮개가 없었다(W7 리뷰) —
           브랜치 전환 중에도 목록·diff를 그대로 누를 수 있었다. */}
       <SwitchingOverlay />
+      {fileMenu.element}
     </ListDiffSplit>
   );
 }
@@ -439,10 +455,11 @@ interface FileRowProps {
   links: readonly FileLink[];
   selected: boolean;
   onSelect: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
   onOpenLink: (link: FileLink) => void;
 }
 
-function FileRow({ file, showDir, links, selected, onSelect, onOpenLink }: FileRowProps) {
+function FileRow({ file, showDir, links, selected, onSelect, onContextMenu, onOpenLink }: FileRowProps) {
   const { t } = useTranslation();
   const { name, dir } = splitPath(file.path);
   const first = links[0];
@@ -452,6 +469,7 @@ function FileRow({ file, showDir, links, selected, onSelect, onOpenLink }: FileR
       tabIndex={0}
       aria-selected={selected}
       onClick={onSelect}
+      onContextMenu={onContextMenu}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();

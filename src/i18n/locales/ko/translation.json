@@ -1256,5 +1256,14 @@
     "commit": "커밋",
     "noCommit": "커밋 선택 안 됨",
     "noWorkingHint": "이 저장소에는 커밋 안 한 변경이 없어요."
+  },
+  "menu": {
+    "copied": "복사했어요",
+    "copyFailed": "복사하지 못했어요: {{error}}",
+    "revealFailed": "Finder에서 열지 못했어요: {{error}}",
+    "openUrlFailed": "브라우저를 열지 못했어요: {{error}}",
+    "fileMenu": "파일 메뉴",
+    "copyRelativePath": "상대 경로 복사",
+    "copyFullPath": "전체 경로 복사"
   }
 }

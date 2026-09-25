@@ -29,7 +29,10 @@ import {
 import { SideBySideDiff } from "@/components/worktree/SideBySideDiff";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import type { MaximizedFiles } from "@/components/layout/maximized-files";
-import type { ActivityEvent, DiffOutput, WipFile } from "@/types";
+import type { ActivityEvent, DiffOutput, StatusEntry, WipFile } from "@/types";
+import { useWorkingFileMenu } from "@/components/commit/useWorkingFileMenu";
+import { useFileMenu } from "@/components/commit/useFileMenu";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
 
 /** `registerWatchPaths`에 쓰는 이 화면의 key. 감시 대상 목록에서 맨 앞에 온다. */
 export const FOLLOW_WATCH_KEY = FOLLOW_KEY;
@@ -212,6 +215,14 @@ function useFreshLines(
   return fresh !== null && fresh.key === key ? fresh : null;
 }
 
+/**
+ * 따라가기 목록의 행을 스테이징 목록의 행(`StatusEntry`)으로 본다. 메뉴의 스테이지·되돌리기는
+ * 스테이지 안 된 쪽이 있으면 그쪽을, 스테이징만 한 파일이면 스테이징된 쪽을 다룬다.
+ */
+export function wipEntry(f: WipFile): StatusEntry {
+  return { path: f.path, origPath: f.origPath, status: f.status, staged: !f.unstaged };
+}
+
 /** 초 단위 표시가 흐르도록 1초마다 다시 그린다. 파일 목록만 다시 그리게 이 안에서만 쓴다. */
 function useNow(intervalMs: number): number {
   const [now, setNow] = useState(() => Date.now());
@@ -266,12 +277,14 @@ function FollowFileList({
   selected,
   overlap,
   onPick,
+  onContextMenu,
 }: {
   files: WipFile[];
   selected: string | null;
   /** 다른 워크트리도 고치는 파일(⧉, 시안 D5). */
   overlap: WorktreeOverlap;
   onPick: (path: string) => void;
+  onContextMenu: (path: string, e: React.MouseEvent) => void;
 }) {
   const { t } = useTranslation();
   const now = useNow(1_000);
@@ -299,6 +312,7 @@ function FollowFileList({
             title={f.path}
             aria-current={f.path === selected || undefined}
             onClick={() => onPick(f.path)}
+            onContextMenu={(e) => onContextMenu(f.path, e)}
             className={cn(
               "w-full flex items-center gap-2 min-h-(--row) px-3 text-left border-b border-(--line) transition-colors",
               f.path === selected
@@ -444,6 +458,21 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
     handlePause();
   };
 
+  // 파일 우클릭: 그 파일을 고르고(따라가기가 멈춘다) 파일 메뉴를 연다. 저장소 화면(`cards`)은 스테이징 목록과
+  // 같은 메뉴(스테이지·되돌리기 포함), 워크스페이스 화면(`inline`)은 읽기 전용 메뉴다 — 거기서는 스테이징하지 않는다.
+  const workingMenu = useWorkingFileMenu(path);
+  const readOnlyMenu = useFileMenu();
+  const fileMenu = variant === "cards" ? workingMenu : readOnlyMenu;
+  const openFileMenu = (filePath: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    const file = list.find((f) => f.path === filePath);
+    if (!file) return;
+    pickFile(filePath);
+    const point = contextMenuPoint(e);
+    if (variant === "cards") workingMenu.openMenu(wipEntry(file), point);
+    else readOnlyMenu.open({ repoPath: path, filePath, exists: file.status !== "deleted" }, point);
+  };
+
   // 크게 보는 diff 옆 파일 목록. 같은 목록·선택을 쓴다(고르면 따라가기가 멈추는 것도 같다).
   const maximizedFiles: MaximizedFiles = {
     items: list.map((f) => ({
@@ -455,6 +484,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
     })),
     selectedKey: shown?.path ?? null,
     onSelect: pickFile,
+    onContextMenu: openFileMenu,
   };
 
   const listPane = (
@@ -494,7 +524,13 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
       ) : list.length === 0 ? (
         <p className="px-3 py-2 text-xs text-muted-foreground">{t("live.noChanges")}</p>
       ) : (
-        <FollowFileList files={list} selected={shown?.path ?? null} overlap={overlap} onPick={pickFile} />
+        <FollowFileList
+          files={list}
+          selected={shown?.path ?? null}
+          overlap={overlap}
+          onPick={pickFile}
+          onContextMenu={openFileMenu}
+        />
       )}
       {footer && (
         <div className="mt-auto flex flex-col gap-2 px-3 py-2.5 shrink-0 border-t border-(--line)">{footer}</div>
@@ -616,12 +652,14 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
         detailOverlay={<SwitchingOverlay />}
       >
         {sideBySide}
+        {fileMenu.element}
       </ListDiffSplit>
     );
   }
   return (
     <ListDiffSplit variant="inline" data-testid="follow-panel" list={listPane} detail={diffPane} files={maximizedFiles}>
       {sideBySide}
+      {fileMenu.element}
     </ListDiffSplit>
   );
 }

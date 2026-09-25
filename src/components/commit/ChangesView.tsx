@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useId, useRef } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistoryView, useSetHistoryView } from "@/components/graph/useHistoryView";
 import { CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
@@ -8,26 +8,15 @@ import { useSelectionStore } from "@/stores/selection";
 import { useMergeState, useStatus } from "@/api/queries";
 import { useCurrentBranch } from "@/hooks/useCurrentBranch";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
-import {
-  createCommit,
-  stageFiles,
-  unstageFiles,
-  openInEditor,
-  discardChanges,
-  revealInFinder,
-  addToGitignore,
-  findConflictMarkers,
-} from "@/api/commands";
+import { createCommit, stageFiles, unstageFiles, openInEditor } from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
 import { FileEntry } from "@/components/commit/FileEntry";
-import { FileContextMenu } from "@/components/commit/FileContextMenu";
 import { MergeConflictBanner } from "@/components/conflict/MergeConflictBanner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { groupFilesByDirectory } from "@/lib/group-files";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
-import { Dialog } from "@/components/ui/Dialog";
 import { useCommitDraftStore, EMPTY_COMMIT_DRAFT } from "@/stores/commit-draft";
 import {
   entryPaths,
@@ -35,27 +24,14 @@ import {
   resolveFileSelection,
   stageableEntries,
 } from "@/lib/file-selection";
-import type { StatusEntry } from "@/types";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { isComposerCollapsed } from "./composer-state";
 import { isFreshWorkingFocus } from "./useOpenWorkingChanges";
 import { RepoWorkSwitcher } from "./WorkSwitcher";
 import { CommitComposer } from "./CommitComposer";
 import { useCommitTarget } from "./useCommitTarget";
 import { useUIStore } from "@/stores/ui";
-
-/** Confirmation text for discarding `entry`, matching what the backend will do. */
-function discardMessageKey(entry: StatusEntry): string {
-  if (!entry.staged) {
-    // "added" on the unstaged side is an intent-to-add (`git add -N`) file,
-    // which the backend moves to the Trash like an untracked one.
-    return entry.status === "untracked" || entry.status === "added"
-      ? "changes.discardUntrackedMessage"
-      : "changes.discardUnstagedMessage";
-  }
-  return entry.status === "added" || entry.status === "copied"
-    ? "changes.discardAddedMessage"
-    : "changes.discardStagedMessage";
-}
+import { useWorkingFileMenu } from "./useWorkingFileMenu";
 
 /**
  * 스테이징 목록과 커밋 입력. 체크아웃하지 않고 다른 브랜치를 보는 중에는 그리지 않고 안내를
@@ -90,8 +66,6 @@ function ViewingComposerNote() {
 
 function ChangesViewBody() {
   const { t } = useTranslation();
-  const discardTitleId = useId();
-  const conflictStageTitleId = useId();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const currentBranch = useCurrentBranch();
   // 커밋 작성자는 동기화·merge와 같은 저장소 계정이다.
@@ -147,23 +121,8 @@ function ChangesViewBody() {
 
   const [isCommitting, setIsCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
-  const [discardTarget, setDiscardTarget] = useState<StatusEntry | null>(null);
-  const [conflictStageTarget, setConflictStageTarget] = useState<StatusEntry | null>(null);
-
-  const handleConfirmDiscard = useCallback(async () => {
-    if (!activeRepoPath || !discardTarget) return;
-    const target = discardTarget;
-    setDiscardTarget(null);
-    try {
-      await discardChanges(activeRepoPath, entryPaths([target]), target.staged);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["status"] }),
-        queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-      ]);
-    } catch (err) {
-      addToast(t("changes.discardFailed", { error: getErrorMessage(err) }), "error");
-    }
-  }, [activeRepoPath, discardTarget, queryClient, addToast, t]);
+  // 행 동작(스테이지·되돌리기·.gitignore)과 우클릭 메뉴·확인 창. 크게 보는 diff 옆 목록도 같은 것을 쓴다.
+  const fileMenu = useWorkingFileMenu(activeRepoPath);
 
   const handleOpenInEditor = async (filePath: string) => {
     if (!activeRepoPath) return;
@@ -178,85 +137,6 @@ function ChangesViewBody() {
       }
     }
   };
-
-  // 우클릭 메뉴 대상 파일 + 좌표
-  const [fileMenu, setFileMenu] = useState<
-    { entry: (typeof statusEntries)[number]; x: number; y: number } | null
-  >(null);
-
-  const refreshStatus = useCallback(
-    () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["status"] }),
-        queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-      ]),
-    [queryClient],
-  );
-
-  const applyToggleStage = useCallback(
-    async (entry: StatusEntry) => {
-      if (!activeRepoPath) return;
-      try {
-        if (entry.staged) await unstageFiles(activeRepoPath, entryPaths([entry]));
-        else await stageFiles(activeRepoPath, entryPaths([entry]));
-        await refreshStatus();
-      } catch (err) {
-        const key = entry.staged ? "commit.unstageFailed" : "commit.stageFailed";
-        addToast(t(key, { error: getErrorMessage(err) }), "error");
-      }
-    },
-    [activeRepoPath, refreshStatus, addToast, t],
-  );
-
-  // 충돌 파일을 스테이징하면 해결된 것으로 처리된다. 충돌 마커가 남아 있으면 먼저 확인한다.
-  const handleToggleStage = useCallback(
-    async (entry: StatusEntry) => {
-      if (!activeRepoPath) return;
-      if (!entry.staged && entry.status === "conflicted") {
-        try {
-          const marked = await findConflictMarkers(activeRepoPath, [entry.path]);
-          if (marked.length > 0) {
-            setConflictStageTarget(entry);
-            return;
-          }
-        } catch (err) {
-          addToast(t("commit.stageFailed", { error: getErrorMessage(err) }), "error");
-          return;
-        }
-      }
-      await applyToggleStage(entry);
-    },
-    [activeRepoPath, applyToggleStage, addToast, t],
-  );
-
-  const handleConfirmConflictStage = useCallback(async () => {
-    if (!conflictStageTarget) return;
-    const target = conflictStageTarget;
-    setConflictStageTarget(null);
-    await applyToggleStage(target);
-  }, [conflictStageTarget, applyToggleStage]);
-
-  const handleRevealFile = useCallback(
-    (path: string) => {
-      if (!activeRepoPath) return;
-      revealInFinder(`${activeRepoPath}/${path}`);
-    },
-    [activeRepoPath],
-  );
-
-  const handleAddToGitignore = useCallback(
-    async (path: string) => {
-      if (!activeRepoPath) return;
-      try {
-        await addToGitignore(activeRepoPath, path);
-        await refreshStatus();
-        addToast(t("changes.addedToGitignore", { path }), "success");
-      } catch (err) {
-        addToast(getErrorMessage(err), "error");
-      }
-    },
-    [activeRepoPath, refreshStatus, addToast, t],
-  );
 
   // Memoize the split so downstream group memos aren't invalidated by a new
   // array identity on every keystroke in the commit message inputs.
@@ -465,10 +345,10 @@ function ChangesViewBody() {
                         onContextMenu={(e) => {
                           e.preventDefault();
                           selectFile(entry.path, entry.staged);
-                          setFileMenu({ entry, x: e.clientX, y: e.clientY });
+                          fileMenu.openMenu(entry, contextMenuPoint(e));
                         }}
-                        onDiscard={() => setDiscardTarget(entry)}
-                        onToggleStage={() => handleToggleStage(entry)}
+                        onDiscard={() => fileMenu.askDiscard(entry)}
+                        onToggleStage={() => void fileMenu.toggleStage(entry)}
                       />
                     );
                   })}
@@ -532,14 +412,14 @@ function ChangesViewBody() {
                         onContextMenu={(e) => {
                           e.preventDefault();
                           selectFile(entry.path, entry.staged);
-                          setFileMenu({ entry, x: e.clientX, y: e.clientY });
+                          fileMenu.openMenu(entry, contextMenuPoint(e));
                         }}
                         onDiscard={
                           entry.status === "conflicted"
                             ? undefined
-                            : () => setDiscardTarget(entry)
+                            : () => fileMenu.askDiscard(entry)
                         }
-                        onToggleStage={() => handleToggleStage(entry)}
+                        onToggleStage={() => void fileMenu.toggleStage(entry)}
                       />
                     );
                   })}
@@ -582,81 +462,7 @@ function ChangesViewBody() {
       </>
       )}
 
-      {discardTarget && (
-        <Dialog
-          onClose={() => setDiscardTarget(null)}
-          closeOnBackdrop
-          labelledBy={discardTitleId}
-          className="w-[380px] max-w-[90vw] rounded-xl border border-border bg-card p-5 shadow-xl"
-        >
-            <h3 id={discardTitleId} className="text-sm font-semibold text-foreground">
-              {t("changes.discardConfirmTitle")}
-            </h3>
-            <p className="mt-2 text-xs text-muted-foreground break-all">
-              {t(discardMessageKey(discardTarget), { file: discardTarget.path })}
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setDiscardTarget(null)}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
-              >
-                {t("changes.cancel")}
-              </button>
-              <button
-                onClick={handleConfirmDiscard}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
-              >
-                {t("changes.discardConfirm")}
-              </button>
-            </div>
-        </Dialog>
-      )}
-
-      {conflictStageTarget && (
-        <Dialog
-          onClose={() => setConflictStageTarget(null)}
-          closeOnBackdrop
-          labelledBy={conflictStageTitleId}
-          className="w-[380px] max-w-[90vw] rounded-xl border border-border bg-card p-5 shadow-xl"
-        >
-          <h3 id={conflictStageTitleId} className="text-sm font-semibold text-foreground">
-            {t("changes.conflictMarkersTitle")}
-          </h3>
-          <p className="mt-2 text-xs text-muted-foreground break-all">
-            {t("changes.conflictMarkersMessage", { file: conflictStageTarget.path })}
-          </p>
-          <div className="mt-4 flex justify-end gap-2">
-            <button
-              onClick={() => setConflictStageTarget(null)}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
-            >
-              {t("changes.cancel")}
-            </button>
-            <button
-              onClick={handleConfirmConflictStage}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
-            >
-              {t("changes.conflictMarkersConfirm")}
-            </button>
-          </div>
-        </Dialog>
-      )}
-
-      {/* 파일 우클릭 메뉴 */}
-      {fileMenu && (
-        <FileContextMenu
-          staged={fileMenu.entry.staged}
-          canDiscard={fileMenu.entry.status !== "conflicted"}
-          position={{ x: fileMenu.x, y: fileMenu.y }}
-          onToggleStage={() => handleToggleStage(fileMenu.entry)}
-          onOpenEditor={() => handleOpenInEditor(fileMenu.entry.path)}
-          onReveal={() => handleRevealFile(fileMenu.entry.path)}
-          onCopyPath={() => navigator.clipboard.writeText(fileMenu.entry.path)}
-          onAddToGitignore={() => handleAddToGitignore(fileMenu.entry.path)}
-          onDiscard={() => setDiscardTarget(fileMenu.entry)}
-          onClose={() => setFileMenu(null)}
-        />
-      )}
+      {fileMenu.element}
     </div>
   );
 }

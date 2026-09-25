@@ -1281,5 +1281,14 @@
     "commit": "Commit",
     "noCommit": "No commit selected",
     "noWorkingHint": "This repository has no uncommitted changes."
+  },
+  "menu": {
+    "copied": "Copied",
+    "copyFailed": "Couldn't copy: {{error}}",
+    "revealFailed": "Couldn't show it in Finder: {{error}}",
+    "openUrlFailed": "Couldn't open the browser: {{error}}",
+    "fileMenu": "File menu",
+    "copyRelativePath": "Copy relative path",
+    "copyFullPath": "Copy full path"
   }
 }
