@@ -55,4 +55,26 @@ describe("StashList menu", () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: i18n.t("stash.drop") }));
     expect(onDrop).toHaveBeenCalledWith(0);
   });
+
+  it("keeps acting on the same stash when a new one pushes it down the list", () => {
+    const handlers = { onSelectStash: vi.fn(), onApply: vi.fn(), onPop: vi.fn(), onDrop: vi.fn() };
+    const { rerender } = render(<StashList stashes={stashes} selectedIndex={null} {...handlers} />);
+    fireEvent.contextMenu(screen.getByText("stash@{0}").closest("button")!);
+    const shifted: StashEntry[] = [
+      { index: 0, message: "WIP on main: newer", commitId: "def456", branchName: "main", timestamp: 2 },
+      { ...stashes[0], index: 1 },
+    ];
+    rerender(<StashList stashes={shifted} selectedIndex={null} {...handlers} />);
+    fireEvent.click(menuItem(i18n.t("stash.apply")));
+    expect(handlers.onApply).toHaveBeenCalledWith(1);
+  });
+
+  it("closes the menu when its stash disappears", () => {
+    const handlers = { onSelectStash: vi.fn(), onApply: vi.fn(), onPop: vi.fn(), onDrop: vi.fn() };
+    const { rerender } = render(<StashList stashes={stashes} selectedIndex={null} {...handlers} />);
+    fireEvent.contextMenu(screen.getByText("stash@{0}").closest("button")!);
+    const other: StashEntry[] = [{ index: 0, message: "other", commitId: "zzz999", branchName: "main", timestamp: 3 }];
+    rerender(<StashList stashes={other} selectedIndex={null} {...handlers} />);
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
 });

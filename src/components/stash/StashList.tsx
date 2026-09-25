@@ -38,12 +38,16 @@ export function StashList({
     selectedIndex: selectedStashIdx,
   });
 
+  // 스태시는 커밋 id로 가리킨다. 메뉴를 연 사이 목록이 바뀌면(다른 곳에서 push·drop) 번호가 밀린다.
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
-    index: number;
+    commitId: string;
   } | null>(null);
-  const [confirmDrop, setConfirmDrop] = useState<number | null>(null);
+  const [confirmDrop, setConfirmDrop] = useState<string | null>(null);
+  // 가리키던 스태시가 목록에서 사라지면 메뉴와 확인 창을 그리지 않는다.
+  const menuEntry = contextMenu ? stashes.find((s) => s.commitId === contextMenu.commitId) : undefined;
+  const dropEntry = confirmDrop !== null ? stashes.find((s) => s.commitId === confirmDrop) : undefined;
   const dropTitleId = useId();
 
   if (stashes.length === 0) {
@@ -72,25 +76,25 @@ export function StashList({
           onClick={() => onSelectStash(entry.index)}
           onContextMenu={(e) => {
             e.preventDefault();
-            setContextMenu({ ...contextMenuPoint(e), index: entry.index });
+            setContextMenu({ ...contextMenuPoint(e), commitId: entry.commitId });
           }}
         />
       ))}
 
       {/* Context Menu */}
-      {contextMenu && (
+      {contextMenu && menuEntry && (
         <StashContextMenu
-          entry={stashes.find((s) => s.index === contextMenu.index) ?? stashes[0]}
+          entry={menuEntry}
           position={contextMenu}
-          onApply={() => onApply(contextMenu.index)}
-          onPop={() => onPop(contextMenu.index)}
-          onDrop={() => setConfirmDrop(contextMenu.index)}
+          onApply={() => onApply(menuEntry.index)}
+          onPop={() => onPop(menuEntry.index)}
+          onDrop={() => setConfirmDrop(menuEntry.commitId)}
           onClose={() => setContextMenu(null)}
         />
       )}
 
       {/* Drop Confirmation Dialog */}
-      {confirmDrop !== null && (
+      {dropEntry && (
         <Dialog
           onClose={() => setConfirmDrop(null)}
           labelledBy={dropTitleId}
@@ -111,7 +115,7 @@ export function StashList({
               <button
                 className="px-3 py-1.5 text-xs rounded-md bg-danger text-danger-foreground hover:bg-danger/90 transition-colors"
                 onClick={() => {
-                  onDrop(confirmDrop);
+                  onDrop(dropEntry.index);
                   setConfirmDrop(null);
                 }}
               >
