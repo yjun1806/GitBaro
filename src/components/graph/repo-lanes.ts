@@ -40,11 +40,6 @@ export type RepoLaneRow =
       key: string;
       repoPath: string;
       commit: CommitInfo;
-      isNew: boolean;
-      /** 「여기까지 확인함」 아래(이미 확인한) 커밋. */
-      isSeen: boolean;
-      /** 그 저장소 레인에서 확인한 첫 커밋. 레인에 「여기까지 확인함」 눈금을 단다. */
-      seenTick: boolean;
       layout: GraphRowLayout;
     }
   | { kind: "base"; key: string; layout: GraphRowLayout };
@@ -90,21 +85,14 @@ function mergeByTime<T>(lists: readonly (readonly T[])[], timeOf: (item: T) => n
 
 type Draft =
   | { kind: "wip"; lane: number; repoLane: number; wip: LaneWip }
-  | { kind: "commit"; lane: number; commit: CommitInfo; isNew: boolean; isSeen: boolean; seenTick: boolean }
+  | { kind: "commit"; lane: number; commit: CommitInfo }
   | { kind: "base" };
 
 /**
- * 행 순서: WIP 행(최근에 바뀐 순) → 새 커밋(시각순) → 확인한 커밋(시각순) → main에서 갈라진 지점.
- * 「여기까지 확인함」은 전체 폭 줄 대신 저장소 레인마다 확인한 첫 커밋에 눈금(`seenTick`)으로 단다.
- * 새 커밋이 없으면 눈금도 없다. 갈라진 지점을 찾은 저장소가 없으면 맨 아래 행도 두지 않는다.
- *
- * `newIds`는 저장소 경로 → 새 커밋 SHA 목록이다(`list_new_commit_ids`).
+ * 행 순서: WIP 행(최근에 바뀐 순) → 커밋(시각순) → main에서 갈라진 지점.
+ * 갈라진 지점을 찾은 저장소가 없으면 맨 아래 행도 두지 않는다.
  */
-export function buildRepoLaneRows(
-  repos: readonly LaneRepo[],
-  wips: readonly LaneWip[],
-  newIds: ReadonlyMap<string, ReadonlySet<string>>,
-): RepoLaneGraph {
+export function buildRepoLaneRows(repos: readonly LaneRepo[], wips: readonly LaneWip[]): RepoLaneGraph {
   const laneOf = new Map(repos.map((r, i) => [r.path, i]));
 
   // 메인 작업 트리의 WIP는 그 저장소 레인 위에 둔다(부모가 레인의 HEAD다). 다른 워크트리의
@@ -131,32 +119,12 @@ export function buildRepoLaneRows(
       wip,
     }));
 
-  type CommitDraft = Extract<Draft, { kind: "commit" }>;
-  const newLists: CommitDraft[][] = [];
-  const oldLists: CommitDraft[][] = [];
-  repos.forEach((repo, lane) => {
-    const fresh = newIds.get(repo.path);
-    const mine = repo.commits.map((commit) => ({
-      kind: "commit" as const,
-      lane,
-      commit,
-      isNew: fresh?.has(commit.id) ?? false,
-      isSeen: false,
-      seenTick: false,
-    }));
-    newLists.push(mine.filter((d) => d.isNew));
-    oldLists.push(mine.filter((d) => !d.isNew));
-  });
-  const newRows = mergeByTime(newLists, (d) => d.commit.timestamp);
-  const hasNew = newRows.length > 0;
-  const ticked = new Set<number>();
-  const oldRows = mergeByTime(oldLists, (d) => d.commit.timestamp).map((d) => {
-    const seenTick = hasNew && !ticked.has(d.lane);
-    if (seenTick) ticked.add(d.lane);
-    return { ...d, isSeen: hasNew, seenTick };
-  });
+  const commitRows = mergeByTime(
+    repos.map((repo, lane) => repo.commits.map((commit) => ({ kind: "commit" as const, lane, commit }))),
+    (d) => d.commit.timestamp,
+  );
 
-  const drafts: Draft[] = [...wipDrafts, ...newRows, ...oldRows];
+  const drafts: Draft[] = [...wipDrafts, ...commitRows];
   const baseIndex = repos.some((r) => r.hasBase) ? drafts.length : -1;
   if (baseIndex >= 0) drafts.push({ kind: "base" });
 
@@ -211,9 +179,6 @@ export function buildRepoLaneRows(
           key: repoCommitKey(repoPath, d.commit.id),
           repoPath,
           commit: d.commit,
-          isNew: d.isNew,
-          isSeen: d.isSeen,
-          seenTick: d.seenTick,
           layout: { oid: d.commit.id, lane: d.lane, chain: d.lane, edges, width: Math.max(width, d.lane + 1) },
         };
       }

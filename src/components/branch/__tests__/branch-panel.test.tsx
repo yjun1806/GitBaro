@@ -22,7 +22,6 @@ vi.mock("@/api/queries", () => ({
   },
   useRecentBranches: () => ({ data: recentNames }),
 }));
-vi.mock("@/hooks/use-avatar-resolver", () => ({ useAvatarResolver: () => () => undefined }));
 
 const { BranchPanel } = await import("../BranchPanel");
 const { useRepositoryStore } = await import("@/stores/repository");

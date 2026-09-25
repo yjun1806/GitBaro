@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Eye, FolderGit2, GitBranch, Undo2 } from "lucide-react";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
@@ -14,11 +14,11 @@ import {
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { cn } from "@/lib/utils";
 import type { BranchInfo, RemoteOp } from "@/types";
-import { WorkingChangesButton } from "@/components/commit/WorkingChangesButton";
 import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { useHistoryView, useSetHistoryView } from "@/components/graph/useHistoryView";
 import { MultiRepoRemoteDialog } from "./MultiRepoRemoteDialog";
-import { countUncommitted, gitStatusLine, type GitStatusLineModel, type GitStatusTone } from "./git-status-line";
+import { StatusActivity } from "./StatusActivity";
+import { countConflicts, gitStatusLine, type GitStatusLineModel, type GitStatusTone } from "./git-status-line";
 
 /** 보는 원격 브랜치를 추적하는 로컬 브랜치가 있으면 그 이름으로 체크아웃한다. */
 export function checkoutNameFor(target: ViewTarget, branches: readonly BranchInfo[]): string | null {
@@ -54,28 +54,29 @@ function Dot() {
 
 export interface GitStatusLineViewProps {
   model: GitStatusLineModel;
-  /** 커밋 안 한 파일 수(「작업 중인 변경 N」 버튼 숫자). */
-  uncommittedCount: number;
   /** 보는 중일 때 체크아웃할 브랜치. 모든 브랜치를 보면 null. */
   checkoutName: string | null;
   onCheckout: () => void;
   onBack: () => void;
   /** upstream 칸을 누를 때. 누를 것이 없으면 undefined. */
   onRemote?: () => void;
+  /** 줄 오른쪽 끝(오프라인 표시·작업 기록 버튼). */
+  trailing?: ReactNode;
 }
 
 /**
  * 메인 칸 맨 위의 git 상태 한 줄(약 32px). 저장소 이름은 툴바가 말하고, 이 줄은 상태를 설명한다:
- * 작업 트리 · 체크아웃 · upstream · 커밋 안 한 변경. 보는 중·진행 중·분리된 HEAD는 줄의 색과
+ * 작업 트리 · 체크아웃 · upstream. 수는 적지 않는다(사이드바·WIP 행·Push 버튼이 말한다). 보는 중·진행 중·분리된 HEAD는 줄의 색과
  * 머리 글을 바꾼다. 보는 중이면 이 줄이 「보는 중」 띠이고, 체크아웃·돌아가기 버튼을 단다.
+ * 오른쪽 끝에는 도는 git 명령과 작업 기록 버튼, 오프라인일 때만 그 표시를 둔다(`trailing`).
  */
 export function GitStatusLineView({
   model,
-  uncommittedCount,
   checkoutName,
   onCheckout,
   onBack,
   onRemote,
+  trailing,
 }: GitStatusLineViewProps) {
   const { t } = useTranslation();
   const viewing = model.tone === "viewing";
@@ -146,15 +147,9 @@ export function GitStatusLineView({
             )}
           </>
         )}
-        {!viewing && (
-          <>
-            <Dot />
-            <span className={cn("shrink-0", uncommittedCount > 0 && "text-foreground")}>{model.uncommitted}</span>
-          </>
-        )}
       </span>
       <span className="flex-1" />
-      {model.canCommit && <WorkingChangesButton count={uncommittedCount} variant="header" />}
+      {trailing}
     </div>
   );
 }
@@ -178,7 +173,6 @@ export function GitStatusLine() {
   const [remoteOp, setRemoteOp] = useState<RemoteOp | null>(null);
 
   const head = branches.find((b) => b.isHead && !b.isRemote) ?? null;
-  const uncommitted = countUncommitted(statusFiles);
   const worktreeName = currentWorktree?.path.split("/").filter(Boolean).pop() ?? "";
   const model = gitStatusLine(
     {
@@ -194,7 +188,7 @@ export function GitStatusLine() {
         : null,
       unpushed: unpushed?.count ?? head?.aheadBehind?.ahead ?? 0,
       hasRemote,
-      uncommitted,
+      conflicts: countConflicts(statusFiles),
       operation,
       viewing: target,
     },
@@ -207,11 +201,11 @@ export function GitStatusLine() {
     <>
       <GitStatusLineView
         model={model}
-        uncommittedCount={uncommitted.total}
         checkoutName={checkoutName}
         onCheckout={() => checkoutName && checkout(checkoutName)}
         onBack={() => setView(null)}
         onRemote={op && activeRepoPath ? () => setRemoteOp(op) : undefined}
+        trailing={<StatusActivity />}
       />
       {remoteOp && activeRepoPath && (
         <MultiRepoRemoteDialog paths={[activeRepoPath]} op={remoteOp} onClose={() => setRemoteOp(null)} />

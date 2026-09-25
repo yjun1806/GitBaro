@@ -66,7 +66,7 @@ beforeEach(async () => {
   onClose.mockReset();
   openWorktree.mockReset();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
-  useUIStore.setState({ activeTab: "stash", compareBranch: "old" });
+  useUIStore.setState({ activeTab: "stash" });
   useBranchRangeStore.getState().clear();
 });
 afterEach(cleanup);
@@ -83,9 +83,7 @@ describe("BranchZone — branch panel wiring", () => {
     renderZone();
     fireEvent.click(row("docs/y").getByRole("button", { name: "Compare" }));
     expect(useBranchRangeStore.getState().range).toEqual({ repoPath: REPO, base: "main", target: "docs/y", head: "main" });
-    // 그래프 탭으로 가고, 예전 비교 화면은 끈다.
     expect(useUIStore.getState().activeTab).toBe("history");
-    expect(useUIStore.getState().compareBranch).toBeNull();
     expect(onClose).toHaveBeenCalled();
   });
 

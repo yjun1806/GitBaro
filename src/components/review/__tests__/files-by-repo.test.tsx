@@ -12,9 +12,7 @@ import type { ActivityEvent, BranchChangedFile, BranchChanges, FileDiffVsDefault
 const APP = "/work/xames-app";
 const API = "/work/xames-backend";
 const DESIGN = "/work/xames-design";
-const BIG = "/work/xames-big";
 const WEB = "/work/xames-web";
-const ADMIN = "/work/xames-admin";
 
 function file(path: string, additions: number, status: BranchChangedFile["status"] = "added"): BranchChangedFile {
   return { path, oldPath: null, status, additions, deletions: 0, isBinary: false };
@@ -70,7 +68,6 @@ const DIFFS: Record<string, FileDiffVsDefault> = {
     'export const getSettings = () => http.get("/api/v1/notifications/settings");',
     "const ok = true;",
   ]),
-  // 7자 문자열 "badg.fg"만 겹친다 — 연결되면 안 된다.
   [`${APP}:src/theme/tokens.ts`]: diff("src/theme/tokens.ts", ["badg.fg = 1;"]),
   [`${API}:src/notifications/settings.controller.ts`]: diff("src/notifications/settings.controller.ts", [
     'const ROUTE = "/api/v1/notifications/settings";',
@@ -78,21 +75,6 @@ const DIFFS: Record<string, FileDiffVsDefault> = {
   ]),
   [`${DESIGN}:src/new.ts`]: diff("src/new.ts", ['const ROUTE = "/api/v1/notifications/settings";']),
 };
-
-// BIG: 예산(LINK_SCAN_FILE_LIMIT)보다 많은, 서로 무관한 파일을 가진 저장소.
-const BIG_FILE_COUNT = 100;
-const BIG_FILES: BranchChangedFile[] = Array.from({ length: BIG_FILE_COUNT }, (_, i) =>
-  file(`src/gen/file${i}.ts`, 1),
-);
-CHANGES[BIG] = changes(BIG, "refactor/huge", BIG_FILES);
-BIG_FILES.forEach((f, i) => {
-  DIFFS[`${BIG}:${f.path}`] = diff(f.path, [`const unrelated${i} = ${i};`]);
-});
-// WEB/ADMIN이 공유하는, BIG의 파일에는 없는 연결 후보 문자열.
-CHANGES[WEB] = changes(WEB, "feat/shared-route", [file("src/route.ts", 1)]);
-DIFFS[`${WEB}:src/route.ts`] = diff("src/route.ts", ['const ROUTE = "/api/v1/shared/route";']);
-CHANGES[ADMIN] = changes(ADMIN, "feat/shared-route", [file("src/route.ts", 1)]);
-DIFFS[`${ADMIN}:src/route.ts`] = diff("src/route.ts", ['const ROUTE = "/api/v1/shared/route";']);
 
 const getChangesVsDefault = vi.fn(async (path: string, _scope?: unknown) => CHANGES[path]);
 const getFileDiffVsDefault = vi.fn(
@@ -117,17 +99,6 @@ vi.mock("@/api/commands", async (importOriginal) => ({
   getBranches: async () => BRANCHES,
   getWorktrees: async () => WORKTREES,
 }));
-const linkScans = vi.hoisted(() => ({ count: 0 }));
-vi.mock("@/lib/linked-changes", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/linked-changes")>();
-  return {
-    ...actual,
-    findLinkedChanges: (...args: Parameters<typeof actual.findLinkedChanges>) => {
-      linkScans.count += 1;
-      return actual.findLinkedChanges(...args);
-    },
-  };
-});
 vi.mock("@/components/diff/DiffViewer", () => ({
   DiffViewer: ({ diff }: { diff: { filePath: string } }) => <div>diff-viewer {diff.filePath}</div>,
 }));
@@ -144,7 +115,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 
-const { FilesByRepo, LINK_SCAN_FILE_LIMIT } = await import("../FilesByRepo");
+const { FilesByRepo } = await import("../FilesByRepo");
 
 function renderFiles(repos: { path: string; name: string }[], groupBy: "repo" | "folder" = "repo") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -191,41 +162,16 @@ describe("FilesByRepo", () => {
     expect(getChangesVsDefault).toHaveBeenCalledWith(API);
   });
 
-  it("links files that add the same long string, and not through a short one", async () => {
-    renderFiles(BOTH);
-    const app = await screen.findByRole("region", { name: "xames-app" });
-    await waitFor(() => expect(screen.getAllByTestId("link-chip")).toHaveLength(2));
-    const chips = screen.getAllByTestId("link-chip");
-    expect(chips.every((c) => c.textContent?.includes("/api/v1/notifications/settings"))).toBe(true);
-    // tokens.ts는 7자 문자열만 겹쳐서 연결 표시가 없다.
-    const tokensRow = within(app).getByText("tokens.ts").closest("[role=button]") as HTMLElement;
-    expect(within(tokensRow).queryByTestId("link-chip")).toBeNull();
-  });
-
-  it("opens linked changes side by side and labels them as a guess", async () => {
-    renderFiles(BOTH);
-    const app = await screen.findByRole("region", { name: "xames-app" });
-    await waitFor(() => expect(within(app).getByTestId("link-chip")).toBeTruthy());
-    fireEvent.click(within(app).getByTestId("link-chip"));
-    const compare = await screen.findByTestId("linked-compare");
-    expect(within(compare).getByText("a guess from matching strings")).toBeTruthy();
-    await waitFor(() => expect(compare.querySelectorAll("mark")).toHaveLength(2));
-    expect(within(compare).getByText("src/notifications/settings.controller.ts")).toBeTruthy();
-    fireEvent.click(within(compare).getByText("Close link"));
-    expect(screen.queryByTestId("linked-compare")).toBeNull();
-  });
-
   it("shows the diff against main for a picked file", async () => {
     renderFiles(BOTH);
     fireEvent.click(await screen.findByText("settings.controller.ts"));
     expect(await screen.findByText("diff-viewer src/notifications/settings.controller.ts")).toBeTruthy();
   });
 
-  it("does not read diffs to look for links when only one repository is shown", async () => {
-    renderFiles([{ path: APP, name: "xames-app" }]);
-    await screen.findByText("notifications.ts");
+  it("reads no file diff until a file is picked", async () => {
+    renderFiles(BOTH);
+    await screen.findByText("settings.controller.ts");
     expect(getFileDiffVsDefault).not.toHaveBeenCalled();
-    expect(screen.queryByTestId("link-chip")).toBeNull();
   });
 
   it("re-reads a repository's changes on repo:activity for that repository", async () => {
@@ -249,30 +195,11 @@ describe("FilesByRepo", () => {
     expect(screen.getByText("Pick a file")).toBeTruthy();
   });
 
-  it("does not search for links again when only the view changes", async () => {
-    const view = renderFiles(BOTH);
-    await waitFor(() => expect(screen.getAllByTestId("link-chip")).toHaveLength(2));
-    const scans = linkScans.count;
-    // 새 배열이지만 같은 저장소, 파일 고르기, 그룹 접기 — 연결 계산을 다시 하지 않는다.
-    view.show(BOTH.map((r) => ({ ...r })));
-    fireEvent.click(screen.getByText("notifications.ts"));
-    fireEvent.click(screen.getByRole("button", { name: /xames-backend/ }));
-    expect(linkScans.count).toBe(scans);
-  });
-
-  it("compares a renamed file against its old path in the side-by-side view", async () => {
-    renderFiles([
-      { path: APP, name: "xames-app" },
-      { path: DESIGN, name: "xames-design" },
-    ]);
-    const design = await screen.findByRole("region", { name: "xames-design" });
-    await waitFor(() => expect(within(design).getByTestId("link-chip")).toBeTruthy());
-    fireEvent.click(within(design).getByTestId("link-chip"));
-    const compare = await screen.findByTestId("linked-compare");
-    await waitFor(() => expect(compare.querySelectorAll("mark")).toHaveLength(2));
-    const designCalls = getFileDiffVsDefault.mock.calls.filter(([p]) => p === DESIGN);
-    expect(designCalls.length).toBeGreaterThan(0);
-    expect(designCalls.every(([, , oldPath]) => oldPath === "src/old.ts")).toBe(true);
+  it("compares a renamed file against its old path", async () => {
+    renderFiles([{ path: DESIGN, name: "xames-design" }]);
+    fireEvent.click(await screen.findByText("new.ts"));
+    expect(await screen.findByText("diff-viewer src/new.ts")).toBeTruthy();
+    expect(getFileDiffVsDefault).toHaveBeenCalledWith(DESIGN, "src/new.ts", "src/old.ts");
   });
 
   it("splits a repository's files by folder when grouped by folder", async () => {
@@ -281,39 +208,6 @@ describe("FilesByRepo", () => {
     const api = await within(app).findByRole("group", { name: "src/api" });
     expect(within(api).getByText("notifications.ts")).toBeTruthy();
     expect(within(app).getByRole("group", { name: "src/theme" })).toBeTruthy();
-  });
-
-  it("fills the link-scan budget round-robin, so a repo with many files does not starve the others (W7 review)", async () => {
-    expect(BIG_FILE_COUNT).toBeGreaterThan(LINK_SCAN_FILE_LIMIT);
-    renderFiles([
-      { path: BIG, name: "xames-big" },
-      { path: WEB, name: "xames-web" },
-      { path: ADMIN, name: "xames-admin" },
-    ]);
-    const web = await screen.findByRole("region", { name: "xames-web" });
-    await waitFor(() => expect(within(web).getByTestId("link-chip")).toBeTruthy());
-    const admin = screen.getByRole("region", { name: "xames-admin" });
-    expect(within(admin).getByTestId("link-chip")).toBeTruthy();
-  });
-
-  it("does not claim link-scan truncation when the eligible file count exactly fills the budget (W7 review)", async () => {
-    // BIG alone has more eligible files than the budget when both other repos are hidden;
-    // shrink the view to exactly LINK_SCAN_FILE_LIMIT files across two repos.
-    const exact = LINK_SCAN_FILE_LIMIT - 1; // WEB contributes 1 more eligible file
-    CHANGES[BIG] = changes(
-      BIG,
-      "refactor/huge",
-      BIG_FILES.slice(0, exact),
-    );
-    renderFiles([
-      { path: BIG, name: "xames-big" },
-      { path: WEB, name: "xames-web" },
-    ]);
-    await screen.findByRole("region", { name: "xames-big" });
-    await waitFor(() => expect(getFileDiffVsDefault).toHaveBeenCalled());
-    expect(screen.queryByText(/links searched in the first/)).toBeNull();
-    // restore the full fixture for later tests
-    CHANGES[BIG] = changes(BIG, "refactor/huge", BIG_FILES);
   });
 
   it("covers the list and diff with the branch-switch overlay, like the other repo-view screens (W7 review)", async () => {
@@ -350,7 +244,7 @@ describe("FilesByRepo", () => {
         "main에서 아직 push하지 않은 변경 (origin/main 대비) · 파일 1개 · 커밋 1 + 커밋 안 함 1",
       ),
     );
-    CHANGES[WEB] = changes(WEB, "feat/shared-route", [file("src/route.ts", 1)]);
+    delete CHANGES[WEB];
   });
 
   it("explains each repository in its own group when several are shown", async () => {

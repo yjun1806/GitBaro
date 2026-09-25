@@ -1,19 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { GitCompare, X } from "lucide-react";
-import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
-import { useCurrentBranch } from "@/hooks/useCurrentBranch";
 import { activeRange, rangeLabel, useBranchRangeStore } from "@/components/branch/branch-range";
 
 /** 그래프 머리에 달 비교 표시(`main..feat/x`). 비교 중이 아니면 null. */
-export function compareChipLabel(
-  range: { base: string; target: string } | null,
-  compareBranch: string | null,
-  currentBranch: string | null,
-): string | null {
-  if (range) return rangeLabel(range);
-  if (compareBranch) return rangeLabel({ base: currentBranch ?? "HEAD", target: compareBranch });
-  return null;
+export function compareChipLabel(range: { base: string; target: string } | null): string | null {
+  return range ? rangeLabel(range) : null;
 }
 
 /**
@@ -25,17 +17,10 @@ export function CompareChip() {
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const stored = useBranchRangeStore((s) => s.range);
   const clearRange = useBranchRangeStore((s) => s.clear);
-  const compareBranch = useUIStore((s) => s.compareBranch);
-  const setCompareBranch = useUIStore((s) => s.setCompareBranch);
-  const currentBranch = useCurrentBranch();
   const range = activeRange(stored, activeRepoPath);
-  const label = compareChipLabel(range, compareBranch, currentBranch);
+  const label = compareChipLabel(range);
   if (label === null) return null;
 
-  const handleClear = () => {
-    if (range) clearRange();
-    if (compareBranch) setCompareBranch(null);
-  };
   return (
     <span
       className="flex items-center gap-1 shrink-0 min-w-0 max-w-[320px] h-6 pl-2 pr-0.5 rounded-(--radius-chip) bg-(--acc-sel) text-[11.5px] font-semibold text-(--fg2)"
@@ -47,7 +32,7 @@ export function CompareChip() {
       </span>
       <button
         type="button"
-        onClick={handleClear}
+        onClick={clearRange}
         aria-label={t("graph.endCompare")}
         title={t("graph.endCompare")}
         className="flex items-center justify-center w-5 h-5 shrink-0 rounded-[4px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"

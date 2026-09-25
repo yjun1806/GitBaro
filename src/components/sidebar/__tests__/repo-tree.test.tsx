@@ -157,11 +157,11 @@ afterEach(cleanup);
 
 // SOLO에만 신호를 주고 QUIET은 모두 0이라 조용한 저장소로 접힌다.
 const baseSignals: Record<string, PathSignals> = {
-  [API]: { dirtyCount: 2, newCommits: 1, ahead: 3, behind: 0 },
-  [WT]: { dirtyCount: 1, newCommits: 4, ahead: 6 },
-  [WEB]: { dirtyCount: 0, newCommits: 0 },
-  [SOLO]: { dirtyCount: 0, newCommits: 0, ahead: 0, behind: 2 },
-  [QUIET]: { dirtyCount: 0, newCommits: 0 },
+  [API]: { dirtyCount: 2, ahead: 3, behind: 0 },
+  [WT]: { dirtyCount: 1, ahead: 6 },
+  [WEB]: { dirtyCount: 0 },
+  [SOLO]: { dirtyCount: 0, ahead: 0, behind: 2 },
+  [QUIET]: { dirtyCount: 0 },
 };
 
 describe("RepoTree — cards and levels", () => {

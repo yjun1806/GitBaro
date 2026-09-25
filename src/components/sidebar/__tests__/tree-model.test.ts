@@ -41,8 +41,8 @@ function sync(path: string, over: Partial<RepoSyncStatus> = {}): RepoSyncStatus 
   };
 }
 
-function review(path: string, newCount: number | null): WorktreeReviewStatus {
-  return { path, branch: "main", headOid: "abc", isMain: true, repoPath: path, newCount, basis: null };
+function review(path: string): WorktreeReviewStatus {
+  return { path, branch: "main", headOid: "abc", isMain: true, repoPath: path };
 }
 
 const API = "/r/api";
@@ -66,24 +66,20 @@ function tree(signals = {}) {
 }
 
 describe("buildSignals", () => {
-  it("merges sync status, new commit counts and change times per path", () => {
+  it("merges sync status, known worktrees and change times per path", () => {
     const signals = buildSignals(
       { [API]: sync(API, { dirtyCount: 2, ahead: 1, unpushed: 1 }) },
-      { [WT]: review(WT, 3) },
+      { [WT]: review(WT) },
       { [WEB]: NOW - 1000 },
     );
-    expect(signals[API]).toEqual({ dirtyCount: 2, newCommits: 0, ahead: 1, behind: 0, lastChangedAt: null });
-    expect(signals[WT]).toMatchObject({ dirtyCount: 0, newCommits: 3 });
+    expect(signals[API]).toEqual({ dirtyCount: 2, ahead: 1, behind: 0, lastChangedAt: null });
+    expect(signals[WT]).toEqual({ dirtyCount: 0, ahead: 0, behind: 0, lastChangedAt: null });
     expect(signals[WEB]).toMatchObject({ lastChangedAt: NOW - 1000 });
   });
 
   it("counts commits on no remote as commits to push, even without an upstream", () => {
     const signals = buildSignals({ [API]: sync(API, { hasUpstream: false, ahead: 0, unpushed: 4 }) }, {}, {});
     expect(signals[API].ahead).toBe(4);
-  });
-
-  it("treats a count that is not known yet as zero", () => {
-    expect(buildSignals({}, { [API]: review(API, null) }, {})[API].newCommits).toBe(0);
   });
 });
 

@@ -109,9 +109,6 @@ pub fn run() {
             commands::worktree::get_worktrees,
             commands::worktree::add_worktree,
             commands::worktree::remove_worktree,
-            commands::worktree::start_worktree_preview,
-            commands::worktree::stop_worktree_preview,
-            commands::worktree::check_preview_active,
             commands::actions::list_workflow_runs,
             commands::actions::get_workflow_run_jobs,
             commands::watch::start_repo_watch,
@@ -120,9 +117,6 @@ pub fn run() {
             commands::activity::set_activity_watch,
             // W1-T4
             commands::review::review_status,
-            commands::review::count_new_commits,
-            // W3-T3
-            commands::review::list_new_commit_ids,
             // W4-T2
             commands::workspace_history::get_workspace_history,
             // W5-T4

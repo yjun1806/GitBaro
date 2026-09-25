@@ -86,8 +86,6 @@ vi.mock("@/api/queries", () => ({
   useRepoSyncStatuses: () => ({ data: undefined }),
   useUnpushedCommits: () => ({ data: undefined }),
   useReviewStatusQuery: () => ({ data: undefined, isLoading: false }),
-  useNewCommitCountsQuery: () => ({ data: undefined, isLoading: false }),
-  useNewCommitIdsQuery: () => ({ data: undefined }),
   useStashList: () => ({ data: [] }),
   useWorkflowRuns: () => ({ data: [] }),
   useFileDiff: () => ({ data: null, isLoading: false, isError: false }),
@@ -110,8 +108,6 @@ vi.mock("@/api/queries", () => ({
       error: null,
     })),
   useStatusMany: () => ({}),
-  useNewCommitIdsMany: () => ({}),
-  useWorkspaceRecentCommits: () => ({}),
   // W6-T1 따라가기
   useWipFiles: () => ({
     data: [

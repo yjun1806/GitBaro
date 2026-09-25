@@ -88,7 +88,7 @@
     "close": "닫기",
     "stageFailed": "Stage 실패: {{error}}",
     "unstageFailed": "Unstage 실패: {{error}}",
-    "workingChanges": "작업 중인 변경 {{count}}",
+    "workingChanges": "작업 중인 변경",
     "target": "{{branch}}에 커밋 · {{worktree}}",
     "addDescription": "설명 추가",
     "author": "작성자 {{name}}"
@@ -141,7 +141,6 @@
     "create": "새 Branch",
     "name": "Branch 이름",
     "from": "기준 Branch",
-    "delete": "Branch 삭제",
     "deleteConfirm": "{{name}} Branch를 삭제하시겠습니까?",
     "deleteUnmergedWarning": "이 브랜치는 아직 병합되지 않았습니다. 병합되지 않은 커밋이 유실될 수 있습니다.",
     "local": "Local",
@@ -269,9 +268,7 @@
     "selectRepo": "저장소를 선택하세요"
   },
   "account": {
-    "switch": "계정 전환",
     "add": "다른 계정 추가",
-    "manage": "계정 관리",
     "remove": "계정 제거",
     "removeConfirm": "GitBaro에서 {{username}}을 제거하시겠습니까?",
     "logout": "로그아웃",
@@ -315,7 +312,6 @@
     "create": "새 저장소 만들기",
     "open": "저장소 열기",
     "noRepos": "저장소 없음",
-    "search": "저장소 검색",
     "addRepository": "저장소 추가",
     "addLocal": "로컬 저장소 추가",
     "cloneRepo": "저장소 Clone",
@@ -390,12 +386,7 @@
     "ai": "AI 어시스턴트",
     "aiDescription": "저장소에서 사용할 AI CLI를 선택하세요",
     "detectingAiClis": "설치된 AI CLI 감지 중",
-    "noAiClis": "설치된 AI CLI를 찾을 수 없습니다",
-    "reviewBasis": "검토 기준",
-    "reviewBasisUnpushed": "원격에 없는 커밋",
-    "reviewBasisUnseen": "확인하지 않은 커밋",
-    "reviewBasisUnpushedHint": "원격에 올리지 않은 커밋을 검토할 커밋으로 봐요.",
-    "reviewBasisUnseenHint": "「여기까지 확인함」 뒤에 생긴 커밋을 검토할 커밋으로 봐요."
+    "noAiClis": "설치된 AI CLI를 찾을 수 없습니다"
   },
   "diff": {
     "unified": "통합 보기",
@@ -511,7 +502,6 @@
     "yearsAgo_other": "{{count}}년 전"
   },
   "status": {
-    "online": "온라인",
     "offline": "오프라인",
     "fetched": "Fetch됨 {{time}}"
   },
@@ -524,11 +514,6 @@
     "untracked": "추적 안 됨",
     "ignored": "무시됨",
     "conflicted": "충돌"
-  },
-  "pr": {
-    "open": "Open",
-    "merged": "Merged",
-    "closed": "Closed"
   },
   "error": {
     "generic": "오류가 발생했습니다",
@@ -548,22 +533,6 @@
     "failedToUpdateSettings": "설정 업데이트 실패: {{error}}",
     "failedToOpenEditor": "에디터 열기 실패: {{error}}"
   },
-  "preview": {
-    "previewing": "미리보기 중: {{branch}}",
-    "stop": "미리보기 중단",
-    "start": "미리보기",
-    "started": "{{branch}} 미리보기 시작",
-    "stopped": "미리보기 중단됨",
-    "failedToStart": "미리보기 시작 실패: {{error}}",
-    "failedToStop": "미리보기 중단 실패: {{error}}",
-    "disabledCommit": "미리보기 중에는 Commit할 수 없습니다",
-    "disabledSync": "미리보기 중에는 동기화할 수 없습니다"
-  },
-  "conflict": {
-    "title": "Merge 충돌",
-    "openTool": "외부 Merge 도구에서 열기",
-    "files": "{{count}}개의 충돌 파일"
-  },
   "mergeRecovery": {
     "mergeInProgress": "Merge 진행 중",
     "rebaseInProgress": "Rebase 진행 중",
@@ -580,35 +549,7 @@
     "continueFailed": "계속 실패: {{error}}"
   },
   "compare": {
-    "title": "Branch 비교",
-    "ahead": "Ahead",
-    "behind": "Behind",
-    "aheadCommits_one": "{{count}}개 Commit 앞섬",
-    "aheadCommits_other": "{{count}}개 Commit 앞섬",
-    "behindCommits_one": "{{count}}개 Commit 뒤처짐",
-    "behindCommits_other": "{{count}}개 Commit 뒤처짐",
-    "identical": "두 Branch가 동일합니다",
-    "noBehindCommits": "Merge할 Commit이 없습니다",
-    "noAheadCommits": "앞선 Commit이 없습니다",
-    "clearComparison": "비교 해제",
-    "detachedHead": "Detached HEAD 상태에서는 Branch 비교를 사용할 수 없습니다",
-    "branchNotFound": "Branch를 찾을 수 없습니다 — 삭제되었을 수 있습니다",
-    "loading": "Branch 비교 중",
-    "comparingWith": "{{branch}}와 비교 중",
-    "incoming": "Incoming",
-    "outgoing": "Outgoing",
-    "incomingFrom": "Incoming from {{branch}}",
-    "outgoingTo": "Outgoing to {{branch}}",
-    "incomingTooltip_one": "{{branch}}에서 Merge할 수 있는 {{count}}개 커밋",
-    "incomingTooltip_other": "{{branch}}에서 Merge할 수 있는 {{count}}개 커밋",
-    "outgoingTooltip_one": "{{branch}}에 없는 {{count}}개 커밋",
-    "outgoingTooltip_other": "{{branch}}에 없는 {{count}}개 커밋",
-    "selectorIncomingTooltip_one": "이 Branch에서 가져올 수 있는 {{count}}개 커밋",
-    "selectorIncomingTooltip_other": "이 Branch에서 가져올 수 있는 {{count}}개 커밋",
-    "selectorOutgoingTooltip_one": "이 Branch보다 {{count}}개 커밋 앞섬",
-    "selectorOutgoingTooltip_other": "이 Branch보다 {{count}}개 커밋 앞섬",
-    "noIncomingCommits": "Incoming 커밋 없음",
-    "noOutgoingCommits": "Outgoing 커밋 없음"
+    "loading": "Branch 비교 중"
   },
   "merge": {
     "conflictStopped": "충돌이 나서 Merge가 멈췄습니다. Changes 탭에서 충돌을 해결하세요.",
@@ -732,7 +673,7 @@
     }
   },
   "activity": {
-    "title": "활동 로그",
+    "title": "작업 기록",
     "clear": "지우기",
     "noActivity": "최근 Git 작업이 없습니다",
     "running": "실행 중...",
@@ -787,7 +728,6 @@
     "graphTab": "커밋 그래프",
     "stashTab": "스태시",
     "uncommitted": "커밋 안 한 변경",
-    "uncommittedCount": "커밋 안 한 변경 ({{count}})",
     "noRepoTitle": "고른 저장소가 없어요",
     "noRepoDescription": "사이드바에서 저장소를 고르거나 새로 추가하세요.",
     "openRepoList": "모든 저장소",
@@ -902,19 +842,12 @@
     "colAuthor": "작성자",
     "colTime": "시각",
     "colCommit": "커밋",
-    "newCommit": "새 커밋",
     "agent": "코딩 에이전트",
     "agentGuess": "{{name}}와 함께 쓴 커밋으로 추정 (Co-Authored-By 트레일러 기준)",
     "unpushed": "아직 push 안 함",
     "worktree": "워크트리",
     "fileCount_other": "파일 {{count}}",
-    "wipWorktreeLabel": "{{name}}의 커밋 안 한 변경 ({{count}})",
-    "seenHere": "여기까지 확인함",
-    "seenHereAt": "여기까지 확인함 · {{time}}",
-    "seenToday": "오늘 {{time}}",
-    "seenYesterday": "어제 {{time}}",
     "modifiedAgo": "{{time}} 수정",
-    "markSeen_other": "새 커밋 {{count}}개 확인함으로 표시",
     "comparing": "{{range}} 비교 중",
     "endCompare": "비교 끝내기",
     "forkPoint": "{{branch}}에서 갈라진 지점",
@@ -957,17 +890,7 @@
     "changedFiles_other": "바뀐 파일 {{count}}"
   },
   "activeScope": {
-    "workspaceDescription_one": "저장소 {{count}}개. 사이드바에서 저장소를 고르면 그 저장소의 그래프를 봅니다.",
-    "workspaceDescription_other": "저장소 {{count}}개. 사이드바에서 저장소를 고르면 그 저장소의 그래프를 봅니다.",
-    "pickRepo": "저장소를 고르세요",
-    "actions": {
-      "fetch": "Fetch",
-      "pull": "Pull",
-      "push": "Push",
-      "branch": "브랜치",
-      "merge": "Merge",
-      "stash": "Stash"
-    }
+    "pickRepo": "저장소를 고르세요"
   },
   "review": {
     "subtitle_one": "워크스페이스 · {{account}} · 저장소 {{count}}개 중 {{shown}}개 표시",
@@ -975,10 +898,8 @@
     "showAll_one": "모두 보기 ({{count}}개 숨김)",
     "showAll_other": "모두 보기 ({{count}}개 숨김)",
     "hideQuiet": "조용한 저장소 숨기기",
-    "hiddenHint": "기본 브랜치에 있고 새 커밋도, 커밋 안 한 변경도 없는 저장소는 숨겨요",
+    "hiddenHint": "기본 브랜치에 있고 원격에 없는 커밋도, 커밋 안 한 변경도 없는 저장소는 숨겨요",
     "noCommits": "기본 브랜치에서 갈라진 뒤 커밋이 없어요",
-    "wipLabel_one": "{{repo}}의 커밋 안 한 변경 (파일 {{count}}개)",
-    "wipLabel_other": "{{repo}}의 커밋 안 한 변경 (파일 {{count}}개)",
     "baseRow": "각 저장소가 기본 브랜치에서 갈라진 지점",
     "repoError": "{{repo}}를 읽지 못했어요: {{error}}",
     "noDefaultBranch": "기본 브랜치를 찾지 못해 최근 커밋을 보여 줘요",
@@ -989,12 +910,8 @@
     "selectTitle": "커밋이나 커밋 안 한 변경을 고르세요",
     "selectHint": "고른 것의 파일과 diff가 여기에 나와요.",
     "openToCommit": "이 작업 트리 열기",
-    "noChanges": "커밋 안 한 변경이 없어요",
-    "staged": "스테이징됨",
-    "allQuiet_one": "조용한 저장소 {{count}}개를 숨겼어요. 기본 브랜치에 있고 새 커밋도, 커밋 안 한 변경도 없어요. 「모두 보기」로 펼칠 수 있어요.",
-    "allQuiet_other": "조용한 저장소 {{count}}개를 모두 숨겼어요. 기본 브랜치에 있고 새 커밋도, 커밋 안 한 변경도 없어요. 「모두 보기」로 펼칠 수 있어요.",
-    "worktreeNew_one": "다른 워크트리에 새 커밋 {{count}}개가 있어요. 저장소를 열어 확인하세요.",
-    "worktreeNew_other": "다른 워크트리에 새 커밋 {{count}}개가 있어요. 저장소를 열어 확인하세요."
+    "allQuiet_one": "조용한 저장소 {{count}}개를 숨겼어요. 기본 브랜치에 있고 원격에 없는 커밋도, 커밋 안 한 변경도 없어요. 「모두 보기」로 펼칠 수 있어요.",
+    "allQuiet_other": "조용한 저장소 {{count}}개를 모두 숨겼어요. 기본 브랜치에 있고 원격에 없는 커밋도, 커밋 안 한 변경도 없어요. 「모두 보기」로 펼칠 수 있어요."
   },
   "gitActions": {
     "syncGroup": "동기화",
@@ -1010,17 +927,12 @@
     "forcePush": "강제 Push…",
     "forcePushDesc": "명령을 확인한 뒤 원격 브랜치를 덮어씁니다",
     "branch": "브랜치",
-    "merge": "Merge",
-    "stash": "Stash",
     "terminal": "터미널에서 열기",
     "terminalFailed": "터미널을 열지 못했어요: {{error}}",
     "mergeTitle": "{{branch}}에 Merge",
-    "mergePick": "지금 브랜치로 가져올 브랜치를 고르세요.",
-    "mergePickPlaceholder": "브랜치 선택",
     "close": "닫기",
     "fetchOptions": "Fetch 방식",
-    "fetchNow": "지금 Fetch",
-    "mergeNoBranch": "아직 현재 브랜치가 없습니다. 첫 커밋을 만들거나 브랜치로 전환하세요."
+    "fetchNow": "지금 Fetch"
   },
   "multiRepoRemote": {
     "title": {
@@ -1175,26 +1087,17 @@
     "tab": "{{base}} 대비 변경",
     "subtitleSingle": "저장소 1곳 · 비교 기준과 갈라진 뒤의 변경 · 커밋 안 한 변경 포함",
     "subtitleMany": "저장소 {{count}}곳 · 저장소마다 비교 기준과 갈라진 뒤의 변경 · 커밋 안 한 변경 포함",
-    "linksTruncated": "연결은 앞의 파일 {{count}}개에서만 찾았어요",
     "loadFailed": "변경을 읽지 못했어요: {{error}}",
     "loading": "불러오는 중…",
     "noChanges": "비교 기준과 갈라진 뒤 바뀐 파일이 없어요.",
-    "linkHint": "연결된 변경은 두 저장소에 함께 추가된 8자 이상 문자열로 찾은 추정이에요.",
     "selectTitle": "파일을 고르세요",
-    "selectHint": "파일을 고르면 비교 기준 대비 diff를, 연결 표시를 누르면 연결된 변경을 나란히 보여 줘요.",
+    "selectHint": "파일을 고르면 비교 기준 대비 diff를 보여 줘요.",
     "detached": "detached HEAD",
     "fileCount_one": "파일 {{count}}",
     "fileCount_other": "파일 {{count}}",
     "noBase": "{{branch}}에서 갈라진 지점을 찾지 못해 커밋 안 한 변경만 보여요.",
     "unborn": "아직 커밋이 없어 커밋 안 한 변경만 보여요.",
-    "linkChipTitleSingle": "다른 저장소에도 「{{token}}」 문자열이 추가됐어요. 누르면 나란히 봐요.",
-    "linkChipTitleMany": "다른 저장소에도 「{{token}}」 문자열이 추가됐어요(연결 {{count}}개). 누르면 나란히 봐요.",
     "binary": "바이너리",
-    "linkedTitle": "같은 문자열로 연결된 변경",
-    "linkedSummary": "{{repos}}에 함께 추가됨:",
-    "estimate": "문자열 일치로 찾은 추정",
-    "pickOther": "비교할 파일",
-    "closeLink": "연결 닫기",
     "groupBy": "파일 나누기",
     "groupByRepo": "저장소별",
     "groupByFolder": "폴더별",
@@ -1230,9 +1133,6 @@
     "detached": "브랜치 없음 · {{sha}}",
     "detachedUnknown": "브랜치 없음",
     "noUpstream": "원격 브랜치 없음",
-    "clean": "커밋 안 한 변경 없음",
-    "uncommitted_other": "커밋 안 한 변경 {{count}}개",
-    "uncommittedStaged_other": "커밋 안 한 변경 {{count}}개 (스테이징 {{staged}})",
     "viewing": "{{target}} 보는 중 · 체크아웃 안 함",
     "operation": "{{op}} 진행 중",
     "operationConflicts_other": "{{op}} 진행 중 · 충돌 {{count}}개",
@@ -1244,9 +1144,9 @@
       "revert": "revert",
       "squash": "squash"
     },
-    "unpushed_other": "원격에 없는 커밋 {{count}}개",
+    "hasUnpushed": "원격에 없는 커밋 있음",
     "notPublished": "publish 전",
-    "behind_other": "받을 커밋 {{count}}개",
+    "hasBehind": "받을 커밋 있음",
     "inSync": "원격과 같음"
   },
   "workSwitcher": {

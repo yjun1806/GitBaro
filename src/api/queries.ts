@@ -495,11 +495,9 @@ export function useStashMutations(repoPath: string | null) {
   };
 }
 
-// W1-T4 — 새 커밋 기준선
+// W1-T4 — 워크트리 목록
 
-import { keepPreviousData } from "@tanstack/react-query";
-import { reviewStatus, countNewCommits } from "./commands";
-import type { SeenRecordInput } from "@/types";
+import { reviewStatus } from "./commands";
 
 /** 사이드바 펼침 여부와 상관없이 20초마다 워크트리 목록과 HEAD를 다시 읽는다. */
 export const REVIEW_POLL_MS = 20_000;
@@ -509,40 +507,6 @@ export function useReviewStatusQuery(repoPaths: string[]) {
     queryKey: ["reviewStatus", repoPaths],
     queryFn: () => reviewStatus(repoPaths),
     enabled: repoPaths.length > 0,
-    refetchInterval: REVIEW_POLL_MS,
-    refetchIntervalInBackground: false,
-  });
-}
-
-/**
- * `inputs`가 null이면 멈춘다(첫 기준선을 잡기 전). 기준선이나 `headsKey`(워크트리 HEAD 목록)가
- * 바뀌면 키가 바뀌어 바로 다시 세고, 그 밖에는 20초마다 센다(기반 브랜치가 움직인 경우).
- */
-export function useNewCommitCountsQuery(inputs: SeenRecordInput[] | null, headsKey: string) {
-  return useQuery({
-    queryKey: ["newCommitCounts", inputs, headsKey],
-    queryFn: () => countNewCommits(inputs ?? []),
-    enabled: inputs !== null && inputs.length > 0,
-    refetchInterval: REVIEW_POLL_MS,
-    refetchIntervalInBackground: false,
-    placeholderData: keepPreviousData,
-  });
-}
-
-// W3-T3
-
-import { listNewCommitIds } from "./commands";
-
-/**
- * 커밋 그래프가 새 커밋 점을 찍을 커밋 목록. `entry`가 null이면 멈춘다(첫 기준선을 잡기 전).
- * 기준선이나 `headOid`가 바뀌면 키가 바뀌어 바로 다시 센다. 앞 결과를 이어서 보여 주지 않는다:
- * 「확인함으로 표시」를 누른 뒤 옛 개수와 점이 남아 있지 않게 한다.
- */
-export function useNewCommitIdsQuery(entry: SeenRecordInput | null, headOid: string | null) {
-  return useQuery({
-    queryKey: ["newCommitIds", entry, headOid],
-    queryFn: () => listNewCommitIds(entry as SeenRecordInput),
-    enabled: entry !== null,
     refetchInterval: REVIEW_POLL_MS,
     refetchIntervalInBackground: false,
   });
@@ -631,9 +595,9 @@ export function useCachedWorkflowRunsState(
 
 // W4-T3 — 워크스페이스 리뷰 화면
 
-import { hashKey, useQueries } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { getWorkspaceHistory } from "./commands";
-import type { NewCommitIds, StatusEntry, WorkspaceRepoHistory } from "@/types";
+import type { StatusEntry, WorkspaceRepoHistory } from "@/types";
 
 /** 워크스페이스 타임라인에서 저장소마다 불러올 커밋 수. */
 export const WORKSPACE_HISTORY_LIMIT = 100;
@@ -688,36 +652,6 @@ export function useWorkspaceHistories(
 }
 
 /**
- * 저장소 HEAD부터의 최근 커밋(`get_commit_history`). 새 커밋 중 타임라인(main과 갈라진 뒤의
- * 커밋)에 없는 커밋을 그리려고 부른다. main에 있는 저장소에서 pull로 받았거나 원격이 없는
- * main에 바로 쌓인 커밋이 그렇다. 결과는 경로 → 커밋 목록(최신 순)이다.
- */
-export function useWorkspaceRecentCommits(
-  repos: readonly { path: string; headOid: string }[],
-): Record<string, CommitInfo[]> {
-  const client = useQueryClient();
-  return useQueries({
-    queries: repos.map(({ path, headOid }) => ({
-      queryKey: ["workspaceRecentCommits", path, headOid, WORKSPACE_HISTORY_LIMIT],
-      queryFn: () => getCommitHistory(path, WORKSPACE_HISTORY_LIMIT, 0),
-      placeholderData: (previous: CommitInfo[] | undefined) =>
-        previous ??
-        latestCachedData<CommitInfo[]>(
-          client,
-          (key) => key[0] === "workspaceRecentCommits" && key[1] === path,
-        ),
-    })),
-    combine: (results) => {
-      const out: Record<string, CommitInfo[]> = {};
-      results.forEach((r, i) => {
-        if (r.data) out[repos[i].path] = r.data;
-      });
-      return out;
-    },
-  });
-}
-
-/**
  * 여러 워크트리의 커밋하지 않은 변경. 키가 `useStatus`와 같아(`["status", path]`) 캐시를 같이 쓴다.
  * 결과는 경로 → 목록이고, 아직 못 읽은 경로는 빠진다.
  */
@@ -735,40 +669,6 @@ export function useStatusMany(paths: readonly string[]): Record<string, StatusEn
       results.forEach((r, i) => {
         if (r.data) out[paths[i]] = r.data;
       });
-      return out;
-    },
-  });
-}
-
-/**
- * 여러 워크트리의 새 커밋. 키가 `useNewCommitIdsQuery`와 같아 단일 저장소 그래프와 캐시를 같이 쓴다.
- * HEAD가 바뀌어 다시 세는 동안에는 같은 기준선으로 센 마지막 결과를 보여 준다(기준선이 바뀌면,
- * 곧 「확인함」을 누른 뒤에는 옛 수를 다시 보이지 않는다).
- * 결과는 경로 → 응답이고, 아직 못 센 경로는 빠진다.
- */
-export function useNewCommitIdsMany(
-  entries: readonly { entry: SeenRecordInput; headOid: string | null }[],
-): Record<string, NewCommitIds> {
-  const client = useQueryClient();
-  return useQueries({
-    queries: entries.map(({ entry, headOid }) => {
-      const entryHash = hashKey([entry]);
-      return {
-        queryKey: ["newCommitIds", entry, headOid],
-        queryFn: () => listNewCommitIds(entry),
-        refetchInterval: REVIEW_POLL_MS,
-        refetchIntervalInBackground: false,
-        placeholderData: (previous: NewCommitIds | undefined) =>
-          previous ??
-          latestCachedData<NewCommitIds>(
-            client,
-            (key) => key[0] === "newCommitIds" && hashKey([key[1]]) === entryHash,
-          ),
-      };
-    }),
-    combine: (results) => {
-      const out: Record<string, NewCommitIds> = {};
-      for (const r of results) if (r.data) out[r.data.path] = r.data;
       return out;
     },
   });
@@ -944,7 +844,7 @@ export function useChangesVsDefaultMany(paths: readonly string[], scopes?: reado
   });
 }
 
-/** 파일 여러 개의 main 대비 diff. 연결된 변경을 찾을 때 추가된 줄을 읽는 데 쓴다. 결과는 `files` 순서다. */
+/** 파일 여러 개의 main 대비 diff. 결과는 `files` 순서다. */
 export function useFileDiffsVsDefault(
   files: readonly { repoPath: string; filePath: string; oldPath: string | null; scope?: ChangesScope | null }[],
 ) {

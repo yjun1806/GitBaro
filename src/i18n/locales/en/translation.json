@@ -88,7 +88,7 @@
     "close": "Close",
     "stageFailed": "Stage failed: {{error}}",
     "unstageFailed": "Unstage failed: {{error}}",
-    "workingChanges": "Working changes {{count}}",
+    "workingChanges": "Working changes",
     "target": "Commit to {{branch}} · {{worktree}}",
     "addDescription": "Add description",
     "author": "Author {{name}}"
@@ -141,7 +141,6 @@
     "create": "New Branch",
     "name": "Branch name",
     "from": "Create from",
-    "delete": "Delete Branch",
     "deleteConfirm": "Are you sure you want to delete {{name}}?",
     "deleteUnmergedWarning": "This branch has not been fully merged. Unmerged commits may be lost.",
     "local": "Local",
@@ -269,9 +268,7 @@
     "selectRepo": "Select a repository"
   },
   "account": {
-    "switch": "Switch Account",
     "add": "Add Another Account",
-    "manage": "Manage Accounts",
     "remove": "Remove Account",
     "removeConfirm": "Remove {{username}} from GitBaro?",
     "logout": "Log Out",
@@ -315,7 +312,6 @@
     "create": "Create New Repository",
     "open": "Open Repository",
     "noRepos": "No repositories",
-    "search": "Search repositories",
     "addRepository": "Add Repository",
     "addLocal": "Add Local Repository",
     "cloneRepo": "Clone Repository",
@@ -390,12 +386,7 @@
     "ai": "AI Assistant",
     "aiDescription": "Choose the AI CLI to use with repositories",
     "detectingAiClis": "Detecting installed AI CLIs",
-    "noAiClis": "No installed AI CLIs found",
-    "reviewBasis": "Review basis",
-    "reviewBasisUnpushed": "Commits not on any remote",
-    "reviewBasisUnseen": "Commits you haven't marked seen",
-    "reviewBasisUnpushedHint": "Commits that no remote has yet are the ones to review.",
-    "reviewBasisUnseenHint": "Commits after your “seen up to here” mark are the ones to review."
+    "noAiClis": "No installed AI CLIs found"
   },
   "diff": {
     "unified": "Unified",
@@ -511,7 +502,6 @@
     "yearsAgo_other": "{{count}} years ago"
   },
   "status": {
-    "online": "Online",
     "offline": "Offline",
     "fetched": "Fetched {{time}}"
   },
@@ -524,11 +514,6 @@
     "untracked": "Untracked",
     "ignored": "Ignored",
     "conflicted": "Conflicted"
-  },
-  "pr": {
-    "open": "Open",
-    "merged": "Merged",
-    "closed": "Closed"
   },
   "error": {
     "generic": "Something went wrong",
@@ -548,22 +533,6 @@
     "failedToUpdateSettings": "Failed to update settings: {{error}}",
     "failedToOpenEditor": "Failed to open editor: {{error}}"
   },
-  "preview": {
-    "previewing": "Previewing: {{branch}}",
-    "stop": "Stop Preview",
-    "start": "Preview",
-    "started": "Previewing {{branch}}",
-    "stopped": "Preview stopped",
-    "failedToStart": "Failed to start preview: {{error}}",
-    "failedToStop": "Failed to stop preview: {{error}}",
-    "disabledCommit": "Commit disabled during preview",
-    "disabledSync": "Sync disabled during preview"
-  },
-  "conflict": {
-    "title": "Merge Conflicts",
-    "openTool": "Open in External Merge Tool",
-    "files": "{{count}} conflicted files"
-  },
   "mergeRecovery": {
     "mergeInProgress": "Merge in progress",
     "rebaseInProgress": "Rebase in progress",
@@ -580,35 +549,7 @@
     "continueFailed": "Failed to continue: {{error}}"
   },
   "compare": {
-    "title": "Compare Branches",
-    "ahead": "Ahead",
-    "behind": "Behind",
-    "aheadCommits_one": "{{count}} commit ahead",
-    "aheadCommits_other": "{{count}} commits ahead",
-    "behindCommits_one": "{{count}} commit behind",
-    "behindCommits_other": "{{count}} commits behind",
-    "identical": "These branches are identical",
-    "noBehindCommits": "No commits to merge",
-    "noAheadCommits": "No commits ahead",
-    "clearComparison": "Clear comparison",
-    "detachedHead": "Branch comparison is not available in detached HEAD state",
-    "branchNotFound": "Branch not found — it may have been deleted",
-    "loading": "Comparing branches",
-    "comparingWith": "Comparing with {{branch}}",
-    "incoming": "Incoming",
-    "outgoing": "Outgoing",
-    "incomingFrom": "Incoming from {{branch}}",
-    "outgoingTo": "Outgoing to {{branch}}",
-    "incomingTooltip_one": "{{count}} commit from {{branch}} that you can merge",
-    "incomingTooltip_other": "{{count}} commits from {{branch}} that you can merge",
-    "outgoingTooltip_one": "{{count}} commit not yet in {{branch}}",
-    "outgoingTooltip_other": "{{count}} commits not yet in {{branch}}",
-    "selectorIncomingTooltip_one": "{{count}} commit you can pull from this branch",
-    "selectorIncomingTooltip_other": "{{count}} commits you can pull from this branch",
-    "selectorOutgoingTooltip_one": "{{count}} commit ahead of this branch",
-    "selectorOutgoingTooltip_other": "{{count}} commits ahead of this branch",
-    "noIncomingCommits": "No incoming commits",
-    "noOutgoingCommits": "No outgoing commits"
+    "loading": "Comparing branches"
   },
   "merge": {
     "conflictStopped": "Merge stopped on conflicts. Resolve them in the Changes tab.",
@@ -787,7 +728,6 @@
     "graphTab": "Commit graph",
     "stashTab": "Stash",
     "uncommitted": "Uncommitted changes",
-    "uncommittedCount": "Uncommitted changes ({{count}})",
     "noRepoTitle": "No repository selected",
     "noRepoDescription": "Pick a repository in the sidebar, or add one.",
     "openRepoList": "All repositories",
@@ -902,21 +842,13 @@
     "colAuthor": "Author",
     "colTime": "Time",
     "colCommit": "Commit",
-    "newCommit": "New commit",
     "agent": "a coding agent",
     "agentGuess": "Probably written with {{name}} (guessed from the Co-Authored-By trailer)",
     "unpushed": "Not pushed yet",
     "worktree": "Worktree",
     "fileCount_one": "{{count}} file",
     "fileCount_other": "{{count}} files",
-    "wipWorktreeLabel": "Uncommitted changes in {{name}} ({{count}})",
-    "seenHere": "Seen up to here",
-    "seenHereAt": "Seen up to here · {{time}}",
-    "seenToday": "today {{time}}",
-    "seenYesterday": "yesterday {{time}}",
     "modifiedAgo": "modified {{time}}",
-    "markSeen_one": "Mark {{count}} new commit as seen",
-    "markSeen_other": "Mark {{count}} new commits as seen",
     "comparing": "Comparing {{range}}",
     "endCompare": "End comparison",
     "forkPoint": "Branched off {{branch}} here",
@@ -959,17 +891,7 @@
     "changedFiles_other": "Changed files {{count}}"
   },
   "activeScope": {
-    "workspaceDescription_one": "{{count}} repository. Pick a repository in the sidebar to see its graph.",
-    "workspaceDescription_other": "{{count}} repositories. Pick a repository in the sidebar to see its graph.",
-    "pickRepo": "Pick a repository",
-    "actions": {
-      "fetch": "Fetch",
-      "pull": "Pull",
-      "push": "Push",
-      "branch": "Branch",
-      "merge": "Merge",
-      "stash": "Stash"
-    }
+    "pickRepo": "Pick a repository"
   },
   "review": {
     "subtitle_one": "Workspace · {{account}} · showing {{shown}} of {{count}} repository",
@@ -977,10 +899,8 @@
     "showAll_one": "Show all ({{count}} hidden)",
     "showAll_other": "Show all ({{count}} hidden)",
     "hideQuiet": "Hide quiet repositories",
-    "hiddenHint": "Repositories on their default branch with no new commits and no uncommitted changes are hidden",
+    "hiddenHint": "Repositories on their default branch with no unpushed commits and no uncommitted changes are hidden",
     "noCommits": "No commits since these repositories branched off their default branch",
-    "wipLabel_one": "Uncommitted changes in {{repo}} ({{count}} file)",
-    "wipLabel_other": "Uncommitted changes in {{repo}} ({{count}} files)",
     "baseRow": "Where each repository branched off its default branch",
     "repoError": "Couldn't read {{repo}}: {{error}}",
     "noDefaultBranch": "No default branch found, so recent commits are shown instead",
@@ -991,12 +911,8 @@
     "selectTitle": "Pick a commit or uncommitted changes",
     "selectHint": "Its files and diff show here.",
     "openToCommit": "Open this working tree",
-    "noChanges": "No uncommitted changes",
-    "staged": "staged",
-    "allQuiet_one": "{{count}} quiet repository is hidden: it is on its default branch with no new commits and no uncommitted changes. Use Show all to see it.",
-    "allQuiet_other": "All {{count}} repositories are quiet and hidden: they are on their default branch with no new commits and no uncommitted changes. Use Show all to see them.",
-    "worktreeNew_one": "{{count}} new commit in another worktree. Open the repository to review it.",
-    "worktreeNew_other": "{{count}} new commits in other worktrees. Open the repository to review them."
+    "allQuiet_one": "{{count}} quiet repository is hidden: it is on its default branch with no unpushed commits and no uncommitted changes. Use Show all to see it.",
+    "allQuiet_other": "All {{count}} repositories are quiet and hidden: they are on their default branch with no unpushed commits and no uncommitted changes. Use Show all to see them."
   },
   "gitActions": {
     "syncGroup": "Sync",
@@ -1012,17 +928,12 @@
     "forcePush": "Force push…",
     "forcePushDesc": "Overwrite the remote branch after you confirm the command",
     "branch": "Branch",
-    "merge": "Merge",
-    "stash": "Stash",
     "terminal": "Open in Terminal",
     "terminalFailed": "Couldn't open Terminal: {{error}}",
     "mergeTitle": "Merge into {{branch}}",
-    "mergePick": "Pick the branch to bring into the current branch.",
-    "mergePickPlaceholder": "Choose a branch",
     "close": "Close",
     "fetchOptions": "Fetch options",
-    "fetchNow": "Fetch now",
-    "mergeNoBranch": "There is no current branch yet. Make the first commit or switch to a branch."
+    "fetchNow": "Fetch now"
   },
   "multiRepoRemote": {
     "title": {
@@ -1192,26 +1103,17 @@
     "tab": "Changes vs {{base}}",
     "subtitleSingle": "1 repository · changes since it left the comparison base · uncommitted changes included",
     "subtitleMany": "{{count}} repositories · each compared with its own base · uncommitted changes included",
-    "linksTruncated": "links searched in the first {{count}} files only",
     "loadFailed": "Couldn't read the changes: {{error}}",
     "loading": "Loading…",
     "noChanges": "No files changed since the comparison base.",
-    "linkHint": "Linked changes are guesses based on matching strings (8+ characters) added in two repositories.",
     "selectTitle": "Pick a file",
-    "selectHint": "Choose a file to see its diff against the comparison base, or a link chip to compare linked changes.",
+    "selectHint": "Choose a file to see its diff against the comparison base.",
     "detached": "detached HEAD",
     "fileCount_one": "{{count}} file",
     "fileCount_other": "{{count}} files",
     "noBase": "Couldn't find where this branch left {{branch}}. Showing uncommitted changes only.",
     "unborn": "No commits yet. Showing uncommitted changes only.",
-    "linkChipTitleSingle": "The same string \"{{token}}\" was added in another repository. Click to compare.",
-    "linkChipTitleMany": "The same string \"{{token}}\" was added in another repository ({{count}} links). Click to compare.",
     "binary": "binary",
-    "linkedTitle": "Changes linked by the same string",
-    "linkedSummary": "Added in {{repos}}:",
-    "estimate": "a guess from matching strings",
-    "pickOther": "File to compare",
-    "closeLink": "Close link",
     "groupBy": "Group files",
     "groupByRepo": "By repository",
     "groupByFolder": "By folder",
@@ -1250,11 +1152,6 @@
     "detached": "No branch · {{sha}}",
     "detachedUnknown": "No branch",
     "noUpstream": "No remote branch",
-    "clean": "No uncommitted changes",
-    "uncommitted_one": "{{count}} uncommitted change",
-    "uncommitted_other": "{{count}} uncommitted changes",
-    "uncommittedStaged_one": "{{count}} uncommitted change ({{staged}} staged)",
-    "uncommittedStaged_other": "{{count}} uncommitted changes ({{staged}} staged)",
     "viewing": "Viewing {{target}} · not checked out",
     "operation": "{{op}} in progress",
     "operationConflicts_one": "{{op}} in progress · {{count}} conflict",
@@ -1267,11 +1164,9 @@
       "revert": "Revert",
       "squash": "Squash"
     },
-    "unpushed_one": "{{count}} commit not on any remote",
-    "unpushed_other": "{{count}} commits not on any remote",
+    "hasUnpushed": "Commits not on any remote",
     "notPublished": "not published",
-    "behind_one": "{{count}} to pull",
-    "behind_other": "{{count}} to pull",
+    "hasBehind": "Commits to pull",
     "inSync": "Up to date with remote"
   },
   "workSwitcher": {

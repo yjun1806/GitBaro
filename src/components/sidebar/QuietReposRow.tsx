@@ -11,7 +11,7 @@ interface QuietReposRowProps {
 }
 
 /**
- * 「조용한 저장소 N개 (a, b, …)」 줄. 계정 머리글처럼 카드 밖 사이드바 바탕에 놓인다. 커밋하지 않은 파일·새 커밋·↑↓가 없고 10분 안에 바뀐 파일도 없는
+ * 「조용한 저장소 N개 (a, b, …)」 줄. 계정 머리글처럼 카드 밖 사이드바 바탕에 놓인다. 커밋하지 않은 파일·↑↓가 없고 10분 안에 바뀐 파일도 없는
  * 계정 바로 아래 저장소를 한 줄로 접어 둔다(판정은 `isQuietRepo`).
  */
 export function QuietReposRow({ names, expanded, onToggle }: QuietReposRowProps) {

@@ -101,7 +101,6 @@ describe("ui store after the two-column shell", () => {
       "graphPanelRatio",
       "maximizedFileListOpen",
       "railMode",
-      "reviewBasis",
       "sidebarWidth",
     ]);
     expect(sanitizePersistedUI({ activeTab: "changes" })).toEqual({});
@@ -158,17 +157,10 @@ describe("migrateUI", () => {
   });
 });
 
-describe("sanitizePersistedUI — review basis", () => {
-  it("keeps a saved review basis and drops an unknown one", () => {
-    expect(sanitizePersistedUI({ reviewBasis: "unseen" })).toEqual({ reviewBasis: "unseen" });
-    expect(sanitizePersistedUI({ reviewBasis: "later" })).toEqual({});
-  });
-
-  it("defaults to commits not on any remote without touching other saved fields", () => {
+describe("sanitizePersistedUI — removed review basis setting", () => {
+  it("ignores a leftover reviewBasis from an older build and keeps the other saved fields", () => {
     const saved = { railMode: "hover", sidebarWidth: 300, diffLineMode: "split" };
-    const merged = { ...useUIStore.getInitialState(), ...sanitizePersistedUI(saved) };
-    expect(merged.reviewBasis).toBe("unpushed");
-    expect(merged).toMatchObject(saved);
+    expect(sanitizePersistedUI({ ...saved, reviewBasis: "unseen" })).toEqual(saved);
   });
 });
 
@@ -198,9 +190,12 @@ describe("maximized diff file list", () => {
     await useUIStore.persist.rehydrate();
     const state = useUIStore.getState();
     expect(state.maximizedFileListOpen).toBe(false);
-    expect(state).toMatchObject({ railMode: "hover", sidebarWidth: 330, reviewBasis: "unseen" });
+    expect(state).toMatchObject({ railMode: "hover", sidebarWidth: 330 });
+    // 옛 빌드가 남긴 reviewBasis는 상태에 들어오지 않고, 다음 저장에서 빠진다.
+    expect(state).not.toHaveProperty("reviewBasis");
+    expect(useUIStore.persist.getOptions().partialize!(state)).not.toHaveProperty("reviewBasis");
     localStorage.removeItem("gitbaro-ui");
-    useUIStore.setState({ maximizedFileListOpen: true, railMode: "expanded", reviewBasis: "unpushed" });
+    useUIStore.setState({ maximizedFileListOpen: true, railMode: "expanded" });
   });
 
   it("falls back to open for users who saved before the field existed", () => {

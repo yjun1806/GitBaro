@@ -16,7 +16,7 @@ import type { RepoReviewStatus, RepoSyncStatus } from "@/types";
  * (`src/lib/repo-tree.ts`)가 만들고, 여기서는 오른쪽 표시 값과 검색, 접힘·감시 대상을 다룬다.
  */
 
-/** 경로별 오른쪽 표시 값을 합친다. 동기화 상태·새 커밋·파일 변경 시각 중 하나라도 있는 경로만 담는다. */
+/** 경로별 오른쪽 표시 값을 합친다. 동기화 상태·워크트리 목록·파일 변경 시각 중 하나라도 있는 경로만 담는다. */
 export function buildSignals(
   syncByPath: Record<string, RepoSyncStatus>,
   reviewByPath: Record<string, WorktreeReviewStatus>,
@@ -32,7 +32,6 @@ export function buildSignals(
     const sync = syncByPath[path];
     out[path] = {
       dirtyCount: sync?.dirtyCount ?? 0,
-      newCommits: reviewByPath[path]?.newCount ?? 0,
       // 「올릴 커밋」은 원격에 없는 커밋이다(추적 브랜치가 없어도 센다).
       ahead: sync?.unpushed ?? 0,
       behind: sync?.behind ?? 0,

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { NewCommitIds, SeenRecordInput, WorkspaceRepoHistory } from "@/types";
+import type { WorkspaceRepoHistory } from "@/types";
 
 /** 응답을 테스트가 직접 풀어 주는 명령 모의. 다시 읽는 동안의 화면을 보려고 쓴다. */
 const pending: Array<{ key: string; resolve: (value: unknown) => void }> = [];
@@ -18,10 +18,9 @@ function resolveLatest(key: string, value: unknown) {
 vi.mock("@/api/commands", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getWorkspaceHistory: vi.fn((paths: string[]) => deferred(`history:${paths[0]}`)),
-  listNewCommitIds: vi.fn((entry: SeenRecordInput) => deferred(`ids:${entry.path}`)),
 }));
 
-const { useWorkspaceHistories, useNewCommitIdsMany } = await import("@/api/queries");
+const { useWorkspaceHistories } = await import("@/api/queries");
 
 function history(path: string, headOid: string): WorkspaceRepoHistory {
   return {
@@ -90,33 +89,5 @@ describe("useWorkspaceHistories", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-});
-
-describe("useNewCommitIdsMany", () => {
-  const counted = (headOid: string, newCount: number): NewCommitIds => ({
-    path: "/a",
-    headOid,
-    newCount,
-    basis: "oid",
-    ids: Array.from({ length: newCount }, (_, i) => `c${i}`),
-  });
-
-  it("keeps the last count for the same baseline while HEAD moves", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const entry: SeenRecordInput = { path: "/a", oid: "seen", seenAt: 1, branch: "feat/x" };
-    const { result, rerender } = renderHook(
-      ({ head, e }: { head: string; e: SeenRecordInput }) => useNewCommitIdsMany([{ entry: e, headOid: head }]),
-      { wrapper: wrapperFor(client), initialProps: { head: "h1", e: entry } },
-    );
-    resolveLatest("ids:/a", counted("h1", 2));
-    await waitFor(() => expect(result.current["/a"]?.newCount).toBe(2));
-
-    rerender({ head: "h2", e: entry });
-    expect(result.current["/a"]?.newCount).toBe(2);
-
-    // 기준선이 바뀌면(「확인함」) 옛 수를 다시 보이지 않는다.
-    rerender({ head: "h2", e: { ...entry, oid: "h2", seenAt: 2 } });
-    expect(result.current["/a"]).toBeUndefined();
   });
 });

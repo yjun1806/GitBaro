@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Archive, Files, GitCommitVertical, Play } from "lucide-react";
-import { useSeenMarkerMode, useUIStore } from "@/stores/ui";
+import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
@@ -9,7 +9,6 @@ import {
   useCommitHistoryInfinite,
   useMergeState,
   useStashList,
-  useUnpushedCommits,
   useWorkflowRuns,
   useWorktrees,
 } from "@/api/queries";
@@ -78,15 +77,10 @@ export function GraphPanel() {
     repoAccountId,
   );
   const runningCount = activeRunCount(workflowRuns);
-  // 체크아웃하지 않고 다른 브랜치를 보는 중이면 체크아웃한 작업 트리의 것(WIP 행, 새 커밋·확인함
-  // 표시, 다른 워크트리 칩)을 감춘다. 그 표시는 체크아웃한 브랜치에만 맞는 말이다.
+  // 체크아웃하지 않고 다른 브랜치를 보는 중이면 체크아웃한 작업 트리의 것(WIP 행, 다른 워크트리
+  // 칩)을 감춘다. 그 표시는 체크아웃한 브랜치에만 맞는 말이다.
   const { target: viewTarget, historyTarget } = useHistoryView();
   const viewing = viewTarget !== null;
-  // 검토 기준이 「원격에 없는 커밋」(기본)이면 확인함 표시(새 커밋 점·구분선·버튼)를 모두 감춘다.
-  const seenMode = useSeenMarkerMode();
-  const newCommits = viewing || !seenMode ? null : review.newCommits;
-  const { data: unpushed } = useUnpushedCommits(activeRepoPath);
-  const graphBadge = seenMode ? newCommits?.newCount : unpushed?.count;
   // 「main 대비 변경」 배지: 지금 연 워크트리의 main 대비 파일 수(그 탭이 보여 줄 목록과 같은 범위).
   const { data: history } = useCommitHistoryInfinite(activeRepoPath);
   const headOid = history?.pages[0]?.[0]?.id ?? null;
@@ -103,15 +97,14 @@ export function GraphPanel() {
   const groupBy = useFilesViewStore((s) => s.groupBy);
   const setGroupBy = useFilesViewStore((s) => s.setGroupBy);
   // 범위·비교 화면은 지금 연 워크트리의 커밋만 그린다 — 칩으로 고를 것이 없으니 칩 줄을 감춘다.
-  const compareBranch = useUIStore((s) => s.compareBranch);
   const branchRange = useBranchRangeStore((s) => s.range);
-  const graphListShown = !compareBranch && activeRange(branchRange, activeRepoPath) === null;
+  const graphListShown = activeRange(branchRange, activeRepoPath) === null;
   // 저장된 탭(activeTab)의 "값"이 바뀔 때만 도는 effect라, 툴바·merge 흐름이 이미 그 값으로
   // 가 있는 탭(예: changes)으로 다시 옮기려 하면(같은 값이라 아무것도 바뀌지 않아) 파일별
   // 탭이 안 닫힌다. merge 진입(충돌 포함)과 브랜치 비교 시작도 같은 이유로 별도로 지켜본다.
   const { data: mergeState } = useMergeState(activeRepoPath);
   const merging = mergeState !== undefined && mergeState !== null;
-  const comparing = compareBranch !== null || activeRange(branchRange, activeRepoPath) !== null;
+  const comparing = !graphListShown;
   useEffect(() => setFilesOpen(false), [activeTab, merging, comparing, setFilesOpen]);
   useEffect(() => () => setFilesOpen(false), [setFilesOpen]);
   const tab: ShownTab = filesOpen ? "files" : graphPanelTabOf(activeTab);
@@ -161,7 +154,6 @@ export function GraphPanel() {
             active={tab === "graph"}
             onClick={openGraphTab}
             icon={<GitCommitVertical className="w-3.5 h-3.5" />}
-            count={badgeCount(graphBadge)}
           >
             {t("shell.graphTab")}
           </Tab>
@@ -196,15 +188,6 @@ export function GraphPanel() {
         {tab === "graph" && <ViewBranchPicker />}
         {tab === "graph" && <CompareChip />}
         {/* 「작업 중인 변경 N」은 위 git 상태 줄에 있다. */}
-        {tab === "graph" && newCommits !== null && newCommits.newCount > 0 && (
-          <button
-            type="button"
-            onClick={review.markSeen}
-            className="shrink-0 h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
-          >
-            {t("graph.markSeen", { count: newCommits.newCount })}
-          </button>
-        )}
         {tab === "files" && <FilesGroupByPicker value={groupBy} onChange={setGroupBy} />}
       </div>
 
@@ -225,8 +208,6 @@ export function GraphPanel() {
           {tab === "graph" ? (
             <CommitGraph
               wips={viewing ? NO_WIPS : worktreeFilter.wips}
-              newCommits={newCommits}
-              seenAt={viewing || !seenMode ? null : review.seenAt}
               worktreeHeads={viewing ? NO_HEADS : worktreeFilter.heads}
               historyTarget={historyTarget}
             />

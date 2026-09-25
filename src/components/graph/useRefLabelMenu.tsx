@@ -50,9 +50,7 @@ export function useRefLabelMenu(): {
     if (!activeRepoPath || !currentBranch) return;
     useHistoryViewStore.getState().reset();
     useBranchRangeStore.getState().setRange({ repoPath: activeRepoPath, base: currentBranch, target: name, head: currentBranch });
-    const ui = useUIStore.getState();
-    ui.setCompareBranch(null);
-    ui.setActiveTab("history");
+    useUIStore.getState().setActiveTab("history");
   };
 
   const handleDelete = async () => {

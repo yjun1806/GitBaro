@@ -843,20 +843,6 @@ export async function removeWorktree(
   return invoke("remove_worktree", { repoPath, path, force });
 }
 
-// Preview
-/** Resolves false when there was nothing to preview (already up to date). */
-export async function startWorktreePreview(repoPath: string, branch: string): Promise<boolean> {
-  return invoke("start_worktree_preview", { repoPath, branch });
-}
-
-export async function stopWorktreePreview(repoPath: string): Promise<void> {
-  return invoke("stop_worktree_preview", { repoPath });
-}
-
-export async function checkPreviewActive(repoPath: string): Promise<boolean> {
-  return invoke("check_preview_active", { repoPath });
-}
-
 // ── Actions (GitHub Actions) ──
 
 import type { WorkflowRun, WorkflowJob } from "@/types";
@@ -891,27 +877,13 @@ export async function setActivityWatch(paths: string[]): Promise<ActivityWatchRe
   return invoke("set_activity_watch", { paths });
 }
 
-// ── W1-T4 새 커밋 기준선 ──
+// ── W1-T4 워크트리 목록 ──
 
-import type { RepoReviewStatus, SeenRecordInput, NewCommitCount } from "@/types";
+import type { RepoReviewStatus } from "@/types";
 
 /** 저장소마다 워크트리 목록(메인 포함)과 각 워크트리의 브랜치·HEAD. */
 export async function reviewStatus(repoPaths: string[]): Promise<RepoReviewStatus[]> {
   return invoke("review_status", { repoPaths });
-}
-
-/** 워크트리마다 기준선 뒤의 새 커밋 수. */
-export async function countNewCommits(entries: SeenRecordInput[]): Promise<NewCommitCount[]> {
-  return invoke("count_new_commits", { entries });
-}
-
-// W3-T3 — 커밋 그래프의 새 커밋 점
-
-import type { NewCommitIds } from "@/types";
-
-/** 한 워크트리의 새 커밋 수와 새 커밋으로 센 커밋의 SHA. */
-export async function listNewCommitIds(entry: SeenRecordInput): Promise<NewCommitIds> {
-  return invoke("list_new_commit_ids", { entry });
 }
 
 // W4-T2 — 워크스페이스 타임라인

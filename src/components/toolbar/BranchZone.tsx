@@ -299,9 +299,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
       target: branchName,
       head: currentBranch,
     });
-    const { setCompareBranch, setActiveTab } = useUIStore.getState();
-    setCompareBranch(null);
-    setActiveTab("history");
+    useUIStore.getState().setActiveTab("history");
     onClose();
   };
 

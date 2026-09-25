@@ -10,7 +10,6 @@ import type { BranchCompareResult, BranchInfo, CommitInfo, RepoInfo } from "@/ty
 import { useBranchRangeStore } from "../branch-range";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
-vi.mock("@/components/history/HistoryView", () => ({ HistoryView: () => <div>compare-view</div> }));
 vi.mock("@/hooks/useOpenWorktree", () => ({ useOpenWorktree: () => vi.fn() }));
 
 Element.prototype.scrollIntoView = vi.fn();
@@ -98,7 +97,7 @@ const repo = { path: REPO, name: "app", remotes: [], accountId: null } as unknow
 function renderGraph() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <CommitGraph wips={[]} newCommits={null} seenAt={null} />
+      <CommitGraph wips={[]} />
     </QueryClientProvider>,
   );
 }
@@ -111,7 +110,7 @@ beforeEach(async () => {
   await i18n.changeLanguage("en");
   comparisons.length = 0;
   branchList = DEFAULT_BRANCHES;
-  useUIStore.setState({ activeTab: "history", compareBranch: null });
+  useUIStore.setState({ activeTab: "history" });
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
   useBranchRangeStore.getState().clear();
@@ -161,7 +160,7 @@ describe("CommitGraph range mode", () => {
     branchList = [branch("main", { isHead: true, isDefault: true }), branch("feat/z")];
     rerender(
       <QueryClientProvider client={new QueryClient()}>
-        <CommitGraph wips={[]} newCommits={null} seenAt={null} />
+        <CommitGraph wips={[]} />
       </QueryClientProvider>,
     );
     expect(useBranchRangeStore.getState().range).toBeNull();

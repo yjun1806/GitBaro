@@ -234,12 +234,12 @@ describe("buildRepoTree", () => {
       expect(labels(account(tree, "mos").children)).toEqual(["xames", "xames-app", "ws:beta"]);
     });
 
-    it("todo: 워크트리의 새 커밋도 저장소의 할 일로 센다", () => {
+    it("todo: 워크트리의 올릴 커밋도 저장소의 할 일로 센다", () => {
       const tree = build({
         repos: [xames, xamesApp],
         sortModeByAccount: { mos: "todo" },
         worktreesByRepo: { [xamesApp.path]: [{ path: "/wt/a", branch: "feat/a" }] },
-        signals: { "/wt/a": { newCommits: 3 } },
+        signals: { "/wt/a": { ahead: 3 } },
       });
 
       expect(labels(account(tree, "mos").children)).toEqual(["xames-app", "xames"]);
