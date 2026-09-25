@@ -307,6 +307,22 @@ describe("RepoTree — hover card", () => {
     expect(hoverCard()).toBeNull();
   });
 
+  it("closes the card when its row goes away, and does not open it for a row that is already gone", async () => {
+    renderTree(makeData(baseSignals));
+    fireEvent.click(item("api"));
+    fireEvent.mouseEnter(item(PRIMARY_MAIN));
+    await screen.findByTestId("sidebar-hover-card");
+    // Folding the card unmounts the row without a mouseleave.
+    fireEvent.keyDown(item("api"), { key: "ArrowLeft" });
+    await waitFor(() => expect(hoverCard()).toBeNull());
+
+    fireEvent.keyDown(item("api"), { key: "ArrowRight" });
+    fireEvent.mouseEnter(item(PRIMARY_MAIN));
+    fireEvent.keyDown(item("api"), { key: "ArrowLeft" });
+    await new Promise((r) => setTimeout(r, 450));
+    expect(hoverCard()).toBeNull();
+  });
+
   it("tells where a linked worktree branched from, reading bases once instead of on every worktree refresh", async () => {
     const { client } = renderTree(makeData(baseSignals));
     fireEvent.click(item("api"));

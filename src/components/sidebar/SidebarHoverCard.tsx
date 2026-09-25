@@ -34,6 +34,8 @@ export function useSidebarHoverCard(): HoverCardApi {
 
 interface Placement {
   subject: HoverSubject;
+  /** 카드가 가리키는 줄. 이 줄이 화면에서 빠지면(접기·목록 갱신) 카드를 닫는다. */
+  anchor: HTMLElement;
   top: number;
   left: number;
 }
@@ -62,10 +64,12 @@ export function SidebarHoverCardProvider({ data, children }: { data: SidebarTree
     clearTimer();
     timer.current = window.setTimeout(() => {
       timer.current = null;
+      // 기다리는 사이 줄이 사라졌으면 띄우지 않는다(떨어진 요소는 크기가 0이라 왼쪽 위 구석에 뜬다).
+      if (!anchor.isConnected) return;
       const row = anchor.getBoundingClientRect();
       const edge = anchor.closest("[data-sidebar-panel]")?.getBoundingClientRect().right ?? row.right;
       const maxTop = Math.max(8, window.innerHeight - 180);
-      setPlacement({ subject, top: Math.min(Math.max(8, row.top - 4), maxTop), left: edge + CARD_GAP_PX });
+      setPlacement({ subject, anchor, top: Math.min(Math.max(8, row.top - 4), maxTop), left: edge + CARD_GAP_PX });
     }, HOVER_CARD_DELAY_MS);
   }, []);
 
@@ -76,6 +80,17 @@ export function SidebarHoverCardProvider({ data, children }: { data: SidebarTree
     if (!placement) return;
     document.addEventListener("scroll", hide, true);
     return () => document.removeEventListener("scroll", hide, true);
+  }, [placement, hide]);
+
+  // 카드가 떠 있는 동안 가리키던 줄이 사라지면(행이 unmount되면 mouseleave·blur가 오지 않는다) 닫는다.
+  useEffect(() => {
+    if (!placement || typeof MutationObserver === "undefined") return;
+    const { anchor } = placement;
+    const observer = new MutationObserver(() => {
+      if (!anchor.isConnected) hide();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, [placement, hide]);
 
   const api = useMemo(() => ({ show, hide }), [show, hide]);
