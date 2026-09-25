@@ -1,5 +1,6 @@
 use base64::Engine as _;
 use crate::error::AppError;
+use super::editor_line;
 use crate::state::json_file;
 use serde::{Deserialize, Serialize};
 
@@ -121,6 +122,7 @@ fn editor_app_name(editor_id: &str) -> Option<&'static str> {
     match editor_id {
         "vscode" => Some("Visual Studio Code"),
         "cursor" => Some("Cursor"),
+        "windsurf" => Some("Windsurf"),
         "antigravity" => Some("Antigravity"),
         "kiro" => Some("Kiro"),
         "zed" => Some("Zed"),
@@ -141,9 +143,15 @@ fn editor_app_name(editor_id: &str) -> Option<&'static str> {
 }
 
 /// 설정된 기본 편집기로 파일을 엽니다.
-/// macOS `open -a` 명령을 사용하여 PATH 의존 없이 앱을 실행합니다.
+/// `line`(1부터)을 주면 그 편집기의 CLI로 그 줄에서 엽니다. 줄 번호를 넘길 방법을 모르거나
+/// CLI를 못 찾으면 macOS `open -a`로 파일만 엽니다(PATH에 의존하지 않음).
 #[tauri::command]
-pub async fn open_in_editor(repo_path: String, file_path: String) -> Result<(), AppError> {
+pub async fn open_in_editor(
+    repo_path: String,
+    file_path: String,
+    line: Option<u32>,
+    column: Option<u32>,
+) -> Result<(), AppError> {
     let settings = load_settings().await?;
     let editor_id = settings.default_editor;
 
@@ -176,6 +184,12 @@ pub async fn open_in_editor(repo_path: String, file_path: String) -> Result<(), 
         });
     }
 
+    if let Some(line) = line.filter(|l| *l > 0) {
+        if open_at_line(&editor_id, &canonical, line, column).await {
+            return Ok(());
+        }
+    }
+
     tokio::process::Command::new("open")
         .args(["-a", app_name])
         .arg(&canonical)
@@ -183,6 +197,27 @@ pub async fn open_in_editor(repo_path: String, file_path: String) -> Result<(), 
         .map_err(AppError::Io)?;
 
     Ok(())
+}
+
+/// 편집기 CLI로 `file`의 `line`번 줄을 연다. CLI를 못 찾거나 띄우지 못하면 false.
+async fn open_at_line(editor_id: &str, file: &std::path::Path, line: u32, column: Option<u32>) -> bool {
+    let Some(cli) = editor_line::editor_cli(editor_id) else {
+        return false;
+    };
+    let home = dirs::home_dir();
+    for candidate in editor_line::cli_candidates(&cli, home.as_deref()) {
+        if tokio::fs::metadata(&candidate).await.is_err() {
+            continue;
+        }
+        match tokio::process::Command::new(&candidate)
+            .args(editor_line::line_args(cli.syntax, file, line, column))
+            .spawn()
+        {
+            Ok(_) => return true,
+            Err(e) => tracing::warn!("could not launch {}: {}", candidate.display(), e),
+        }
+    }
+    false
 }
 
 /// .app 번들에서 아이콘 파일명을 읽고, sips로 64x64 PNG 변환 후 base64 data URI를 반환합니다.
@@ -307,6 +342,7 @@ pub async fn detect_installed_editors() -> Result<Vec<EditorInfo>, AppError> {
     let candidates: Vec<(&str, &str, &str, &str)> = vec![
         ("vscode", "Visual Studio Code", "code", "Visual Studio Code.app"),
         ("cursor", "Cursor", "cursor", "Cursor.app"),
+        ("windsurf", "Windsurf", "windsurf", "Windsurf.app"),
         ("antigravity", "Antigravity", "antigravity", "Antigravity.app"),
         ("kiro", "Kiro", "kiro", "Kiro.app"),
         ("zed", "Zed", "zed", "Zed.app"),

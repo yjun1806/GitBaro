@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, type ReactNode } from "react";
+import { useState, useMemo, useCallback, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FileQuestion } from "lucide-react";
 import { DiffFile } from "@git-diff-view/core";
@@ -10,6 +10,9 @@ import { DiffHeader } from "./DiffHeader";
 import { BinaryDiffViewer } from "./BinaryDiffViewer";
 import { VirtualizedDiffView, type DiffMenuLine } from "./VirtualizedDiffView";
 import { DiffContextMenu } from "./DiffContextMenu";
+import { DiffFindBar } from "./DiffFindBar";
+import { useDiffFind } from "./use-diff-find";
+import { useMenuActions } from "@/hooks/useMenuActions";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { MarkdownDiffView } from "./MarkdownDiffView";
 import { availableModes, defaultMode, diffResetKey, type DiffViewMode } from "./view-mode";
@@ -68,7 +71,7 @@ interface DiffViewerProps {
   headerExtra?: ReactNode;
   /** diff 머리에 「크게 보기」 버튼을 둘지. 목록 + diff 화면에서만 켠다. */
   maximizable?: boolean;
-  /** 파일이 든 저장소(워크트리). 주면 우클릭 메뉴에서 편집기로 파일을 연다. */
+  /** 파일이 든 저장소(워크트리). 주면 우클릭 메뉴·줄 번호 더블클릭으로 편집기에서 연다. */
   repoPath?: string | null;
 }
 
@@ -93,6 +96,7 @@ export function DiffViewer({
   const theme = useUIStore((s) => s.theme);
   const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   const addToast = useToastStore((s) => s.addToast);
+  const actions = useMenuActions();
 
   const filePath = diff?.filePath;
   const binary = diff?.binary ?? false;
@@ -120,6 +124,21 @@ export function DiffViewer({
     setViewMode(defaultMode(filePath, binary, lineMode));
     setForceHighlight(false);
   }
+
+  const rootRef = useRef<HTMLDivElement>(null);
+  const find = useDiffFind({
+    enabled: !!diff && !diff.binary && diff.hunks.length > 0,
+    rootRef,
+    resetKey: `${resetKey}\u0000${viewMode}`,
+  });
+
+  const openLineInEditor = useCallback(
+    (line: DiffMenuLine) => {
+      if (!repoPath || !filePath) return;
+      actions.openFileInEditor(repoPath, filePath, line.editorLine ?? undefined);
+    },
+    [actions, repoPath, filePath],
+  );
 
   const handleSelectMode = useCallback(
     (mode: DiffViewMode) => {
@@ -260,7 +279,12 @@ export function DiffViewer({
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div
+      ref={rootRef}
+      tabIndex={-1}
+      data-diff-viewer=""
+      className="flex-1 flex flex-col min-h-0 overflow-hidden outline-none"
+    >
       <DiffHeader
         filePath={diff.filePath}
         status={status}
@@ -271,7 +295,9 @@ export function DiffViewer({
         onSelectMode={handleSelectMode}
         extra={headerExtra}
         maximizable={maximizable}
+        onFind={find.openFind}
       />
+      {find.open && <DiffFindBar {...find.bar} />}
 
       {viewMode !== "document" && !wantHighlight && (
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs bg-surface border-b border-border text-muted-foreground">
@@ -295,6 +321,8 @@ export function DiffViewer({
             oldContent={diff.oldContent}
             newContent={diff.newContent}
             onError={handleDocError}
+            find={find.viewFind}
+            onFindResult={find.onFindResult}
           />
         </div>
       ) : diffFile ? (
@@ -311,6 +339,9 @@ export function DiffViewer({
           freshLines={freshLines}
           revealLine={revealLine}
           onLineContextMenu={openMenu}
+          onLineNumberDoubleClick={repoPath ? openLineInEditor : undefined}
+          find={find.viewFind}
+          onFindResult={find.onFindResult}
         />
       ) : (
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">

@@ -439,6 +439,20 @@
     "codeChanged": "코드 변경됨",
     "htmlChanged": "HTML 블록 변경됨"
   },
+  "diffFind": {
+    "placeholder": "diff에서 찾기",
+    "count": "{{current}} / {{total}}",
+    "noResults": "결과 없음",
+    "caseSensitive": "대소문자 구분",
+    "previous": "이전 결과 (Shift+Enter)",
+    "next": "다음 결과 (Enter)",
+    "close": "닫기 (Esc)",
+    "open": "diff에서 찾기 (⌘F)"
+  },
+  "editor": {
+    "openAtLine": "편집기에서 {{line}}번 줄 열기",
+    "doubleClickToOpen": "두 번 눌러 편집기에서 이 줄 열기"
+  },
   "sync": {
     "publishFailed": "Branch 게시 실패: {{error}}",
     "noRemoteError": "이 저장소에는 동기화할 Remote가 없습니다. Remote를 먼저 추가하세요.",

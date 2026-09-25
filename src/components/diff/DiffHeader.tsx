@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { clsx } from "clsx";
-import { Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { useHasMaximizedFiles } from "@/components/layout/maximized-files";
 import { FileStatusBadge } from "@/lib/file-status";
@@ -27,6 +27,8 @@ interface DiffHeaderProps {
   extra?: ReactNode;
   /** diff를 메인 칸 전체로 키우는 버튼을 둘지(목록 + diff 화면에서만 켠다). */
   maximizable?: boolean;
+  /** 주면 찾기 버튼을 둔다(⌘F와 같다). */
+  onFind?: () => void;
 }
 
 export function DiffHeader({
@@ -39,6 +41,7 @@ export function DiffHeader({
   onSelectMode,
   extra,
   maximizable = false,
+  onFind,
 }: DiffHeaderProps) {
   const { t } = useTranslation();
 
@@ -91,6 +94,17 @@ export function DiffHeader({
             </button>
           ))}
         </div>
+        {onFind && (
+          <button
+            type="button"
+            onClick={onFind}
+            aria-label={t("diffFind.open")}
+            title={t("diffFind.open")}
+            className={ICON_BUTTON}
+          >
+            <Search className="w-3.5 h-3.5" />
+          </button>
+        )}
         {maximizable && <FileListButton />}
         {maximizable && <MaximizeButton />}
       </div>
