@@ -598,7 +598,7 @@ pub fn file_diff_vs_default(
             .map(|blob| blob.content().to_vec()),
         None => repo
             .workdir()
-            .and_then(|dir| std::fs::read(dir.join(file_path)).ok())
+            .and_then(|dir| worktree_content(&dir.join(file_path)))
             .or_else(|| skip_worktree_blob(&repo, file_path)),
     };
     let text = |bytes: Option<Vec<u8>>| {
@@ -618,6 +618,21 @@ pub fn file_diff_vs_default(
         base_is_divergence_point: is_point,
         binary_preview: None,
     })
+}
+
+/// 작업 트리 파일의 내용을 git 과 같은 뜻으로 읽는다. 심볼릭 링크는 따라가지 않고 링크 대상 경로를
+/// 내용으로 본다. 일반 파일이 아니면(FIFO·장치·폴더) 읽지 않는다 — FIFO 는 읽으면 멈추고, 링크로
+/// `/dev/zero` 나 큰 파일을 가리키면 끝없이 또는 통째로 읽게 된다.
+fn worktree_content(full_path: &Path) -> Option<Vec<u8>> {
+    let meta = std::fs::symlink_metadata(full_path).ok()?;
+    if meta.file_type().is_symlink() {
+        let target = std::fs::read_link(full_path).ok()?;
+        return Some(target.to_string_lossy().into_owned().into_bytes());
+    }
+    if !meta.is_file() {
+        return None;
+    }
+    std::fs::read(full_path).ok()
 }
 
 /// sparse checkout 범위 밖이라 디스크에 없는 파일의 내용: 인덱스에 있는 내용이 그 파일의 현재 내용이다.
@@ -1064,6 +1079,55 @@ mod tests {
         let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
         assert_eq!(paths(&c.uncommitted), vec!["keep.txt"]);
         assert_eq!(c.uncommitted[0].status, FileStatus::Deleted);
+    }
+
+    /// `f` 를 따로 돌려 `secs` 초 안에 끝나지 않으면 실패한다(FIFO 를 읽으면 영영 멈춘다).
+    fn within<T: Send + 'static>(secs: u64, f: impl FnOnce() -> T + Send + 'static) -> T {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(f());
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(secs)).expect("멈췄다(링크 대상이나 FIFO 를 읽었다)")
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_diff_shows_the_link_target_without_reading_through_it() {
+        // git 은 심볼릭 링크의 내용을 링크 대상 경로로 본다. 따라 읽으면 FIFO 에서 멈추고 큰 파일은 통째로 읽는다.
+        let root = tmp_dir("symlink-diff");
+        let dir = root.join("r");
+        feature_repo(&dir);
+        let outside = root.join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let big = outside.join("big.bin");
+        std::fs::File::create(&big).unwrap().set_len(64 * 1024 * 1024).unwrap();
+        let fifo = outside.join("pipe");
+        let made = Command::new("mkfifo").arg(&fifo).status().unwrap();
+        assert!(made.success());
+        std::os::unix::fs::symlink(&big, dir.join("big-link")).unwrap();
+        std::os::unix::fs::symlink(&fifo, dir.join("pipe-link")).unwrap();
+
+        let path = dir.to_str().unwrap().to_string();
+        let (big_diff, pipe_diff) = within(20, move || {
+            (
+                file_diff_vs_default(&path, "big-link", None, None, None).unwrap(),
+                file_diff_vs_default(&path, "pipe-link", None, None, None).unwrap(),
+            )
+        });
+        assert_eq!(big_diff.new_content, big.to_str().unwrap());
+        assert_eq!(pipe_diff.new_content, fifo.to_str().unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_fifo_in_the_working_tree_is_not_read() {
+        let dir = tmp_dir("fifo-untracked").join("r");
+        feature_repo(&dir);
+        let made = Command::new("mkfifo").arg(dir.join("pipe")).status().unwrap();
+        assert!(made.success());
+        let path = dir.to_str().unwrap().to_string();
+        let d = within(20, move || file_diff_vs_default(&path, "pipe", None, None, None).unwrap());
+        assert!(d.new_content.is_empty());
     }
 
     #[test]
