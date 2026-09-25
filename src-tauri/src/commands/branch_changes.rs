@@ -35,6 +35,10 @@ use crate::git::merge_base::{divergence_point, BaseStatus, DivergencePoint};
 use crate::git::untracked::{is_too_large_untracked, untracked_lines, UntrackedLines, UNTRACKED_COUNT_LIMIT};
 use crate::git::worktree_base::default_branch_with_fallback;
 
+/// 추적하는 파일은 한쪽이라도 이보다 크면 줄 단위로 비교하지 않는다(「너무 큼」). 새 파일 한도
+/// (`UNTRACKED_COUNT_LIMIT`, 1 MiB)보다 넉넉히 둔다 — `pnpm-lock.yaml` 같은 큰 텍스트 파일도 diff 를 본다.
+pub const TRACKED_DIFF_LIMIT: u64 = 8 * 1024 * 1024;
+
 /// 바뀐 파일 하나.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,7 +51,8 @@ pub struct ChangedFile {
     pub additions: usize,
     pub deletions: usize,
     pub is_binary: bool,
-    /// 추적하지 않는 새 파일이 1 MiB(`UNTRACKED_COUNT_LIMIT`)를 넘어 읽지 않았다. 줄 수는 0 이다.
+    /// 추적하지 않는 새 파일이 1 MiB(`UNTRACKED_COUNT_LIMIT`)를, 추적하는 파일이 `TRACKED_DIFF_LIMIT` 를
+    /// 넘어 줄 단위로 비교하지 않았다. 줄 수는 0 이다.
     pub too_large: bool,
     /// 이 목록이 보여 주는 쪽(커밋이면 그 트리, 작업 트리면 디스크)의 파일 내용 id. 「봤음」 표시가
     /// 내용이 바뀌었는지 가리는 데 쓴다. 보통은 blob OID 이고, 1 MiB 를 넘는 작업 트리 파일은 읽지 않고
@@ -413,20 +418,51 @@ fn changed_files(repo: &Repository, diff: &mut Diff) -> Result<Vec<ChangedFile>,
             continue;
         }
 
+        // 트리 쪽 새 파일 id. 작업 트리와 비교했으면 `to_workdir` 가 디스크 내용으로 바꾼다.
+        let new_id = delta.new_file().id();
+        let blob_id = (status != FileStatus::Deleted && !new_id.is_zero()).then(|| new_id.to_string());
+        if is_too_large_delta(repo, &delta) {
+            let old = delta.old_file();
+            if old.mode() == delta.new_file().mode() && !old.id().is_zero() && old.id() == new_id {
+                continue;
+            }
+            let (additions, deletions, is_binary, too_large) = (0, 0, false, true);
+            files.push(ChangedFile { path, old_path, status, additions, deletions, is_binary, too_large, blob_id });
+            continue;
+        }
+
         let patch = Patch::from_diff(diff, idx)?;
         if status == FileStatus::Modified && is_unchanged(&delta, patch.as_ref()) {
             // 트리 → 인덱스 → 작업 트리를 합친 diff 는 고쳤다가 되돌린 파일도 「수정」으로 남긴다.
             continue;
         }
         let (additions, deletions, is_binary) = line_counts(&delta, patch)?;
-
-        // 트리 쪽 새 파일 id. 작업 트리와 비교했으면 `to_workdir` 가 디스크 내용으로 바꾼다.
-        let new_id = delta.new_file().id();
-        let blob_id = (status != FileStatus::Deleted && !new_id.is_zero()).then(|| new_id.to_string());
         files.push(ChangedFile { path, old_path, status, additions, deletions, is_binary, too_large: false, blob_id });
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)
+}
+
+/// 한쪽 크기. 저장소에 있는 내용이면 그 크기(내용을 읽지 않고 머리만 본다), 작업 트리에만 있는 내용이면
+/// 디스크 파일의 크기. 없는 쪽(id 가 0)은 libgit2 가 준 크기(없으면 0)다.
+fn side_size(repo: &Repository, file: &git2::DiffFile) -> u64 {
+    let id = file.id();
+    if id.is_zero() {
+        return file.size();
+    }
+    if let Ok((size, _)) = repo.odb().and_then(|odb| odb.read_header(id)) {
+        return size as u64;
+    }
+    let on_disk = match (repo.workdir(), file.path()) {
+        (Some(dir), Some(rel)) => std::fs::symlink_metadata(dir.join(rel)).ok().filter(|m| m.is_file()).map(|m| m.len()),
+        _ => None,
+    };
+    on_disk.unwrap_or(0).max(file.size())
+}
+
+/// 추적하는 파일의 어느 쪽이든 `TRACKED_DIFF_LIMIT` 보다 큰가. 크면 줄 단위로 비교하지 않는다.
+fn is_too_large_delta(repo: &Repository, delta: &git2::DiffDelta) -> bool {
+    side_size(repo, &delta.old_file()) > TRACKED_DIFF_LIMIT || side_size(repo, &delta.new_file()) > TRACKED_DIFF_LIMIT
 }
 
 /// 「수정」으로 나왔지만 내용·모드가 그대로인가. 내용 id 가 같거나, 모드가 같고 바뀐 구간이 없으면 그대로다.
@@ -496,7 +532,7 @@ pub struct FileDiffVsDefault {
     pub base_oid: Option<String>,
     /// 비교 기준이 갈라진 지점인가. `false` 면 HEAD 와 비교한 결과다(`files` 와 같은 규칙).
     pub base_is_divergence_point: bool,
-    /// 추적하지 않는 새 파일이 1 MiB 를 넘어 읽지 않았을 때만 있다. `binary` 는 `true`, 내용·구간은 비어 있다.
+    /// 파일이 한도(새 파일 1 MiB, 추적 파일 `TRACKED_DIFF_LIMIT`)를 넘어 읽지 않았을 때만 있다. `binary` 는 `true`, 내용·구간은 비어 있다.
     /// 모양은 `get_file_diff` 의 `binaryPreview` 와 같아서 diff 화면이 「너무 큼」으로 보여 준다.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub binary_preview: Option<TooLargePreview>,
@@ -541,7 +577,11 @@ pub fn file_diff_vs_default(
     }
     let (base_tree, base_oid, is_point, target_tree) = comparison_base(&repo, base, target)?;
     if target_tree.is_none() && is_too_large_untracked(&repo, file_path) {
-        return Ok(too_large_diff(&repo, file_path, old_path, base_oid, is_point));
+        let new_size = repo
+            .workdir()
+            .and_then(|dir| std::fs::symlink_metadata(dir.join(file_path)).ok())
+            .map(|m| m.len());
+        return Ok(too_large_diff(file_path, old_path, base_oid, is_point, None, new_size));
     }
 
     let opts = || {
@@ -570,7 +610,12 @@ pub fn file_diff_vs_default(
 
     let mut hunks = Vec::new();
     let mut binary = false;
-    for idx in 0..diff.deltas().count() {
+    for (idx, delta) in diff.deltas().enumerate() {
+        if is_too_large_delta(&repo, &delta) {
+            let size = |file: git2::DiffFile| (!file.id().is_zero()).then(|| side_size(&repo, &file));
+            let (old_size, new_size) = (size(delta.old_file()), size(delta.new_file()));
+            return Ok(too_large_diff(file_path, old_path, base_oid, is_point, old_size, new_size));
+        }
         let Some(patch) = Patch::from_diff(&diff, idx)? else {
             continue;
         };
@@ -645,18 +690,15 @@ fn skip_worktree_blob(repo: &Repository, file_path: &str) -> Option<Vec<u8>> {
     repo.find_blob(entry.id).ok().map(|blob| blob.content().to_vec())
 }
 
-/// 1 MiB 를 넘는 새 파일: 읽지 않고 「너무 큼」 자리만 돌려준다.
+/// 한도를 넘는 파일(1 MiB 넘는 새 파일, `TRACKED_DIFF_LIMIT` 넘는 추적 파일): 읽지 않고 「너무 큼」 자리만 돌려준다.
 fn too_large_diff(
-    repo: &Repository,
     file_path: &str,
     old_path: Option<&str>,
     base_oid: Option<Oid>,
     is_point: bool,
+    old_size: Option<u64>,
+    new_size: Option<u64>,
 ) -> FileDiffVsDefault {
-    let new_size = repo
-        .workdir()
-        .and_then(|dir| std::fs::symlink_metadata(dir.join(file_path)).ok())
-        .map(|m| m.len());
     FileDiffVsDefault {
         file_path: file_path.to_string(),
         old_path: old_path.map(str::to_string),
@@ -672,7 +714,7 @@ fn too_large_diff(
             meta: TooLargeMeta {
                 file_type: detect_file_type(file_path),
                 mime_type: extension_to_mime(file_path),
-                old_size: None,
+                old_size,
                 new_size,
                 too_large: true,
             },
@@ -1128,6 +1170,33 @@ mod tests {
         let path = dir.to_str().unwrap().to_string();
         let d = within(20, move || file_diff_vs_default(&path, "pipe", None, None, None).unwrap());
         assert!(d.new_content.is_empty());
+    }
+
+    #[test]
+    fn a_huge_tracked_file_is_not_patched() {
+        // 커밋한 큰 파일(덤프·빌드 결과물)은 새로 고칠 때마다 줄 단위로 비교하지 않는다.
+        let dir = tmp_dir("huge-tracked").join("r");
+        feature_repo(&dir);
+        let line = "0123456789abcdef\n";
+        let lines = TRACKED_DIFF_LIMIT as usize / line.len() + 1;
+        write(&dir, "dump.sql", &line.repeat(lines));
+        commit_all(&dir, "dump");
+        write(&dir, "dump.sql", &format!("{}changed\n", line.repeat(lines)));
+
+        let path = dir.to_str().unwrap();
+        let c = changes_vs_default(path, None, None).unwrap();
+        for list in [&c.committed, &c.uncommitted, &c.files] {
+            let dump = find(list, "dump.sql");
+            assert!(dump.too_large, "{dump:?}");
+            assert_eq!((dump.additions, dump.deletions), (0, 0));
+        }
+        // 작은 파일은 그대로 센다.
+        assert_eq!(find(&c.committed, "a.txt").additions, 1);
+
+        let d = file_diff_vs_default(path, "dump.sql", None, None, None).unwrap();
+        assert!(d.hunks.is_empty() && d.new_content.is_empty() && d.old_content.is_empty());
+        let json = serde_json::to_value(&d).unwrap();
+        assert_eq!(json["binaryPreview"]["meta"]["tooLarge"], true);
     }
 
     #[test]
