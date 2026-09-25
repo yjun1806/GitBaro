@@ -539,17 +539,6 @@
     "failedToUpdateSettings": "설정 업데이트 실패: {{error}}",
     "failedToOpenEditor": "에디터 열기 실패: {{error}}"
   },
-  "preview": {
-    "previewing": "미리보기 중: {{branch}}",
-    "stop": "미리보기 중단",
-    "start": "미리보기",
-    "started": "{{branch}} 미리보기 시작",
-    "stopped": "미리보기 중단됨",
-    "failedToStart": "미리보기 시작 실패: {{error}}",
-    "failedToStop": "미리보기 중단 실패: {{error}}",
-    "disabledCommit": "미리보기 중에는 Commit할 수 없습니다",
-    "disabledSync": "미리보기 중에는 동기화할 수 없습니다"
-  },
   "mergeRecovery": {
     "mergeInProgress": "Merge 진행 중",
     "rebaseInProgress": "Rebase 진행 중",

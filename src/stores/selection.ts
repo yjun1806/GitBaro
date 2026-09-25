@@ -68,7 +68,7 @@ export const useSelectionStore = create<SelectionState>()((set) => ({
 
 // --- Cross-store auto-reset (registered once on module load) ---
 
-// Repo change -> clear all selections and the History branch compare/preview
+// Repo change -> clear all selections and the History branch compare
 // target (the branch may not exist in the new repo).
 // (브랜치 전환 시 파일·커밋 선택 초기화는 switchBranch 실행 지점(BranchZone)에서
 //  직접 처리한다. worktree 전환은 activeRepoPath 변경이라 아래 구독이 커버한다.)
@@ -77,6 +77,6 @@ useRepositoryStore.subscribe((state) => {
   if (state.activeRepoPath !== prevRepoPath) {
     prevRepoPath = state.activeRepoPath;
     useSelectionStore.getState().clearAll();
-    useUIStore.setState({ compareBranch: null, previewBranch: null });
+    useUIStore.setState({ compareBranch: null });
   }
 });

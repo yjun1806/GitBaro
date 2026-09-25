@@ -155,10 +155,9 @@ function RepoSyncGroup() {
   // pull it), so only fetch is offered there.
   const needsPublish = !hasUpstream && !isDetached;
 
-  const previewBranch = useUIStore((s) => s.previewBranch);
   // canPush is null for non-GitHub remotes: push access is unknown, so let git decide.
   const canSync = tokenStatus?.valid === true && tokenStatus?.canPush !== false;
-  const syncDisabled = isSyncing || !accountId || (!isValidating && !canSync) || !!previewBranch;
+  const syncDisabled = isSyncing || !accountId || (!isValidating && !canSync);
 
   // Find this repo's active remote operation progress
   const activeRemoteOp = Object.values(activeOperations).find(

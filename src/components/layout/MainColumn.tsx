@@ -1,15 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
 import { FolderGit2, X } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
-import { useToastStore } from "@/stores/toast";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { useActiveScope } from "@/hooks/useActiveScope";
-import { stopWorktreePreview } from "@/api/commands";
-import { getErrorMessage } from "@/lib/utils";
 import { ToolbarRoot } from "@/components/toolbar";
-import { PreviewBanner } from "@/components/worktree/PreviewBanner";
 import { RepoListView } from "@/components/repository/RepoListView";
 import { GraphPanel } from "@/components/graph/GraphPanel";
 import { WorkspaceReview } from "@/components/review/WorkspaceReview";
@@ -55,39 +50,17 @@ export function MainColumn() {
   const { t } = useTranslation();
   const activeTab = useUIStore((s) => s.activeTab);
   const repoListOpen = useUIStore((s) => s.repoListOpen);
-  const setPreviewBranch = useUIStore((s) => s.setPreviewBranch);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const activeRepoName = useRepositoryStore((s) => s.activeRepo?.name ?? null);
   const filesOpen = useFilesViewStore((s) => s.repoTabOpen);
   const groupBy = useFilesViewStore((s) => s.groupBy);
   const scope = useActiveScope();
-  const addToast = useToastStore((s) => s.addToast);
-  const queryClient = useQueryClient();
   // 다른 저장소·워크스페이스로 옮기거나 목록을 열면 diff 크게 보기를 끝낸다(숨긴 목록으로 돌아올 길이 없어진다).
   useDiffMaximizeReset(`${scope?.kind === "workspace" ? scope.id : ""}:${activeRepoPath ?? ""}:${repoListOpen}`);
-
-  const handleStopPreview = async () => {
-    if (!activeRepoPath) return;
-    try {
-      await stopWorktreePreview(activeRepoPath);
-      setPreviewBranch(null);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["branches"] }),
-        queryClient.invalidateQueries({ queryKey: ["status"] }),
-        queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
-        queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-      ]);
-      addToast(t("preview.stopped"), "success");
-    } catch (err) {
-      addToast(t("preview.failedToStop", { error: getErrorMessage(err) }), "error");
-    }
-  };
 
   return (
     <main className="relative flex flex-col flex-1 min-w-0 h-full bg-background">
       <ToolbarRoot />
-      {/* 미리보기는 저장소 하나에 묶여 있다. 워크스페이스 화면에서는 멈출 대상이 없으므로 숨긴다. */}
-      {scope?.kind === "repo" && <PreviewBanner onStopPreview={handleStopPreview} />}
 
       {/* 시안 frame()의 메인 칸 여백: 오른쪽·아래 g, 왼쪽 2px(사이드바가 자기 오른쪽 여백을 가진다) */}
       <div className="flex flex-col flex-1 min-h-0 gap-(--g) pt-(--g) pr-(--g) pb-(--g) pl-0.5">

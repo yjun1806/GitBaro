@@ -539,17 +539,6 @@
     "failedToUpdateSettings": "Failed to update settings: {{error}}",
     "failedToOpenEditor": "Failed to open editor: {{error}}"
   },
-  "preview": {
-    "previewing": "Previewing: {{branch}}",
-    "stop": "Stop Preview",
-    "start": "Preview",
-    "started": "Previewing {{branch}}",
-    "stopped": "Preview stopped",
-    "failedToStart": "Failed to start preview: {{error}}",
-    "failedToStop": "Failed to stop preview: {{error}}",
-    "disabledCommit": "Commit disabled during preview",
-    "disabledSync": "Sync disabled during preview"
-  },
   "mergeRecovery": {
     "mergeInProgress": "Merge in progress",
     "rebaseInProgress": "Rebase in progress",

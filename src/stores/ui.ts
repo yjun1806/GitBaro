@@ -30,7 +30,6 @@ interface UIState {
   railMode: RailMode;
   repoListOpen: boolean;
   compareBranch: string | null;
-  previewBranch: string | null;
   isActivityLogOpen: boolean;
   /** 브랜치 전환(checkout + 재조회) 진행 중 여부. 로딩 피드백 표시에 사용. */
   isSwitchingBranch: boolean;
@@ -57,7 +56,6 @@ interface UIState {
   setRailMode: (mode: RailMode) => void;
   setRepoListOpen: (open: boolean) => void;
   setCompareBranch: (branch: string | null) => void;
-  setPreviewBranch: (branch: string | null) => void;
   setActivityLogOpen: (open: boolean) => void;
   setSwitchingBranch: (switching: boolean) => void;
   setDiffLineMode: (mode: DiffLineMode) => void;
@@ -146,7 +144,6 @@ export const useUIStore = create<UIState>()(
       railMode: "expanded",
       repoListOpen: false,
       compareBranch: null,
-      previewBranch: null,
       isActivityLogOpen: false,
       isSwitchingBranch: false,
       diffLineMode: "unified",
@@ -171,7 +168,6 @@ export const useUIStore = create<UIState>()(
       setRepoListOpen: (open) => set({ repoListOpen: open }),
 
       setCompareBranch: (branch) => set({ compareBranch: branch }),
-      setPreviewBranch: (branch) => set({ previewBranch: branch }),
       setActivityLogOpen: (open) => set({ isActivityLogOpen: open }),
       setSwitchingBranch: (switching) => set({ isSwitchingBranch: switching }),
       setDiffLineMode: (mode) => set({ diffLineMode: mode }),

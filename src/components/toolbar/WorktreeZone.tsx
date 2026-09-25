@@ -1,15 +1,12 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
-import { useUIStore } from "@/stores/ui";
 import { useBranches, useWorktrees } from "@/api/queries";
 import {
   removeWorktree,
-  stopWorktreePreview,
-  checkPreviewActive,
   openInTerminal,
   openRepoInEditor,
 } from "@/api/commands";
@@ -41,34 +38,10 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
   const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
-  const previewBranch = useUIStore((s) => s.previewBranch);
   const { currentWorktree, isInWorktree, mainWorktree } = useWorktreeContext(activeRepoPath, worktrees);
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const placeMenu = useCurrentPlaceMenu(currentWorktree?.branch ?? null);
-
-  // 마운트 시 잔여 미리보기 정리. checkPreviewActive는 GitBaro가 미리보기를 시작하며
-  // 남긴 표식 파일만 본다(사용자가 진행 중인 merge는 미리보기로 보지 않는다).
-  // 미리보기를 멈추면 메인 작업트리 상태가 복원되므로
-  // status/branches/diff를 갱신하고, 미리보기 워크트리가 사라지므로 worktrees도 갱신한다.
-  useEffect(() => {
-    if (!activeRepoPath) return;
-    checkPreviewActive(activeRepoPath).then((active) => {
-      if (active && !previewBranch) {
-        stopWorktreePreview(activeRepoPath)
-          .then(() => Promise.all([
-            queryClient.invalidateQueries({ queryKey: ["branches"] }),
-            queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] }),
-            queryClient.invalidateQueries({ queryKey: ["status"] }),
-            queryClient.invalidateQueries({ queryKey: ["commitHistory"] }),
-            queryClient.invalidateQueries({ queryKey: ["fileDiff"] }),
-            queryClient.invalidateQueries({ queryKey: ["worktrees"] }),
-          ]))
-          .catch(() => {});
-      }
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRepoPath]);
 
   const linkedCount = worktrees.filter((w) => !w.isBare && !w.isMain).length;
   // 링크된 워크트리에 있을 때만 그 이름을 보이고, 메인/불명확할 땐 상태 라벨을 쓴다.

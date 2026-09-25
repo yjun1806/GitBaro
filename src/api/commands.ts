@@ -837,20 +837,6 @@ export async function removeWorktree(
   return invoke("remove_worktree", { repoPath, path, force });
 }
 
-// Preview
-/** Resolves false when there was nothing to preview (already up to date). */
-export async function startWorktreePreview(repoPath: string, branch: string): Promise<boolean> {
-  return invoke("start_worktree_preview", { repoPath, branch });
-}
-
-export async function stopWorktreePreview(repoPath: string): Promise<void> {
-  return invoke("stop_worktree_preview", { repoPath });
-}
-
-export async function checkPreviewActive(repoPath: string): Promise<boolean> {
-  return invoke("check_preview_active", { repoPath });
-}
-
 // ── Actions (GitHub Actions) ──
 
 import type { WorkflowRun, WorkflowJob } from "@/types";

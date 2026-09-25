@@ -1061,155 +1061,6 @@ fn detect_operation(git_dir: &Path) -> Option<GitOperation> {
     }
 }
 
-// ── Preview operations (merge-based preview) ─────────────────────────────────
-// 다른 branch의 변경사항을 임시 머지하여 dev 서버 핫리로드로 미리보기한다.
-// stop_preview로 깔끔하게 원복한다.
-//
-// 미리보기 여부는 git dir의 표식 파일(PREVIEW_MARKER)로만 판단한다. MERGE_HEAD만
-// 보고 판단하면 사용자가 직접 진행 중인 merge를 미리보기 잔여물로 오인해 중단한다.
-// 표식에는 미리보기가 만든 MERGE_HEAD와 스태시 oid를 적어, 정리할 때 그 둘만 건드린다.
-
-const PREVIEW_MARKER: &str = "gitbaro-preview";
-
-/// Contents of the preview marker file.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct PreviewMarker {
-    merge_head: String,
-    stash_oid: Option<String>,
-}
-
-impl PreviewMarker {
-    fn to_file_contents(&self) -> String {
-        format!(
-            "{}\n{}\n",
-            self.merge_head,
-            self.stash_oid.as_deref().unwrap_or("")
-        )
-    }
-
-    fn from_file_contents(contents: &str) -> Option<Self> {
-        let mut lines = contents.lines().map(str::trim);
-        let merge_head = lines.next().filter(|l| !l.is_empty())?.to_string();
-        let stash_oid = lines.next().filter(|l| !l.is_empty()).map(String::from);
-        Some(Self { merge_head, stash_oid })
-    }
-}
-
-impl GitCliEngine {
-    /// Start previewing another branch by performing a no-commit merge.
-    /// Local changes (including untracked files) are stashed first.
-    /// Returns false when there is nothing to preview (already up to date);
-    /// in that case the working tree is left as it was.
-    pub async fn start_preview(&self, branch: &str) -> Result<bool, AppError> {
-        let git_dir = self.git_dir().await?;
-        if self.operation_in(&git_dir).await?.is_some() || git_dir.join(PREVIEW_MARKER).exists() {
-            return Err(AppError::GitCli {
-                message: "Another operation is in progress".to_string(),
-                exit_code: None,
-            });
-        }
-
-        // 1. dirty 상태면 스태시하고, 새로 생긴 스태시의 oid를 기록한다.
-        let status = self.run_local_checked(&["status", "--porcelain"]).await?;
-        let stash_oid = if status.is_empty() {
-            None
-        } else {
-            let before = self.stash_head_oid().await?;
-            self.run_local_checked(&["stash", "push", "-u", "-m", "gitbaro-preview"])
-                .await?;
-            let after = self.stash_head_oid().await?;
-            if after.is_none() || after == before {
-                return Err(AppError::GitCli {
-                    message: "Failed to stash local changes".to_string(),
-                    exit_code: None,
-                });
-            }
-            after
-        };
-        let restore_stash = || async {
-            if let Some(oid) = &stash_oid {
-                let _ = self.stash_pop_oid(oid).await;
-            }
-        };
-
-        // 2. no-commit merge
-        let result = self
-            .run_local(&["merge", "--no-commit", "--no-ff", "--", branch])
-            .await?;
-        if !result.status.success() {
-            // 방금 시작한 merge만 되돌린다 (시작 전엔 진행 중인 작업이 없음을 확인했다).
-            if git_dir.join("MERGE_HEAD").exists() {
-                let _ = self.run_local(&["merge", "--abort"]).await;
-            }
-            restore_stash().await;
-            let stderr = String::from_utf8_lossy(&result.stderr);
-            return Err(AppError::GitCli {
-                message: parse_git_error(&stderr),
-                exit_code: result.status.code(),
-            });
-        }
-
-        // "Already up to date": merge가 시작되지 않았으니 미리보기도 없다.
-        let merge_head = std::fs::read_to_string(git_dir.join("MERGE_HEAD")).ok();
-        let Some(merge_head) = merge_head.map(|h| h.trim().to_string()) else {
-            restore_stash().await;
-            return Ok(false);
-        };
-
-        let marker = PreviewMarker { merge_head, stash_oid };
-        std::fs::write(git_dir.join(PREVIEW_MARKER), marker.to_file_contents())?;
-        Ok(true)
-    }
-
-    /// Stop an active preview: abort the preview merge and restore the exact
-    /// stash it created. Does nothing when no preview marker exists, and never
-    /// aborts a merge that the preview did not start.
-    pub async fn stop_preview(&self) -> Result<(), AppError> {
-        let git_dir = self.git_dir().await?;
-        let marker_path = git_dir.join(PREVIEW_MARKER);
-        let Ok(contents) = std::fs::read_to_string(&marker_path) else {
-            return Ok(());
-        };
-        let Some(marker) = PreviewMarker::from_file_contents(&contents) else {
-            std::fs::remove_file(&marker_path)?;
-            return Ok(());
-        };
-
-        let current_merge_head = std::fs::read_to_string(git_dir.join("MERGE_HEAD"))
-            .ok()
-            .map(|h| h.trim().to_string());
-        match current_merge_head {
-            Some(head) if head == marker.merge_head => {
-                self.run_local_checked(&["merge", "--abort"]).await?;
-            }
-            // 사용자가 시작한 다른 merge가 진행 중이면 건드리지 않는다.
-            // 미리보기 스태시는 스태시 목록에 그대로 남는다.
-            Some(_) => {
-                std::fs::remove_file(&marker_path)?;
-                return Ok(());
-            }
-            // 미리보기 merge가 이미 끝났다(중단·커밋). 스태시만 복원한다.
-            None => {}
-        }
-
-        if let Some(oid) = &marker.stash_oid {
-            if self.operation_in(&git_dir).await?.is_none() {
-                // 사용자가 이미 꺼내거나 지운 스태시면 복원할 것이 없다.
-                if let Some(index) = self.stash_index_of(oid).await? {
-                    self.stash_pop_index(index).await?;
-                }
-            }
-        }
-        std::fs::remove_file(&marker_path)?;
-        Ok(())
-    }
-
-    /// Whether a preview started by GitBaro is active (the marker exists).
-    pub async fn is_previewing(&self) -> Result<bool, AppError> {
-        Ok(self.git_dir().await?.join(PREVIEW_MARKER).exists())
-    }
-}
-
 #[cfg(test)]
 mod operation_tests {
     use super::*;
@@ -1281,78 +1132,6 @@ mod operation_tests {
     }
 
     #[tokio::test]
-    async fn user_merge_is_not_mistaken_for_a_preview() {
-        let repo = conflicting_repo();
-        git_may_fail(&repo.0, &["merge", "feature"]);
-        assert!(repo.0.join(".git/MERGE_HEAD").exists());
-
-        let engine = GitCliEngine::new(&repo.0);
-        assert!(!engine.is_previewing().await.unwrap());
-        engine.stop_preview().await.unwrap();
-
-        assert!(repo.0.join(".git/MERGE_HEAD").exists(), "사용자 merge가 중단됨");
-        assert_eq!(
-            engine.operation_in_progress().await.unwrap(),
-            Some(GitOperation::Merge)
-        );
-    }
-
-    #[tokio::test]
-    async fn preview_restores_its_own_stash_including_untracked_files() {
-        let repo = conflicting_repo();
-        // 미리보기와 무관한 기존 스태시
-        write(&repo.0, "other.txt", "other\n");
-        git(&repo.0, &["stash", "push", "-u", "-m", "user stash"]);
-        // 충돌 없는 미리보기 대상 브랜치
-        git(&repo.0, &["checkout", "-qb", "clean"]);
-        write(&repo.0, "b.txt", "b\n");
-        git(&repo.0, &["add", "b.txt"]);
-        git(&repo.0, &["commit", "-qm", "add b"]);
-        git(&repo.0, &["checkout", "-q", "main"]);
-        // 미리보기 전 로컬 변경: 추적되지 않은 파일
-        write(&repo.0, "wip.txt", "wip\n");
-        let before = head(&repo.0);
-
-        let engine = GitCliEngine::new(&repo.0);
-        assert!(engine.start_preview("clean").await.unwrap());
-        assert!(engine.is_previewing().await.unwrap());
-        assert!(!repo.0.join("wip.txt").exists(), "untracked 파일도 스태시돼야 함");
-        assert!(repo.0.join("b.txt").exists());
-
-        engine.stop_preview().await.unwrap();
-        assert!(!engine.is_previewing().await.unwrap());
-        assert_eq!(head(&repo.0), before);
-        assert!(!repo.0.join("b.txt").exists());
-        assert_eq!(std::fs::read_to_string(repo.0.join("wip.txt")).unwrap(), "wip\n");
-        let stashes = git(&repo.0, &["stash", "list", "--format=%s"]);
-        assert_eq!(stashes.lines().count(), 1);
-        assert!(stashes.contains("user stash"), "기존 스태시가 꺼내짐: {stashes}");
-    }
-
-    #[tokio::test]
-    async fn already_up_to_date_is_not_a_preview() {
-        let repo = conflicting_repo();
-        write(&repo.0, "wip.txt", "wip\n");
-        let engine = GitCliEngine::new(&repo.0);
-
-        // main은 main~1을 이미 포함한다.
-        assert!(!engine.start_preview("main~1").await.unwrap());
-        assert!(!engine.is_previewing().await.unwrap());
-        assert!(repo.0.join("wip.txt").exists());
-        assert!(git(&repo.0, &["stash", "list"]).is_empty());
-    }
-
-    #[tokio::test]
-    async fn preview_refuses_to_start_during_a_user_merge() {
-        let repo = conflicting_repo();
-        git_may_fail(&repo.0, &["merge", "feature"]);
-        let engine = GitCliEngine::new(&repo.0);
-
-        assert!(engine.start_preview("feature").await.is_err());
-        assert!(repo.0.join(".git/MERGE_HEAD").exists());
-    }
-
-    #[tokio::test]
     async fn cherry_pick_conflict_is_detected_and_aborted() {
         let repo = conflicting_repo();
         let before = head(&repo.0);
@@ -1421,8 +1200,6 @@ mod operation_tests {
         git(&repo.0, &["restore", "--staged", "."]);
         assert!(repo.0.join(".git/SQUASH_MSG").exists());
         assert_eq!(engine.operation_in_progress().await.unwrap(), None);
-        std::fs::remove_file(repo.0.join("b.txt")).unwrap();
-        assert!(engine.start_preview("clean").await.unwrap());
     }
 
     #[tokio::test]
@@ -1528,18 +1305,6 @@ mod operation_tests {
         assert_eq!(std::fs::read_to_string(repo.0.join("a.txt")).unwrap(), "main\n");
     }
 
-    #[test]
-    fn preview_marker_round_trips() {
-        let with_stash = PreviewMarker {
-            merge_head: "abc".into(),
-            stash_oid: Some("def".into()),
-        };
-        let without = PreviewMarker { merge_head: "abc".into(), stash_oid: None };
-        for m in [with_stash, without] {
-            assert_eq!(PreviewMarker::from_file_contents(&m.to_file_contents()), Some(m));
-        }
-        assert_eq!(PreviewMarker::from_file_contents(""), None);
-    }
 }
 
 // ── Remote operations (auth-aware) ──────────────────────────────────────────

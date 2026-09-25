@@ -5,15 +5,14 @@ import { useSelectionStore } from "@/stores/selection";
 import { useUIStore } from "@/stores/ui";
 
 describe("repo switch resets", () => {
-  it("clears the History compare/preview branch when the active repo changes", () => {
+  it("clears the History compare branch when the active repo changes", () => {
     useRepositoryStore.setState({ activeRepoPath: "/repos/alpha" });
-    useUIStore.setState({ compareBranch: "feature", previewBranch: "feature" });
+    useUIStore.setState({ compareBranch: "feature" });
     useSelectionStore.getState().selectCommit("abc");
 
     useRepositoryStore.setState({ activeRepoPath: "/repos/beta" });
 
     expect(useUIStore.getState().compareBranch).toBeNull();
-    expect(useUIStore.getState().previewBranch).toBeNull();
     expect(useSelectionStore.getState().selectedCommitId).toBeNull();
   });
 });
