@@ -22,12 +22,17 @@
 use std::collections::HashSet;
 use std::path::{Component, Path};
 
-use git2::{Delta, Diff, DiffFindOptions, DiffOptions, ErrorCode, Oid, Patch, Repository, Tree};
+use git2::{
+    Delta, Diff, DiffFindOptions, DiffOptions, ErrorCode, Index, IndexEntryExtendedFlag, Oid, Patch, Repository,
+    Tree,
+};
 use serde::Serialize;
 
 use crate::error::AppError;
 use crate::git::engine::FileStatus;
+use crate::git::binary::{detect_file_type, extension_to_mime, PreviewFileType};
 use crate::git::merge_base::{divergence_point, BaseStatus, DivergencePoint};
+use crate::git::untracked::{is_too_large_untracked, untracked_lines, UntrackedLines};
 use crate::git::worktree_base::default_branch_with_fallback;
 
 /// 바뀐 파일 하나.
@@ -42,6 +47,8 @@ pub struct ChangedFile {
     pub additions: usize,
     pub deletions: usize,
     pub is_binary: bool,
+    /// 추적하지 않는 새 파일이 1 MiB(`UNTRACKED_COUNT_LIMIT`)를 넘어 읽지 않았다. 줄 수는 0 이다.
+    pub too_large: bool,
 }
 
 /// `get_changes_vs_default` 의 결과. 저장소 하나.
@@ -159,7 +166,7 @@ pub fn changes_vs_default(
     };
     let Some(head_ref) = head else {
         // 커밋이 없는 저장소: 모든 변경이 커밋하지 않은 변경이다.
-        let uncommitted = to_workdir(&repo, None)?;
+        let uncommitted = to_workdir(&repo, None, &index_to_workdir(&repo, &mut workdir_opts())?)?;
         return Ok(BranchChanges {
             path: path.to_string(),
             branch: unborn_branch(&repo),
@@ -182,9 +189,11 @@ pub fn changes_vs_default(
     let point = point_against(&repo, head_oid, branch.as_deref(), base)?;
     let base_tree = point.merge_base.map(|oid| tree_of(&repo, oid)).transpose()?;
 
-    let uncommitted = to_workdir(&repo, Some(&head_tree))?;
+    // 작업 트리 쪽(인덱스 → 작업 트리)은 한 번만 훑고 두 비교에 같이 쓴다.
+    let workdir = index_to_workdir(&repo, &mut workdir_opts())?;
+    let uncommitted = to_workdir(&repo, Some(&head_tree), &workdir)?;
     let (committed, files) = match &base_tree {
-        Some(base) => (tree_to_tree(&repo, base, &head_tree)?, to_workdir(&repo, Some(base))?),
+        Some(base) => (tree_to_tree(&repo, base, &head_tree)?, to_workdir(&repo, Some(base), &workdir)?),
         None => (Vec::new(), uncommitted.clone()),
     };
 
@@ -214,19 +223,64 @@ fn unborn_branch(repo: &Repository) -> Option<String> {
 
 fn tree_to_tree(repo: &Repository, old: &Tree, new: &Tree) -> Result<Vec<ChangedFile>, git2::Error> {
     let mut diff = repo.diff_tree_to_tree(Some(old), Some(new), Some(&mut DiffOptions::new()))?;
-    changed_files(&mut diff)
+    changed_files(repo, &mut diff)
+}
+
+/// 작업 트리와 비교할 때 쓰는 옵션. 추적하지 않는 파일은 폴더 안까지 넣되 내용은 읽지 않는다
+/// (줄 수는 `untracked_file` 이 크기를 보고 센다).
+fn workdir_opts() -> DiffOptions {
+    let mut opts = DiffOptions::new();
+    opts.include_untracked(true).recurse_untracked_dirs(true).include_typechange(true);
+    opts
+}
+
+/// 인덱스 → 작업 트리. sparse checkout 으로 디스크에 없는 파일(skip-worktree)은 넣지 않는다.
+fn index_to_workdir<'r>(repo: &'r Repository, opts: &mut DiffOptions) -> Result<Diff<'r>, git2::Error> {
+    let visible = index_without_absent_skip_worktree(repo)?;
+    repo.diff_index_to_workdir(visible.as_ref(), Some(opts))
+}
+
+/// skip-worktree 로 표시돼 디스크에 없는 항목을 뺀 인덱스 사본. 저장하지 않는다. 그런 항목이 없으면 `None`.
+///
+/// libgit2 는 skip-worktree 파일이 디스크에 있으면 바뀌지 않은 것으로 보지만, 없으면 삭제로 본다.
+/// git 은 이런 파일을 비교하지 않는다(sparse checkout 범위 밖).
+fn index_without_absent_skip_worktree(repo: &Repository) -> Result<Option<Index>, git2::Error> {
+    let Some(workdir) = repo.workdir() else { return Ok(None) };
+    let index = repo.index()?;
+    let skip = IndexEntryExtendedFlag::SKIP_WORKTREE.bits();
+    let absent: HashSet<Vec<u8>> = index
+        .iter()
+        .filter(|e| e.flags_extended & skip != 0)
+        .filter(|e| std::fs::symlink_metadata(workdir.join(&*String::from_utf8_lossy(&e.path))).is_err())
+        .map(|e| e.path)
+        .collect();
+    if absent.is_empty() {
+        return Ok(None);
+    }
+    let mut visible = Index::new()?;
+    for entry in index.iter().filter(|e| !absent.contains(&e.path)) {
+        visible.add(&entry)?;
+    }
+    Ok(Some(visible))
+}
+
+/// `old`(없으면 빈 트리) → 인덱스 → 작업 트리. `workdir` 는 `index_to_workdir` 결과다.
+fn tree_to_workdir<'r>(
+    repo: &'r Repository,
+    old: Option<&Tree>,
+    workdir: &Diff<'r>,
+    opts: &mut DiffOptions,
+) -> Result<Diff<'r>, git2::Error> {
+    let mut diff = repo.diff_tree_to_index(old, None, Some(opts))?;
+    diff.merge(workdir)?;
+    Ok(diff)
 }
 
 /// `old`(없으면 빈 트리) → 작업 트리. 스테이징한 변경과 추적하지 않는 파일(폴더 안까지)을 넣는다.
-fn to_workdir(repo: &Repository, old: Option<&Tree>) -> Result<Vec<ChangedFile>, git2::Error> {
-    let mut opts = DiffOptions::new();
-    opts.include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .show_untracked_content(true)
-        .include_typechange(true);
-    let mut diff = repo.diff_tree_to_workdir_with_index(old, Some(&mut opts))?;
-    let mut files = changed_files(&mut diff)?;
-    let untracked_copies = untracked_copies_of_deleted(repo, &files)?;
+fn to_workdir(repo: &Repository, old: Option<&Tree>, workdir: &Diff) -> Result<Vec<ChangedFile>, git2::Error> {
+    let mut diff = tree_to_workdir(repo, old, workdir, &mut workdir_opts())?;
+    let mut files = changed_files(repo, &mut diff)?;
+    let untracked_copies = untracked_copies_of_deleted(repo, &files, workdir);
     if untracked_copies.is_empty() {
         return Ok(files);
     }
@@ -239,53 +293,50 @@ fn to_workdir(repo: &Repository, old: Option<&Tree>) -> Result<Vec<ChangedFile>,
 ///
 /// 트리 → 인덱스 → 작업 트리를 합친 diff 는 인덱스에서 뺀 파일을 「삭제」 하나로만 남긴다.
 /// `git status` 는 같은 파일을 추적하지 않는 파일로도 보여 주므로 그 항목을 더한다.
-fn untracked_copies_of_deleted(
-    repo: &Repository,
-    files: &[ChangedFile],
-) -> Result<Vec<ChangedFile>, git2::Error> {
-    let deleted: Vec<&str> = files
+fn untracked_copies_of_deleted(repo: &Repository, files: &[ChangedFile], workdir: &Diff) -> Vec<ChangedFile> {
+    let deleted: HashSet<&str> = files
         .iter()
         .filter(|f| f.status == FileStatus::Deleted)
         .map(|f| f.path.as_str())
         .collect();
     if deleted.is_empty() {
-        return Ok(Vec::new());
+        return Vec::new();
     }
     let listed: HashSet<&str> = files
         .iter()
         .filter(|f| f.status != FileStatus::Deleted)
         .map(|f| f.path.as_str())
         .collect();
+    workdir
+        .deltas()
+        .filter(|delta| delta.status() == Delta::Untracked)
+        .filter_map(|delta| delta.new_file().path().map(|p| p.to_string_lossy().into_owned()))
+        .filter(|path| deleted.contains(path.as_str()) && !listed.contains(path.as_str()))
+        .map(|path| untracked_file(repo, path))
+        .collect()
+}
 
-    let mut opts = DiffOptions::new();
-    opts.include_untracked(true).show_untracked_content(true).disable_pathspec_match(true);
-    for path in &deleted {
-        opts.pathspec(path);
+/// 추적하지 않는 새 파일 하나. 1 MiB 를 넘으면 읽지 않는다(`git::untracked`).
+fn untracked_file(repo: &Repository, path: String) -> ChangedFile {
+    let lines = match repo.workdir() {
+        Some(dir) => untracked_lines(&dir.join(&path)),
+        None => UntrackedLines::Unreadable,
+    };
+    let (additions, is_binary, too_large) = match lines {
+        UntrackedLines::Text(n) => (n, false, false),
+        UntrackedLines::Binary => (0, true, false),
+        UntrackedLines::TooLarge => (0, false, true),
+        UntrackedLines::Unreadable => (0, false, false),
+    };
+    ChangedFile {
+        path,
+        old_path: None,
+        status: FileStatus::Untracked,
+        additions,
+        deletions: 0,
+        is_binary,
+        too_large,
     }
-    let diff = repo.diff_index_to_workdir(None, Some(&mut opts))?;
-
-    let mut copies = Vec::new();
-    for (idx, delta) in diff.deltas().enumerate() {
-        if delta.status() != Delta::Untracked {
-            continue;
-        }
-        let Some(path) = delta.new_file().path().map(|p| p.to_string_lossy().into_owned()) else {
-            continue;
-        };
-        if listed.contains(path.as_str()) {
-            continue;
-        }
-        let (additions, deletions, is_binary) = line_counts(&delta, Patch::from_diff(&diff, idx)?)?;
-        copies.push(ChangedFile {
-            path,
-            old_path: None,
-            status: FileStatus::Untracked,
-            additions,
-            deletions,
-            is_binary,
-        });
-    }
-    Ok(copies)
 }
 
 /// 더한 줄 수, 뺀 줄 수, 바이너리 여부.
@@ -303,7 +354,7 @@ fn line_counts(
     })
 }
 
-fn changed_files(diff: &mut Diff) -> Result<Vec<ChangedFile>, git2::Error> {
+fn changed_files(repo: &Repository, diff: &mut Diff) -> Result<Vec<ChangedFile>, git2::Error> {
     diff.find_similar(Some(DiffFindOptions::new().renames(true).for_untracked(true)))?;
 
     let mut files = Vec::new();
@@ -322,6 +373,10 @@ fn changed_files(diff: &mut Diff) -> Result<Vec<ChangedFile>, git2::Error> {
             .then_some(old_path)
             .flatten()
             .filter(|old| *old != path);
+        if status == FileStatus::Untracked {
+            files.push(untracked_file(repo, path));
+            continue;
+        }
 
         let patch = Patch::from_diff(diff, idx)?;
         if status == FileStatus::Modified && is_unchanged(&delta, patch.as_ref()) {
@@ -330,7 +385,7 @@ fn changed_files(diff: &mut Diff) -> Result<Vec<ChangedFile>, git2::Error> {
         }
         let (additions, deletions, is_binary) = line_counts(&delta, patch)?;
 
-        files.push(ChangedFile { path, old_path, status, additions, deletions, is_binary });
+        files.push(ChangedFile { path, old_path, status, additions, deletions, is_binary, too_large: false });
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)
@@ -403,6 +458,29 @@ pub struct FileDiffVsDefault {
     pub base_oid: Option<String>,
     /// 비교 기준이 갈라진 지점인가. `false` 면 HEAD 와 비교한 결과다(`files` 와 같은 규칙).
     pub base_is_divergence_point: bool,
+    /// 추적하지 않는 새 파일이 1 MiB 를 넘어 읽지 않았을 때만 있다. `binary` 는 `true`, 내용·구간은 비어 있다.
+    /// 모양은 `get_file_diff` 의 `binaryPreview` 와 같아서 diff 화면이 「너무 큼」으로 보여 준다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binary_preview: Option<TooLargePreview>,
+}
+
+/// 읽지 않은 큰 파일의 미리 보기 자리. TS `BinaryPreview` 와 같은 모양이다.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TooLargePreview {
+    pub meta: TooLargeMeta,
+    pub old_base64: Option<String>,
+    pub new_base64: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TooLargeMeta {
+    pub file_type: PreviewFileType,
+    pub mime_type: &'static str,
+    pub old_size: Option<u64>,
+    pub new_size: Option<u64>,
+    pub too_large: bool,
 }
 
 /// 파일 하나의 main(또는 `base`) 대비 diff: 갈라진 지점 → 작업 트리(스테이징 포함).
@@ -424,20 +502,29 @@ pub fn file_diff_vs_default(
         return Err(AppError::BareRepository(path.to_string()));
     }
     let (base_tree, base_oid, is_point, target_tree) = comparison_base(&repo, base, target)?;
-
-    let mut opts = DiffOptions::new();
-    opts.include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .show_untracked_content(true)
-        .include_typechange(true)
-        .disable_pathspec_match(true)
-        .pathspec(file_path);
-    if let Some(old) = old_path {
-        opts.pathspec(old);
+    if target_tree.is_none() && is_too_large_untracked(&repo, file_path) {
+        return Ok(too_large_diff(&repo, file_path, old_path, base_oid, is_point));
     }
+
+    let opts = || {
+        let mut opts = DiffOptions::new();
+        opts.include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .show_untracked_content(true)
+            .include_typechange(true)
+            .disable_pathspec_match(true)
+            .pathspec(file_path);
+        if let Some(old) = old_path {
+            opts.pathspec(old);
+        }
+        opts
+    };
     let mut diff = match &target_tree {
-        Some(new_tree) => repo.diff_tree_to_tree(base_tree.as_ref(), Some(new_tree), Some(&mut opts))?,
-        None => repo.diff_tree_to_workdir_with_index(base_tree.as_ref(), Some(&mut opts))?,
+        Some(new_tree) => repo.diff_tree_to_tree(base_tree.as_ref(), Some(new_tree), Some(&mut opts()))?,
+        None => {
+            let workdir = index_to_workdir(&repo, &mut opts())?;
+            tree_to_workdir(&repo, base_tree.as_ref(), &workdir, &mut opts())?
+        }
     };
     if old_path.is_some() {
         diff.find_similar(Some(DiffFindOptions::new().renames(true).for_untracked(true)))?;
@@ -471,7 +558,10 @@ pub fn file_diff_vs_default(
             .ok()
             .and_then(|entry| repo.find_blob(entry.id()).ok())
             .map(|blob| blob.content().to_vec()),
-        None => repo.workdir().and_then(|dir| std::fs::read(dir.join(file_path)).ok()),
+        None => repo
+            .workdir()
+            .and_then(|dir| std::fs::read(dir.join(file_path)).ok())
+            .or_else(|| skip_worktree_blob(&repo, file_path)),
     };
     let text = |bytes: Option<Vec<u8>>| {
         bytes.filter(|_| !binary).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default()
@@ -488,7 +578,55 @@ pub fn file_diff_vs_default(
         new_content: text(new_bytes),
         base_oid: base_oid.map(|o| o.to_string()),
         base_is_divergence_point: is_point,
+        binary_preview: None,
     })
+}
+
+/// sparse checkout 범위 밖이라 디스크에 없는 파일의 내용: 인덱스에 있는 내용이 그 파일의 현재 내용이다.
+fn skip_worktree_blob(repo: &Repository, file_path: &str) -> Option<Vec<u8>> {
+    let index = repo.index().ok()?;
+    let entry = index.get_path(Path::new(file_path), 0)?;
+    if entry.flags_extended & IndexEntryExtendedFlag::SKIP_WORKTREE.bits() == 0 {
+        return None;
+    }
+    repo.find_blob(entry.id).ok().map(|blob| blob.content().to_vec())
+}
+
+/// 1 MiB 를 넘는 새 파일: 읽지 않고 「너무 큼」 자리만 돌려준다.
+fn too_large_diff(
+    repo: &Repository,
+    file_path: &str,
+    old_path: Option<&str>,
+    base_oid: Option<Oid>,
+    is_point: bool,
+) -> FileDiffVsDefault {
+    let new_size = repo
+        .workdir()
+        .and_then(|dir| std::fs::symlink_metadata(dir.join(file_path)).ok())
+        .map(|m| m.len());
+    FileDiffVsDefault {
+        file_path: file_path.to_string(),
+        old_path: old_path.map(str::to_string),
+        binary: true,
+        insertions: 0,
+        deletions: 0,
+        hunks: Vec::new(),
+        old_content: String::new(),
+        new_content: String::new(),
+        base_oid: base_oid.map(|o| o.to_string()),
+        base_is_divergence_point: is_point,
+        binary_preview: Some(TooLargePreview {
+            meta: TooLargeMeta {
+                file_type: detect_file_type(file_path),
+                mime_type: extension_to_mime(file_path),
+                old_size: None,
+                new_size,
+                too_large: true,
+            },
+            old_base64: None,
+            new_base64: None,
+        }),
+    }
 }
 
 /// 저장소 루트 기준의 상대 경로만 받는다(`..`·절대 경로는 거부).
@@ -891,6 +1029,56 @@ mod tests {
     }
 
     #[test]
+    fn a_large_untracked_file_is_not_read() {
+        use crate::git::untracked::UNTRACKED_COUNT_LIMIT;
+        let dir = tmp_dir("large-untracked").join("r");
+        feature_repo(&dir);
+        write(&dir, "big.log", &"x\n".repeat(UNTRACKED_COUNT_LIMIT as usize / 2 + 1));
+        write(&dir, "small.log", "a\nb\n");
+
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
+        let big = find(&c.uncommitted, "big.log");
+        assert!(big.too_large);
+        assert_eq!((big.additions, big.deletions, big.is_binary), (0, 0, false));
+        assert!(find(&c.files, "big.log").too_large);
+        let small = find(&c.uncommitted, "small.log");
+        assert_eq!((small.additions, small.too_large), (2, false));
+
+        let d = file_diff_vs_default(dir.to_str().unwrap(), "big.log", None, None, None).unwrap();
+        assert!(d.binary && d.hunks.is_empty() && d.new_content.is_empty());
+        let json = serde_json::to_value(&d).unwrap();
+        assert_eq!(json["binaryPreview"]["meta"]["tooLarge"], true);
+        assert_eq!(json["binaryPreview"]["meta"]["newSize"], UNTRACKED_COUNT_LIMIT + 2);
+        let small = file_diff_vs_default(dir.to_str().unwrap(), "small.log", None, None, None).unwrap();
+        assert!(serde_json::to_value(&small).unwrap().get("binaryPreview").is_none());
+    }
+
+    #[test]
+    fn files_outside_a_sparse_checkout_are_not_deleted() {
+        let dir = tmp_dir("sparse").join("r");
+        init(&dir, "main");
+        write(&dir, "in/a.txt", "a\n");
+        write(&dir, "out/b.txt", "b\n");
+        commit_all(&dir, "base");
+        git(&dir, &["checkout", "-q", "-b", "feat"]);
+        write(&dir, "out/b.txt", "b2\n");
+        commit_all(&dir, "change outside the cone");
+        git(&dir, &["sparse-checkout", "set", "in"]);
+        assert!(!dir.join("out/b.txt").exists(), "sparse checkout 이 파일을 치웠다");
+
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
+        assert!(c.uncommitted.is_empty(), "{:?}", c.uncommitted);
+        assert_eq!(paths(&c.files), vec!["out/b.txt"]);
+        assert_eq!(find(&c.files, "out/b.txt").status, FileStatus::Modified);
+
+        let d = file_diff_vs_default(dir.to_str().unwrap(), "out/b.txt", None, None, None).unwrap();
+        assert_eq!(lines_of(&d, "deletion"), vec!["b"]);
+        assert_eq!(lines_of(&d, "addition"), vec!["b2"]);
+        assert_eq!((d.old_content.as_str(), d.new_content.as_str()), ("b\n", "b2\n"));
+        let _ = std::fs::remove_dir_all(dir.parent().unwrap());
+    }
+
+    #[test]
     fn serialized_shape_matches_the_typescript_types() {
         // src/types/index.ts 의 BranchChanges·BranchChangedFile 와 키가 같아야 한다.
         let dir = tmp_dir("shape").join("r");
@@ -911,7 +1099,7 @@ mod tests {
         );
         assert_eq!(
             keys(&json["committed"][0]),
-            vec!["additions", "deletions", "isBinary", "oldPath", "path", "status"]
+            vec!["additions", "deletions", "isBinary", "oldPath", "path", "status", "tooLarge"]
         );
         assert_eq!(json["baseStatus"], "found");
         assert_eq!(json["committed"][0]["status"], "modified");

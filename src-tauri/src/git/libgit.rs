@@ -648,28 +648,24 @@ pub struct DirtySummary {
 /// Count uncommitted files (staged, unstaged and untracked, recursing into
 /// untracked folders) and find the newest mtime among them.
 ///
-/// Ignored files are skipped by libgit2, so large ignored folders such as
+/// Reads `git status` (`git::status::read_status`) like the Changes tab, not
+/// libgit2: libgit2 reports files outside a sparse checkout (skip-worktree)
+/// as deleted. Ignored files are skipped, so large ignored folders such as
 /// `node_modules` or `target` cost nothing. Returns an empty summary when the
 /// status scan fails (e.g. a bare repo).
 pub fn working_tree_dirty_summary(repo: &Repository) -> DirtySummary {
-    let mut opts = git2::StatusOptions::new();
-    opts.include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .exclude_submodules(true);
-    let Ok(statuses) = repo.statuses(Some(&mut opts)) else {
-        return DirtySummary { count: 0, latest_mtime_ms: None };
-    };
-    let workdir = repo.workdir();
-    let latest_mtime_ms = statuses
+    let empty = DirtySummary { count: 0, latest_mtime_ms: None };
+    let Some(workdir) = repo.workdir() else { return empty };
+    let Ok(entries) = crate::git::status::read_status(workdir) else { return empty };
+    let latest_mtime_ms = entries
         .iter()
         .filter_map(|entry| {
-            let path = workdir?.join(entry.path()?);
-            let modified = std::fs::symlink_metadata(path).ok()?.modified().ok()?;
+            let modified = std::fs::symlink_metadata(workdir.join(&entry.path)).ok()?.modified().ok()?;
             let millis = modified.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis();
             i64::try_from(millis).ok()
         })
         .max();
-    DirtySummary { count: statuses.len(), latest_mtime_ms }
+    DirtySummary { count: entries.len(), latest_mtime_ms }
 }
 
 #[cfg(test)]
@@ -738,6 +734,31 @@ mod dirty_summary_tests {
 
         assert_eq!(summary.count, 4);
         assert!(dirty);
+    }
+
+    #[test]
+    fn files_outside_a_sparse_checkout_are_not_counted() {
+        let (dir, repo) = temp_repo("sparse");
+        std::fs::create_dir_all(dir.join("in")).unwrap();
+        std::fs::create_dir_all(dir.join("out")).unwrap();
+        std::fs::write(dir.join("out/b.txt"), "b\n").unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index.add_path(Path::new("out/b.txt")).unwrap();
+            index.write().unwrap();
+        }
+        commit_file(&repo, &dir, "in/a.txt", "a\n");
+        let out = std::process::Command::new("git")
+            .args(["sparse-checkout", "set", "in"])
+            .current_dir(&dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        assert!(!dir.join("out/b.txt").exists());
+        let summary = working_tree_dirty_summary(&Repository::open(&dir).unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(summary.count, 0);
     }
 
     #[test]

@@ -6,6 +6,7 @@ use crate::git::binary::{detect_file_type, extension_to_mime, is_previewable, MA
 use crate::git::commit::{agent_attribution, parent_ids};
 use crate::git::diff::{detect_renames, rename_source};
 use crate::git::remote::parse_github_url;
+use crate::git::unpushed::{commits_not_on_any_remote, upstream_tip, UNPUSHED_LIMIT};
 use crate::github::client::GitHubClient;
 use crate::state::TokenStore;
 use base64::Engine;
@@ -36,10 +37,6 @@ struct HistoryTips {
     upstream: Option<git2::Oid>,
     /// 원격 브랜치를 볼 때: 이미 원격에 있으니 push할 커밋이 없다.
     on_remote: bool,
-}
-
-fn upstream_tip(branch: &git2::Branch) -> Option<git2::Oid> {
-    branch.upstream().ok().and_then(|up| up.get().target())
 }
 
 fn head_tips(repo: &git2::Repository) -> HistoryTips {
@@ -94,54 +91,23 @@ fn resolve_history_tips(
 }
 
 /// 시작점에서 아직 리모트로 push되지 않은 커밋의 OID 집합을 구한다.
-/// 검토 기준 「원격에 없는 커밋」(`git::unpushed`)과 같은 판정이다:
-/// `<tips> --not --remotes` — 어느 원격 추적 브랜치에서도 닿지 않는 커밋. 다른 원격 브랜치에
-/// 이미 올라간 커밋은 올린 것으로 본다. upstream이 로컬 브랜치여도 그 끝은 함께 숨긴다.
-///
-/// 반환값 `None`은 "시작점의 모든 커밋이 unpushed"를 뜻한다. 리모트 tracking
-/// 브랜치가 하나도 없으면(로컬 전용 저장소) hide 대상이 없어 전체 히스토리를
-/// 순회하게 되므로, 그 경우는 revwalk 없이 `None`으로 처리한다.
+/// 검토 기준 「원격에 없는 커밋」(`git::unpushed`)과 같은 판정이다: 원격이 없으면 비어 있고,
+/// upstream이 로컬 브랜치여도 그 끝은 함께 숨긴다. 많아야 `UNPUSHED_LIMIT`개까지 표시한다.
 fn unpushed_from(
     repo: &git2::Repository,
     tips: &HistoryTips,
-) -> Option<std::collections::HashSet<git2::Oid>> {
-    use std::collections::HashSet;
-
+) -> std::collections::HashSet<git2::Oid> {
     if tips.on_remote {
-        return Some(HashSet::new());
+        return Default::default();
     }
-    // upstream도 없고 리모트 tracking 브랜치도 없으면 전부 unpushed
-    if tips.upstream.is_none() {
-        let has_remote = repo
-            .branches(Some(git2::BranchType::Remote))
-            .map(|mut it| it.next().is_some())
-            .unwrap_or(false);
-        if !has_remote {
-            return None;
-        }
-    }
-
-    let Ok(mut walk) = repo.revwalk() else {
-        return Some(HashSet::new()); // revwalk 생성 실패 시 안전하게 "unpushed 없음"
-    };
-    if tips.tips.is_empty() {
-        return Some(HashSet::new()); // unborn HEAD(빈 저장소) 등
-    }
-    for tip in &tips.tips {
-        if walk.push(*tip).is_err() {
-            return Some(HashSet::new());
-        }
-    }
-    if let Some(oid) = tips.upstream {
-        let _ = walk.hide(oid);
-    }
-    let _ = walk.hide_glob("refs/remotes/*"); // tips --not --remotes
-    Some(walk.flatten().collect())
+    commits_not_on_any_remote(repo, &tips.tips, tips.upstream, UNPUSHED_LIMIT)
+        .map(|oids| oids.into_iter().collect())
+        .unwrap_or_default() // 판정 실패 시 안전하게 "unpushed 없음"
 }
 
 /// HEAD 기준 unpushed 커밋 집합(`unpushed_from`의 HEAD 판).
 #[cfg(test)]
-fn compute_unpushed(repo: &git2::Repository) -> Option<std::collections::HashSet<git2::Oid>> {
+fn compute_unpushed(repo: &git2::Repository) -> std::collections::HashSet<git2::Oid> {
     unpushed_from(repo, &head_tips(repo))
 }
 
@@ -158,7 +124,7 @@ pub async fn get_commit_history(
         let repo = git2::Repository::open(&repo_path)?;
         let ref_map = crate::git::commit::build_ref_map(&repo);
         let tips = resolve_history_tips(&repo, &target.unwrap_or(HistoryTarget::Head))?;
-        // 시작점 기준 unpushed 커밋 집합. None이면 "모든 커밋이 unpushed".
+        // 시작점 기준 unpushed 커밋 집합.
         let unpushed = unpushed_from(&repo, &tips);
         let mut revwalk = repo.revwalk()?;
         // 기본은 현재 체크아웃된 브랜치(HEAD)에서 도달 가능한 커밋만 시간순으로 조회한다.
@@ -185,10 +151,7 @@ pub async fn get_commit_history(
                 let author_email = author.email().unwrap_or("").to_string();
                 let author_name = author.name().unwrap_or("").to_string();
                 let refs = ref_map.get(&oid).cloned().unwrap_or_default();
-                let is_unpushed = match &unpushed {
-                    None => true,
-                    Some(set) => set.contains(&oid),
-                };
+                let is_unpushed = unpushed.contains(&oid);
                 let message = commit.message().unwrap_or("");
                 let (co_authors, is_agent_authored) = agent_attribution(message);
                 Some(json!({
@@ -697,27 +660,45 @@ mod tests {
     }
 
     /// 네트워크 없이 리모트 tracking ref(refs/remotes/<name>)를 특정 커밋에 만든다.
+    /// 그 원격도 설정한다(원격이 없으면 올릴 곳이 없어 아무것도 unpushed가 아니다).
     fn set_remote_ref(repo: &Repository, name: &str, oid: Oid) {
+        let remote = name.split('/').next().unwrap();
+        if repo.find_remote(remote).is_err() {
+            repo.remote(remote, "https://example.invalid/r.git").unwrap();
+        }
         repo.reference(&format!("refs/remotes/{name}"), oid, true, "test")
             .unwrap();
     }
 
     #[test]
-    fn unpushed_is_none_without_any_remote() {
-        // 리모트 tracking 브랜치가 하나도 없으면 전부 unpushed(None)
+    fn nothing_is_unpushed_without_any_remote() {
+        // 원격이 없으면 올릴 곳이 없다. 원격 표시(`head_unpushed`)와 같은 판정.
         let tmp = TempRepo::new();
         let repo = tmp.open();
         commit(&repo, "a.txt", "1");
         commit(&repo, "a.txt", "2");
-        assert!(compute_unpushed(&repo).is_none());
+        assert!(compute_unpushed(&repo).is_empty());
+        let summary = crate::git::unpushed::head_unpushed(&repo, UNPUSHED_LIMIT).unwrap();
+        assert!(summary.oids.is_empty());
     }
 
     #[test]
-    fn unpushed_is_none_on_empty_repo() {
-        // unborn HEAD + 리모트 없음 → None
+    fn every_commit_is_unpushed_when_the_remote_was_never_fetched() {
         let tmp = TempRepo::new();
         let repo = tmp.open();
-        assert!(compute_unpushed(&repo).is_none());
+        let c1 = commit(&repo, "a.txt", "1");
+        let c2 = commit(&repo, "a.txt", "2");
+        repo.remote("origin", "https://example.invalid/r.git").unwrap();
+        let set = compute_unpushed(&repo);
+        assert_eq!(set, [c1, c2].into_iter().collect());
+    }
+
+    #[test]
+    fn unpushed_is_empty_on_empty_repo() {
+        let tmp = TempRepo::new();
+        let repo = tmp.open();
+        repo.remote("origin", "https://example.invalid/r.git").unwrap();
+        assert!(compute_unpushed(&repo).is_empty());
     }
 
     #[test]
@@ -730,12 +711,10 @@ mod tests {
         let branch = head_branch(&repo);
 
         set_remote_ref(&repo, &format!("origin/{branch}"), c1);
-        repo.remote("origin", "https://example.invalid/r.git")
-            .unwrap();
         let mut b = repo.find_branch(&branch, BranchType::Local).unwrap();
         b.set_upstream(Some(&format!("origin/{branch}"))).unwrap();
 
-        let set = compute_unpushed(&repo).expect("tracking → Some");
+        let set = compute_unpushed(&repo);
         assert!(set.contains(&c2), "c2(ahead) should be unpushed");
         assert!(!set.contains(&c1), "c1(on remote) should be pushed");
         assert_eq!(set.len(), 1);
@@ -751,7 +730,7 @@ mod tests {
         let c3 = commit(&repo, "a.txt", "3");
         set_remote_ref(&repo, "origin/main", c1); // 리모트엔 c1까지만
 
-        let set = compute_unpushed(&repo).expect("remote ref exists → Some");
+        let set = compute_unpushed(&repo);
         assert!(set.contains(&c2));
         assert!(set.contains(&c3));
         assert!(!set.contains(&c1));
@@ -769,11 +748,10 @@ mod tests {
         let branch = head_branch(&repo);
         set_remote_ref(&repo, &format!("origin/{branch}"), c1);
         set_remote_ref(&repo, "origin/backup", c2);
-        repo.remote("origin", "https://example.invalid/r.git").unwrap();
         let mut b = repo.find_branch(&branch, BranchType::Local).unwrap();
         b.set_upstream(Some(&format!("origin/{branch}"))).unwrap();
 
-        let set = compute_unpushed(&repo).expect("tracking → Some");
+        let set = compute_unpushed(&repo);
         assert_eq!(set.into_iter().collect::<Vec<_>>(), vec![c3]);
     }
 
@@ -813,8 +791,8 @@ mod tests {
         );
         assert_eq!(commits.len(), 2);
 
-        // 리모트가 없으므로 모든 커밋이 unpushed(true)로 표시된다
-        assert!(commits.iter().all(|v| v["isUnpushed"].as_bool().unwrap()));
+        // 리모트가 없으므로 올릴 곳이 없다: 아무 커밋도 unpushed로 표시하지 않는다
+        assert!(commits.iter().all(|v| !v["isUnpushed"].as_bool().unwrap()));
     }
 
     /// `git mv`로 옮긴 파일은 삭제+추가가 아니라 이름 변경으로 보여야 한다.

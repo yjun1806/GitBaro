@@ -59,6 +59,7 @@ pub fn run() {
             commands::repo::get_repo_visibility,
             commands::repo::get_owner_type,
             commands::branch::get_branches,
+            commands::branch::get_default_branches,
             commands::branch::is_head_detached,
             commands::branch::get_branch_divergence,
             commands::branch::repo_sync_status,

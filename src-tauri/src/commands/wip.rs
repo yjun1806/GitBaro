@@ -8,7 +8,6 @@
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
-use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -18,11 +17,8 @@ use serde::Serialize;
 use crate::error::AppError;
 use crate::git::cli::parse_git_error;
 use crate::git::status::{read_status, PorcelainEntry};
+use crate::git::untracked::{untracked_lines, UntrackedLines};
 
-/// 새(추적 안 된) 파일은 이 크기까지만 읽어 줄 수를 센다. 넘으면 줄 수는 `None`.
-const UNTRACKED_COUNT_LIMIT: u64 = 1024 * 1024;
-/// 이 앞부분에 NUL 바이트가 있으면 바이너리로 본다(git 과 같은 기준).
-const BINARY_SNIFF_LEN: usize = 8000;
 
 /// HEAD 와 비교한 작업 트리 파일의 상태.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -272,27 +268,10 @@ fn parse_numstat_z(output: &[u8]) -> HashMap<String, LineCounts> {
 
 /// 새(추적 안 된) 파일의 줄 수. 전부 추가된 줄로 센다. 바이너리·너무 큰 파일·읽기 실패는 `None`.
 fn untracked_line_stats(full_path: &Path) -> LineCounts {
-    let meta = std::fs::symlink_metadata(full_path).ok()?;
-    if meta.file_type().is_symlink() {
-        // git 은 링크 대상 경로 한 줄을 내용으로 본다.
-        return Some((1, 0));
+    match untracked_lines(full_path) {
+        UntrackedLines::Text(n) => Some((n, 0)),
+        _ => None,
     }
-    if !meta.is_file() || meta.len() > UNTRACKED_COUNT_LIMIT {
-        return None;
-    }
-    let mut bytes = Vec::with_capacity(meta.len() as usize);
-    std::fs::File::open(full_path).ok()?.read_to_end(&mut bytes).ok()?;
-    count_added_lines(&bytes).map(|n| (n, 0))
-}
-
-/// 바이트열의 줄 수. 마지막 줄에 줄바꿈이 없어도 한 줄로 센다. 바이너리면 `None`.
-fn count_added_lines(bytes: &[u8]) -> Option<usize> {
-    if bytes[..bytes.len().min(BINARY_SNIFF_LEN)].contains(&0) {
-        return None;
-    }
-    let newlines = bytes.iter().filter(|b| **b == b'\n').count();
-    let trailing = usize::from(bytes.last().is_some_and(|b| *b != b'\n'));
-    Some(newlines + trailing)
 }
 
 #[cfg(test)]
@@ -556,14 +535,6 @@ mod tests {
         assert_eq!(stats.get("new name.txt"), Some(&Some((0, 3))));
         assert_eq!(stats.get("old.txt"), None);
         assert_eq!(stats.get("img.png"), Some(&None));
-    }
-
-    #[test]
-    fn counts_lines_of_new_content() {
-        assert_eq!(count_added_lines(b""), Some(0));
-        assert_eq!(count_added_lines(b"a\nb\n"), Some(2));
-        assert_eq!(count_added_lines(b"a\nb"), Some(2));
-        assert_eq!(count_added_lines(b"a\0b"), None);
     }
 
     #[test]

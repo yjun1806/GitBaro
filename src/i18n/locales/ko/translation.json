@@ -1042,6 +1042,7 @@
       "upToDate_push": "보낼 것 없음",
       "upToDate_pull": "받을 것 없음",
       "noUpstream": "추적 브랜치 없음",
+      "upstreamGone": "원격 브랜치가 사라짐",
       "detachedHead": "브랜치 없음",
       "unborn": "커밋 없음",
       "noRemote": "원격 없음",

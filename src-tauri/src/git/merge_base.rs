@@ -121,3 +121,108 @@ fn upstream_ref(repo: &Repository, name: &str) -> Option<(String, Oid)> {
     let oid = upstream.get().target()?;
     Some((upstream_name, oid))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .output()
+            .expect("git 실행 실패");
+        assert!(out.status.success(), "git {:?}: {}", args, String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn commit(dir: &Path, msg: &str) -> Oid {
+        git(dir, &["commit", "-q", "--allow-empty", "-m", msg]);
+        Oid::from_str(&git(dir, &["rev-parse", "HEAD"])).unwrap()
+    }
+
+    /// 테스트가 끝나면(실패해도) 지우는 임시 저장소.
+    struct TempRepo(PathBuf);
+
+    impl TempRepo {
+        fn new(name: &str, branch: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("gitbaro-mergebase-{}-{}", name, std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            git(&dir, &["init", "-q", "-b", branch]);
+            TempRepo(dir)
+        }
+
+        fn point(&self) -> DivergencePoint {
+            let repo = Repository::open(&self.0).unwrap();
+            let head = repo.head().unwrap();
+            let oid = head.target().unwrap();
+            let branch = head.shorthand().map(str::to_string);
+            divergence_point(&repo, oid, branch.as_deref()).unwrap()
+        }
+    }
+
+    impl Drop for TempRepo {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn a_branch_off_main_diverges_at_the_fork_commit() {
+        let r = TempRepo::new("found", "main");
+        commit(&r.0, "m1");
+        let fork = commit(&r.0, "m2");
+        git(&r.0, &["checkout", "-q", "-b", "feat"]);
+        commit(&r.0, "f1");
+        git(&r.0, &["checkout", "-q", "main"]);
+        commit(&r.0, "m3 after the fork");
+        git(&r.0, &["checkout", "-q", "feat"]);
+
+        let point = r.point();
+        assert_eq!(point.status, BaseStatus::Found);
+        assert_eq!(point.default_branch.as_deref(), Some("main"));
+        assert_eq!(point.base_ref.as_deref(), Some("main"));
+        assert_eq!(point.merge_base, Some(fork));
+    }
+
+    #[test]
+    fn a_local_only_default_branch_diverges_at_head() {
+        let r = TempRepo::new("on-default", "main");
+        let head = commit(&r.0, "m1");
+        let point = r.point();
+        assert_eq!(point.status, BaseStatus::Found);
+        assert_eq!(point.merge_base, Some(head), "원격 사본이 없으면 갈라진 뒤의 커밋이 없다");
+    }
+
+    #[test]
+    fn without_main_master_or_origin_head_there_is_no_default_branch() {
+        let r = TempRepo::new("no-default", "trunk");
+        commit(&r.0, "t1");
+        let point = r.point();
+        assert_eq!(point.status, BaseStatus::NoDefaultBranch);
+        assert_eq!(point.default_branch, None);
+        assert_eq!((point.base_ref, point.merge_base), (None, None));
+    }
+
+    #[test]
+    fn an_unrelated_history_has_no_shared_ancestor() {
+        let r = TempRepo::new("unrelated", "main");
+        commit(&r.0, "m1");
+        git(&r.0, &["checkout", "-q", "--orphan", "other"]);
+        commit(&r.0, "o1");
+
+        let point = r.point();
+        assert_eq!(point.status, BaseStatus::NoSharedHistory);
+        assert_eq!(point.default_branch.as_deref(), Some("main"));
+        assert_eq!((point.base_ref, point.merge_base), (None, None));
+    }
+}

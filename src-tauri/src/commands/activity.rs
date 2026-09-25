@@ -38,7 +38,9 @@ pub struct ActivityWatchResult {
 /// Sets the full list of paths (repositories and worktrees) to watch for
 /// activity. Up to `MAX_ACTIVITY_TARGETS` (40) are actually watched; the rest
 /// come back as `overflow`. Emits `repo:activity` (debounced 2s per path) when
-/// something changes inside a watched path, `.git/` internals excluded.
+/// something changes inside a watched path: `kind: "workTree"` for files
+/// (ignored files and build output excluded), `kind: "git"` for a commit,
+/// staging or branch move of that path. Other `.git/` internals are excluded.
 ///
 /// This is independent from the active-repository watcher
 /// (`commands::watch`), which keeps refreshing that repo's status.
@@ -59,12 +61,13 @@ pub async fn set_activity_watch(
         let mut guard = state.inner.lock().map_err(|e| AppError::Channel(e.to_string()))?;
         if guard.is_none() {
             let handle = app_handle.clone();
-            let watcher = ActivityWatcher::new(move |path, at| {
+            let watcher = ActivityWatcher::new(move |path, at, kind| {
                 let _ = handle.emit(
                     REPO_ACTIVITY,
                     ActivityEvent {
                         path: path.to_string_lossy().to_string(),
                         at,
+                        kind,
                     },
                 );
             })?;

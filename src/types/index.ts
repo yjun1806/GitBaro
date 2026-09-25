@@ -168,12 +168,28 @@ export interface BranchInfo {
   name: string;
   isHead: boolean;
   isRemote: boolean;
+  /**
+   * 기본 브랜치(origin/HEAD → 로컬 main → master)이거나 그 원격 사본(`origin/main`,
+   * 로컬 기본 브랜치에 추적 브랜치가 있으면 그것).
+   */
   isDefault: boolean;
   upstream: string | null;
   aheadBehind: { ahead: number; behind: number } | null;
   lastCommitTime: number | null;
   isFullyMerged: boolean;
   lastCommitAuthor: { name: string; email: string } | null;
+}
+
+/** `get_default_branches`의 한 항목. 저장소를 열지 못하면 `name`·`remoteRef`가 null이다. */
+export interface DefaultBranch {
+  /** 요청에 넘긴 경로 그대로. */
+  path: string;
+  /** 기본 브랜치 이름(`main`). origin/HEAD → 로컬 main → master 순으로 찾는다. */
+  name: string | null;
+  /** 그 이름의 로컬 브랜치가 있다. */
+  hasLocal: boolean;
+  /** 원격 사본(`origin/main`). 로컬 기본 브랜치의 추적 브랜치, 없으면 `origin/<name>`. */
+  remoteRef: string | null;
 }
 
 /**
@@ -493,11 +509,19 @@ export interface ActivityWatchResult {
   overflow: string[];
 }
 
+/**
+ * 무엇이 바뀌었나. `workTree`: 작업 트리 파일(무시한 파일·빌드 결과 제외).
+ * `git`: 그 경로의 커밋·스테이징·브랜치 이동(HEAD, index, `refs/heads/*`). 파일은 그대로일 수 있다.
+ */
+export type ActivityKind = "workTree" | "git";
+
 /** Payload of the `repo:activity` event. */
 export interface ActivityEvent {
   path: string;
   /** Epoch ms of the emission. */
   at: number;
+  /** 백엔드는 항상 보낸다. 없으면 `workTree`로 본다. */
+  kind?: ActivityKind;
 }
 
 // W1-T4 — 새 커밋 기준선 (Rust: src-tauri/src/git/new_commits.rs)
@@ -650,6 +674,8 @@ export interface BranchChangedFile {
   additions: number;
   deletions: number;
   isBinary: boolean;
+  /** 추적하지 않는 새 파일이 1 MiB를 넘어 읽지 않았다. 줄 수는 0이다. */
+  tooLarge?: boolean;
 }
 
 /**
@@ -689,7 +715,10 @@ export interface BranchChanges {
   files: BranchChangedFile[];
 }
 
-/** `get_file_diff_vs_default`의 결과. 파일 하나를 갈라진 지점 → 작업 트리로 비교한다. */
+/**
+ * `get_file_diff_vs_default`의 결과. 파일 하나를 갈라진 지점 → 작업 트리로 비교한다.
+ * 1 MiB를 넘는 새 파일은 읽지 않는다: `binary`가 true이고 `binaryPreview.meta.tooLarge`가 true다.
+ */
 export interface FileDiffVsDefault extends DiffOutput {
   /** 이름을 바꾼 파일이면 갈라진 지점에서의 경로. */
   oldPath: string | null;
@@ -705,6 +734,8 @@ export interface FileDiffVsDefault extends DiffOutput {
 export type RemotePlanSkipReason =
   | "upToDate"
   | "noUpstream"
+  /** Pull: 추적 브랜치는 설정돼 있지만 원격 브랜치가 사라졌다. */
+  | "upstreamGone"
   | "detachedHead"
   | "unborn"
   | "noRemote"

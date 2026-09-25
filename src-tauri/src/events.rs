@@ -21,8 +21,9 @@ pub struct FsChangeEvent {
 // W1-T3
 /// Emitted by the multi-repo activity watcher (`commands::activity`,
 /// independent from `fs:change`) when a watched repository or worktree
-/// changes, debounced to at most once per 2s per path. `.git/` internals do
-/// not count.
+/// changes, debounced to at most once per 2s per path and kind. `kind` says
+/// whether working-tree files changed or git metadata did (a commit, staging,
+/// a branch switch); other `.git/` internals do not count.
 pub const REPO_ACTIVITY: &str = "repo:activity";
 
 #[derive(Debug, Clone, Serialize)]
@@ -31,6 +32,7 @@ pub struct ActivityEvent {
     pub path: String,
     /// Epoch ms of the emission.
     pub at: i64,
+    pub kind: crate::watcher::activity::ActivityKind,
 }
 
 #[derive(Debug, Clone, Serialize)]
