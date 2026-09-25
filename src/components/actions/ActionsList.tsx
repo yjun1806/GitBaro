@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Play, Loader2 } from "lucide-react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { ActionsRunItem } from "./ActionsRunItem";
 import { ActionsRunContextMenu } from "./ActionsRunContextMenu";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
@@ -67,19 +67,13 @@ export function ActionsList({
           onContextMenu={(e) => {
             e.preventDefault();
             onSelectRun(run.id);
-            setMenu({ run, x: e.clientX, y: e.clientY });
+            setMenu({ run, ...contextMenuPoint(e) });
           }}
         />
       ))}
 
       {menu && (
-        <ActionsRunContextMenu
-          hasUrl={!!menu.run.htmlUrl}
-          position={{ x: menu.x, y: menu.y }}
-          onOpenBrowser={() => openUrl(menu.run.htmlUrl)}
-          onCopyUrl={() => navigator.clipboard.writeText(menu.run.htmlUrl)}
-          onClose={() => setMenu(null)}
-        />
+        <ActionsRunContextMenu run={menu.run} position={{ x: menu.x, y: menu.y }} onClose={() => setMenu(null)} />
       )}
     </div>
   );

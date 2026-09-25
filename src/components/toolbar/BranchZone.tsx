@@ -34,6 +34,7 @@ import { selectionAfterStashPushed } from "@/lib/stash-selection";
 import { runWithStashedChanges } from "./run-with-stashed-changes";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
+import { useCurrentPlaceMenu } from "./useCurrentPlaceMenu";
 
 /**
  * 툴바 오른쪽 [브랜치 · Merge · Stash] 묶음의 「브랜치」 버튼. 왼쪽 브랜치 칸과 같은
@@ -314,6 +315,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     addToast(t("branch.copiedName"), "success");
   };
 
+  const placeMenu = useCurrentPlaceMenu(currentBranch);
   const repoTitle = mainWorktree?.path.split("/").filter(Boolean).pop() ?? activeRepoName;
   const avatar = avatarColor(activeRepoPath ?? repoTitle);
   const originAhead = !isInWorktree ? ahead : 0;
@@ -338,6 +340,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         <button
           ref={triggerRef}
           onClick={onToggle}
+          onContextMenu={placeMenu.onContextMenu}
           aria-haspopup="dialog"
           aria-expanded={isOpen}
           className={cn(
@@ -397,6 +400,8 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           onClose={onClose}
         />
       )}
+
+      {placeMenu.element}
 
       {showCreateDialog && (
         <CreateBranchDialog

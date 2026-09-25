@@ -1298,6 +1298,10 @@
     "expandAllInAccount": "이 계정 모두 펴기",
     "accountMenu": "계정 메뉴",
     "openWorkspace": "워크스페이스 열기",
-    "fetchAll": "저장소 모두 Fetch…"
+    "fetchAll": "저장소 모두 Fetch…",
+    "placeMenu": "지금 폴더 메뉴",
+    "copyStashMessage": "stash 메시지 복사",
+    "stashMenu": "stash 메뉴",
+    "runMenu": "실행 메뉴"
   }
 }

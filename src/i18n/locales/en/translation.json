@@ -1323,6 +1323,10 @@
     "expandAllInAccount": "Expand all in this account",
     "accountMenu": "Account menu",
     "openWorkspace": "Open workspace",
-    "fetchAll": "Fetch all repositories…"
+    "fetchAll": "Fetch all repositories…",
+    "placeMenu": "Current folder menu",
+    "copyStashMessage": "Copy stash message",
+    "stashMenu": "Stash menu",
+    "runMenu": "Workflow run menu"
   }
 }
