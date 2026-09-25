@@ -5,6 +5,7 @@ pub mod auto_sync;
 pub mod auth;
 pub mod branch;
 pub mod diff;
+pub mod editor_line;
 pub mod git;
 pub mod history;
 pub mod repo;

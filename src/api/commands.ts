@@ -783,8 +783,10 @@ export async function detectInstalledEditors(): Promise<EditorInfo[]> {
   return invoke("detect_installed_editors");
 }
 
-export async function openInEditor(repoPath: string, filePath: string): Promise<void> {
-  return invoke("open_in_editor", { repoPath, filePath });
+/** `line`(1부터)을 주면 편집기가 줄 번호를 받을 수 있을 때 그 줄에서 연다. */
+export async function openInEditor(repoPath: string, filePath: string, line?: number): Promise<void> {
+  if (line == null) return invoke("open_in_editor", { repoPath, filePath });
+  return invoke("open_in_editor", { repoPath, filePath, line });
 }
 
 // Repository context menu actions

@@ -39,6 +39,7 @@ const AI_CLI_DISPLAY_NAMES: Record<string, string> = {
 const EDITOR_DISPLAY_NAMES: Record<string, string> = {
   vscode: "Visual Studio Code",
   cursor: "Cursor",
+  windsurf: "Windsurf",
   antigravity: "Antigravity",
   kiro: "Kiro",
   zed: "Zed",
