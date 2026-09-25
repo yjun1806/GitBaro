@@ -11,6 +11,8 @@ export interface MaximizedFileItem {
   deletions?: number | null;
   /** 원래 목록의 묶음(스테이징됨·저장소 이름 등). 바뀌는 자리에 묶음 이름을 한 줄 넣는다. */
   group?: string;
+  /** 「봤음」 표시를 다는 목록에서만 준다. 봤으면 흐리게 보인다. */
+  viewed?: boolean;
 }
 
 /**
@@ -23,6 +25,8 @@ export interface MaximizedFiles {
   onSelect: (key: string) => void;
   /** 행 우클릭. 원래 목록의 메뉴를 그대로 연다. */
   onContextMenu?: (key: string, e: React.MouseEvent) => void;
+  /** 있으면 `viewed`를 준 행 끝에 「봤음」 칸을 단다. */
+  onToggleViewed?: (key: string) => void;
 }
 
 /** 지금 diff를 감싼 `ListDiffSplit`이 크게 보기용 파일 목록을 가졌는지. diff 머리의 목록 버튼이 쓴다. */

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Plus, Minus, Code2, FolderOpen, Copy, EyeOff, Undo2 } from "lucide-react";
+import { Plus, Minus, Code2, FolderOpen, Copy, EyeOff, Undo2, SquareCheck, Square } from "lucide-react";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import type { ContextMenuSection } from "@/components/ui/ContextMenu";
 import { useMenuActions } from "@/hooks/useMenuActions";
@@ -15,6 +15,12 @@ export interface WorkingFileMenuActions {
   onAddToGitignore?: () => void;
 }
 
+/** 「봤음」 표시를 다는 목록(main 대비 변경)에서만 준다. */
+export interface FileReviewMenuAction {
+  viewed: boolean;
+  onToggle: () => void;
+}
+
 interface FileContextMenuProps {
   /** 파일이 든 저장소(워크트리) 경로. */
   repoPath: string;
@@ -24,6 +30,7 @@ interface FileContextMenuProps {
   exists?: boolean;
   /** 작업 중인 변경 목록에서 열었을 때만 준다. 커밋·main 대비 목록은 읽기 전용이다. */
   working?: WorkingFileMenuActions;
+  review?: FileReviewMenuAction;
   position: { x: number; y: number };
   onClose: () => void;
 }
@@ -37,6 +44,7 @@ export function FileContextMenu({
   filePath,
   exists = true,
   working,
+  review,
   position,
   onClose,
 }: FileContextMenuProps) {
@@ -45,6 +53,17 @@ export function FileContextMenu({
   const icon = "w-3.5 h-3.5";
 
   const sections: ContextMenuSection[] = [];
+  if (review) {
+    sections.push({
+      items: [
+        {
+          label: review.viewed ? t("fileReview.unmarkViewed") : t("fileReview.markViewed"),
+          icon: review.viewed ? <Square className={icon} /> : <SquareCheck className={icon} />,
+          onClick: review.onToggle,
+        },
+      ],
+    });
+  }
   if (working) {
     sections.push({
       items: [
