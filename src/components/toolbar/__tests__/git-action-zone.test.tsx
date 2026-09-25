@@ -36,13 +36,6 @@ vi.mock("@/api/queries", () => ({
   invalidateAfterSync: () => Promise.resolve(),
 }));
 vi.mock("@/components/toolbar/AutoSyncHint", () => ({ AutoSyncHint: () => null }));
-// 기존 창은 그대로 쓴다. 여기서는 어느 창이 열리는지만 본다.
-vi.mock("@/components/stash/StashSaveDialog", () => ({
-  StashSaveDialog: () => <div>stash-save-dialog</div>,
-}));
-vi.mock("@/components/toolbar/MergeDialog", () => ({
-  MergeDialog: ({ currentBranch }: { currentBranch: string }) => <div>merge-dialog:{currentBranch}</div>,
-}));
 
 import { useRepositoryStore } from "@/stores/repository";
 import { makeRepo } from "@/lib/__tests__/repo-tree-fixtures";
@@ -90,11 +83,15 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe("GitActionZone — repository mode", () => {
-  it("shows the ahead count on Push and the stash count on Stash", () => {
-    data.stashes = [{}, {}];
+  it("shows the ahead count on Push", () => {
     renderZone(<GitActionZone mode="repo" />);
     expect(screen.getByRole("button", { name: "Push — 19" })).toHaveProperty("disabled", false);
-    expect(screen.getByRole("button", { name: "Stash — 2" })).toBeTruthy();
+  });
+
+  it("has no Merge or Stash button (the branch panel, stash tab and right-click menus have them)", () => {
+    renderZone(<GitActionZone mode="repo" />);
+    expect(screen.queryByRole("button", { name: /^Merge/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Stash/ })).toBeNull();
   });
 
   it("counts commits on no remote and says Publish before the branch has an upstream", () => {
@@ -126,28 +123,21 @@ describe("GitActionZone — repository mode", () => {
     expect(commands.gitPush).not.toHaveBeenCalled();
   });
 
-  it("opens the branch panel, the merge dialog, the stash dialog and the terminal", async () => {
+  it("opens the branch panel and the terminal", async () => {
     renderZone(<GitActionZone mode="repo" />);
 
     // W5-T3의 브랜치 패널이 들어오기 전까지는 툴바의 브랜치 목록을 연다.
     fireEvent.click(screen.getByRole("button", { name: "Branch" }));
     expect(dropdown.toggle).toHaveBeenCalledWith("branch");
 
-    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
-    expect(screen.getByText("merge-dialog:feat/x")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Stash" }));
-    expect(screen.getByText("stash-save-dialog")).toBeTruthy();
-
     fireEvent.click(screen.getByRole("button", { name: "Open in Terminal" }));
     await waitFor(() => expect(commands.openInTerminal).toHaveBeenCalledWith(repo.path));
   });
 
-  it("turns Merge, Pull and Push off on a detached HEAD", () => {
+  it("turns Pull and Push off on a detached HEAD", () => {
     data.detached = true;
     data.branches = [];
     renderZone(<GitActionZone mode="repo" />);
-    expect(screen.getByRole("button", { name: /^Merge/ })).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "Pull" })).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "Push" })).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: /^Fetch —/ })).toHaveProperty("disabled", false);
@@ -171,26 +161,6 @@ describe("GitActionZone — menus and disabled reasons", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fetch options" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Fetch now/ }));
     await waitFor(() => expect(commands.gitFetch).toHaveBeenCalledWith(repo.path, "acc-1"));
-  });
-
-  it("explains a disabled Merge in a repository with no commits yet, not as a detached HEAD", () => {
-    // git init 직후: 브랜치 목록이 비어 있고 HEAD는 분리되지 않았다(unborn).
-    data.branches = [];
-    renderZone(<GitActionZone mode="repo" />);
-    const merge = screen.getByRole("button", { name: /^Merge/ });
-    expect(merge).toHaveProperty("disabled", true);
-    expect(merge.getAttribute("aria-label")).toBe(
-      "Merge — There is no current branch yet. Make the first commit or switch to a branch.",
-    );
-    expect(merge.getAttribute("aria-label")).not.toMatch(/detached/);
-  });
-
-  it("gives no Merge reason while the branch list is still loading", () => {
-    data.branches = [];
-    data.branchesLoading = true;
-    renderZone(<GitActionZone mode="repo" />);
-    const merge = screen.getByRole("button", { name: "Merge" });
-    expect(merge).toHaveProperty("disabled", true);
   });
 });
 
@@ -238,9 +208,9 @@ describe("GitActionZone — workspace mode", () => {
     expect(screen.getByRole("button", { name: "Fetch" })).toBeTruthy();
   });
 
-  it("keeps branch, Merge, Stash and the terminal off", () => {
+  it("keeps branch and the terminal off", () => {
     renderZone(<GitActionZone mode="workspace" paths={paths} />);
-    for (const label of ["Branch", "Merge", "Stash", "Open in Terminal"]) {
+    for (const label of ["Branch", "Open in Terminal"]) {
       expect(screen.getByRole("button", { name: `${label} — Pick a repository` })).toHaveProperty("disabled", true);
     }
   });

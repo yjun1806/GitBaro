@@ -929,17 +929,12 @@
     "forcePush": "Force push…",
     "forcePushDesc": "Overwrite the remote branch after you confirm the command",
     "branch": "Branch",
-    "merge": "Merge",
-    "stash": "Stash",
     "terminal": "Open in Terminal",
     "terminalFailed": "Couldn't open Terminal: {{error}}",
     "mergeTitle": "Merge into {{branch}}",
-    "mergePick": "Pick the branch to bring into the current branch.",
-    "mergePickPlaceholder": "Choose a branch",
     "close": "Close",
     "fetchOptions": "Fetch options",
-    "fetchNow": "Fetch now",
-    "mergeNoBranch": "There is no current branch yet. Make the first commit or switch to a branch."
+    "fetchNow": "Fetch now"
   },
   "multiRepoRemote": {
     "title": {
