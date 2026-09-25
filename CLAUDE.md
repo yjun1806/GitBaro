@@ -19,15 +19,14 @@ GitBaro/
 │   │   ├── commit/                # Commit panel & message input
 │   │   ├── conflict/              # Merge conflict banner
 │   │   ├── diff/                  # Diff viewer, image diff (swipe/onion/two-up)
-│   │   ├── history/               # Commit timeline, detail, branch compare
-│   │   ├── layout/                # MainLayout, Sidebar, ContentArea, StatusBar
-│   │   ├── pr/                    # Pull request status badge
+│   │   ├── history/               # Commit detail, merge panel, commit dialogs
+│   │   ├── layout/                # MainLayout, MainColumn, ContentArea, activity log panel
 │   │   ├── repository/            # Repo list, cards, clone dialog
 │   │   ├── settings/              # Settings panel, theme selector
 │   │   ├── toolbar/               # Toolbar (branch zone, account zone, sync zone)
 │   │   ├── ui/                    # Reusable primitives (Select, ContextMenu, Combobox)
 │   │   ├── welcome/               # First-launch welcome screen
-│   │   └── worktree/              # Worktree create dialog & preview banner
+│   │   └── worktree/              # Worktree create dialog, panel, chips
 │   ├── stores/                    # Zustand stores
 │   │   ├── account.ts             # GitHub accounts
 │   │   ├── repository.ts          # Repository list & active repo
@@ -69,7 +68,7 @@ GitBaro/
 │   │   │   ├── settings.rs        # app settings, theme, editor/terminal/AI-CLI detection & launch
 │   │   │   ├── watch.rs           # start/stop FS watcher for the active repo (emits fs:change)
 │   │   │   ├── actions.rs         # GitHub Actions workflow runs & jobs
-│   │   │   └── worktree.rs        # worktree add/remove/preview
+│   │   │   └── worktree.rs        # worktree add/remove
 │   │   ├── github/                # GitHub REST API client (reqwest)
 │   │   │   ├── client.rs          # HTTP client, auth headers, path-segment validation
 │   │   │   ├── issue.rs           # Issues API (client ready; not yet wired to a command)
