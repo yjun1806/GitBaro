@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { clsx } from "clsx";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
+import { useHasMaximizedFiles } from "@/components/layout/maximized-files";
 import { FileStatusBadge } from "@/lib/file-status";
 import type { FileStatus } from "@/types";
 import type { DiffViewMode } from "./view-mode";
@@ -90,9 +91,36 @@ export function DiffHeader({
             </button>
           ))}
         </div>
+        {maximizable && <FileListButton />}
         {maximizable && <MaximizeButton />}
       </div>
     </div>
+  );
+}
+
+const ICON_BUTTON =
+  "flex items-center justify-center w-6 h-6 rounded-(--radius-chip) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors";
+
+/** 크게 보는 동안 diff 왼쪽 파일 목록을 접고 편다. diff를 연 목록이 있을 때만 나타난다. */
+function FileListButton() {
+  const { t } = useTranslation();
+  const maximized = useUIStore((s) => s.isDiffMaximized);
+  const open = useUIStore((s) => s.maximizedFileListOpen);
+  const setOpen = useUIStore((s) => s.setMaximizedFileListOpen);
+  const hasFiles = useHasMaximizedFiles();
+  if (!maximized || !hasFiles) return null;
+  const label = open ? t("diff.hideFileList") : t("diff.showFileList");
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen(!open)}
+      aria-label={label}
+      aria-pressed={open}
+      title={label}
+      className={ICON_BUTTON}
+    >
+      {open ? <PanelLeftClose className="w-3.5 h-3.5" /> : <PanelLeftOpen className="w-3.5 h-3.5" />}
+    </button>
   );
 }
 
@@ -109,7 +137,7 @@ function MaximizeButton() {
       aria-label={label}
       aria-pressed={maximized}
       title={label}
-      className="flex items-center justify-center w-6 h-6 rounded-(--radius-chip) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+      className={ICON_BUTTON}
     >
       {maximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
     </button>

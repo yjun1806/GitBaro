@@ -432,7 +432,12 @@
     "expandDown": "Expand down",
     "expandAll": "Expand all {{lines}} hidden lines",
     "maximize": "Maximize diff (Esc to restore)",
-    "restoreSize": "Restore size"
+    "restoreSize": "Restore size",
+    "fileList": "Files",
+    "fileListCount_one": "{{count}} file",
+    "fileListCount_other": "{{count}} files",
+    "hideFileList": "Hide file list",
+    "showFileList": "Show file list"
   },
   "mdDiff": {
     "rendering": "Computing document diff...",

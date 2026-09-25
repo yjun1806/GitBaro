@@ -432,7 +432,12 @@
     "expandDown": "아래로 펼치기",
     "expandAll": "접힌 {{lines}}줄 모두 펼치기",
     "maximize": "diff 크게 보기(Esc로 되돌리기)",
-    "restoreSize": "원래 크기로"
+    "restoreSize": "원래 크기로",
+    "fileList": "파일 목록",
+    "fileListCount_one": "파일 {{count}}개",
+    "fileListCount_other": "파일 {{count}}개",
+    "hideFileList": "파일 목록 숨기기",
+    "showFileList": "파일 목록 보기"
   },
   "mdDiff": {
     "rendering": "문서 diff 계산 중...",

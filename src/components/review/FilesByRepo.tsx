@@ -8,6 +8,7 @@ import { useChangesVsDefaultMany, useFileDiffsVsDefault } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { EmptyState } from "@/components/layout/ContentArea";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
+import type { MaximizedFiles } from "@/components/layout/maximized-files";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import { RepoLaneTag } from "@/components/graph/CommitGraph";
 import { normalizePath } from "@/components/graph/graph-model";
@@ -203,6 +204,28 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
     setOpenLink({ from: { repoPath, filePath: file.path }, link });
   };
 
+  // 크게 보는 diff 옆 파일 목록. 이 목록과 같은 순서·같은 선택을 쓴다(저장소가 여럿이면 저장소별로 묶는다).
+  const maximizedEntries = repos.flatMap((repo) =>
+    groupFiles(changesByPath.get(repo.path)?.files ?? [], groupBy).flatMap((group) =>
+      group.files.map((file) => ({ repo, file })),
+    ),
+  );
+  const maximizedFiles: MaximizedFiles = {
+    items: maximizedEntries.map(({ repo, file }) => ({
+      key: fileKey(repo.path, file.path),
+      path: file.path,
+      status: file.status,
+      additions: file.isBinary ? null : file.additions,
+      deletions: file.isBinary ? null : file.deletions,
+      group: repos.length > 1 ? repo.name : undefined,
+    })),
+    selectedKey: selected ? fileKey(selected.repoPath, selected.filePath) : null,
+    onSelect: (key) => {
+      const hit = maximizedEntries.find(({ repo, file }) => fileKey(repo.path, file.path) === key);
+      if (hit) handleSelect(hit.repo.path, hit.file);
+    },
+  };
+
   const nameOf = (path: string) => repos.find((r) => r.path === path)?.name ?? path;
   const linksScanned = scanTargets.length > 0;
   const linksTruncated = repos.length >= 2 && eligibleCount > LINK_SCAN_FILE_LIMIT;
@@ -300,7 +323,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
   );
 
   return (
-    <ListDiffSplit variant="cards" list={list} detail={detail}>
+    <ListDiffSplit variant="cards" list={list} detail={detail} files={maximizedFiles}>
       {/* 다른 화면(ContentArea, FollowPanel)과 달리 이 탭에는 전환 덮개가 없었다(W7 리뷰) —
           브랜치 전환 중에도 목록·diff를 그대로 누를 수 있었다. */}
       <SwitchingOverlay />

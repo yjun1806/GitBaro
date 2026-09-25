@@ -99,6 +99,7 @@ describe("ui store after the two-column shell", () => {
       "diffLineMode",
       "fileListWidth",
       "graphPanelRatio",
+      "maximizedFileListOpen",
       "railMode",
       "reviewBasis",
       "sidebarWidth",
@@ -168,5 +169,44 @@ describe("sanitizePersistedUI — review basis", () => {
     const merged = { ...useUIStore.getInitialState(), ...sanitizePersistedUI(saved) };
     expect(merged.reviewBasis).toBe("unpushed");
     expect(merged).toMatchObject(saved);
+  });
+});
+
+describe("maximized diff file list", () => {
+  it("is open by default and remembered across restarts", () => {
+    expect(useUIStore.getInitialState().maximizedFileListOpen).toBe(true);
+    useUIStore.getState().setMaximizedFileListOpen(false);
+    const partialize = useUIStore.persist.getOptions().partialize!;
+    expect(partialize(useUIStore.getState())).toMatchObject({ maximizedFileListOpen: false });
+    useUIStore.getState().setMaximizedFileListOpen(true);
+  });
+
+  it("keeps a saved choice and drops a malformed one", () => {
+    expect(sanitizePersistedUI({ maximizedFileListOpen: false })).toEqual({ maximizedFileListOpen: false });
+    expect(sanitizePersistedUI({ maximizedFileListOpen: "no" })).toEqual({});
+  });
+
+  it("restores the choice without touching other saved fields", async () => {
+    useUIStore.setState({ railMode: "expanded", maximizedFileListOpen: true });
+    localStorage.setItem(
+      "gitbaro-ui",
+      JSON.stringify({
+        state: { railMode: "hover", sidebarWidth: 330, reviewBasis: "unseen", maximizedFileListOpen: false },
+        version: 0,
+      }),
+    );
+    await useUIStore.persist.rehydrate();
+    const state = useUIStore.getState();
+    expect(state.maximizedFileListOpen).toBe(false);
+    expect(state).toMatchObject({ railMode: "hover", sidebarWidth: 330, reviewBasis: "unseen" });
+    localStorage.removeItem("gitbaro-ui");
+    useUIStore.setState({ maximizedFileListOpen: true, railMode: "expanded", reviewBasis: "unpushed" });
+  });
+
+  it("falls back to open for users who saved before the field existed", () => {
+    const merge = useUIStore.persist.getOptions().merge!;
+    const merged = merge({ railMode: "collapsed", sidebarWidth: 300 }, useUIStore.getInitialState());
+    expect(merged.maximizedFileListOpen).toBe(true);
+    expect(merged.railMode).toBe("collapsed");
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FileText, GitCommit, GitCompare, Archive, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
@@ -22,7 +22,9 @@ import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import { FollowPanel, FollowRepoFooter } from "@/components/live/FollowPanel";
 import { useFollowStore } from "@/stores/follow";
 import { normalizePath } from "@/components/graph/graph-model";
+import { parseWorkingFileKey, workingFileItems, workingFileKey } from "@/components/commit/working-files";
 import { ListDiffSplit } from "./ListDiffSplit";
+import type { MaximizedFiles } from "./maximized-files";
 import type { FileStatus } from "@/types";
 
 /* --- Empty / Placeholder States --- */
@@ -109,6 +111,32 @@ function CommitDetailView({ commitId }: { commitId: string }) {
   );
 }
 
+/** 크게 보는 diff 옆에 둘 작업 중인 변경 목록. 스테이징 목록과 같은 상태 조회·선택을 쓴다. */
+function useWorkingMaximizedFiles(): MaximizedFiles {
+  const { t } = useTranslation();
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const { data: statusEntries } = useStatus(activeRepoPath);
+  const selectedFile = useSelectionStore((s) => s.selectedFile);
+  const selectedFileStaged = useSelectionStore((s) => s.selectedFileStaged);
+  const selectFile = useSelectionStore((s) => s.selectFile);
+  const items = useMemo(
+    () =>
+      workingFileItems(statusEntries ?? [], {
+        staged: t("commit.stagedChanges"),
+        unstaged: t("commit.unstaged"),
+      }),
+    [statusEntries, t],
+  );
+  return {
+    items,
+    selectedKey: selectedFile === null ? null : workingFileKey(selectedFile, selectedFileStaged),
+    onSelect: (key) => {
+      const { path, staged } = parseWorkingFileKey(key);
+      selectFile(path, staged);
+    },
+  };
+}
+
 /* --- Card --- */
 
 /** A panel card from the design: panel colour, 14px corners, panel shadow. */
@@ -154,6 +182,7 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const { data: mergeState } = useMergeState(activeRepoPath);
   const merging = mergeState !== undefined && mergeState !== null;
+  const workingFiles = useWorkingMaximizedFiles();
 
   // 병합·pull·되돌리기 등이 충돌로 멈추면 따라가기를 끝낸다. 충돌을 푸는 배너와 스테이징
   // 목록(ChangesView)이 보여야 한다 — 그 흐름들은 「changes」 탭으로 옮기기만 하는데, 이미
@@ -184,6 +213,7 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
         variant="cards"
         list={<ChangesView />}
         listOverlay={<SwitchingOverlay />}
+        files={workingFiles}
         detail={
           selectedFile ? (
             <DiffContent filePath={selectedFile} staged={selectedFileStaged} />

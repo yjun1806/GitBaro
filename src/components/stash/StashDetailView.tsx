@@ -8,7 +8,14 @@ import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
-import type { StashFileSummary } from "@/types";
+import type { FileStatus, StashFileSummary } from "@/types";
+
+const FILE_STATUSES: readonly string[] = ["modified", "added", "deleted", "renamed", "copied", "untracked", "ignored", "conflicted"];
+
+/** 스태시 요약의 상태 문자열. 모르는 값은 「수정」으로 본다. */
+function toFileStatus(status: string): FileStatus {
+  return FILE_STATUSES.includes(status) ? (status as FileStatus) : "modified";
+}
 
 interface StashDetailViewProps {
   stashIndex: number;
@@ -194,6 +201,17 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
       {/* Content: file list + diff */}
       <ListDiffSplit
         variant="inline"
+        files={{
+          items: files.map((f) => ({
+            key: f.path,
+            path: f.path,
+            status: toFileStatus(f.status),
+            additions: f.insertions,
+            deletions: f.deletions,
+          })),
+          selectedKey: selectedFilePath,
+          onSelect: setSelectedFilePath,
+        }}
         list={
           <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
           <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">

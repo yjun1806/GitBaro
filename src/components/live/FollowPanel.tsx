@@ -28,6 +28,7 @@ import {
 } from "@/components/worktree/OverlapBadge";
 import { SideBySideDiff } from "@/components/worktree/SideBySideDiff";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
+import type { MaximizedFiles } from "@/components/layout/maximized-files";
 import type { ActivityEvent, DiffOutput, WipFile } from "@/types";
 
 /** `registerWatchPaths`에 쓰는 이 화면의 key. 감시 대상 목록에서 맨 앞에 온다. */
@@ -443,6 +444,19 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
     handlePause();
   };
 
+  // 크게 보는 diff 옆 파일 목록. 같은 목록·선택을 쓴다(고르면 따라가기가 멈추는 것도 같다).
+  const maximizedFiles: MaximizedFiles = {
+    items: list.map((f) => ({
+      key: f.path,
+      path: f.path,
+      status: f.status,
+      additions: f.insertions,
+      deletions: f.deletions,
+    })),
+    selectedKey: shown?.path ?? null,
+    onSelect: pickFile,
+  };
+
   const listPane = (
     <>
       {switcher === undefined ? variant === "cards" ? <RepoWorkSwitcher mode="working" /> : null : switcher}
@@ -597,6 +611,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
         data-testid="follow-panel"
         list={listPane}
         listOverlay={<SwitchingOverlay />}
+        files={maximizedFiles}
         detail={diffPane}
         detailOverlay={<SwitchingOverlay />}
       >
@@ -605,7 +620,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
     );
   }
   return (
-    <ListDiffSplit variant="inline" data-testid="follow-panel" list={listPane} detail={diffPane}>
+    <ListDiffSplit variant="inline" data-testid="follow-panel" list={listPane} detail={diffPane} files={maximizedFiles}>
       {sideBySide}
     </ListDiffSplit>
   );

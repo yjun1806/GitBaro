@@ -371,6 +371,11 @@ export function CommitDetail({
   return (
     <ListDiffSplit
       variant="inline"
+      files={{
+        items: changedFiles.map((f) => ({ key: f.path, path: f.path, status: f.status })),
+        selectedKey: selectedPath,
+        onSelect: handleFileClick,
+      }}
       list={
         <>
           {switcher === undefined ? <RepoWorkSwitcher mode="commit" /> : switcher}
