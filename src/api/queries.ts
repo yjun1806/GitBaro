@@ -944,7 +944,7 @@ export function useChangesVsDefaultMany(paths: readonly string[], scopes?: reado
   });
 }
 
-/** 파일 여러 개의 main 대비 diff. 연결된 변경을 찾을 때 추가된 줄을 읽는 데 쓴다. 결과는 `files` 순서다. */
+/** 파일 여러 개의 main 대비 diff. 결과는 `files` 순서다. */
 export function useFileDiffsVsDefault(
   files: readonly { repoPath: string; filePath: string; oldPath: string | null; scope?: ChangesScope | null }[],
 ) {

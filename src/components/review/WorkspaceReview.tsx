@@ -39,7 +39,7 @@ export interface WorkspaceReviewProps {
 /**
  * 워크스페이스를 고른 상태의 메인 칸(D1). 제목, 여러 저장소 커밋 그래프(저장소별 레인),
  * 아래에 고른 커밋이나 커밋하지 않은 변경의 파일 목록과 diff.
- * 「main 대비 변경」 탭(D7)을 고르면 그래프 대신 저장소별 main 대비 변경 목록과 연결된 변경을 보여 준다.
+ * 「main 대비 변경」 탭(D7)을 고르면 그래프 대신 저장소별 main 대비 변경 목록을 보여 준다.
  * 조용한 저장소(main에 있고 새 커밋·커밋하지 않은 변경이 없음)는 접고 「모두 보기」로 펼친다.
  */
 export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
