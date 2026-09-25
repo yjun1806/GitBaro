@@ -1,6 +1,7 @@
 import { fuzzyFilter } from "@/lib/fuzzy-search";
 import type { BranchInfo, WorktreeInfo } from "@/types";
 import { remoteShortName } from "./branch-name";
+import { trimTrailingSlash } from "@/lib/utils";
 
 /**
  * 브랜치 패널(D6) 행의 주 동작.
@@ -33,10 +34,6 @@ export interface BranchPanelSections {
   remote: BranchPanelRow[];
 }
 
-function trimSlash(path: string): string {
-  return path.length > 1 ? path.replace(/\/+$/, "") : path;
-}
-
 const byName = (a: BranchPanelRow, b: BranchPanelRow) => a.branch.name.localeCompare(b.branch.name);
 const byRecent = (a: BranchPanelRow, b: BranchPanelRow) =>
   (b.branch.lastCommitTime ?? 0) - (a.branch.lastCommitTime ?? 0) || byName(a, b);
@@ -60,7 +57,7 @@ export function classifyBranches(
   query = "",
   { sortBy = "recent", recentNames = [] }: { sortBy?: BranchPanelSort; recentNames?: readonly string[] } = {},
 ): BranchPanelSections {
-  const active = activePath ? trimSlash(activePath) : null;
+  const active = activePath ? trimTrailingSlash(activePath) : null;
   const worktreeByBranch = new Map<string, WorktreeInfo>();
   for (const wt of worktrees) {
     if (wt.branch && !wt.isBare && !worktreeByBranch.has(wt.branch)) worktreeByBranch.set(wt.branch, wt);
@@ -78,7 +75,7 @@ export function classifyBranches(
       continue;
     }
     const worktree = worktreeByBranch.get(branch.name) ?? null;
-    const elsewhere = worktree !== null && trimSlash(worktree.path) !== active;
+    const elsewhere = worktree !== null && trimTrailingSlash(worktree.path) !== active;
     const action: BranchRowAction = branch.isHead ? "current" : elsewhere ? "openWorktree" : "switch";
     if (branch.isHead || worktree !== null) inWorktree.push({ branch, section: "inWorktree", worktree, action });
     else local.push({ branch, section: "local", worktree, action });

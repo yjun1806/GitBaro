@@ -1,3 +1,5 @@
+import { trimTrailingSlash } from "@/lib/utils";
+
 /**
  * 워크스페이스 리뷰 화면의 판단 규칙(순수 함수).
  */
@@ -52,12 +54,8 @@ export interface ReviewRepoPaths {
   worktreePaths: readonly string[];
 }
 
-function trimSlash(path: string): string {
-  return path.length > 1 ? path.replace(/\/+$/, "") : path;
-}
-
 function covers(root: string, path: string): boolean {
-  const r = trimSlash(root);
+  const r = trimTrailingSlash(root);
   return path === r || path.startsWith(`${r}/`);
 }
 
@@ -73,10 +71,10 @@ export function dedupeReviewMembers<T extends { path: string; worktrees: readonl
   const claimed = new Set<string>();
   const out: T[] = [];
   for (const member of members) {
-    if (claimed.has(trimSlash(member.path))) continue;
-    const worktrees = member.worktrees.filter((w) => !claimed.has(trimSlash(w.path)));
-    worktrees.forEach((w) => claimed.add(trimSlash(w.path)));
-    claimed.add(trimSlash(member.path));
+    if (claimed.has(trimTrailingSlash(member.path))) continue;
+    const worktrees = member.worktrees.filter((w) => !claimed.has(trimTrailingSlash(w.path)));
+    worktrees.forEach((w) => claimed.add(trimTrailingSlash(w.path)));
+    claimed.add(trimTrailingSlash(member.path));
     out.push({ ...member, worktrees });
   }
   return out;
@@ -95,12 +93,12 @@ export interface ActivityTarget {
  * 잘못 가지 않게). 워크스페이스 밖의 경로면 null.
  */
 export function activityTargetOf(path: string, repos: readonly ReviewRepoPaths[]): ActivityTarget | null {
-  const target = trimSlash(path);
+  const target = trimTrailingSlash(path);
   let best: (ActivityTarget & { depth: number }) | null = null;
   for (const repo of repos) {
     for (const root of [repo.repoPath, ...repo.worktreePaths]) {
       if (!covers(root, target)) continue;
-      const depth = trimSlash(root).length;
+      const depth = trimTrailingSlash(root).length;
       if (!best || depth > best.depth) best = { repoPath: repo.repoPath, root, depth };
     }
   }
@@ -122,6 +120,6 @@ export function activityInvalidationKeys(root: string): unknown[][] {
 
 /** 경로의 마지막 부분(저장소·워크트리 이름). */
 export function baseName(path: string): string {
-  const trimmed = trimSlash(path);
+  const trimmed = trimTrailingSlash(path);
   return trimmed.slice(trimmed.lastIndexOf("/") + 1) || path;
 }

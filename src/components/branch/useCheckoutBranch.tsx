@@ -9,7 +9,7 @@ import { useHistoryViewStore } from "@/stores/history-view";
 import { useBranches, useStatus, useWorktrees } from "@/api/queries";
 import { stashPopByOid, stashPush, switchBranch } from "@/api/commands";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
-import { getErrorMessage } from "@/lib/utils";
+import { getErrorMessage, trimTrailingSlash } from "@/lib/utils";
 import { selectionAfterStashPushed } from "@/lib/stash-selection";
 import { runWithStashedChanges } from "@/components/toolbar/run-with-stashed-changes";
 import type { WorktreeInfo } from "@/types";
@@ -32,10 +32,6 @@ const CHECKOUT_QUERY_KEYS = [
   "defaultBranches",
 ];
 
-function trimSlash(path: string): string {
-  return path.length > 1 ? path.replace(/\/+$/, "") : path;
-}
-
 /**
  * `branchName`(로컬 이름, 또는 로컬이 없는 원격 이름)을 체크아웃한 다른 워크트리.
  * git은 그 브랜치를 두 곳에서 체크아웃하지 못하므로 그 워크트리로 이동해야 한다.
@@ -45,9 +41,9 @@ export function worktreeHolding(
   worktrees: readonly WorktreeInfo[],
   activePath: string | null,
 ): WorktreeInfo | null {
-  const active = activePath ? trimSlash(activePath) : null;
+  const active = activePath ? trimTrailingSlash(activePath) : null;
   return (
-    worktrees.find((w) => w.branch === branchName && !w.isBare && trimSlash(w.path) !== active) ?? null
+    worktrees.find((w) => w.branch === branchName && !w.isBare && trimTrailingSlash(w.path) !== active) ?? null
   );
 }
 

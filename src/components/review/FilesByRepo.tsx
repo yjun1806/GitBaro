@@ -13,10 +13,9 @@ import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { useFileMenu } from "@/components/commit/useFileMenu";
 import { useFolderMenu } from "@/components/ui/useFolderMenu";
-import { normalizePath } from "@/components/graph/graph-model";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
 import { statusTextColors } from "@/lib/file-status";
-import { cn, getErrorMessage } from "@/lib/utils";
+import { cn, getErrorMessage, trimTrailingSlash } from "@/lib/utils";
 import type { ActivityEvent, BranchChangedFile, BranchChanges, ChangesScope, FileStatus } from "@/types";
 import type { FilesGroupBy } from "./files-view";
 import { changesSummary, tabBaseName, useChangesScopes, useCompareBaseStore } from "./compare-base";
@@ -434,20 +433,20 @@ function SelectedFileDiff({ file }: { file: SelectedFile }) {
  */
 function useChangesActivityRefresh(paths: readonly string[]): void {
   const queryClient = useQueryClient();
-  const key = paths.map(normalizePath).join("\n");
+  const key = paths.map(trimTrailingSlash).join("\n");
   useEffect(() => {
     const watched = new Set(key.split("\n").filter(Boolean));
     let mounted = true;
     let unlisten: (() => void) | undefined;
     listen<ActivityEvent>("repo:activity", (event) => {
       if (!mounted) return;
-      const path = normalizePath(event.payload.path);
+      const path = trimTrailingSlash(event.payload.path);
       if (!watched.has(path)) return;
       void queryClient.invalidateQueries({
         predicate: (q) =>
           (q.queryKey[0] === "changesVsDefault" || q.queryKey[0] === "fileDiffVsDefault") &&
           typeof q.queryKey[1] === "string" &&
-          normalizePath(q.queryKey[1]) === path,
+          trimTrailingSlash(q.queryKey[1]) === path,
       });
     })
       .then((fn) => {

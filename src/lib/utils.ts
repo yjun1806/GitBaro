@@ -137,8 +137,12 @@ export function getFileName(path: string): string {
  * Used to tell when adding a folder found a repository above it.
  */
 export function isSameFolder(a: string, b: string): boolean {
-  const trim = (p: string) => p.replace(/\/+$/, "") || "/";
-  return trim(a) === trim(b);
+  return trimTrailingSlash(a) === trimTrailingSlash(b);
+}
+
+/** 경로 비교용: 끝의 `/`를 뗀다. 루트(`/`, `//`)는 `/`로 둔다. */
+export function trimTrailingSlash(path: string): string {
+  return path.replace(/\/+$/, "") || "/";
 }
 
 /** Whether `error` is a backend `AppError` of the given `type`. */

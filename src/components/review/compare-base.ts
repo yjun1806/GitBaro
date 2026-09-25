@@ -2,9 +2,9 @@ import { useMemo } from "react";
 import type { TFunction } from "i18next";
 import { create } from "zustand";
 import { useRepositoryStore } from "@/stores/repository";
-import { normalizePath } from "@/components/graph/graph-model";
 import { useHistoryViewStore, viewTargetFor } from "@/stores/history-view";
 import type { BranchChanges, ChangesScope } from "@/types";
+import { trimTrailingSlash } from "@/lib/utils";
 
 interface CompareBaseState {
   /** 저장소(워크트리) 경로 → 사용자가 고른 비교 기준 브랜치. 없으면 기본 브랜치. */
@@ -20,7 +20,7 @@ export const useCompareBaseStore = create<CompareBaseState>()((set) => ({
   baseByPath: {},
   setBase: (path, base) =>
     set((state) => {
-      const key = normalizePath(path);
+      const key = trimTrailingSlash(path);
       const rest = Object.fromEntries(Object.entries(state.baseByPath).filter(([p]) => p !== key));
       return { baseByPath: base ? { ...rest, [key]: base } : rest };
     }),
@@ -36,11 +36,11 @@ export function useChangesScopes(paths: readonly string[]): (ChangesScope | null
   // 체크아웃한 브랜치를 보게 된 보기는 그래프 쪽(`useHistoryView`)이 곧 지운다.
   const target = useHistoryViewStore((s) => viewTargetFor(s, activeRepoPath));
   const viewed = target?.kind === "ref" ? target.name : null;
-  const active = activeRepoPath ? normalizePath(activeRepoPath) : null;
+  const active = activeRepoPath ? trimTrailingSlash(activeRepoPath) : null;
   return useMemo(
     () =>
       paths.map((path) => {
-        const key = normalizePath(path);
+        const key = trimTrailingSlash(path);
         const base = baseByPath[key] ?? null;
         const scopeTarget = key === active ? viewed : null;
         return base || scopeTarget ? { base, target: scopeTarget } : null;

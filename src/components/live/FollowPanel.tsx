@@ -16,9 +16,8 @@ import { FOLLOW_KEY, useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { diffDelta, type DiffDelta } from "@/lib/diff-delta";
 import { FileStatusBadge } from "@/lib/file-status";
-import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
+import { cn, formatRelativeTime, getErrorMessage, trimTrailingSlash } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
-import { normalizePath } from "@/components/graph/graph-model";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import {
   OverlapBanner,
@@ -47,7 +46,7 @@ const BASELINE_LIMIT = 30;
 const TOAST_MS = 8_000;
 
 function samePath(a: string, b: string): boolean {
-  return normalizePath(a) === normalizePath(b);
+  return trimTrailingSlash(a) === trimTrailingSlash(b);
 }
 
 /** 「따라가는 중」·「따라가기 멈춤」 알약. WIP 행과 파일 목록 머리에 붙는다. */

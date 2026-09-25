@@ -6,8 +6,8 @@ import { useReviewStatus } from "@/hooks/useReviewStatus";
 import { useCurrentBranch } from "@/hooks/useCurrentBranch";
 import { useRepoSyncStatuses, useStatus } from "@/api/queries";
 import { syncStatusPaths } from "@/components/sidebar/tree-model";
-import { countChangedFiles } from "@/lib/utils";
-import { normalizePath, orderWipRows, type GraphWip } from "./graph-model";
+import { countChangedFiles, trimTrailingSlash } from "@/lib/utils";
+import { orderWipRows, type GraphWip } from "./graph-model";
 
 /** 그래프가 보이는 워크트리를 활동 감시 대상으로 더할 때 쓰는 키. */
 export const GRAPH_WATCH_KEY = "graph";
@@ -49,7 +49,7 @@ export function useGraphReview(): GraphReview {
   const statusPaths = useMemo(() => syncStatusPaths(repoPaths, review.repos), [repoPaths, review.repos]);
   const { data: syncByPath } = useRepoSyncStatuses(statusPaths);
 
-  const currentKey = activeRepoPath ? normalizePath(activeRepoPath) : null;
+  const currentKey = activeRepoPath ? trimTrailingSlash(activeRepoPath) : null;
   // 일부만 스테이지한 파일이 두 줄로 나오므로 줄이 아니라 파일 수를 센다.
   const currentCount = statusEntries ? countChangedFiles(statusEntries) : null;
 
@@ -62,7 +62,7 @@ export function useGraphReview(): GraphReview {
       return live === null ? polled : Math.max(polled, live);
     };
     const rows: GraphWip[] = worktrees.map((w) => {
-      const isCurrent = normalizePath(w.path) === currentKey;
+      const isCurrent = trimTrailingSlash(w.path) === currentKey;
       return {
         path: w.path,
         branch: w.branch,
@@ -82,7 +82,7 @@ export function useGraphReview(): GraphReview {
         count: currentCount,
         changedAt: changedAtOf(activeRepoPath),
         isCurrent: true,
-        isMain: ownerPath !== null && normalizePath(ownerPath) === normalizePath(activeRepoPath),
+        isMain: ownerPath !== null && trimTrailingSlash(ownerPath) === trimTrailingSlash(activeRepoPath),
         headOid: null,
       });
     }

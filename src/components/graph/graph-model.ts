@@ -1,4 +1,5 @@
 import { avatarColor } from "@/lib/avatar-color";
+import { trimTrailingSlash } from "@/lib/utils";
 
 /**
  * 커밋 그래프의 화면 계산(순수 함수). 레인 위치는 `@/lib/graph-lanes`가 정하고,
@@ -56,11 +57,6 @@ export interface GraphWip {
   headOid?: string | null;
 }
 
-/** 경로 비교용: 끝의 `/`를 뗀다. */
-export function normalizePath(path: string): string {
-  return path.length > 1 ? path.replace(/\/+$/, "") : path;
-}
-
 /**
  * WIP 행 순서. 다른 워크트리를 위에(메인 먼저, 그다음 경로순), 지금 연 워크트리를 맨 아래에
  * 둔다. 지금 연 워크트리의 WIP 행은 바로 아래 HEAD 커밋과 점선으로 이어진다.
@@ -92,8 +88,8 @@ export function edgesThroughBottom(
  * 남기고, 따라가는 중인 워크트리는 0이 돼도 남긴다(아래 칸이 그 워크트리를 계속 보여 주므로).
  */
 export function visibleWipRows(wips: readonly GraphWip[], followTarget: string | null): GraphWip[] {
-  const followed = followTarget !== null ? normalizePath(followTarget) : null;
-  return wips.filter((w) => w.count !== 0 || normalizePath(w.path) === followed);
+  const followed = followTarget !== null ? trimTrailingSlash(followTarget) : null;
+  return wips.filter((w) => w.count !== 0 || trimTrailingSlash(w.path) === followed);
 }
 
 /**

@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { FolderGit2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useReviewStatusQuery, useSiblingFileDiffs, useWipFilesMany } from "@/api/queries";
-import { normalizePath } from "@/components/graph/graph-model";
 import { worktreeColor } from "@/components/graph/worktree-history";
 import {
   compareLineRanges,
@@ -14,6 +13,7 @@ import {
   type SiblingWorktreeFiles,
 } from "@/lib/worktree-overlap";
 import type { DiffOutput, WipFile } from "@/types";
+import { trimTrailingSlash } from "@/lib/utils";
 
 /** 같은 파일을 함께 고치는 다른 워크트리와, 그쪽 diff를 볼 때 고를 스테이징 쪽. */
 export interface OverlapSibling extends OverlapWorktree {
@@ -49,10 +49,10 @@ export function useWorktreeOverlap(path: string, files: readonly WipFile[]): Wor
   const repoPaths = useMemo(() => repos.map((r) => r.path), [repos]);
   const { data: scan } = useReviewStatusQuery(repoPaths);
 
-  const key = normalizePath(path);
+  const key = trimTrailingSlash(path);
   const siblings = useMemo(() => {
-    const repo = scan?.find((r) => r.worktrees.some((w) => normalizePath(w.path) === key));
-    return repo ? repo.worktrees.filter((w) => normalizePath(w.path) !== key) : [];
+    const repo = scan?.find((r) => r.worktrees.some((w) => trimTrailingSlash(w.path) === key));
+    return repo ? repo.worktrees.filter((w) => trimTrailingSlash(w.path) !== key) : [];
   }, [scan, key]);
   const siblingPaths = useMemo(
     () => (siblings.length > 0 ? siblings.map((s) => s.path) : NO_PATHS),

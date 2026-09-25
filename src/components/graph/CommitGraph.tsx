@@ -24,7 +24,7 @@ import { useCommitActions } from "@/hooks/useCommitActions";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { computeGraphLanes } from "@/lib/graph-lanes";
-import { formatRelativeTime, getErrorMessage, gitHubRepoUrl } from "@/lib/utils";
+import { formatRelativeTime, getErrorMessage, gitHubRepoUrl, trimTrailingSlash } from "@/lib/utils";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { useWipRowMenu } from "./useWipRowMenu";
@@ -48,7 +48,6 @@ import {
   graphColumnWidth,
   laneColor,
   laneX,
-  normalizePath,
   visibleWipRows,
   wipTarget,
   type GraphWip,
@@ -166,7 +165,7 @@ function useFollowModeOf(): (path: string) => FollowMode | null {
   const target = useFollowStore((s) => s.target);
   const mode = useFollowStore((s) => s.mode);
   return useCallback(
-    (path: string) => (target !== null && normalizePath(target) === normalizePath(path) ? mode : null),
+    (path: string) => (target !== null && trimTrailingSlash(target) === trimTrailingSlash(path) ? mode : null),
     [target, mode],
   );
 }
