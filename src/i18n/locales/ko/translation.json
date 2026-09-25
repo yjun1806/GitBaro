@@ -28,7 +28,9 @@
     "fetch": "Fetch origin",
     "push": "Push",
     "pull": "Pull",
-    "accountGroup": "계정과 설정"
+    "accountGroup": "계정과 설정",
+    "placePath": "지금 위치",
+    "branchCrumb": "브랜치 {{branch}}"
   },
   "changes": {
     "title": "Changes",

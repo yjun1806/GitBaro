@@ -6,11 +6,7 @@ import i18n from "@/i18n/config";
 
 // 저장소 전용 영역은 Tauri를 부른다. 이 테스트는 툴바가 어느 영역을 띄우는지만 본다.
 vi.mock("@/components/toolbar/BranchZone", async () => {
-  // 브랜치 버튼(BranchPanelButton)은 실제 것을 쓴다. 왼쪽 브랜치 칸만 가린다.
-  const actual = await vi.importActual<typeof import("@/components/toolbar/BranchZone")>(
-    "@/components/toolbar/BranchZone",
-  );
-  return { ...actual, BranchZone: () => <div>branch-zone</div> };
+  return { BranchZone: () => <div>branch-zone</div> };
 });
 vi.mock("@/components/toolbar/WorktreeZone", () => ({ WorktreeZone: () => <div>worktree-zone</div> }));
 vi.mock("@/components/toolbar/AccountZone", () => ({ AccountZone: () => <div>account-zone</div> }));
@@ -35,7 +31,7 @@ import { makeRepo } from "@/lib/__tests__/repo-tree-fixtures";
 const { ToolbarRoot } = await import("@/components/toolbar/ToolbarRoot");
 
 const xames = makeRepo("xames", "mos");
-const ALL_ACTIONS = ["fetch", "pull", "push", "branch", "editor", "terminal", "finder", "github"];
+const ALL_ACTIONS = ["fetch", "pull", "push", "editor", "terminal", "finder", "github"];
 
 function renderToolbar() {
   return render(
@@ -63,8 +59,11 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe("ToolbarRoot — scope", () => {
-  it("shows the repository zones and the git actions in the mockup order while a repository is picked", () => {
+  it("shows the place path and the git actions in the mockup order while a repository is picked", () => {
     renderToolbar();
+    // 경로 순서: 저장소 › 폴더 › 브랜치
+    const path = screen.getByRole("navigation", { name: "Where you are" });
+    expect(path.textContent).toBe("Xxamesworktree-zonebranch-zone"); // 아바타 글자 X + 이름
     expect(screen.getByText("branch-zone")).toBeTruthy();
     expect(screen.getByText("worktree-zone")).toBeTruthy();
     expect(screen.queryByText("xames-ws")).toBeNull();
@@ -87,7 +86,7 @@ describe("ToolbarRoot — scope", () => {
     for (const label of ["Fetch", "Pull", "Push"]) {
       expect(screen.getByRole("button", { name: label })).toHaveProperty("disabled", false);
     }
-    for (const label of ["Branch", "Open in Terminal"]) {
+    for (const label of ["Open in editor", "Open in Terminal"]) {
       const button = screen.getByRole("button", { name: `${label} — Pick a repository` });
       expect(button).toHaveProperty("disabled", true);
       expect(button.parentElement?.getAttribute("title")).toBe("Pick a repository");
@@ -103,7 +102,7 @@ describe("ToolbarRoot — scope", () => {
       useWorkspaceStore.getState().setActiveWorkspace("w1");
     });
     renderToolbar();
-    // 브랜치 하나와 저장소 열기 묶음의 버튼 넷이 꺼진다.
-    expect(screen.getAllByTitle("저장소를 고르세요")).toHaveLength(5);
+    // 저장소 열기 묶음의 버튼 넷이 꺼진다.
+    expect(screen.getAllByTitle("저장소를 고르세요")).toHaveLength(4);
   });
 });

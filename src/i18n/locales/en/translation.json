@@ -28,7 +28,9 @@
     "fetch": "Fetch origin",
     "push": "Push",
     "pull": "Pull",
-    "accountGroup": "Account and settings"
+    "accountGroup": "Account and settings",
+    "placePath": "Where you are",
+    "branchCrumb": "Branch {{branch}}"
   },
   "changes": {
     "title": "Changes",

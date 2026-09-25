@@ -58,8 +58,12 @@ export function toolbarButtonClass({
  * 44px 머리 줄 가운데에 놓인다. 모서리는 버튼 모서리(6px) + 여백(3px) = 9px로 같은 중심을 가진다.
  * 묶음 사이는 선 대신 틈(6px)으로 나눈다.
  */
-export const TOOLBAR_GROUP =
-  "flex items-center gap-0.5 p-[3px] shrink-0 rounded-[9px] bg-card border border-(--line) shadow-(--shadow-sm)";
+const TOOLBAR_GROUP_SURFACE =
+  "flex items-center gap-0.5 p-[3px] rounded-[9px] bg-card border border-(--line) shadow-(--shadow-sm)";
+export const TOOLBAR_GROUP = `${TOOLBAR_GROUP_SURFACE} shrink-0`;
+
+/** 좁아지면 먼저 줄어드는 묶음(왼쪽 경로 카드). 안의 이름은 말줄임된다. */
+export const TOOLBAR_GROUP_SHRINKABLE = `${TOOLBAR_GROUP_SURFACE} min-w-0 shrink`;
 
 /** 툴바 버튼 안 숫자 배지(↑·↓ 수, stash 수). 강조가 아니라 회색이다. */
 export const TOOLBAR_BADGE =

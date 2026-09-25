@@ -18,10 +18,11 @@ import { HEADER_HEIGHT_CLASS } from "@/lib/layout-tokens";
 import { ToolbarDropdownContext, useToolbarDropdown } from "./useToolbarDropdown";
 import { BranchZone } from "./BranchZone";
 import { WorktreeZone } from "./WorktreeZone";
+import { CrumbSeparator, RepoCrumb } from "./RepoCrumb";
 import { GitActionZone } from "./GitActionZone";
 import { AccountZone } from "./AccountZone";
 import { ActionGroup } from "./ActionButton";
-import { TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
+import { TOOLBAR_GROUP_SHRINKABLE, TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
 import type { AppSettings } from "@/types";
 import { useActiveScope } from "@/hooks/useActiveScope";
 
@@ -135,21 +136,24 @@ export function ToolbarRoot() {
           </>
         ) : (
           <>
-            {/* 지금 맥락 제목 블록: 저장소 아바타 + 이름 + 브랜치(Zone A) + 워크트리 칩(Zone A2).
-                시안 `repo_title()`(gen_d2.py:108-112) 자리 — 브랜치 패널·워크트리 패널 모두
-                각자의 트리거 바로 아래에 anchor해서 연다(AnchoredPanel). */}
-            <div className="flex items-center gap-1 h-full min-w-0 shrink">
-              <BranchZone
-                isOpen={activeDropdown === "branch"}
-                onToggle={() => toggle("branch")}
-                onClose={close}
-              />
+            {/* 지금 맥락 경로: 저장소 › 폴더(워크트리) › 브랜치. 사이드바 계층과 같은 순서다.
+                오른쪽 묶음과 같은 흰 카드(TOOLBAR_GROUP_SHRINKABLE)에 담아 머리 줄 모양을 통일한다.
+                폴더 칸은 워크트리 패널을, 브랜치 칸은 브랜치 패널을 각자의 트리거 아래에 연다. */}
+            <nav aria-label={t("toolbar.placePath")} className={TOOLBAR_GROUP_SHRINKABLE}>
+              <RepoCrumb />
+              <CrumbSeparator />
               <WorktreeZone
                 isOpen={activeDropdown === "worktree"}
                 onToggle={() => toggle("worktree")}
                 onClose={close}
               />
-            </div>
+              <CrumbSeparator />
+              <BranchZone
+                isOpen={activeDropdown === "branch"}
+                onToggle={() => toggle("branch")}
+                onClose={close}
+              />
+            </nav>
 
             {/* Drag region */}
             <div className="flex-1 min-w-4 h-full" data-tauri-drag-region />

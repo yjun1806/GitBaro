@@ -16,7 +16,7 @@ export const HEADER_HEIGHT_CLASS = "h-[44px]";
  * sidebar side of the header strip (the window's actual top-left corner),
  * not the toolbar.
  */
-export const TRAFFIC_LIGHT_INSET_PX = 78;
+export const TRAFFIC_LIGHT_INSET_PX = 92;
 
 /**
  * Width of the sidebar resize handle between the sidebar and the main column.

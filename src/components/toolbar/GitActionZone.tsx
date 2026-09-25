@@ -1,12 +1,11 @@
 import { useTranslation } from "react-i18next";
-import { Code, FolderOpen, GitBranch, Globe, SquareTerminal, type LucideIcon } from "lucide-react";
+import { Code, FolderOpen, Globe, SquareTerminal, type LucideIcon } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useMenuActions } from "@/hooks/useMenuActions";
 import { gitHubRepoUrl } from "@/lib/utils";
 import { SyncZone } from "./SyncZone";
-import { ActionButton, ActionGroup } from "./ActionButton";
+import { ActionGroup } from "./ActionButton";
 import { TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
-import { BranchPanelButton } from "./BranchZone";
 
 /**
  * 콜백은 받지 않는다. 여러 저장소 Fetch·Pull·Push는 `SyncZone.tsx`(W5-T2)가, 브랜치 패널은
@@ -21,9 +20,10 @@ type GitActionZoneProps =
     };
 
 /**
- * 툴바 오른쪽 묶음. [Fetch · Pull · Push(↑)] [브랜치] [편집기 · 터미널 · Finder · GitHub]을 둔다.
+ * 툴바 오른쪽 묶음. [Fetch · Pull · Push(↑)] [편집기 · 터미널 · Finder · GitHub]을 둔다.
+ * 브랜치 패널은 왼쪽 경로의 브랜치 칸이 연다(같은 동작을 두 곳에 두지 않는다).
  * Merge는 브랜치 패널·우클릭 메뉴·비교 범위 머리에서, Stash는 스태시 탭과 우클릭 메뉴에서 한다.
- * 워크스페이스 모드에서는 저장소 하나에만 뜻이 있는 브랜치와 여는 동작을 꺼 둔다.
+ * 워크스페이스 모드에서는 저장소 하나에만 뜻이 있는 여는 동작을 꺼 둔다.
  */
 export function GitActionZone(props: GitActionZoneProps) {
   return (
@@ -96,15 +96,12 @@ function RepoOpenGroup({ handlers, hint }: { handlers: RepoOpenHandlers; hint?: 
   );
 }
 
-/** 워크스페이스 모드: 브랜치와 여는 동작은 저장소를 골라야 쓸 수 있다. */
+/** 워크스페이스 모드: 여는 동작은 저장소를 골라야 쓸 수 있다. */
 function WorkspaceRepoActions() {
   const { t } = useTranslation();
   const hint = t("activeScope.pickRepo");
   return (
     <>
-      <ActionGroup label={t("gitActions.branchGroup")}>
-        <ActionButton action="branch" icon={GitBranch} label={t("gitActions.branch")} disabled caret hint={hint} />
-      </ActionGroup>
       <RepoOpenGroup handlers={{}} hint={hint} />
     </>
   );
@@ -129,9 +126,6 @@ function RepoActions() {
 
   return (
     <>
-      <ActionGroup label={t("gitActions.branchGroup")}>
-        <BranchPanelButton />
-      </ActionGroup>
       <RepoOpenGroup handlers={handlers} hint={activeRepoPath ? undefined : t("activeScope.pickRepo")} />
     </>
   );

@@ -128,12 +128,11 @@ describe("GitActionZone — repository mode", () => {
     expect(commands.gitPush).not.toHaveBeenCalled();
   });
 
-  it("opens the branch panel and the terminal", async () => {
+  it("has no branch button of its own and opens the terminal", async () => {
     renderZone(<GitActionZone mode="repo" />);
 
-    // W5-T3의 브랜치 패널이 들어오기 전까지는 툴바의 브랜치 목록을 연다.
-    fireEvent.click(screen.getByRole("button", { name: "Branch" }));
-    expect(dropdown.toggle).toHaveBeenCalledWith("branch");
+    // 브랜치 패널은 왼쪽 경로의 브랜치 칸이 연다. 오른쪽에 같은 버튼을 두지 않는다.
+    expect(screen.queryByRole("button", { name: "Branch" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Open in Terminal" }));
     await waitFor(() => expect(commands.openInTerminal).toHaveBeenCalledWith(repo.path));
@@ -237,9 +236,9 @@ describe("GitActionZone — workspace mode", () => {
     expect(screen.getByRole("button", { name: "Fetch" })).toBeTruthy();
   });
 
-  it("keeps branch and the open-repository buttons off", () => {
+  it("keeps the open-repository buttons off", () => {
     renderZone(<GitActionZone mode="workspace" paths={paths} />);
-    for (const label of ["Branch", "Open in editor", "Open in Terminal", "Reveal in Finder", "View on GitHub"]) {
+    for (const label of ["Open in editor", "Open in Terminal", "Reveal in Finder", "View on GitHub"]) {
       expect(screen.getByRole("button", { name: `${label} — Pick a repository` })).toHaveProperty("disabled", true);
     }
   });
