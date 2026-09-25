@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Eye, FolderGit2, GitBranch, Undo2 } from "lucide-react";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
@@ -18,6 +18,7 @@ import { WorkingChangesButton } from "@/components/commit/WorkingChangesButton";
 import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { useHistoryView, useSetHistoryView } from "@/components/graph/useHistoryView";
 import { MultiRepoRemoteDialog } from "./MultiRepoRemoteDialog";
+import { StatusActivity } from "./StatusActivity";
 import { countUncommitted, gitStatusLine, type GitStatusLineModel, type GitStatusTone } from "./git-status-line";
 
 /** 보는 원격 브랜치를 추적하는 로컬 브랜치가 있으면 그 이름으로 체크아웃한다. */
@@ -62,12 +63,15 @@ export interface GitStatusLineViewProps {
   onBack: () => void;
   /** upstream 칸을 누를 때. 누를 것이 없으면 undefined. */
   onRemote?: () => void;
+  /** 줄 오른쪽 끝(오프라인 표시·작업 기록 버튼). */
+  trailing?: ReactNode;
 }
 
 /**
  * 메인 칸 맨 위의 git 상태 한 줄(약 32px). 저장소 이름은 툴바가 말하고, 이 줄은 상태를 설명한다:
  * 작업 트리 · 체크아웃 · upstream · 커밋 안 한 변경. 보는 중·진행 중·분리된 HEAD는 줄의 색과
  * 머리 글을 바꾼다. 보는 중이면 이 줄이 「보는 중」 띠이고, 체크아웃·돌아가기 버튼을 단다.
+ * 오른쪽 끝에는 도는 git 명령과 작업 기록 버튼, 오프라인일 때만 그 표시를 둔다(`trailing`).
  */
 export function GitStatusLineView({
   model,
@@ -76,6 +80,7 @@ export function GitStatusLineView({
   onCheckout,
   onBack,
   onRemote,
+  trailing,
 }: GitStatusLineViewProps) {
   const { t } = useTranslation();
   const viewing = model.tone === "viewing";
@@ -155,6 +160,7 @@ export function GitStatusLineView({
       </span>
       <span className="flex-1" />
       {model.canCommit && <WorkingChangesButton count={uncommittedCount} variant="header" />}
+      {trailing}
     </div>
   );
 }
@@ -212,6 +218,7 @@ export function GitStatusLine() {
         onCheckout={() => checkoutName && checkout(checkoutName)}
         onBack={() => setView(null)}
         onRemote={op && activeRepoPath ? () => setRemoteOp(op) : undefined}
+        trailing={<StatusActivity />}
       />
       {remoteOp && activeRepoPath && (
         <MultiRepoRemoteDialog paths={[activeRepoPath]} op={remoteOp} onClose={() => setRemoteOp(null)} />

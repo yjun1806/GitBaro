@@ -502,7 +502,6 @@
     "yearsAgo_other": "{{count}}년 전"
   },
   "status": {
-    "online": "온라인",
     "offline": "오프라인",
     "fetched": "Fetch됨 {{time}}"
   },
@@ -674,7 +673,7 @@
     }
   },
   "activity": {
-    "title": "활동 로그",
+    "title": "작업 기록",
     "clear": "지우기",
     "noActivity": "최근 Git 작업이 없습니다",
     "running": "실행 중...",

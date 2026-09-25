@@ -502,7 +502,6 @@
     "yearsAgo_other": "{{count}} years ago"
   },
   "status": {
-    "online": "Online",
     "offline": "Offline",
     "fetched": "Fetched {{time}}"
   },

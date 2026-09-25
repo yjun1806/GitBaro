@@ -9,7 +9,6 @@ import { RepoRail } from "./RepoRail";
 import { MainColumn } from "./MainColumn";
 import { SIDEBAR_HANDLE_WIDTH } from "@/lib/layout-tokens";
 import { HEADER_HEIGHT_PX } from "@/lib/layout-tokens";
-import { StatusBar } from "./StatusBar";
 import { SplitHandle } from "./SplitHandle";
 import { useDiffMaximizeEscape } from "./useDiffMaximize";
 import { ActivityLogPanel } from "./ActivityLogPanel";
@@ -78,10 +77,8 @@ export function MainLayout() {
         <MainColumn />
       </div>
 
-      {/* Activity log panel (above status bar) */}
+      {/* 작업 기록. git 상태 줄의 작업 기록 버튼으로 연다. */}
       {isActivityLogOpen && <ActivityLogPanel />}
-
-      <StatusBar />
 
       {/* 저장소 메뉴에서 여는 원격 자동 최신화 설정 */}
       <AutoSyncSettingsDialogHost />
