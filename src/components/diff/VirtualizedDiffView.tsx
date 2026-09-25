@@ -496,6 +496,8 @@ export function VirtualizedDiffView({
   }, []);
 
   // ── 찾기 ──
+  // 칠한 하이라이트를 이 뷰어 것으로 묶는 표. 화면에 뷰어가 둘이어도 서로 지우지 않는다.
+  const [findOwner] = useState(() => Symbol("diff-find"));
   // 행 배열 전체를 한 번 훑는다(5만 줄도 수 ms). 정규식이 같으면 다시 훑지 않는다 —
   // 다음·이전으로 움직일 때는 `active`만 바뀐다.
   const regex = find?.regex ?? null;
@@ -540,12 +542,12 @@ export function VirtualizedDiffView({
         current = ranges[activeMatch.nth] ?? null;
       }
     }
-    paintFindHighlights(all, current);
+    paintFindHighlights(findOwner, all, current);
   });
   useEffect(() => {
     if (!regex) return;
-    return clearFindHighlights;
-  }, [regex]);
+    return () => clearFindHighlights(findOwner);
+  }, [regex, findOwner]);
 
   /**
    * 눈금자용 — 행 인덱스를 문서 전체에서의 위치(0~1)로.
