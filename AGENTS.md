@@ -254,7 +254,7 @@ cd src-tauri && cargo build          # Build
 
 ### UI
 
-- One owner per number: each count on screen (changed files, commits to push, ...) is computed from one source and shown by one component. Don't repeat or recompute it elsewhere.
+- One owner per number: each count (uncommitted files, commits to push, ...) is computed from one source. Show it at most once per level: the sidebar signal (navigation) and the one place where you act on it (e.g. the graph WIP row / WorkSwitcher tab for uncommitted files, the Push button for commits to push). Status lines and tab badges state the condition in words, without repeating the number.
 - Colors come from tokens in `src/styles/globals.css`, never raw hex or Tailwind palette colors.
 - Layers: 0 window frame (`--frame`), 1 canvas (`--canvas`), 2 card/panel (`PANEL_SURFACE`), 3 floating menus, popovers, dialogs, tooltips (`FLOATING_SURFACE`). Both surfaces are in `components/ui/layers.ts`.
 - The brand color (`--acc`, `primary`) is for emphasis only: selection, the main button, active tab underline, focus ring, links. Everything else is grays. Status colors (live, diff, CI) are separate from the brand color.
