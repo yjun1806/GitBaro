@@ -363,6 +363,30 @@
     "collapsed": "접힘",
     "expandOnHover": "호버 시 펼침"
   },
+  "notify": {
+    "newCommitsTitle_other": "{{repo}} · {{branch}}: 새 커밋 {{count}}개",
+    "ciFailedTitle": "{{repo}} · {{branch}}: CI 실패 · {{workflow}}",
+    "ciFailedBody": "#{{number}} 실행이 실패했습니다",
+    "ciTimedOutBody": "#{{number}} 실행이 제한 시간을 넘겼습니다",
+    "ciUnnamedWorkflow": "워크플로",
+    "settings": {
+      "title": "알림",
+      "description": "GitBaro가 지켜보는 저장소와 워크트리에 변화가 생기면 macOS 알림으로 알려 줍니다.",
+      "newCommits": "새 커밋 알림",
+      "newCommitsDescription": "저장소나 워크트리의 체크아웃한 브랜치에 새 커밋이 생기면 알립니다. GitBaro에서 직접 만든 커밋과 브랜치 전환은 알리지 않습니다.",
+      "ciFailures": "CI 실패 알림",
+      "ciFailuresDescription": "체크아웃한 브랜치의 GitHub Actions 실행이 실패하거나 시간을 넘기면 알립니다. 저장소에 GitHub 계정이 연결돼 있어야 합니다.",
+      "whenFocused": "앱이 앞에 있을 때도 알림",
+      "whenFocusedDescription": "끄면 GitBaro를 쓰는 동안에는 알림 대신 앱 안에 메시지를 띄웁니다."
+    },
+    "test": {
+      "button": "알림 테스트",
+      "title": "GitBaro",
+      "body": "알림이 잘 옵니다.",
+      "sent": "보냈습니다. 알림이 보이지 않으면 시스템 설정 › 알림에서 GitBaro를 허용하세요.",
+      "denied": "알림이 허용되지 않았습니다. 시스템 설정 › 알림에서 GitBaro를 허용하세요."
+    }
+  },
   "settings": {
     "title": "설정",
     "accounts": "계정",

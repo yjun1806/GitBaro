@@ -363,6 +363,31 @@
     "collapsed": "Collapsed",
     "expandOnHover": "Expand on hover"
   },
+  "notify": {
+    "newCommitsTitle_one": "{{repo}} · {{branch}}: {{count}} new commit",
+    "newCommitsTitle_other": "{{repo}} · {{branch}}: {{count}} new commits",
+    "ciFailedTitle": "{{repo}} · {{branch}}: CI failed · {{workflow}}",
+    "ciFailedBody": "Run #{{number}} failed",
+    "ciTimedOutBody": "Run #{{number}} timed out",
+    "ciUnnamedWorkflow": "Workflow",
+    "settings": {
+      "title": "Notifications",
+      "description": "Get a macOS notification when something changes in the repositories and worktrees GitBaro is watching.",
+      "newCommits": "New commits",
+      "newCommitsDescription": "When a new commit lands on the checked-out branch of a repository or worktree. Commits you make in GitBaro and branch switches are not reported.",
+      "ciFailures": "CI failures",
+      "ciFailuresDescription": "When a GitHub Actions run fails or times out on a checked-out branch. Needs a GitHub account linked to the repository.",
+      "whenFocused": "Notify while GitBaro is in front",
+      "whenFocusedDescription": "When off, GitBaro shows a message inside the app instead while you are using it."
+    },
+    "test": {
+      "button": "Send a test notification",
+      "title": "GitBaro",
+      "body": "Notifications are working.",
+      "sent": "Sent. If nothing appeared, allow notifications for GitBaro in System Settings › Notifications.",
+      "denied": "Notifications are not allowed. Allow them for GitBaro in System Settings › Notifications."
+    }
+  },
   "settings": {
     "title": "Settings",
     "accounts": "Accounts",

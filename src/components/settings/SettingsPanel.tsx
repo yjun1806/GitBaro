@@ -1,5 +1,5 @@
 import { useState, useEffect, useId } from "react";
-import { X, Users, Palette, Code, Check, Loader2, Terminal, Bot } from "lucide-react";
+import { X, Users, Palette, Code, Check, Loader2, Terminal, Bot, Bell } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import type { AppSettings, GitHubAccount, EditorInfo, TerminalInfo, AiCliInfo } from "@/types";
@@ -7,6 +7,8 @@ import { Select } from "@/components/ui/Select";
 import { detectInstalledEditors, detectInstalledTerminals, detectInstalledAiClis } from "@/api/commands";
 import { ThemeSelector } from "./ThemeSelector";
 import { AccountSettings } from "./AccountSettings";
+import { NotificationSettings } from "./NotificationSettings";
+import { notificationSettingsOf } from "@/lib/notify/target";
 import { Dialog } from "@/components/ui/Dialog";
 
 const AI_CLI_ICONS: Record<string, { bg: string; svg: React.ReactNode }> = {
@@ -102,7 +104,7 @@ interface SettingsPanelProps {
   onClose: () => void;
 }
 
-type Section = "accounts" | "appearance" | "editor" | "terminal" | "ai";
+type Section = "accounts" | "appearance" | "editor" | "terminal" | "ai" | "notifications";
 
 const sections: { id: Section; labelKey: string; icon: typeof Users }[] = [
   { id: "accounts", labelKey: "settings.accounts", icon: Users },
@@ -110,6 +112,7 @@ const sections: { id: Section; labelKey: string; icon: typeof Users }[] = [
   { id: "editor", labelKey: "settings.editor", icon: Code },
   { id: "terminal", labelKey: "settings.terminal", icon: Terminal },
   { id: "ai", labelKey: "settings.ai", icon: Bot },
+  { id: "notifications", labelKey: "notify.settings.title", icon: Bell },
 ];
 
 export function SettingsPanel({
@@ -203,6 +206,13 @@ export function SettingsPanel({
                 onRemove={onRemoveAccount}
                 onAddAccount={onAddAccount}
                 onSyncAccounts={onSyncAccounts}
+              />
+            )}
+
+            {activeSection === "notifications" && (
+              <NotificationSettings
+                value={notificationSettingsOf(settings.notifications)}
+                onChange={(notifications) => onUpdateSettings({ notifications })}
               />
             )}
 

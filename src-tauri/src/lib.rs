@@ -22,6 +22,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(state::TokenStore::new())
         .manage(commands::watch::WatcherState::new())
         // W1-T3
@@ -117,6 +118,7 @@ pub fn run() {
             commands::activity::set_activity_watch,
             // W1-T4
             commands::review::review_status,
+            commands::notify::get_head_advance,
             // W4-T2
             commands::workspace_history::get_workspace_history,
             // W5-T4
