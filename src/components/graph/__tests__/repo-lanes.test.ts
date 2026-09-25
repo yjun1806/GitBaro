@@ -26,38 +26,25 @@ const summary = (rows: ReturnType<typeof buildRepoLaneRows>["rows"]) =>
   rows.map((r) => (r.kind === "commit" ? r.commit.id : r.kind === "wip" ? `wip:${r.repoPath}` : r.kind));
 
 describe("buildRepoLaneRows", () => {
-  it("puts WIP rows on top, then new commits by time, older commits with a seen tick per lane, then the base", () => {
-    const newIds = new Map([
-      ["/w/a", new Set(["a2"])],
-      ["/w/b", new Set(["b2"])],
-    ]);
-    const { rows } = buildRepoLaneRows([A, B], [wipA], newIds);
+  it("puts WIP rows on top, then commits by time, then the base", () => {
+    const { rows } = buildRepoLaneRows([A, B], [wipA]);
     expect(summary(rows)).toEqual(["wip:/w/a", "a2", "b2", "b1", "a1", "base"]);
-    const a1 = rows.find((r) => r.kind === "commit" && r.commit.id === "a1");
-    expect(a1 && a1.kind === "commit" && a1.isSeen).toBe(true);
-    // 저장소 레인마다 확인한 첫 커밋에만 눈금이 붙는다.
-    const ticks = rows.flatMap((r) => (r.kind === "commit" && r.seenTick ? [r.commit.id] : []));
-    expect(ticks).toEqual(["b1", "a1"]);
   });
 
-  it("leaves out the divider when nothing is new, and the base when no repository found one", () => {
-    const { rows } = buildRepoLaneRows(
-      [{ ...A, hasBase: false }, { ...B, hasBase: false }],
-      [],
-      new Map(),
-    );
+  it("leaves out the base when no repository found one", () => {
+    const { rows } = buildRepoLaneRows([{ ...A, hasBase: false }, { ...B, hasBase: false }], []);
     expect(summary(rows)).toEqual(["a2", "b2", "b1", "a1"]);
   });
 
   it("keeps each repository's own order even when its timestamps go backwards (rebase)", () => {
     const skewed: LaneRepo = { path: "/w/a", commits: [commit("child", 5), commit("parent", 60)], hasBase: false };
-    const { rows } = buildRepoLaneRows([skewed, B], [], new Map());
+    const { rows } = buildRepoLaneRows([skewed, B], []);
     const ids = summary(rows);
     expect(ids.indexOf("child")).toBeLessThan(ids.indexOf("parent"));
   });
 
   it("gives each repository one lane that runs from its first row down into the base", () => {
-    const { rows, laneCount } = buildRepoLaneRows([A, B], [], new Map());
+    const { rows, laneCount } = buildRepoLaneRows([A, B], []);
     expect(laneCount).toBe(2);
     // a2(레인 0) → b2(레인 1) → b1 → a1 → base
     const [a2, b2, b1, a1, base] = rows;
@@ -78,15 +65,10 @@ describe("buildRepoLaneRows", () => {
   });
 
   it("ends a lane at its last row when that repository has no base", () => {
-    const { rows } = buildRepoLaneRows([A, { ...B, hasBase: false }], [], new Map());
+    const { rows } = buildRepoLaneRows([A, { ...B, hasBase: false }], []);
     const base = rows[rows.length - 1];
     if (base.kind !== "base") throw new Error("no base row");
     expect(base.layout.edges.map((e) => e.chain)).toEqual([0]);
-  });
-
-  it("puts no seen tick anywhere when nothing is new", () => {
-    const { rows } = buildRepoLaneRows([A, B], [], new Map());
-    expect(rows.some((r) => r.kind === "commit" && r.seenTick)).toBe(false);
   });
 });
 
@@ -101,7 +83,7 @@ describe("buildRepoLaneRows — other worktrees' uncommitted changes", () => {
   };
 
   it("puts them in a separate column with no line into the repository's commits", () => {
-    const { rows, laneCount } = buildRepoLaneRows([A, B], [wipAFeat, wipA], new Map());
+    const { rows, laneCount } = buildRepoLaneRows([A, B], [wipAFeat, wipA]);
     expect(laneCount).toBe(3);
     const wt = rows.find((r) => r.kind === "wip" && r.wip.path === "/w/a-feat");
     if (!wt || wt.kind !== "wip") throw new Error("missing worktree WIP");
@@ -113,7 +95,7 @@ describe("buildRepoLaneRows — other worktrees' uncommitted changes", () => {
   });
 
   it("still starts the repository lane at the main checkout's WIP", () => {
-    const { rows } = buildRepoLaneRows([A, B], [wipAFeat, wipA], new Map());
+    const { rows } = buildRepoLaneRows([A, B], [wipAFeat, wipA]);
     const mainWip = rows.find((r) => r.kind === "wip" && r.wip.path === "/w/a");
     if (!mainWip || mainWip.kind !== "wip") throw new Error("missing main WIP");
     expect(mainWip.layout.lane).toBe(0);
@@ -128,8 +110,8 @@ describe("buildRepoLaneRows — other worktrees' uncommitted changes", () => {
 
 describe("repoLaneColor", () => {
   it("is fixed per repository, whatever lane it lands in", () => {
-    const first = buildRepoLaneRows([A, B], [], new Map());
-    const swapped = buildRepoLaneRows([B, A], [], new Map());
+    const first = buildRepoLaneRows([A, B], []);
+    const swapped = buildRepoLaneRows([B, A], []);
     const colorOfRow = (lanePaths: string[], rows: typeof first.rows, id: string) => {
       const row = rows.find((r) => r.kind === "commit" && r.commit.id === id);
       if (!row || row.kind !== "commit") throw new Error("missing");

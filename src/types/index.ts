@@ -500,9 +500,9 @@ export interface ActivityEvent {
   at: number;
 }
 
-// W1-T4 — 새 커밋 기준선 (Rust: src-tauri/src/git/new_commits.rs)
+// W1-T4 — 워크트리 목록 (Rust: src-tauri/src/git/review_worktrees.rs)
 
-/** `review_status`가 돌려주는 워크트리 하나. `path`는 기준선 스토어의 키다. */
+/** `review_status`가 돌려주는 워크트리 하나. */
 export interface ReviewWorktree {
   /**
    * 작업 트리 경로(끝의 `/` 없음). 메인 작업 트리는 요청한 저장소 경로를 그대로 쓴다
@@ -521,42 +521,6 @@ export interface RepoReviewStatus {
   /** 요청에 넘긴 저장소 경로 그대로. */
   repoPath: string;
   worktrees: ReviewWorktree[];
-}
-
-/** `count_new_commits`의 입력. 기준선이 없으면 `oid`를 비운다. */
-export interface SeenRecordInput {
-  path: string;
-  oid?: string | null;
-  /** 확인한 시각(epoch ms). */
-  seenAt?: number | null;
-  branch?: string | null;
-}
-
-/**
- * 새 커밋을 센 방법.
- * - `oid`: 기준 커밋..HEAD. 기반 브랜치를 병합해 들어온 커밋은 뺀다(기본 브랜치 제외)
- * - `authorTime`: rebase·amend로 기준 커밋이 사라져, 기반 브랜치에 없는 커밋 중 author 시각이
- *   확인 시각과 같은 초이거나 더 늦은 커밋
- * - `mergeBase`: 기준선이 없거나 브랜치가 바뀌어, 기반 브랜치에서 갈라진 지점..HEAD
- */
-export type NewCommitBasis = "oid" | "authorTime" | "mergeBase";
-
-/** 워크트리 하나의 새 커밋 수. HEAD가 없거나 열 수 없는 워크트리는 응답에서 빠진다. */
-export interface NewCommitCount {
-  path: string;
-  headOid: string;
-  newCount: number;
-  basis: NewCommitBasis;
-}
-
-// W3-T3
-
-/**
- * `list_new_commit_ids`의 응답. 개수와 규칙은 `NewCommitCount`와 같고, 새 커밋으로 센 커밋의
- * SHA를 함께 준다(최대 1000개. 넘치면 `ids.length < newCount`).
- */
-export interface NewCommitIds extends NewCommitCount {
-  ids: string[];
 }
 
 // W4-T2 — 워크스페이스 타임라인 (Rust: src-tauri/src/commands/workspace_history.rs)

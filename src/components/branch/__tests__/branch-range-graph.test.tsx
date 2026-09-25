@@ -97,7 +97,7 @@ const repo = { path: REPO, name: "app", remotes: [], accountId: null } as unknow
 function renderGraph() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <CommitGraph wips={[]} newCommits={null} seenAt={null} />
+      <CommitGraph wips={[]} />
     </QueryClientProvider>,
   );
 }
@@ -160,7 +160,7 @@ describe("CommitGraph range mode", () => {
     branchList = [branch("main", { isHead: true, isDefault: true }), branch("feat/z")];
     rerender(
       <QueryClientProvider client={new QueryClient()}>
-        <CommitGraph wips={[]} newCommits={null} seenAt={null} />
+        <CommitGraph wips={[]} />
       </QueryClientProvider>,
     );
     expect(useBranchRangeStore.getState().range).toBeNull();

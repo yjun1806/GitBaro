@@ -2,7 +2,7 @@ import { avatarColor } from "@/lib/avatar-color";
 
 /**
  * 커밋 그래프의 화면 계산(순수 함수). 레인 위치는 `@/lib/graph-lanes`가 정하고,
- * 여기서는 그 결과를 그리는 데 필요한 값(레인 색, 좌표, 새 커밋, 구분선 자리)만 만든다.
+ * 여기서는 그 결과를 그리는 데 필요한 값(레인 색, 좌표)만 만든다.
  */
 
 /** 행 높이(px). 시안 `gen_d.py`의 `RH`. */
@@ -38,65 +38,6 @@ export function laneColor(seed: string, chain: number): string {
   const hue = /hsl\((\d+)/.exec(base)?.[1] ?? "0";
   const lightness = LANE_LIGHTNESS[chain % LANE_LIGHTNESS.length];
   return `hsl(${hue}, 55%, ${lightness}%)`;
-}
-
-export interface NewCommitMarks {
-  /** 새 커밋으로 표시할 커밋(불러온 것 중). */
-  newIds: ReadonlySet<string>;
-  /**
-   * 「여기까지 확인함」 구분선을 이 번호의 행 앞에 그린다(`commits.length`면 맨 끝).
-   * 새 커밋이 없거나, 새 커밋이 아직 다 불러와지지 않았으면(구분선이 더 아래에 있음) null.
-   */
-  dividerBefore: number | null;
-}
-
-const NO_MARKS: NewCommitMarks = { newIds: new Set(), dividerBefore: null };
-
-/**
- * 불러온 커밋 중 어느 것이 새 커밋이고, 구분선이 어디에 오는지 정한다.
- *
- * 새 커밋은 백엔드가 개수를 셀 때 고른 커밋 그대로다(`list_new_commit_ids`의 `ids`).
- * 그래서 점과 구분선이 버튼의 N과 늘 같은 커밋을 가리킨다. 기반 브랜치에서 병합해 들어온
- * 커밋처럼 시간순으로 새 커밋 사이에 끼어도 새 커밋이 아닌 커밋에는 점을 찍지 않는다.
- *
- * 구분선은 마지막 새 커밋 바로 아래에 둔다. 새 커밋을 다 찾지 못했으면(다음 페이지에 있거나,
- * 백엔드 목록이 상한에서 잘렸으면) 그리지 않는다.
- */
-export function markNewCommits(
-  commits: readonly { id: string }[],
-  newCommits: { newCount: number; ids: readonly string[] } | null,
-): NewCommitMarks {
-  if (!newCommits || newCommits.newCount <= 0 || newCommits.ids.length === 0) return NO_MARKS;
-  const wanted = new Set(newCommits.ids);
-  const newIds = new Set(commits.filter((c) => wanted.has(c.id)).map((c) => c.id));
-  const complete = newCommits.ids.length >= newCommits.newCount && newIds.size === wanted.size;
-  if (!complete) return { newIds, dividerBefore: null };
-  let last = -1;
-  commits.forEach((c, i) => {
-    if (newIds.has(c.id)) last = i;
-  });
-  return { newIds, dividerBefore: last + 1 };
-}
-
-/**
- * 「여기까지 확인함 · 오늘 14:10」의 시각 부분. 오늘·어제는 그 말과 시:분, 그보다 전은
- * 날짜와 시:분으로 쓴다(시안 `gen_d.py`의 구분선 문구).
- */
-export function formatSeenClock(
-  seenAtMs: number,
-  nowMs: number,
-  labels: { today: (time: string) => string; yesterday: (time: string) => string },
-  locale?: string,
-): string {
-  const seen = new Date(seenAtMs);
-  const time = `${String(seen.getHours()).padStart(2, "0")}:${String(seen.getMinutes()).padStart(2, "0")}`;
-  const startOfToday = new Date(nowMs);
-  startOfToday.setHours(0, 0, 0, 0);
-  const dayMs = 24 * 60 * 60 * 1000;
-  if (seenAtMs >= startOfToday.getTime()) return labels.today(time);
-  if (seenAtMs >= startOfToday.getTime() - dayMs) return labels.yesterday(time);
-  const date = seen.toLocaleDateString(locale, { month: "short", day: "numeric" });
-  return `${date} ${time}`;
 }
 
 export interface GraphWip {

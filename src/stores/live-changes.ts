@@ -81,8 +81,8 @@ export const useLiveChangesStore = create<LiveChangesState>((set, get) => ({
 }));
 
 /**
- * 저장소를 목록에서 지우면 최근 변경 기록도 지운다(`workspace.ts`·
- * `review-seen.ts`의 같은 구독과 같은 이유). 이 스토어는 저장하지 않으므로
+ * 저장소를 목록에서 지우면 최근 변경 기록도 지운다(`workspace.ts`의 같은 구독과
+ * 같은 이유). 이 스토어는 저장하지 않으므로
  * 복원 순서를 기다릴 필요는 없다 — 저장소 스토어가 복원된 뒤의 실제 제거만
  * 걸러내면 된다.
  */

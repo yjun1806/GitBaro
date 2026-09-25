@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { create } from "zustand";
 import i18n from "@/i18n/config";
@@ -8,7 +8,6 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useFilesViewStore } from "@/components/review/files-view";
 import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
-import { useReviewSeenStore } from "@/stores/review-seen";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useFollowStore } from "@/stores/follow";
 import { useBranchRangeStore } from "@/components/branch/branch-range";
@@ -19,10 +18,8 @@ import { useGraphWorktreesStore } from "../graph-worktrees";
 import type {
   CommitInfo,
   GitOperation,
-  NewCommitIds,
   RepoInfo,
   RepoReviewStatus,
-  SeenRecordInput,
   StatusEntry,
   WorktreeInfo,
 } from "@/types";
@@ -39,7 +36,6 @@ vi.mock("@/hooks/useOpenWorktree", () => ({ useOpenWorktree: () => openWorktree 
 
 const REPO = "/work/app";
 const FEAT = "/work/app-feat";
-const HEADS: Record<string, string> = { [REPO]: "c1", [FEAT]: "f1" };
 
 function commit(id: string, parentIds: string[], extra: Partial<CommitInfo> = {}): CommitInfo {
   return {
@@ -86,19 +82,6 @@ const scan: RepoReviewStatus[] = [
 const statusEntries = [{ path: "a.ts", status: "modified", staged: false }] as StatusEntry[];
 const syncByPath = { [FEAT]: { path: FEAT, dirtyCount: 4, dirtyLatestMtime: Date.now() - 5 * 60_000 } };
 
-/** 가짜 백엔드: 기준선이 지금 HEAD면 0개, 아니면 HEAD 쪽 2개. */
-function fakeIds(entry: SeenRecordInput): NewCommitIds {
-  const headOid = HEADS[entry.path];
-  const fresh = entry.oid === headOid;
-  return {
-    path: entry.path,
-    headOid,
-    newCount: fresh ? 0 : 2,
-    basis: "oid",
-    ids: fresh ? [] : ["c1", "c2"],
-  };
-}
-
 /** `useWorktrees` 응답과 다른 워크트리의 HEAD 이력(칩 줄, D5). 기본은 비어 있다. */
 const worktreeState = {
   list: [] as WorktreeInfo[],
@@ -114,20 +97,6 @@ const mergeMockStore = create<{ value: GitOperation | null }>()(() => ({ value: 
 /** `useRepoSyncStatuses`에 넘긴 경로 목록. */
 const syncCalls: string[][] = [];
 
-/** true면 `list_new_commit_ids` 응답을 붙잡아 둔다(백엔드가 아직 세는 중인 상태). */
-const backend = { hold: false, pending: [] as (() => void)[] };
-vi.mock("@/api/commands", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/api/commands")>()),
-  listNewCommitIds: vi.fn(
-    (entry: SeenRecordInput) =>
-      new Promise<NewCommitIds>((resolve) => {
-        const answer = () => resolve(fakeIds(entry));
-        if (backend.hold) backend.pending.push(answer);
-        else answer();
-      }),
-  ),
-}));
-
 /** 그래프가 커밋 목록을 읽은 시작점(`useCommitHistoryInfinite`의 둘째 인자). */
 const historyTargets: unknown[] = [];
 
@@ -139,12 +108,10 @@ const changesVsDefaultByPath: Record<string, unknown> = {};
 
 const unpushedState = vi.hoisted(() => ({ value: undefined as unknown }));
 const stashPush = vi.hoisted(() => vi.fn(async (_message?: string) => "stash-oid" as string | null));
-vi.mock("@/api/queries", async (importOriginal) => ({
+vi.mock("@/api/queries", () => ({
   useChangesVsDefaultOnHead: (entries: readonly { path: string }[]) =>
     entries.map((e) => ({ data: changesVsDefaultByPath[e.path] })),
   useStatusMany: () => ({}),
-  // 새 커밋 조회는 실제 훅을 쓴다(키·이전 값 유지 방식까지 확인하려고). 명령만 가짜다.
-  useNewCommitIdsQuery: (await importOriginal<typeof import("@/api/queries")>()).useNewCommitIdsQuery,
   useStatus: (path: string | null) => ({ data: path ? statusEntries : undefined }),
   useStashList: () => ({ data: [] }),
   useWorkflowRuns: () => ({ data: [] }),
@@ -171,7 +138,6 @@ vi.mock("@/api/queries", async (importOriginal) => ({
     return { data: syncByPath };
   },
   useReviewStatusQuery: () => ({ data: scan, isLoading: false }),
-  useNewCommitCountsQuery: () => ({ data: [], isLoading: false }),
   useUnpushedCommits: () => ({ data: unpushedState.value }),
   useStashMutations: () => ({ push: { mutateAsync: stashPush } }),
 }));
@@ -188,20 +154,10 @@ function renderPanel() {
   );
 }
 
-/** 스크롤 영역 안의 행(버튼·구분선)을 화면 순서대로. */
+/** 스크롤 영역 안의 행(버튼)을 화면 순서대로. */
 function rowLabels(): string[] {
-  const rows = document.querySelectorAll(
-    "[role=tabpanel] button:not([data-working-changes]), [role=tabpanel] [role=separator]",
-  );
-  // 「여기까지 확인함」은 확인한 첫 커밋 레인의 눈금이다. 그 행 앞에 "--seen--"을 끼워 순서를 본다.
-  return [...rows].flatMap((el) =>
-    el.getAttribute("role") === "separator"
-      ? ["--seen--"]
-      : [
-          ...(el.querySelector("[data-testid=seen-tick]") ? ["--seen--"] : []),
-          el.getAttribute("data-commit-id") ?? el.getAttribute("aria-label") ?? "",
-        ],
-  );
+  const rows = document.querySelectorAll("[role=tabpanel] button:not([data-working-changes])");
+  return [...rows].map((el) => el.getAttribute("data-commit-id") ?? el.getAttribute("aria-label") ?? "");
 }
 
 Element.prototype.scrollIntoView = vi.fn();
@@ -212,14 +168,11 @@ beforeEach(async () => {
   useGraphWorktreesStore.setState({ shownByRepo: { [REPO]: [FEAT] } });
   openWorktree.mockReset();
   openWorktree.mockImplementation(switchTo);
-  backend.hold = false;
-  backend.pending = [];
   worktreeState.list = [];
   worktreeState.histories = {};
   mergeMockStore.setState({ value: null });
   useBranchRangeStore.getState().clear();
-  // 이 파일의 기존 시나리오는 「확인하지 않은 커밋」 기준(확인함 표시)이다. 기본 기준은 따로 본다.
-  useUIStore.setState({ activeTab: "history", repoListOpen: false, reviewBasis: "unseen" });
+  useUIStore.setState({ activeTab: "history", repoListOpen: false });
   unpushedState.value = undefined;
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
@@ -227,69 +180,29 @@ beforeEach(async () => {
   useHistoryViewStore.getState().reset();
   historyTargets.length = 0;
   branchList.length = 0;
-  useReviewSeenStore.setState({
-    entries: {
-      [REPO]: { branch: "main", oid: "c3", seenAt: Date.now() - 60_000 },
-      [FEAT]: { branch: "feat/x", oid: "f1", seenAt: Date.now() - 60_000 },
-    },
-    initialScanDone: true,
-    scannedRepos: [REPO],
-    worktreesByRepo: { [REPO]: [REPO, FEAT] },
-  });
 });
 
 afterEach(cleanup);
 
 describe("GraphPanel commit graph", () => {
-  it("puts a WIP row per worktree on top and the seen divider under the new commits", async () => {
+  it("puts a WIP row per worktree on top of the commits", () => {
     renderPanel();
-    await screen.findByTestId("seen-tick");
     expect(rowLabels()).toEqual([
       "Uncommitted changes · feat/x branch · app-feat · 4 files",
       "Uncommitted changes · main branch · primary folder · 1 file",
       "c1",
       "c2",
-      "--seen--",
       "c3",
       "c4",
     ]);
-    expect(screen.getByTestId("seen-tick").getAttribute("aria-label")).toContain("Seen up to here · today ");
-    // The two new commits carry the new-commit dot, older ones do not.
-    expect(screen.getAllByTitle("New commit")).toHaveLength(2);
-    // Rows below the divider are drawn faded, as in the mockup.
-    const seen = [...document.querySelectorAll("[data-seen]")].map((el) => el.getAttribute("data-commit-id"));
-    expect(seen).toEqual(["c3", "c4"]);
   });
 
-  it("hides every seen marker by default and badges the graph tab with commits not on any remote", async () => {
-    useUIStore.setState({ reviewBasis: "unpushed" });
+  it("badges the graph tab with commits not on any remote", async () => {
     unpushedState.value = { count: 3, hasUpstream: false, hasRemote: true, commits: [] };
     renderPanel();
     await screen.findByText("c1");
-    expect(screen.queryByTestId("seen-tick")).toBeNull();
-    expect(screen.queryByRole("button", { name: /new commits? as seen/ })).toBeNull();
-    expect(screen.queryAllByTitle("New commit")).toHaveLength(0);
-    expect(document.querySelectorAll("[data-seen]")).toHaveLength(0);
     const graphTab = screen.getByRole("tab", { name: /Commit graph/ });
     expect(graphTab.textContent).toContain("3");
-  });
-
-  it("clears the button, dots and divider at once when marked seen, before the recount returns", async () => {
-    renderPanel();
-    const button = await screen.findByRole("button", { name: "Mark 2 new commits as seen" });
-    backend.hold = true;
-    fireEvent.click(button);
-    expect(useReviewSeenStore.getState().entries[REPO].oid).toBe("c1");
-    // The recount is still pending, yet nothing from the old count is left on screen.
-    expect(backend.pending.length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: /new commits? as seen/ })).toBeNull();
-    expect(screen.queryByTestId("seen-tick")).toBeNull();
-    expect(screen.queryAllByTitle("New commit")).toHaveLength(0);
-    // The recount answers N = 0 and nothing comes back.
-    backend.pending.forEach((answer) => answer());
-    await waitFor(() => expect(backend.pending.length).toBeGreaterThan(0));
-    expect(screen.queryByRole("button", { name: /new commits? as seen/ })).toBeNull();
-    expect(screen.queryByTestId("seen-tick")).toBeNull();
   });
 
   it("opens the staging list for the open worktree's WIP row", () => {
@@ -420,13 +333,6 @@ describe("GraphPanel commit graph", () => {
     });
     expect(useFilesViewStore.getState().repoTabOpen).toBe(false);
   });
-
-  it("uses Korean labels for the divider and the button", async () => {
-    await i18n.changeLanguage("ko");
-    renderPanel();
-    expect(await screen.findByRole("button", { name: "새 커밋 2개 확인함으로 표시" })).toBeTruthy();
-    expect(screen.getByTestId("seen-tick").getAttribute("aria-label")).toContain("여기까지 확인함 · 오늘 ");
-  });
 });
 
 describe("GraphPanel worktree chips (D5)", () => {
@@ -465,14 +371,12 @@ describe("GraphPanel worktree chips (D5)", () => {
     expect(buttons.map((b) => b.textContent)).toEqual(["mainprimary folder1", "feat/xfrom main4"]);
     expect(buttons[0].getAttribute("aria-pressed")).toBe("true");
     expect(within(chips).getByText("Worktrees shown together")).toBeTruthy();
-    await screen.findByTestId("seen-tick");
     expect(rowLabels()).toEqual([
       "Uncommitted changes · feat/x branch · app-feat · 4 files",
       "Uncommitted changes · main branch · primary folder · 1 file",
       "f1",
       "c1",
       "c2",
-      "--seen--",
       "c3",
       "c4",
     ]);
@@ -484,8 +388,7 @@ describe("GraphPanel worktree chips (D5)", () => {
     const feat = within(chips).getByRole("button", { name: /feat\/x/ });
     fireEvent.click(feat);
     expect(feat.getAttribute("aria-pressed")).toBe("false");
-    await screen.findByTestId("seen-tick");
-    expect(rowLabels()).toEqual(["Uncommitted changes · main branch · primary folder · 1 file", "c1", "c2", "--seen--", "c3", "c4"]);
+    expect(rowLabels()).toEqual(["Uncommitted changes · main branch · primary folder · 1 file", "c1", "c2", "c3", "c4"]);
     expect(within(chips).getByRole("button", { name: "1 more worktree · show together" })).toBeTruthy();
 
     fireEvent.click(feat);
@@ -495,7 +398,6 @@ describe("GraphPanel worktree chips (D5)", () => {
 
   it("draws each worktree's WIP row in its own lane down to its commits, in the chip's color", async () => {
     renderPanel();
-    await screen.findByTestId("seen-tick");
     const featColor = worktreeColor(FEAT);
     const chips = screen.getByRole("group", { name: "Worktrees to show together in the graph" });
     const swatch = within(within(chips).getByRole("button", { name: /feat\/x/ })).getByTestId("chip-swatch");
@@ -513,7 +415,6 @@ describe("GraphPanel worktree chips (D5)", () => {
 
   it("does not offer reset or revert on another worktree's commit", async () => {
     renderPanel();
-    await screen.findByTestId("seen-tick");
     const disabledOf = (id: string) => {
       fireEvent.contextMenu(document.querySelector(`[data-commit-id="${id}"]`) as HTMLElement);
       const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
@@ -588,7 +489,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     useUIStore.setState({ workingFocusAt: null, isDiffMaximized: false });
   });
 
-  it("puts counts on the tabs: new commits and files changed since main", async () => {
+  it("puts counts on the tabs: files changed since main", () => {
     changesVsDefaultByPath[REPO] = {
       baseStatus: "found",
       mergeBaseOid: "c3",
@@ -597,8 +498,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
       committed: [{ path: "x.ts" }, { path: "a.ts" }],
     };
     renderPanel();
-    await screen.findByRole("button", { name: "Mark 2 new commits as seen" });
-    expect(screen.getByRole("tab", { name: /^Commit graph/ }).textContent).toBe("Commit graph2");
+    expect(screen.getByRole("tab", { name: /^Commit graph/ }).textContent).toBe("Commit graph");
     // x.ts·a.ts(커밋함) + a.ts(커밋 안 함) → 파일 2개.
     expect(screen.getByRole("tab", { name: /^Changes vs / }).textContent).toBe("Changes vs main2");
     // 스태시·Actions가 0이면 배지가 없다.
@@ -697,21 +597,17 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     expect(screen.queryByTestId("compare-chip")).toBeNull();
   });
 
-  it("views another branch without checking it out: no WIP rows, no new-commit marks, a strip with actions", async () => {
+  it("views another branch without checking it out: no WIP rows, a strip with actions", () => {
     branchList.push({ name: "main", isHead: true, isRemote: false }, { name: "feat/x", isHead: false, isRemote: false });
     renderPanel();
-    await screen.findByTestId("seen-tick");
     expect(screen.getAllByTestId("wip-row")).toHaveLength(2);
 
     act(() => useHistoryViewStore.getState().view(REPO, { kind: "ref", name: "feat/x", isRemote: false }));
     // 커밋 목록은 그 브랜치에서 읽는다.
     expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "ref", name: "feat/x" });
-    // 체크아웃한 작업 트리의 것(WIP 행, 새 커밋 점·확인함 선·버튼, 작업 중인 변경 버튼)은 감추고 안내를 둔다.
+    // 체크아웃한 작업 트리의 것(WIP 행, 작업 중인 변경 버튼)은 감추고 안내를 둔다.
     expect(screen.queryAllByTestId("wip-row")).toHaveLength(0);
     expect(screen.getByText(i18n.t("historyView.wipHidden"))).toBeTruthy();
-    expect(screen.queryByTestId("seen-tick")).toBeNull();
-    expect(screen.queryAllByTitle("New commit")).toHaveLength(0);
-    expect(screen.queryByRole("button", { name: /new commits? as seen/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Working changes/ })).toBeNull();
     // 커밋 행은 그대로 눌러 상세를 연다.
     fireEvent.click(document.querySelector<HTMLElement>('[data-commit-id="c2"]')!);
@@ -765,7 +661,6 @@ describe("GraphPanel commits not on any remote", () => {
   const remoteRepo = { ...repo, remotes: [{ name: "origin", url: "https://github.com/o/app.git" }] } as RepoInfo;
 
   beforeEach(() => {
-    useUIStore.setState({ reviewBasis: "unpushed" });
     useRepositoryStore.setState({ repos: [remoteRepo], activeRepo: remoteRepo, activeRepoPath: REPO });
     const [c1, c2, c3, c4] = history.pages[0];
     history.pages[0] = [
@@ -788,13 +683,6 @@ describe("GraphPanel commits not on any remote", () => {
     const boundary = document.querySelectorAll("[data-remote-boundary]");
     expect([...boundary].map((el) => el.getAttribute("data-commit-id"))).toEqual(["c3"]);
     expect(screen.getByTestId("remote-boundary").getAttribute("title")).toBe("On a remote from here down");
-  });
-
-  it("keeps plain dots in the seen-marker mode", () => {
-    useUIStore.setState({ reviewBasis: "unseen" });
-    renderPanel();
-    expect(document.querySelector('[data-commit-id="c1"] circle[data-dot]')?.getAttribute("data-dot")).toBe("plain");
-    expect(document.querySelector("[data-remote-boundary]")).toBeNull();
   });
 });
 

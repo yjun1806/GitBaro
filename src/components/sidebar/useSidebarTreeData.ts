@@ -54,7 +54,7 @@ export interface SidebarTreeData {
 /**
  * 사이드바 트리가 쓰는 데이터를 한곳에서 모은다.
  *
- * - 워크트리 목록과 새 커밋 수: `review_status` + `count_new_commits`(`useReviewStatus`, 20초).
+ * - 워크트리 목록: `review_status`(`useReviewStatus`, 20초).
  * - 커밋하지 않은 파일 수와 ↑↓: 저장소와 링크된 워크트리 경로 전체를 `repo_sync_status` 한 번의
  *   묶음 호출로 읽는다(20초). 저장소가 늘어도 호출 수는 늘지 않는다.
  * - 파일 변경 시각: `live-changes` 스토어.

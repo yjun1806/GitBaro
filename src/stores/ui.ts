@@ -16,12 +16,6 @@ export type RailMode = "expanded" | "collapsed" | "hover";
 /** Line-diff layout the user last picked; remembered across files and restarts. */
 export type DiffLineMode = "unified" | "split";
 
-/**
- * 검토 기준. `unpushed`(기본): 원격에 없는 커밋이 검토 대상이다. `unseen`: 앱이 기억하는
- * 「여기까지 확인함」 뒤의 커밋이 검토 대상이다(새 커밋 점·구분선·「확인함으로 표시」).
- */
-export type ReviewBasis = "unpushed" | "unseen";
-
 interface UIState {
   theme: Theme;
   activeTab: "changes" | "history" | "stash" | "actions";
@@ -33,8 +27,6 @@ interface UIState {
   /** 브랜치 전환(checkout + 재조회) 진행 중 여부. 로딩 피드백 표시에 사용. */
   isSwitchingBranch: boolean;
   diffLineMode: DiffLineMode;
-  /** 검토 기준(설정 「검토 기준」, 저장). */
-  reviewBasis: ReviewBasis;
   /** 그래프 패널이 메인 칸 높이에서 차지하는 비율(손잡이로 조절, 저장). */
   graphPanelRatio: number;
   /** 파일 목록 ↔ diff 사이의 목록 폭(px, 손잡이로 조절, 저장). */
@@ -57,7 +49,6 @@ interface UIState {
   setActivityLogOpen: (open: boolean) => void;
   setSwitchingBranch: (switching: boolean) => void;
   setDiffLineMode: (mode: DiffLineMode) => void;
-  setReviewBasis: (basis: ReviewBasis) => void;
   setGraphPanelRatio: (ratio: number) => void;
   setFileListWidth: (width: number) => void;
   setDiffMaximized: (maximized: boolean) => void;
@@ -70,12 +61,11 @@ export const DEFAULT_SIDEBAR_WIDTH = 276;
 
 const RAIL_MODES: readonly RailMode[] = ["expanded", "collapsed", "hover"];
 const DIFF_LINE_MODES: readonly DiffLineMode[] = ["unified", "split"];
-const REVIEW_BASES: readonly ReviewBasis[] = ["unpushed", "unseen"];
 
 /** Fields of the UI store written to `gitbaro-ui` (see `partialize`). */
 type PersistedUI = Pick<
   UIState,
-  "railMode" | "sidebarWidth" | "diffLineMode" | "graphPanelRatio" | "fileListWidth" | "reviewBasis" | "maximizedFileListOpen"
+  "railMode" | "sidebarWidth" | "diffLineMode" | "graphPanelRatio" | "fileListWidth" | "maximizedFileListOpen"
 >;
 
 /**
@@ -90,8 +80,10 @@ type PersistedUI = Pick<
  * must survive as-is: W2-T2 requires keeping the rail's collapsed/hover
  * modes, so a v0 user's deliberate choice is never silently reset to
  * "expanded".
- * `graphPanelRatio`·`fileListWidth`·`reviewBasis`·`maximizedFileListOpen`은 나중에 더한 선택 필드다. 없으면 기본값을 쓰므로
+ * `graphPanelRatio`·`fileListWidth`·`maximizedFileListOpen`은 나중에 더한 선택 필드다. 없으면 기본값을 쓰므로
  * (`sanitizePersistedUI`) 버전을 올리지 않는다. 다른 필드의 뜻은 그대로라 옛 값을 지우지 않는다.
+ * 없앤 `reviewBasis`(검토 기준 설정)도 버전을 올리지 않는다. 옛 저장값에 남은 그 필드는
+ * `sanitizePersistedUI`가 읽지 않고, 다음 저장 때 `partialize`가 빼서 사라진다.
  */
 export const UI_STORE_VERSION = 0;
 
@@ -123,7 +115,6 @@ export function sanitizePersistedUI(persisted: unknown): Partial<UIState> {
   if (typeof p.fileListWidth === "number" && Number.isFinite(p.fileListWidth)) {
     out.fileListWidth = clampFileListWidth(p.fileListWidth);
   }
-  if (REVIEW_BASES.includes(p.reviewBasis as ReviewBasis)) out.reviewBasis = p.reviewBasis as ReviewBasis;
   if (typeof p.maximizedFileListOpen === "boolean") out.maximizedFileListOpen = p.maximizedFileListOpen;
   return out;
 }
@@ -144,7 +135,6 @@ export const useUIStore = create<UIState>()(
       isActivityLogOpen: false,
       isSwitchingBranch: false,
       diffLineMode: "unified",
-      reviewBasis: "unpushed",
       graphPanelRatio: DEFAULT_GRAPH_RATIO,
       fileListWidth: DEFAULT_FILE_LIST_WIDTH,
       isDiffMaximized: false,
@@ -167,7 +157,6 @@ export const useUIStore = create<UIState>()(
       setActivityLogOpen: (open) => set({ isActivityLogOpen: open }),
       setSwitchingBranch: (switching) => set({ isSwitchingBranch: switching }),
       setDiffLineMode: (mode) => set({ diffLineMode: mode }),
-      setReviewBasis: (basis) => set({ reviewBasis: basis }),
       setGraphPanelRatio: (ratio) => set({ graphPanelRatio: clampGraphRatio(ratio) }),
       setFileListWidth: (width) => set({ fileListWidth: clampFileListWidth(width) }),
       setDiffMaximized: (maximized) => set({ isDiffMaximized: maximized }),
@@ -191,15 +180,9 @@ export const useUIStore = create<UIState>()(
         diffLineMode: state.diffLineMode,
         graphPanelRatio: state.graphPanelRatio,
         fileListWidth: state.fileListWidth,
-        reviewBasis: state.reviewBasis,
         maximizedFileListOpen: state.maximizedFileListOpen,
       }),
       merge: (persisted, current) => ({ ...current, ...sanitizePersistedUI(persisted) }),
     },
   ),
 );
-
-/** 「확인하지 않은 커밋」 기준인지. 아니면 새 커밋 점·확인함 구분선·확인함 버튼을 숨긴다. */
-export function useSeenMarkerMode(): boolean {
-  return useUIStore((s) => s.reviewBasis === "unseen");
-}

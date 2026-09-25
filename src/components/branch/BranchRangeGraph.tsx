@@ -153,8 +153,6 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
                 remoteTags={null}
                 isSelected={selectedCommitId === commit.id}
                 isHighlighted={activeIndex === index}
-                isNew={false}
-                isSeen={false}
                 wipAbove={false}
                 onClick={() => onSelectCommit(commit.id)}
                 onContextMenu={(e) => {

@@ -1,31 +1,28 @@
 import { describe, expect, it } from "vitest";
-import type { CommitInfo, NewCommitIds, WorkspaceRepoHistory } from "@/types";
 import {
   activityInvalidationKeys,
   isHiddenReviewRepo,
   isOnDefaultBranch,
   activityTargetOf,
-  laneCommitsOf,
   splitReviewRepos,
-  sumNewCounts,
   type ReviewRepoSignals,
 } from "../review-model";
 
 const quiet: ReviewRepoSignals = {
   branch: "main",
   defaultBranch: "main",
-  newCount: 0,
+  unpushedCount: 0,
   wipCount: 0,
   error: null,
 };
 
-describe("isHiddenReviewRepo (질문 2: main에 있고 새 커밋·WIP가 없으면 숨김)", () => {
+describe("isHiddenReviewRepo (질문 2: main에 있고 원격에 없는 커밋·WIP가 없으면 숨김)", () => {
   it("hides a repository on its default branch with nothing to review", () => {
     expect(isHiddenReviewRepo(quiet)).toBe(true);
   });
 
-  it("shows it when it has new commits", () => {
-    expect(isHiddenReviewRepo({ ...quiet, newCount: 2 })).toBe(false);
+  it("shows it when it has commits no remote has yet", () => {
+    expect(isHiddenReviewRepo({ ...quiet, unpushedCount: 2 })).toBe(false);
   });
 
   it("shows it when it has uncommitted changes", () => {
@@ -52,15 +49,15 @@ describe("isHiddenReviewRepo (질문 2: main에 있고 새 커밋·WIP가 없으
     expect(isHiddenReviewRepo({ ...quiet, error: "not a repo" })).toBe(false);
   });
 
-  it("treats a not-yet-counted new-commit number as zero", () => {
-    expect(isHiddenReviewRepo({ ...quiet, newCount: null })).toBe(true);
+  it("treats a not-yet-counted unpushed number as zero", () => {
+    expect(isHiddenReviewRepo({ ...quiet, unpushedCount: null })).toBe(true);
   });
 });
 
 describe("splitReviewRepos", () => {
   const repos = [
     { ...quiet, id: "a" },
-    { ...quiet, id: "b", newCount: 3 },
+    { ...quiet, id: "b", unpushedCount: 3 },
     { ...quiet, id: "c", wipCount: 2 },
   ];
 
@@ -115,60 +112,5 @@ describe("activityInvalidationKeys", () => {
       ["status", "/w/app-feat"],
       ["fileDiff", "/w/app-feat"],
     ]);
-  });
-});
-
-describe("sumNewCounts", () => {
-  const c = (path: string, newCount: number): NewCommitIds => ({ path, headOid: "h", newCount, basis: "oid", ids: [] });
-
-  it("adds every worktree's new commits, not just the main checkout's", () => {
-    expect(sumNewCounts(["/w/a", "/w/a-feat"], { "/w/a": c("/w/a", 0), "/w/a-feat": c("/w/a-feat", 3) })).toBe(3);
-  });
-
-  it("is null when nothing was counted yet", () => {
-    expect(sumNewCounts(["/w/a"], {})).toBeNull();
-  });
-});
-
-describe("laneCommitsOf", () => {
-  const commit = (id: string): CommitInfo => ({
-    id,
-    shortId: id,
-    message: id,
-    summary: id,
-    author: { name: "t", email: "t@t" },
-    committer: { name: "t", email: "t@t" },
-    timestamp: 1,
-    parentIds: [],
-    refs: [],
-    coAuthors: [],
-    isAgentAuthored: false,
-  });
-  const history = (commits: CommitInfo[]): WorkspaceRepoHistory => ({
-    path: "/w/a",
-    branch: "main",
-    headOid: "c3",
-    defaultBranch: "main",
-    baseRef: "origin/main",
-    baseStatus: "found",
-    mergeBaseOid: "c3",
-    mergeBaseCommit: commit("c3"),
-    commits,
-    truncated: false,
-    error: null,
-  });
-
-  it("keeps the timeline and the base when it already holds every new commit", () => {
-    const lane = laneCommitsOf(history([commit("f1")]), new Set(["f1"]), undefined);
-    expect(lane).toEqual({ commits: [commit("f1")], hasBase: true, needsRecent: false });
-  });
-
-  it("adds new commits that sit at or below the merge base, and ends the lane without the base row", () => {
-    // main에서 pull로 받은 커밋: 갈라진 지점 = HEAD라 타임라인이 비었다.
-    const ids = new Set(["c3", "c2"]);
-    expect(laneCommitsOf(history([]), ids, undefined)).toEqual({ commits: [], hasBase: false, needsRecent: true });
-    const lane = laneCommitsOf(history([]), ids, [commit("c3"), commit("c2"), commit("c1")]);
-    expect(lane.commits.map((x) => x.id)).toEqual(["c3", "c2"]);
-    expect(lane.hasBase).toBe(false);
   });
 });

@@ -5,7 +5,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
-import { useSeenMarkerMode, useUIStore } from "@/stores/ui";
+import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
 import { useToastStore } from "@/stores/toast";
 import { useFollowStore, type FollowMode } from "@/stores/follow";
@@ -39,7 +39,6 @@ import {
   GRAPH_COLUMNS,
   GraphRow,
   GraphWipRow,
-  useSeenLabel,
   type CommitDot,
 } from "./GraphRow";
 import {
@@ -49,7 +48,6 @@ import {
   graphColumnWidth,
   laneColor,
   laneX,
-  markNewCommits,
   normalizePath,
   visibleWipRows,
   wipTarget,
@@ -71,10 +69,6 @@ import { activeRange, isStaleRange, useBranchRangeStore } from "@/components/bra
 export interface CommitGraphProps {
   /** 맨 위 WIP 행(`useGraphReview`가 순서까지 정한 목록). */
   wips: GraphWip[];
-  /** 지금 연 워크트리의 새 커밋 수와 새 커밋으로 센 커밋. 모르면 null. */
-  newCommits: { newCount: number; ids: readonly string[] } | null;
-  /** 지금 연 워크트리를 확인한 시각(epoch ms). */
-  seenAt: number | null;
   /**
    * 칩 줄에서 고른 다른 워크트리의 HEAD(D5). 그 이력의 첫 페이지를 지금 연 워크트리의
    * 이력과 합쳐 한 그래프에 그린다. 없으면 지금 연 워크트리의 이력만.
@@ -99,7 +93,7 @@ const NO_WORKTREE_HEADS: readonly WorktreeHead[] = [];
 
 /**
  * 위 패널의 커밋 그래프(단일 저장소). 전체 폭 레인 그래프로 HEAD의 이력을 그리고,
- * 맨 위에 워크트리마다 WIP 행, 새 커밋 점, 「여기까지 확인함」 구분선을 둔다.
+ * 맨 위에 워크트리마다 WIP 행을 둔다.
  */
 export function CommitGraph({ wips: allWips, ...rest }: CommitGraphProps) {
   const followTarget = useFollowStore((s) => s.target);
@@ -229,8 +223,6 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
 }
 
 function CommitGraphList({
-  newCommits,
-  seenAt,
   wips,
   shownWips,
   worktreeHeads = NO_WORKTREE_HEADS,
@@ -240,9 +232,6 @@ function CommitGraphList({
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const hasRemote = useRepositoryStore((s) => (s.activeRepo?.remotes.length ?? 0) > 0);
-  // 검토 기준이 「원격에 없는 커밋」이면 커밋 점으로 원격에 있는지 보여 준다.
-  const unpushedMode = !useSeenMarkerMode();
-  const seenLabel = useSeenLabel();
   const colorSeed = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? "");
   const accounts = useAccountStore((s) => s.accounts);
   const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
@@ -319,10 +308,6 @@ function CommitGraphList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyData, hasNextPage, otherKey, wipLaneKey, shownKey]);
 
-  const marks = useMemo(
-    () => markNewCommits(commits, newCommits),
-    [commits, newCommits],
-  );
   // 「main에서 갈라진 지점」 행(D4). 「파일별 변경」 배지와 같은 조회(HEAD가 바뀔 때만 다시 읽음)를 쓴다.
   // 보는 중이면 그리지 않는다 — 그 기준(main 대비)은 체크아웃한 HEAD의 것이다.
   const forkEntries = useMemo(
@@ -349,7 +334,7 @@ function CommitGraphList({
       label.kind === "tag" ? null : branchColorOf(label.name, label.kind === "remoteBranch", colorByBranch),
     [colorByBranch],
   );
-  const markRemote = unpushedMode && hasRemote;
+  const markRemote = hasRemote;
   const dotOf = (commit: CommitInfo): CommitDot =>
     !markRemote || commit.isUnpushed === undefined ? "plain" : commit.isUnpushed ? "unpushed" : "pushed";
   const boundaryIdx = useMemo(
@@ -452,15 +437,11 @@ function CommitGraphList({
                   avatarUrl={accountAvatarMap.get(emailKey) || githubAvatarMap[emailKey] || undefined}
                   isSelected={selectedCommitId === commit.id}
                   isHighlighted={activeIndex === index}
-                  isNew={marks.newIds.has(commit.id)}
-                  isSeen={marks.dividerBefore !== null && index >= marks.dividerBefore}
                   wipAbove={false}
                   dot={dotOf(commit)}
                   laneTitle={laneTitle}
                   refColor={refColor}
                   remoteBoundary={boundaryIdx === index}
-                  // 「여기까지 확인함」은 전체 폭 줄 대신 확인한 첫 커밋의 레인에 눈금으로 단다.
-                  seenTick={marks.dividerBefore === index ? seenLabel(seenAt) : null}
                   onClick={() => selectCommit(commit.id)}
                   onContextMenu={(e) => {
                     e.preventDefault();
@@ -614,8 +595,6 @@ export interface RepoLaneCommitGraphProps {
   repoLabel: (repoPath: string) => string;
   /** 고른 행의 `key`(`RepoLaneRow.key`). */
   selectedKey: string | null;
-  /** 가장 최근에 확인한 시각(epoch ms). 구분선 문구에 쓴다. */
-  seenAt: number | null;
   /** 가장 가까운 갈라진 지점 커밋의 시각(epoch s). 모르면 null. */
   baseTime: number | null;
   /** 맨 아래 행의 기본 브랜치 표시(`main`, 저장소마다 다르면 `main, trunk`). */
@@ -643,15 +622,13 @@ export function RepoLaneTag({ repoPath, label }: { repoPath: string; label: stri
 
 /**
  * 워크스페이스의 커밋 그래프. 레인 하나가 저장소 하나이고, 레인 색은 저장소 색으로 고정이다.
- * 맨 위에 커밋하지 않은 변경(WIP) 행, 새 커밋 점과 「여기까지 확인함」 구분선, 맨 아래에
- * 각 저장소가 main에서 갈라진 지점을 둔다. 행 계산은 `buildRepoLaneRows`가 한다.
+ * 맨 위에 커밋하지 않은 변경(WIP) 행, 맨 아래에 각 저장소가 main에서 갈라진 지점을 둔다. 행 계산은 `buildRepoLaneRows`가 한다.
  */
 export function RepoLaneCommitGraph({
   graph,
   lanePaths,
   repoLabel,
   selectedKey,
-  seenAt,
   baseTime,
   baseBranchLabel,
   isLoading,
@@ -660,7 +637,6 @@ export function RepoLaneCommitGraph({
   onSelectWip,
 }: RepoLaneCommitGraphProps) {
   const { t } = useTranslation();
-  const seenLabel = useSeenLabel();
   const accounts = useAccountStore((s) => s.accounts);
   const startFollow = useFollowStore((s) => s.start);
   const followModeOf = useFollowModeOf();
@@ -752,9 +728,6 @@ export function RepoLaneCommitGraph({
                     avatarUrl={accountAvatarMap.get(emailKey) || undefined}
                     isSelected={selectedKey === row.key}
                     isHighlighted={activeIndex === idx}
-                    isNew={row.isNew}
-                    isSeen={row.isSeen}
-                    seenTick={row.seenTick ? seenLabel(seenAt) : null}
                     wipAbove={false}
                     leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
                     onClick={() => onSelectCommit(row.repoPath, row.commit, row.key)}
@@ -830,7 +803,6 @@ function BaseRow({
       </svg>
       <span className={GRAPH_COLUMNS + " flex-1 min-w-0 pl-2 pr-3 text-[12.5px]"}>
         <span className="flex items-center gap-2 min-w-0">
-          <span className="w-1.5 shrink-0" />
           <span className="shrink-0 px-[7px] py-px rounded-[6px] bg-(--chip) text-[10.5px] font-bold text-(--fg2)">
             {branchLabel}
           </span>

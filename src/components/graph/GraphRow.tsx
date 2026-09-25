@@ -6,7 +6,7 @@ import { RefBadge } from "@/components/history/CommitItem";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { GraphEdge, GraphRowLayout } from "@/lib/graph-lanes";
 import type { CommitInfo, RefLabel } from "@/types";
-import { formatSeenClock, GRAPH_ROW_HEIGHT, laneX, type WipTarget } from "./graph-model";
+import { GRAPH_ROW_HEIGHT, laneX, type WipTarget } from "./graph-model";
 import { LANE_LABEL_CLASS, laneLabelStyle } from "./lane-style";
 
 const H = GRAPH_ROW_HEIGHT;
@@ -31,7 +31,7 @@ export function edgePath(edge: GraphEdge, dotLane: number): string {
 }
 
 /**
- * 커밋 점 모양. `plain`: 채운 점(검토 기준이 확인함이거나 원격이 없을 때).
+ * 커밋 점 모양. `plain`: 채운 점(원격이 없을 때).
  * `unpushed`: 원격에 없는 커밋 — 채운 점 + 옅은 고리. `pushed`: 원격에 있는 커밋 — 속 빈 점.
  */
 export type CommitDot = "plain" | "unpushed" | "pushed";
@@ -40,7 +40,6 @@ interface GraphCellProps {
   layout: GraphRowLayout;
   width: number;
   colorOf: (chain: number) => string;
-  isNew: boolean;
   /** 위 WIP 행에서 내려오는 점선을 이 커밋 점까지 잇는다(지금 연 워크트리의 HEAD 행). */
   wipAbove: boolean;
   dot: CommitDot;
@@ -49,7 +48,7 @@ interface GraphCellProps {
 }
 
 /** 한 행의 그래프 칸. 선이 행 안에서 완결되므로 행마다 따로 그린다(`graph-lanes`). */
-function GraphCell({ layout, width, colorOf, isNew, wipAbove, dot, laneTitle }: GraphCellProps) {
+function GraphCell({ layout, width, colorOf, wipAbove, dot, laneTitle }: GraphCellProps) {
   const x = laneX(layout.lane);
   const color = colorOf(layout.chain);
   const dotTitle = laneTitle?.(layout.chain);
@@ -89,8 +88,8 @@ function GraphCell({ layout, width, colorOf, isNew, wipAbove, dot, laneTitle }: 
         r={dot === "pushed" ? DOT_R - 0.5 : DOT_R}
         data-dot={dot}
         fill={dot === "pushed" ? "var(--card)" : color}
-        stroke={dot === "pushed" ? color : isNew ? "var(--card)" : undefined}
-        strokeWidth={dot === "pushed" ? 2 : isNew ? 1.5 : undefined}
+        stroke={dot === "pushed" ? color : undefined}
+        strokeWidth={dot === "pushed" ? 2 : undefined}
       >
         {dotTitle && <title>{dotTitle}</title>}
       </circle>
@@ -107,9 +106,6 @@ interface GraphRowProps {
   avatarUrl?: string;
   isSelected: boolean;
   isHighlighted: boolean;
-  isNew: boolean;
-  /** 「여기까지 확인함」 아래(이미 확인한) 커밋. 시안처럼 흐리게 그린다. */
-  isSeen: boolean;
   wipAbove: boolean;
   /** 커밋 점 모양(원격에 있는지). 기본은 채운 점. */
   dot?: CommitDot;
@@ -118,8 +114,6 @@ interface GraphRowProps {
   refColor?: (label: RefLabel) => string | null;
   /** 이 행 위 가장자리에 「원격에 올라간 지점」 경계를 그린다. */
   remoteBoundary?: boolean;
-  /** 이 커밋 레인에 「여기까지 확인함」 눈금을 붙인다(확인함 기준). 값은 툴팁 문구. */
-  seenTick?: string | null;
   /** 설명 칸 맨 앞(ref 라벨 앞)에 둘 것. 저장소별 레인 모드의 저장소 표시에 쓴다. */
   leading?: ReactNode;
   onClick: () => void;
@@ -130,7 +124,7 @@ interface GraphRowProps {
 }
 
 /**
- * 커밋 그래프의 커밋 행. 그래프 칸 + [설명(새 커밋 점, ref 라벨, 제목) / 작성자 / 시각 / 커밋].
+ * 커밋 그래프의 커밋 행. 그래프 칸 + [설명(ref 라벨, 제목) / 작성자 / 시각 / 커밋].
  * 에이전트가 쓴 커밋(트레일러로 추정)은 작성자 칸에 흐린 표시와 「추정」 툴팁을 붙인다.
  */
 export function GraphRow({
@@ -142,14 +136,11 @@ export function GraphRow({
   avatarUrl,
   isSelected,
   isHighlighted,
-  isNew,
-  isSeen,
   wipAbove,
   dot = "plain",
   laneTitle,
   refColor,
   remoteBoundary = false,
-  seenTick = null,
   leading,
   onClick,
   onContextMenu,
@@ -169,12 +160,9 @@ export function GraphRow({
       onContextMenu={onContextMenu}
       aria-current={isSelected ? "true" : undefined}
       data-commit-id={commit.id}
-      data-seen={isSeen || undefined}
       data-remote-boundary={remoteBoundary || undefined}
       className={cn(
         "relative flex items-center w-full text-left border-b border-(--line) select-none transition-colors",
-        // 시안(gen_d.py)의 확인한 커밋: opacity 0.55. 고른 행은 또렷하게 둔다.
-        isSeen && !isSelected && "[&>*]:opacity-55",
         isSelected
           ? "bg-(--acc-sel)"
           : isHighlighted
@@ -184,22 +172,16 @@ export function GraphRow({
       style={{ height: H }}
     >
       {remoteBoundary && <RemoteBoundary />}
-      {seenTick && <SeenTick lane={layout.lane} label={seenTick} />}
       <GraphCell
         layout={layout}
         width={graphWidth}
         colorOf={colorOf}
-        isNew={isNew}
         wipAbove={wipAbove}
         dot={dot}
         laneTitle={laneTitle}
       />
       <span className={cn(GRAPH_COLUMNS, "flex-1 min-w-0 pl-2 pr-3 text-[12.5px]")}>
         <span className="flex items-center gap-2 min-w-0">
-          <span
-            className={cn("w-1.5 h-1.5 rounded-full shrink-0", isNew ? "bg-(--acc)" : "bg-transparent")}
-            title={isNew ? t("graph.newCommit") : undefined}
-          />
           {leading}
           {commit.refs.map((label) => (
             <span
@@ -278,39 +260,6 @@ function RemoteBoundary() {
       <span aria-hidden="true" className="w-full border-t border-dashed border-(--ln)" />
     </span>
   );
-}
-
-/** 「여기까지 확인함」 눈금: 이 커밋 레인 위 가장자리의 짧은 가로 막대. 전체 폭 줄 대신 쓴다. */
-function SeenTick({ lane, label }: { lane: number; label: string }) {
-  return (
-    <span
-      role="img"
-      aria-label={label}
-      title={label}
-      data-testid="seen-tick"
-      className="absolute -top-[2px] z-[1] h-[4px] w-[14px] rounded-full bg-(--acc)"
-      style={{ left: laneX(lane) - 7 }}
-    />
-  );
-}
-
-/** 「여기까지 확인함 · 오늘 14:10」 문구. 눈금과 구분선이 같이 쓴다. */
-export function useSeenLabel(): (seenAt: number | null) => string {
-  const { t, i18n } = useTranslation();
-  return (seenAt) =>
-    seenAt !== null
-      ? t("graph.seenHereAt", {
-          time: formatSeenClock(
-            seenAt,
-            Date.now(),
-            {
-              today: (time) => t("graph.seenToday", { time }),
-              yesterday: (time) => t("graph.seenYesterday", { time }),
-            },
-            i18n.language,
-          ),
-        })
-      : t("graph.seenHere");
 }
 
 interface GraphWipRowProps {
@@ -432,7 +381,6 @@ export function GraphWipRow({
       </svg>
       <span className={cn(GRAPH_COLUMNS, "flex-1 min-w-0 pl-2 pr-3 text-[12.5px]")}>
         <span className="flex items-center gap-2 min-w-0">
-          <span className="w-1.5 shrink-0" />
           {leading}
           <span className="italic text-(--fg2) truncate">{wipLabel}</span>
           {/* 이 변경이 쌓인 브랜치(그 브랜치 최신 커밋 위)와 워크트리. */}
@@ -521,7 +469,6 @@ export function ForkPointRow({ branch, timestamp, graphWidth, through, colorOf }
         ))}
       </svg>
       <span className="flex items-center gap-2 flex-1 min-w-0 pl-2 pr-3 text-[12.5px]">
-        <span className="w-1.5 shrink-0" />
         <span className="shrink-0 px-[7px] py-px rounded-[6px] bg-(--chip) text-[10.5px] font-bold text-(--fg2)">
           {branch}
         </span>

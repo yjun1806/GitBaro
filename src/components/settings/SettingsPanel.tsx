@@ -8,7 +8,6 @@ import { detectInstalledEditors, detectInstalledTerminals, detectInstalledAiClis
 import { ThemeSelector } from "./ThemeSelector";
 import { AccountSettings } from "./AccountSettings";
 import { Dialog } from "@/components/ui/Dialog";
-import { useUIStore, type ReviewBasis } from "@/stores/ui";
 
 const AI_CLI_ICONS: Record<string, { bg: string; svg: React.ReactNode }> = {
   claude: {
@@ -232,7 +231,6 @@ export function SettingsPanel({
                     className="max-w-xs"
                   />
                 </div>
-                <ReviewBasisField />
               </div>
             )}
 
@@ -388,29 +386,5 @@ export function SettingsPanel({
           </div>
         </div>
     </Dialog>
-  );
-}
-
-/** 「검토 기준」: 무엇을 검토할 커밋으로 볼지. 이 기기에 저장한다(UI 설정). */
-function ReviewBasisField() {
-  const { t } = useTranslation();
-  const basis = useUIStore((s) => s.reviewBasis);
-  const setBasis = useUIStore((s) => s.setReviewBasis);
-  return (
-    <div className="flex flex-col gap-2">
-      <label className="text-xs font-medium text-muted-foreground">{t("settings.reviewBasis")}</label>
-      <Select
-        value={basis}
-        options={[
-          { value: "unpushed", label: t("settings.reviewBasisUnpushed") },
-          { value: "unseen", label: t("settings.reviewBasisUnseen") },
-        ]}
-        onChange={(val) => setBasis(val as ReviewBasis)}
-        className="max-w-xs"
-      />
-      <p className="text-xs text-muted-foreground">
-        {t(basis === "unpushed" ? "settings.reviewBasisUnpushedHint" : "settings.reviewBasisUnseenHint")}
-      </p>
-    </div>
   );
 }

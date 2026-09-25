@@ -20,6 +20,6 @@ pub use engine::{
     MergeResult, RemoteInfo, StashEntry, StatusEntry,
 };
 // W1-T4
-pub mod new_commits;
+pub mod review_worktrees;
 // W4-T2
 pub mod merge_base;

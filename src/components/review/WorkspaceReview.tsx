@@ -6,7 +6,6 @@ import { AlertTriangle, Files, Folder, GitCommitVertical } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { useSeenMarkerMode } from "@/stores/ui";
 import { repoAccountsByPath } from "@/lib/repo-tree";
 import { baseName } from "./review-model";
 import { Card, EmptyState } from "@/components/layout/ContentArea";
@@ -40,7 +39,7 @@ export interface WorkspaceReviewProps {
  * 워크스페이스를 고른 상태의 메인 칸(D1). 제목, 여러 저장소 커밋 그래프(저장소별 레인),
  * 아래에 고른 커밋이나 커밋하지 않은 변경의 파일 목록과 diff.
  * 「main 대비 변경」 탭(D7)을 고르면 그래프 대신 저장소별 main 대비 변경 목록을 보여 준다.
- * 조용한 저장소(main에 있고 새 커밋·커밋하지 않은 변경이 없음)는 접고 「모두 보기」로 펼친다.
+ * 조용한 저장소(main에 있고 원격에 없는 커밋·커밋하지 않은 변경이 없음)는 접고 「모두 보기」로 펼친다.
  */
 export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const { t } = useTranslation();
@@ -56,7 +55,6 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const setGroupBy = useFilesViewStore((s) => s.setGroupBy);
 
   const data = useWorkspaceReview(paths, showAll);
-  const seenMode = useSeenMarkerMode();
   useReviewActivityRefresh(data.repoPaths);
 
   const accountLabel = useMemo(() => {
@@ -129,7 +127,6 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                   active={tab === "graph"}
                   onClick={() => setTab("graph")}
                   icon={<GitCommitVertical className="w-3.5 h-3.5" />}
-                  count={badgeCount(seenMode ? data.newCount : data.unpushedCount)}
                 >
                   {t("shell.graphTab")}
                 </Tab>
@@ -156,18 +153,6 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                   {showAll ? t("review.hideQuiet") : t("review.showAll", { count: data.hiddenCount })}
                 </button>
               ) : null}
-              {tab === "graph" && seenMode && data.newCount > 0 && (
-                <>
-                  <span className="w-px h-[18px] bg-(--line) mx-1 shrink-0" aria-hidden="true" />
-                  <button
-                    type="button"
-                    onClick={data.markSeen}
-                    className="shrink-0 h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
-                  >
-                    {t("graph.markSeen", { count: data.newCount })}
-                  </button>
-                </>
-              )}
             </div>
             {tab === "graph" && (
               <RepoLaneCommitGraph
@@ -175,7 +160,6 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                 lanePaths={data.lanePaths}
                 repoLabel={repoLabel}
                 selectedKey={selection?.key ?? null}
-                seenAt={data.seenAt}
                 baseTime={data.baseTime}
                 baseBranchLabel={data.baseBranchLabel}
                 isLoading={data.isLoading}
@@ -242,11 +226,9 @@ function RepoLegend({ repos }: { repos: ReviewRepo[] }) {
       {repos.map((r) => {
         const color = repoLaneColor(r.path);
         const note = historyNote(t, r.history);
-        const worktreeNote =
-          r.worktreeNewCount > 0 ? t("review.worktreeNew", { count: r.worktreeNewCount }) : null;
         const title = r.error
           ? t("review.repoError", { repo: r.name, error: r.error })
-          : [note, worktreeNote].filter(Boolean).join("\n") || r.path;
+          : (note ?? r.path);
         return (
           <span
             key={r.path}
@@ -263,15 +245,6 @@ function RepoLegend({ repos }: { repos: ReviewRepo[] }) {
             {r.name}
             {r.branch && <span className="font-mono font-medium opacity-80">{r.branch}</span>}
             {note && <span className="opacity-70" aria-hidden="true">*</span>}
-            {worktreeNote && (
-              <span
-                className="px-1 rounded-[4px] bg-(--acc-sel) text-(--acc) text-[10px] font-bold"
-                aria-label={worktreeNote}
-                data-testid="worktree-new"
-              >
-                +{r.worktreeNewCount}
-              </span>
-            )}
           </span>
         );
       })}

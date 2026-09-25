@@ -37,8 +37,6 @@ export const worktreeNodeKey = (path: string) => `wt:${path}`;
 export interface PathSignals {
   /** 커밋하지 않은 파일 수 */
   dirtyCount?: number;
-  /** 마지막 확인 뒤 들어온 새 커밋 수 */
-  newCommits?: number;
   ahead?: number;
   behind?: number;
   /** 마지막 파일 변경 시각(epoch ms). 모르면 null */
@@ -195,7 +193,7 @@ export function workspaceMembership(
 
 function todoScore(s: PathSignals | undefined): number {
   if (!s) return 0;
-  return (s.dirtyCount ?? 0) + (s.newCommits ?? 0) + (s.ahead ?? 0) + (s.behind ?? 0);
+  return (s.dirtyCount ?? 0) + (s.ahead ?? 0) + (s.behind ?? 0);
 }
 
 function repoPathsOf(node: RepoNode): string[] {
@@ -232,7 +230,7 @@ const byName = <T extends WorkspaceNode | RepoNode>(a: T, b: T) =>
  * - custom: 저장된 순서가 먼저, 저장되지 않은 노드는 입력 순서대로 뒤에 붙는다.
  * - name: 이름순.
  * - recent: 마지막 파일 변경이 늦은 순. 기록이 없으면 뒤로, 그 안에서는 이름순.
- * - todo: 할 일(커밋하지 않은 파일·새 커밋·↑↓)이 있는 것 먼저, 각 무리 안에서는 이름순.
+ * - todo: 할 일(커밋하지 않은 파일·↑↓)이 있는 것 먼저, 각 무리 안에서는 이름순.
  */
 export function sortSiblings<T extends WorkspaceNode | RepoNode>(
   nodes: T[],
@@ -272,7 +270,7 @@ export function sortSiblings<T extends WorkspaceNode | RepoNode>(
 }
 
 /**
- * 조용한 저장소: 저장소와 그 워크트리 모두 커밋하지 않은 파일·새 커밋·↑↓가 0이고,
+ * 조용한 저장소: 저장소와 그 워크트리 모두 커밋하지 않은 파일·↑↓가 0이고,
  * 10분 안에 파일 변경이 없다. 신호를 아직 하나도 받지 못한 저장소는 조용하다고
  * 판단하지 않는다(모르는 것을 숨기지 않는다).
  */
