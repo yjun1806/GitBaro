@@ -70,6 +70,15 @@ impl GitHubClient {
         }
     }
 
+    /// A client aimed at a local test server instead of api.github.com.
+    #[cfg(test)]
+    pub(crate) fn with_base_url(base_url: &str) -> Self {
+        GitHubClient {
+            http: shared_http_client(),
+            base_url: base_url.to_string(),
+        }
+    }
+
     fn auth_headers(&self, token: &str) -> Result<reqwest::header::HeaderMap, AppError> {
         let mut headers = reqwest::header::HeaderMap::new();
         // 정적 문자열은 항상 유효하므로 unwrap 허용.
@@ -230,8 +239,13 @@ impl GitHubClient {
             .json(&serde_json::json!({ "query": query, "variables": variables }))
             .send()
             .await?;
+        let reset_at = response
+            .headers()
+            .get("X-RateLimit-Reset")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
         let body = self.handle_response(response).await?;
-        graphql_error(&body)?;
+        graphql_error(&body, reset_at.as_deref())?;
         let data = body["data"].clone();
         cache::put(key, None, &data);
         Ok(data)
@@ -338,19 +352,24 @@ impl GitHubClient {
 }
 
 /// The first GraphQL error as an `AppError`, or Ok when the answer has none.
-/// A partial answer (data plus errors) is still an error when `data` is null.
-pub(crate) fn graphql_error(body: &Value) -> Result<(), AppError> {
+/// A partial answer (data plus errors) is used as is: typed `NOT_FOUND`/`FORBIDDEN`
+/// errors fail the call only when `data` or `data.repository` is null (the
+/// repository itself could not be read), not when one nested field could not.
+/// `reset_at` is the `X-RateLimit-Reset` header, kept for `RATE_LIMITED`.
+pub(crate) fn graphql_error(body: &Value, reset_at: Option<&str>) -> Result<(), AppError> {
     let Some(first) = body["errors"].as_array().and_then(|e| e.first()) else {
         return Ok(());
     };
     let message = first["message"].as_str().unwrap_or("GitHub GraphQL error").to_string();
+    let data = &body["data"];
+    let unreadable = data.is_null() || data.get("repository").is_some_and(Value::is_null);
     match first["type"].as_str() {
         Some("RATE_LIMITED") => Err(AppError::RateLimit {
-            reset_at: "unknown".to_string(),
+            reset_at: reset_at.unwrap_or("unknown").to_string(),
         }),
-        Some("NOT_FOUND") => Err(AppError::GithubApi { status: 404, message }),
-        Some("FORBIDDEN") => Err(AppError::GithubApi { status: 403, message }),
-        _ if body["data"].is_null() => Err(AppError::GithubApi { status: 0, message }),
+        Some("NOT_FOUND") if unreadable => Err(AppError::GithubApi { status: 404, message }),
+        Some("FORBIDDEN") if unreadable => Err(AppError::GithubApi { status: 403, message }),
+        _ if data.is_null() => Err(AppError::GithubApi { status: 0, message }),
         _ => Ok(()),
     }
 }
@@ -385,15 +404,40 @@ mod tests {
     #[test]
     fn graphql_errors_map_to_app_errors() {
         use serde_json::json;
-        assert!(graphql_error(&json!({"data": {"x": 1}})).is_ok());
+        assert!(graphql_error(&json!({"data": {"x": 1}}), None).is_ok());
         let not_found = json!({"data": {"repository": null}, "errors": [{"type": "NOT_FOUND", "message": "no"}]});
-        assert!(matches!(graphql_error(&not_found), Err(AppError::GithubApi { status: 404, .. })));
+        assert!(matches!(graphql_error(&not_found, None), Err(AppError::GithubApi { status: 404, .. })));
         let limited = json!({"data": null, "errors": [{"type": "RATE_LIMITED", "message": "slow"}]});
-        assert!(matches!(graphql_error(&limited), Err(AppError::RateLimit { .. })));
+        assert!(matches!(graphql_error(&limited, None), Err(AppError::RateLimit { .. })));
         let other = json!({"data": null, "errors": [{"message": "bad query"}]});
-        assert!(matches!(graphql_error(&other), Err(AppError::GithubApi { status: 0, .. })));
+        assert!(matches!(graphql_error(&other, None), Err(AppError::GithubApi { status: 0, .. })));
         // 일부만 실패한 답은 쓸 수 있는 데이터가 있으면 그대로 쓴다.
         let partial = json!({"data": {"x": 1}, "errors": [{"type": "SOMETHING", "message": "m"}]});
-        assert!(graphql_error(&partial).is_ok());
+        assert!(graphql_error(&partial, None).is_ok());
+    }
+
+    #[test]
+    fn typed_errors_on_part_of_an_answer_keep_the_data() {
+        use serde_json::json;
+        // 저장소는 읽었고 그 안의 한 필드(예: 지운 사용자의 리뷰)만 NOT_FOUND·FORBIDDEN 이다.
+        let nested = json!({
+            "data": {"repository": {"pullRequest": {"number": 1}}},
+            "errors": [{"type": "FORBIDDEN", "message": "no access to one reviewer", "path": ["repository", "pullRequest", "reviews"]}]
+        });
+        assert!(graphql_error(&nested, None).is_ok());
+        let missing = json!({"data": {"repository": {"x": 1}}, "errors": [{"type": "NOT_FOUND", "message": "gone"}]});
+        assert!(graphql_error(&missing, None).is_ok());
+        let no_data = json!({"data": null, "errors": [{"type": "FORBIDDEN", "message": "no"}]});
+        assert!(matches!(graphql_error(&no_data, None), Err(AppError::GithubApi { status: 403, .. })));
+    }
+
+    #[test]
+    fn a_rate_limited_answer_keeps_the_reset_time() {
+        use serde_json::json;
+        let limited = json!({"data": null, "errors": [{"type": "RATE_LIMITED", "message": "slow"}]});
+        match graphql_error(&limited, Some("1790000000")) {
+            Err(AppError::RateLimit { reset_at }) => assert_eq!(reset_at, "1790000000"),
+            other => panic!("{other:?}"),
+        }
     }
 }

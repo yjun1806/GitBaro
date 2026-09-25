@@ -306,9 +306,9 @@ export interface NotificationSettings {
 /** `get_head_advance`: HEAD 가 옛 커밋에서 새 커밋으로 앞으로만 나아갔는지. */
 export interface HeadAdvance {
   isDescendant: boolean;
-  /** 새로 쌓인 커밋 수. 자손이 아니면 0. */
+  /** 새로 쌓인 커밋 수(첫 부모 줄기만 — 병합으로 끌어온 커밋은 세지 않는다). 자손이 아니면 0. */
   count: number;
-  /** 새 커밋 제목, 오래된 것부터 많아야 5개. */
+  /** 새 커밋 제목, 최근 것부터 많아야 5개. */
   subjects: string[];
 }
 
@@ -673,7 +673,7 @@ export interface BranchChangedFile {
   additions: number;
   deletions: number;
   isBinary: boolean;
-  /** 추적하지 않는 새 파일이 1 MiB를 넘어 읽지 않았다. 줄 수는 0이다. */
+  /** 새 파일이 1 MiB를, 추적하는 파일이 8 MiB를 넘어 줄 단위로 비교하지 않았다. 줄 수는 0이다. */
   tooLarge?: boolean;
   /**
    * 이 목록이 보여 주는 쪽(커밋 트리 또는 작업 트리)의 파일 내용 id. 보통 blob OID이고, 1 MiB를 넘는
@@ -721,7 +721,7 @@ export interface BranchChanges {
 
 /**
  * `get_file_diff_vs_default`의 결과. 파일 하나를 갈라진 지점 → 작업 트리로 비교한다.
- * 1 MiB를 넘는 새 파일은 읽지 않는다: `binary`가 true이고 `binaryPreview.meta.tooLarge`가 true다.
+ * 1 MiB를 넘는 새 파일과 8 MiB를 넘는 추적 파일은 읽지 않는다: `binary`가 true이고 `binaryPreview.meta.tooLarge`가 true다.
  */
 export interface FileDiffVsDefault extends DiffOutput {
   /** 이름을 바꾼 파일이면 갈라진 지점에서의 경로. */
@@ -740,6 +740,8 @@ export type RemotePlanSkipReason =
   | "noUpstream"
   /** Pull: 추적 브랜치는 설정돼 있지만 원격 브랜치가 사라졌다. */
   | "upstreamGone"
+  /** Pull: 추적 브랜치는 설정돼 있지만 이 클론(`--single-branch` 등)이 그 브랜치를 받지 않는다. */
+  | "notTracked"
   | "detachedHead"
   | "unborn"
   | "noRemote"

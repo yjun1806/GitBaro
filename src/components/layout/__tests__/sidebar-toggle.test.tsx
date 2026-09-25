@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import i18n from "@/i18n/config";
 import { useUIStore } from "@/stores/ui";
 import type { SidebarTreeData } from "@/components/sidebar/useSidebarTreeData";
 import { HiddenSidebarLead } from "../SidebarToggle";
 import { isSidebarToggleShortcut, useSidebarToggleShortcut } from "../useSidebarToggleShortcut";
 import { RepoRail } from "../RepoRail";
+import { Dialog } from "@/components/ui/Dialog";
 
 // 사이드바 안의 트리·설정 조회는 Tauri를 부른다. 여기서는 머리 줄과 숨김 상태만 본다.
 vi.mock("@/components/sidebar/RepoTree", () => ({ RepoTree: () => <div>repo-tree</div> }));
@@ -53,6 +54,27 @@ describe("sidebar toggle in the sidebar header", () => {
     expect(screen.getByText("repo-tree")).toBeTruthy();
   });
 
+  it("keeps keyboard focus on the toggle as it moves between the sidebar and the toolbar", () => {
+    // 숨긴 사이드바는 inert라, 그 안의 버튼에 있던 포커스가 body로 떨어지면 안 된다.
+    render(
+      <>
+        <div data-testid="toolbar">
+          <HiddenSidebarLead />
+        </div>
+        <div data-testid="sidebar">
+          <RepoRail width={276} />
+        </div>
+      </>,
+    );
+    const toggleIn = (id: string) => within(screen.getByTestId(id)).getByRole("button", { name: /사이드바/ });
+    toggleIn("sidebar").focus();
+    fireEvent.click(toggleIn("sidebar"));
+    expect(document.activeElement).toBe(toggleIn("toolbar"));
+
+    fireEvent.click(toggleIn("toolbar"));
+    expect(document.activeElement).toBe(toggleIn("sidebar"));
+  });
+
   it("turns off the slide under reduced motion", () => {
     const { container } = render(<RepoRail width={276} />);
     const panel = container.querySelector("[data-sidebar-panel]") as HTMLElement;
@@ -87,6 +109,19 @@ describe("⌘\\ shortcut", () => {
     render(<ShortcutHost />);
     pressKey({ key: "\\", code: "Backslash", metaKey: true });
     expect(useUIStore.getState().sidebarHidden).toBe(true);
+    pressKey({ key: "\\", code: "Backslash", metaKey: true });
+    expect(useUIStore.getState().sidebarHidden).toBe(false);
+  });
+
+  it("does nothing while a modal dialog is open", () => {
+    render(
+      <>
+        <ShortcutHost />
+        <Dialog ariaLabel="settings">
+          <button type="button">ok</button>
+        </Dialog>
+      </>,
+    );
     pressKey({ key: "\\", code: "Backslash", metaKey: true });
     expect(useUIStore.getState().sidebarHidden).toBe(false);
   });

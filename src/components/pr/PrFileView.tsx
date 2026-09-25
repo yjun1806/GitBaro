@@ -19,6 +19,8 @@ interface PrFileViewProps {
   editorRepoPath: string | null;
   /** 이 줄(새 쪽)을 보이게 스크롤한다. */
   revealLine: number | null;
+  /** 바뀌면 같은 줄로 다시 스크롤한다. */
+  revealNonce: number;
   onReveal: (line: number | null) => void;
 }
 
@@ -35,7 +37,7 @@ function patchDiff(file: PrFile): DiffOutput | null {
  * - 스레드: diff 아래 칸. 줄을 누르면 diff가 그 줄로 간다(새 쪽 줄만 — DiffViewer 제약).
  *   자리를 잃은(outdated) 스레드는 따로 접어 둔다.
  */
-export function PrFileView({ pr, file, threads, repoPath, editorRepoPath, revealLine, onReveal }: PrFileViewProps) {
+export function PrFileView({ pr, file, threads, repoPath, editorRepoPath, revealLine, revealNonce, onReveal }: PrFileViewProps) {
   const { t } = useTranslation();
   const actions = useMenuActions();
   const local = usePullRequestFileDiff(
@@ -75,6 +77,7 @@ export function PrFileView({ pr, file, threads, repoPath, editorRepoPath, reveal
         maximizable
         repoPath={editorRepoPath}
         revealLine={revealLine}
+        revealNonce={revealNonce}
         headerExtra={
           !useLocal ? (
             <span className="text-[10.5px] text-(--faint)" title={t("pr.file.patchSourceHint")}>

@@ -78,17 +78,37 @@ export function documentRanges(root: Element, re: RegExp, limit = MAX_FIND_MATCH
   return { ranges, capped: false };
 }
 
-/** 찾은 곳을 모두 옅게, 지금 것만 진하게 칠한다. `all`에 `current`가 들어 있어도 된다. */
-export function paintFindHighlights(all: Range[], current: Range | null): void {
-  const reg = registry();
-  if (!reg) return;
-  reg.set(ALL, new Highlight(...all.filter((r) => r !== current)));
-  if (current) reg.set(CURRENT, new Highlight(current));
+/** 뷰어마다 칠한 것. 하이라이트 이름은 CSS에 고정돼 있어 하나뿐이므로, 뷰어별로 모아 합쳐 칠한다 —
+ * 나란히 보기처럼 뷰어가 둘일 때 한쪽이 다른 쪽 것을 덮어쓰거나 지우지 않게. */
+const painted = new Map<symbol, { all: Range[]; current: Range | null }>();
+
+function repaint(reg: HighlightRegistry): void {
+  const all: Range[] = [];
+  const current: Range[] = [];
+  for (const v of painted.values()) {
+    all.push(...v.all.filter((r) => r !== v.current));
+    if (v.current) current.push(v.current);
+  }
+  if (all.length > 0) reg.set(ALL, new Highlight(...all));
+  else reg.delete(ALL);
+  if (current.length > 0) reg.set(CURRENT, new Highlight(...current));
   else reg.delete(CURRENT);
 }
 
-export function clearFindHighlights(): void {
+/**
+ * `owner`(뷰어 하나)가 찾은 곳을 모두 옅게, 지금 것만 진하게 칠한다. `all`에 `current`가 들어 있어도 된다.
+ * 다른 뷰어가 칠한 것은 그대로 둔다.
+ */
+export function paintFindHighlights(owner: symbol, all: Range[], current: Range | null): void {
   const reg = registry();
-  reg?.delete(ALL);
-  reg?.delete(CURRENT);
+  if (!reg) return;
+  painted.set(owner, { all, current });
+  repaint(reg);
+}
+
+/** `owner`가 칠한 것만 지운다. */
+export function clearFindHighlights(owner: symbol): void {
+  painted.delete(owner);
+  const reg = registry();
+  if (reg) repaint(reg);
 }

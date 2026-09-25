@@ -68,6 +68,8 @@ interface DiffViewerProps {
   freshLines?: ReadonlySet<number>;
   /** 줄 보기에서 이 새 쪽 줄 번호가 보이도록 스크롤한다(따라가기). */
   revealLine?: number | null;
+  /** 바뀌면 같은 `revealLine`으로 다시 스크롤한다(PR 스레드의 같은 줄을 다시 눌렀을 때). */
+  revealNonce?: number;
   /** diff 머리의 줄 수 앞에 둘 것(따라가기의 「4초 전 수정」, 스테이지 쪽 고르기). */
   headerExtra?: ReactNode;
   /** diff 머리에 「크게 보기」 버튼을 둘지. 목록 + diff 화면에서만 켠다. */
@@ -82,6 +84,7 @@ export function DiffViewer({
   staged = false,
   freshLines,
   revealLine = null,
+  revealNonce = 0,
   headerExtra,
   maximizable = false,
   repoPath = null,
@@ -340,6 +343,7 @@ export function DiffViewer({
           fontSize={codeFontSize}
           freshLines={freshLines}
           revealLine={revealLine}
+          revealNonce={revealNonce}
           onLineContextMenu={openMenu}
           onLineNumberDoubleClick={repoPath ? openLineInEditor : undefined}
           find={find.viewFind}

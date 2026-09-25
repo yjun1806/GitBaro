@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { compileFindRegex } from "../diff-find";
-import { documentRanges, rangesIn, textNodesOf } from "../find-highlight";
+import { clearFindHighlights, documentRanges, paintFindHighlights, rangesIn, textNodesOf } from "../find-highlight";
 
 function html(markup: string): HTMLElement {
   const el = document.createElement("div");
@@ -43,5 +43,50 @@ describe("documentRanges", () => {
   it("caps the count", () => {
     const el = html("<p>a a a a</p>");
     expect(documentRanges(el, re("a"), 2)).toMatchObject({ capped: true });
+  });
+});
+
+describe("paintFindHighlights", () => {
+  // jsdom에는 CSS Custom Highlight API가 없다. 이름 → 칠한 Range 목록만 기록한다.
+  const registry = new Map<string, Range[]>();
+  beforeEach(() => {
+    registry.clear();
+    vi.stubGlobal(
+      "Highlight",
+      class {
+        ranges: Range[];
+        constructor(...ranges: Range[]) {
+          this.ranges = ranges;
+        }
+      },
+    );
+    vi.stubGlobal("CSS", {
+      highlights: {
+        set: (name: string, h: { ranges: Range[] }) => registry.set(name, h.ranges),
+        delete: (name: string) => registry.delete(name),
+      },
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("keeps each viewer's highlights when two diff viewers are on screen", () => {
+    // 나란히 보기(SideBySideDiff)처럼 뷰어가 둘이면 한쪽이 칠하거나 지워도 다른 쪽이 남아야 한다.
+    const left = rangesIn(textNodesOf(html("<p>foo foo</p>")), re("foo"));
+    const right = rangesIn(textNodesOf(html("<p>foo</p>")), re("foo"));
+    const a = Symbol("left");
+    const b = Symbol("right");
+
+    paintFindHighlights(a, left, left[0]);
+    paintFindHighlights(b, right, right[0]);
+    expect(registry.get("diff-find")).toEqual([left[1]]);
+    expect(registry.get("diff-find-current")).toEqual([left[0], right[0]]);
+
+    clearFindHighlights(b);
+    expect(registry.get("diff-find")).toEqual([left[1]]);
+    expect(registry.get("diff-find-current")).toEqual([left[0]]);
+
+    clearFindHighlights(a);
+    expect(registry.has("diff-find")).toBe(false);
+    expect(registry.has("diff-find-current")).toBe(false);
   });
 });

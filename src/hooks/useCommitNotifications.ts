@@ -82,7 +82,7 @@ export function useCommitNotifications(enabled: boolean): void {
           if (!advance.isDescendant || advance.count === 0) return;
           bursts.current = addToBurst(
             bursts.current,
-            { ...move, count: advance.count, firstSubject: advance.subjects[0] ?? null },
+            { ...move, count: advance.count, latestSubject: advance.subjects[0] ?? null },
             Date.now(),
           );
         })
@@ -102,7 +102,7 @@ export function useCommitNotifications(enabled: boolean): void {
       const where = burst.branch ?? truncateHash(burst.latestOid);
       return {
         title: t("notify.newCommitsTitle", { repo: repoName, branch: where, count: burst.count }),
-        body: burst.firstSubject ?? "",
+        body: burst.latestSubject ?? "",
         target: {
           kind: "commit" as const,
           repoPath: burst.repoPath,

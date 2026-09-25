@@ -47,7 +47,7 @@ async fn which(name: &str) -> Option<String> {
 pub async fn get_environment_info() -> Result<EnvironmentInfo, AppError> {
     let git_path = which("git").await;
     let git_version = binary_version(Path::new(git_path.as_deref().unwrap_or("git"))).await;
-    let gh = crate::gh::cli::find_gh_binary().ok();
+    let gh = crate::gh::cli::locate_gh().await.ok();
     let gh_version = match &gh {
         Some(path) => binary_version(path).await,
         None => None,

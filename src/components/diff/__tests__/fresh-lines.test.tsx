@@ -99,4 +99,41 @@ describe("VirtualizedDiffView fresh lines (follow mode)", () => {
     );
     expect(scrollToIndex).toHaveBeenCalledTimes(1);
   });
+
+  it("scrolls to the same line again when the reveal nonce changes", () => {
+    // PR 스레드의 같은 줄을 다시 누르면(그 사이 스크롤했어도) 다시 그 줄로 간다.
+    const file = buildFile();
+    const view = (nonce: number) => (
+      <VirtualizedDiffView
+        diffFile={file}
+        viewMode="unified"
+        isDark={false}
+        highlight={false}
+        fontSize={12}
+        revealLine={5}
+        revealNonce={nonce}
+      />
+    );
+    const { rerender } = render(view(0));
+    expect(scrollToIndex).toHaveBeenCalledTimes(1);
+    rerender(view(1));
+    expect(scrollToIndex).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("VirtualizedDiffView find scrolling", () => {
+  it("does not jump back to the active match when the rows are rebuilt", () => {
+    // 찾기가 열린 채 diff가 다시 조회되면(새 diffFile) 행 배열이 새로 만들어진다. 사용자가 스크롤한
+    // 자리를 지키고, 일치 번호나 찾는 말이 바뀔 때만 움직인다.
+    const find = { regex: /x/gi, active: 0, nonce: 0 };
+    const view = (file: ReturnType<typeof buildFile>, f: typeof find) => (
+      <VirtualizedDiffView diffFile={file} viewMode="unified" isDark={false} highlight={false} fontSize={12} find={f} />
+    );
+    const { rerender } = render(view(buildFile(), find));
+    expect(scrollToIndex).toHaveBeenCalledTimes(1);
+    rerender(view(buildFile(), { ...find }));
+    expect(scrollToIndex).toHaveBeenCalledTimes(1);
+    rerender(view(buildFile(), { ...find, nonce: 1 }));
+    expect(scrollToIndex).toHaveBeenCalledTimes(2);
+  });
 });

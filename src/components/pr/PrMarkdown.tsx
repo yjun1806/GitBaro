@@ -1,4 +1,5 @@
 import { useMemo, type MouseEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { useMenuActions } from "@/hooks/useMenuActions";
 import { cn } from "@/lib/utils";
 import { renderPrMarkdown } from "./pr-markdown";
@@ -9,15 +10,22 @@ interface PrMarkdownProps {
   /** 본문이 비었을 때 보일 글. 없으면 아무것도 그리지 않는다(본문 없는 승인 리뷰 등). */
   placeholder?: string;
   className?: string;
+  /** 이 글의 GitHub 주소(PR·코멘트). 앱이 그릴 수 없는 그림은 이 주소로 가는 링크가 된다. */
+  sourceUrl?: string;
 }
 
 /**
  * PR 본문·코멘트. 살균한 HTML만 넣는다(`renderPrMarkdown`). 링크를 누르면 앱 창이 그 주소로 넘어가지
  * 않게 막고 브라우저에서 연다.
  */
-export function PrMarkdown({ source, placeholder, className }: PrMarkdownProps) {
+export function PrMarkdown({ source, placeholder, className, sourceUrl }: PrMarkdownProps) {
+  const { t } = useTranslation();
   const actions = useMenuActions();
-  const html = useMemo(() => renderPrMarkdown(source), [source]);
+  const imageLabel = t("pr.imageOnGitHub");
+  const html = useMemo(
+    () => renderPrMarkdown(source, { href: sourceUrl ?? "", label: imageLabel }),
+    [source, sourceUrl, imageLabel],
+  );
 
   const handleClick = (e: MouseEvent<HTMLDivElement>) => {
     const anchor = e.target instanceof Element ? e.target.closest("a") : null;

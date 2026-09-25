@@ -68,6 +68,8 @@ export function MarkdownDiffView({ oldContent, newContent, onError, find = null,
 
   // 찾기 — 위의 `paint` 효과 뒤에 선언해야 칠해진 문서에서 찾는다(효과는 선언 순서대로 돈다).
   // 문서는 가상 목록이 아니라 한 번에 다 그려지므로 찾은 Range를 그대로 들고 있다.
+  // 칠한 하이라이트를 이 뷰어 것으로 묶는 표(`paintFindHighlights`).
+  const [findOwner] = useState(() => Symbol("doc-find"));
   const [found, setFound] = useState<{ ranges: Range[]; capped: boolean } | null>(null);
   const regex = find?.regex ?? null;
   useEffect(() => {
@@ -85,13 +87,13 @@ export function MarkdownDiffView({ oldContent, newContent, onError, find = null,
   useEffect(() => {
     if (!found) return;
     const current = found.ranges[Math.min(active, found.ranges.length - 1)] ?? null;
-    paintFindHighlights(found.ranges, current);
+    paintFindHighlights(findOwner, found.ranges, current);
     current?.startContainer.parentElement?.scrollIntoView({ block: "center" });
-  }, [found, active, findNonce]);
+  }, [found, active, findNonce, findOwner]);
   useEffect(() => {
     if (!regex) return;
-    return clearFindHighlights;
-  }, [regex]);
+    return () => clearFindHighlights(findOwner);
+  }, [regex, findOwner]);
 
   // 오류는 부모가 통합 보기로 전환하며 토스트로 설명한다 — 여기서 또 말하면 두 번 말하는 셈이다.
   if (state.status !== "ready") {

@@ -38,10 +38,28 @@ const INLINE_DELETE_LIMIT = 2;
  *   이 뷰의 변경 표시를 흉내 낼 수도 있다. 렌더에 필요한 클래스(`d-*`)는 살균 **뒤에**
  *   이 파일이 직접 붙이고, markdown-it이 붙이는 `language-*`는 쓰는 곳이 없다.
  *   GitHub도 README의 class·id를 걷어낸다.
+ * - `<style>` 요소: 속성이 아니라 `FORBID_ATTR`에 걸리지 않는다. 문서 중간이나 `<svg>` 안에
+ *   두면 앱 전체의 스타일을 바꾼다. `<svg>`·`<math>`는 규칙이 달라지는 별도 네임스페이스라
+ *   통째로, 문서 머리 요소(`link`·`meta`·`base`)와 삽입 요소(`iframe`·`object`·`embed`)도 막는다.
  */
 const SANITIZE: Parameters<typeof DOMPurify.sanitize>[1] = {
   FORBID_ATTR: ["style", "class", "id"],
-  FORBID_TAGS: ["form", "input", "button", "select", "textarea"],
+  FORBID_TAGS: [
+    "style",
+    "svg",
+    "math",
+    "link",
+    "meta",
+    "base",
+    "form",
+    "input",
+    "button",
+    "select",
+    "textarea",
+    "iframe",
+    "object",
+    "embed",
+  ],
 };
 
 /**

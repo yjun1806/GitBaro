@@ -38,10 +38,21 @@ pub fn untracked_lines(full_path: &Path) -> UntrackedLines {
     if meta.len() > UNTRACKED_COUNT_LIMIT {
         return UntrackedLines::TooLarge;
     }
-    let mut bytes = Vec::with_capacity(meta.len() as usize);
-    let read = std::fs::File::open(full_path).and_then(|mut f| f.read_to_end(&mut bytes));
-    if read.is_err() {
+    match std::fs::File::open(full_path) {
+        Ok(file) => lines_from(file),
+        Err(_) => UntrackedLines::Unreadable,
+    }
+}
+
+/// 읽은 내용의 줄 수. 크기를 본 뒤에도 파일이 자랄 수 있어(에이전트가 쓰는 중인 로그) 한도 + 1 바이트까지만
+/// 읽고, 그보다 길면 「너무 큼」이다.
+fn lines_from(reader: impl Read) -> UntrackedLines {
+    let mut bytes = Vec::new();
+    if reader.take(UNTRACKED_COUNT_LIMIT + 1).read_to_end(&mut bytes).is_err() {
         return UntrackedLines::Unreadable;
+    }
+    if bytes.len() as u64 > UNTRACKED_COUNT_LIMIT {
+        return UntrackedLines::TooLarge;
     }
     match count_lines(&bytes) {
         Some(n) => UntrackedLines::Text(n),
@@ -81,6 +92,13 @@ mod tests {
         assert_eq!(count_lines(b"a\nb\n"), Some(2));
         assert_eq!(count_lines(b"a\nb"), Some(2));
         assert_eq!(count_lines(b"a\0b"), None);
+    }
+
+    #[test]
+    fn stops_reading_at_the_limit_when_the_file_grew_after_the_size_check() {
+        // 끝없는 입력으로 흉내 낸다. 한도 없이 읽으면 멈추지 않는다.
+        assert_eq!(lines_from(std::io::repeat(b'x')), UntrackedLines::TooLarge);
+        assert_eq!(lines_from(&b"a\nb\n"[..]), UntrackedLines::Text(2));
     }
 
     #[test]

@@ -75,7 +75,7 @@ function CommentBlock({
             </button>
           )}
         </div>
-        <PrMarkdown source={comment.body} className="mt-0.5" />
+        <PrMarkdown source={comment.body} className="mt-0.5" sourceUrl={comment.url || undefined} />
       </div>
     </div>
   );

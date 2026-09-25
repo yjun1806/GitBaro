@@ -944,7 +944,10 @@ export function usePullRequests(repoPath: string | null, accountId: string | nul
     refetchInterval: PULL_REQUEST_POLL_MS,
     refetchIntervalInBackground: false,
     staleTime: 30_000,
-    placeholderData: keepPreviousData,
+    // 필터만 바꿀 때는 이전 목록을 둔다. 저장소·계정이 바뀌면 두지 않는다 — 남은 줄을 누르면
+    // 새 저장소에서 같은 번호의 다른 PR을 연다.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === repoPath && previousQuery.queryKey[2] === accountId ? previous : undefined,
   });
 }
 

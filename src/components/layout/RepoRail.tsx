@@ -70,7 +70,7 @@ export function RepoRail({ width }: RepoRailProps) {
             예약한다(Overlay 타이틀바). 사이드바 버튼은 숨겼을 때 툴바에 놓이는 자리와 같다. */}
         <div className={cn("flex items-center gap-1.5 pr-2 shrink-0 border-b border-(--line2)", HEADER_HEIGHT_CLASS)}>
           <div className="h-full shrink-0" style={{ width: TRAFFIC_LIGHT_INSET_PX }} data-tauri-drag-region />
-          <SidebarToggleButton />
+          <SidebarToggleButton placement="sidebar" />
           <button
             onClick={() => setRepoListOpen(!repoListOpen)}
             title={t("rail.allRepos")}

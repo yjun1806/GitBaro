@@ -59,7 +59,7 @@ export function PrOverview({ pr, onOpenThread }: PrOverviewProps) {
             <span className="font-semibold text-(--fg2)">{pr.author.login}</span>
             <TimeAgo iso={pr.createdAt} />
           </div>
-          <PrMarkdown source={pr.body} placeholder={t("pr.noDescription")} />
+          <PrMarkdown source={pr.body} placeholder={t("pr.noDescription")} sourceUrl={pr.url} />
         </Section>
 
         {(pr.reviewers.length > 0 || pr.labels.length > 0) && (

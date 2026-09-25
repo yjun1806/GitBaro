@@ -34,6 +34,7 @@ import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { useCurrentPlaceMenu } from "./useCurrentPlaceMenu";
 import { useMenuActions } from "@/hooks/useMenuActions";
+import { useActiveRepoName } from "@/hooks/useRepoDisplay";
 
 /** 제목 툴팁을 머리 줄 아래 경계보다 6px 아래에 띄운다(28px 버튼은 줄 안에서 가운데 정렬). */
 const TITLE_TOOLTIP_OFFSET_PX = (HEADER_HEIGHT_PX - 28) / 2 + 6;
@@ -59,8 +60,8 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const addToast = useToastStore((s) => s.addToast);
   // 복사는 결과를 기다려 성공·실패를 알린다(다른 메뉴와 같은 동작).
   const actions = useMenuActions();
-  const activeRepoName = useRepositoryStore((s) => s.activeRepo?.name ?? "");
-  const { mainWorktree, currentWorktree, isInWorktree } = useWorktreeContext(activeRepoPath, worktrees);
+  const repoTitle = useActiveRepoName();
+  const { currentWorktree, isInWorktree } = useWorktreeContext(activeRepoPath, worktrees);
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
   // 전환은 「보는 중」 띠·그래프 메뉴와 같은 규칙(원격→로컬 이름, 다른 워크트리면 이동, 변경은 묻기)을 쓴다.
   const { checkout, element: checkoutDialog } = useCheckoutBranch();
@@ -237,7 +238,6 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
 
 
   const placeMenu = useCurrentPlaceMenu(currentBranch);
-  const repoTitle = mainWorktree?.path.split("/").filter(Boolean).pop() ?? activeRepoName;
   const originAhead = !isInWorktree ? ahead : 0;
   const branchText = currentBranch ?? (isDetached ? t("branch.detachedHead") : t("branch.noBranch"));
   const titleTooltip = [
