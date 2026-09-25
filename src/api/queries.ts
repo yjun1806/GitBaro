@@ -116,6 +116,8 @@ export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> 
       "fileDiffVsDefault",
       // fetch가 origin/HEAD를 바꾸거나 원격 기본 브랜치를 처음 받아 올 수 있다.
       "defaultBranches",
+      // 그래프에 함께 그린 다른 워크트리의 이력. HEAD가 그대로여도 push·fetch 뒤 원격 라벨이 바뀐다.
+      "worktreeHeadHistory",
     ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
   );
 }
