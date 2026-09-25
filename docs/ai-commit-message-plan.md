@@ -1,3 +1,5 @@
+> 구현하지 않은 계획입니다(2026-09-25 확인). 코드에 `claude` 모듈·`generate_commit_message` 커맨드가 없고, 계획이 가리키는 `Sidebar.tsx` 커밋 패널도 지금은 없습니다.
+
 # 커밋 메시지 자동 생성 (Claude Code CLI 연동)
 
 ## Context
