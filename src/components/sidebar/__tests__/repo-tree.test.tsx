@@ -14,6 +14,8 @@ vi.mock("@/api/commands", () => ({
   getWorktrees: vi.fn(),
   getBranches: vi.fn(),
   removeWorktree: vi.fn(async () => {}),
+  getStatus: vi.fn(async () => []),
+  switchBranch: vi.fn(async () => {}),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), ask: vi.fn() }));
 
@@ -541,6 +543,15 @@ describe("RepoTree — right-click menus", () => {
     fireEvent.contextMenu(await screen.findByRole("treeitem", { name: "View main (no checkout)" }));
     expect(menuLabels()).toEqual(["View without checkout", "Check out here", "Copy branch name"]);
     expect((menuItem("Check out here") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("checks out the view-only default branch in the open repository once its lists are loaded", async () => {
+    const { switchBranch } = await import("@/api/commands");
+    useRepositoryStore.setState({ activeRepoPath: SOLO, activeRepo: repos[2] });
+    renderTree(makeData(baseSignals));
+    fireEvent.contextMenu(await screen.findByRole("treeitem", { name: "View main (no checkout)" }));
+    fireEvent.click(menuItem("Check out here"));
+    await waitFor(() => expect(switchBranch).toHaveBeenCalledWith(SOLO, "main"));
   });
 
   it("sorts, creates a workspace and folds everything from the account line", () => {
