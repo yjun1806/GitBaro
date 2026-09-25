@@ -94,6 +94,18 @@ describe("PrListView", () => {
     expect(invoke).toHaveBeenCalledWith("list_pull_requests", expect.objectContaining({ state: "closed" }));
   });
 
+  it("does not show the previous repository's PRs while the next one loads", async () => {
+    // 이전 저장소의 줄이 남아 있으면 그 줄을 눌러 새 저장소에서 엉뚱한 번호의 PR을 연다.
+    const other = { ...repo, path: "/work/other", name: "other" } as typeof repo;
+    handlers.list_pull_requests = ({ repoPath }) =>
+      repoPath === REPO ? [summary({ title: "Old repo PR" })] : new Promise(() => {});
+    renderList();
+    await screen.findByText("Old repo PR");
+    useRepositoryStore.setState({ repos: [repo, other], activeRepo: other, activeRepoPath: other.path });
+    await waitFor(() => expect(screen.queryByText("Old repo PR")).toBeNull());
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+
   it("refresh bypasses the backend cache", async () => {
     renderList();
     await screen.findByText("Older PR");
