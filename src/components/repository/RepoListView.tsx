@@ -455,6 +455,11 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                         <button
                           ref={navIdx >= 0 ? itemRef(navIdx) : undefined}
                           onClick={() => onSelectRepo(repo.path)}
+                          // 우클릭은 ⋮ 버튼과 같은 메뉴(계정 연결·즐겨찾기·자동 동기화·목록에서 제거)를 연다.
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setAccountPickerRepo(repo.path);
+                          }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-colors min-w-0 rounded-md",
                             isActive
