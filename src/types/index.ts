@@ -734,6 +734,8 @@ export interface FileDiffVsDefault extends DiffOutput {
 export type RemotePlanSkipReason =
   | "upToDate"
   | "noUpstream"
+  /** Pull: 추적 브랜치는 설정돼 있지만 원격 브랜치가 사라졌다. */
+  | "upstreamGone"
   | "detachedHead"
   | "unborn"
   | "noRemote"

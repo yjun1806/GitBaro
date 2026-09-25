@@ -35,6 +35,8 @@ pub enum RemotePlanSkipReason {
     UpToDate,
     /// Pull: 추적 브랜치가 없다.
     NoUpstream,
+    /// Pull: 추적 브랜치는 설정돼 있지만 그 원격 브랜치가 사라졌다(원격에서 지운 뒤 fetch --prune).
+    UpstreamGone,
     /// 체크아웃한 브랜치가 없다(detached HEAD).
     DetachedHead,
     /// 커밋이 하나도 없는 저장소.
@@ -217,7 +219,8 @@ fn plan_pull(repo: &Repository, target: &SyncTarget, base: RepoRemotePlan) -> Re
         .unwrap_or_default();
     let command = format!("git pull {}{} {}", flag, remote, merge_ref);
     let branch = target.branch.as_deref().unwrap_or_default();
-    let behind = upstream_ahead_behind(repo, branch).map_or(0, |(_, behind)| behind);
+    let ahead_behind = upstream_ahead_behind(repo, branch);
+    let behind = ahead_behind.map_or(0, |(_, behind)| behind);
     let plan = RepoRemotePlan {
         remote: Some(remote),
         command: Some(command),
@@ -225,7 +228,10 @@ fn plan_pull(repo: &Repository, target: &SyncTarget, base: RepoRemotePlan) -> Re
         behind,
         ..base
     };
-    if behind == 0 {
+    if ahead_behind.is_none() {
+        // 설정은 있는데 추적 브랜치 ref 가 없다: 받을 곳이 없으므로 「받을 것 없음」이 아니다.
+        plan.skipped(RemotePlanSkipReason::UpstreamGone)
+    } else if behind == 0 {
         plan.skipped(RemotePlanSkipReason::UpToDate)
     } else {
         plan
@@ -692,6 +698,23 @@ mod tests {
         );
         assert!(!plan.sets_upstream);
         assert_eq!(plan.commits, 1);
+    }
+
+    #[test]
+    fn pull_when_the_remote_branch_was_deleted_says_so() {
+        let root = tmp_dir("upstream-gone");
+        let (origin, work) = clone_with_origin(&root);
+        git(&work, &["checkout", "-q", "-b", "feat"]);
+        commit(&work, "a");
+        git(&work, &["push", "-q", "-u", "origin", "feat"]);
+        git(&origin, &["branch", "-D", "feat"]);
+        git(&work, &["fetch", "-q", "--prune", "origin"]);
+
+        let plan = plan_repo(p(&work), RemotePlanOp::Pull);
+        assert!(plan.skip);
+        assert_eq!(plan.skip_reason, Some(RemotePlanSkipReason::UpstreamGone));
+        let json = serde_json::to_value(&plan).unwrap();
+        assert_eq!(json["skipReason"], "upstreamGone");
     }
 
     #[test]

@@ -1047,6 +1047,7 @@
       "upToDate_push": "Nothing to push",
       "upToDate_pull": "Nothing to pull",
       "noUpstream": "No tracking branch",
+      "upstreamGone": "Remote branch is gone",
       "detachedHead": "No branch",
       "unborn": "No commits",
       "noRemote": "No remote",
