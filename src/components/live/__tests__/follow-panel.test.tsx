@@ -152,6 +152,11 @@ afterEach(() => {
 
 describe("FollowPanel", () => {
   it("lists files by modification time and shows the most recent one while following", async () => {
+    // Freeze only the clock (timers stay real for waitFor), so "4 seconds ago" does not
+    // drift to "5 seconds ago" when the machine is slow.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    backend.files = [wipFile("src/b.ts", nowSecs() - 4), wipFile("src/a.ts", nowSecs() - 40)];
     renderFollow();
     await waitFor(() => expect(diffText()).toContain("src/b.ts"));
     const names = screen.getAllByRole("listitem").map((el) => el.getAttribute("title"));
