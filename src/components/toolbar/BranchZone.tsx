@@ -26,7 +26,6 @@ import { BranchPanel } from "@/components/branch/BranchPanel";
 import { BranchMergeDialog } from "@/components/branch/BranchMergeDialog";
 import { useBranchRangeStore } from "@/components/branch/branch-range";
 import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
-import { SwitchBranchDialog } from "@/components/branch/SwitchBranchDialog";
 import { DeleteBranchDialog } from "@/components/branch/DeleteBranchDialog";
 import { RenameBranchDialog } from "@/components/branch/RenameBranchDialog";
 import { WorktreeBaseLabel } from "@/components/worktree/WorktreeBaseLabel";
@@ -34,7 +33,9 @@ import { selectionAfterStashPushed } from "@/lib/stash-selection";
 import { runWithStashedChanges } from "./run-with-stashed-changes";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
+import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { useCurrentPlaceMenu } from "./useCurrentPlaceMenu";
+import { useMenuActions } from "@/hooks/useMenuActions";
 
 /**
  * 툴바 오른쪽 [브랜치 · Merge · Stash] 묶음의 「브랜치」 버튼. 왼쪽 브랜치 칸과 같은
@@ -84,11 +85,14 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
+  // 복사는 결과를 기다려 성공·실패를 알린다(다른 메뉴와 같은 동작).
+  const actions = useMenuActions();
   const activeRepoName = useRepositoryStore((s) => s.activeRepo?.name ?? "");
   const { mainWorktree, currentWorktree, isInWorktree } = useWorktreeContext(activeRepoPath, worktrees);
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
+  // 전환은 「보는 중」 띠·그래프 메뉴와 같은 규칙(원격→로컬 이름, 다른 워크트리면 이동, 변경은 묻기)을 쓴다.
+  const { checkout, element: checkoutDialog } = useCheckoutBranch();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pendingRename, setPendingRename] = useState<string | null>(null);
   const [pendingMerge, setPendingMerge] = useState<string | null>(null);
@@ -117,6 +121,8 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         // 브랜치를 만들거나 바꾸면 「파일별 변경」(D7)의 기준(브랜치)과 목록도 바뀐다(W7 리뷰).
         "changesVsDefault",
         "fileDiffVsDefault",
+        // 사이드바의 「보기만 하는 기본 브랜치」 줄은 기본 브랜치를 체크아웃한 폴더가 있는지에 따라 바뀐다.
+        "defaultBranches",
       ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
     );
 
@@ -170,57 +176,6 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         );
         return true;
     }
-  };
-
-  /**
-   * "leave": stash the changes (they stay behind in the stash list) and
-   * switch; if the switch fails, pop them back. "bring": git carries them over.
-   */
-  const switchTo = async (repoPath: string, branchName: string, mode: "leave" | "bring") => {
-    const { setSwitchingBranch } = useUIStore.getState();
-    setSwitchingBranch(true);
-    try {
-      let switched: boolean;
-      if (mode === "leave") {
-        switched = await runStashed(repoPath, () => switchBranch(repoPath, branchName), {
-          popOnSuccess: false,
-          failureKey: "branch.failedToSwitch",
-        });
-      } else {
-        try {
-          await switchBranch(repoPath, branchName);
-          switched = true;
-        } catch (err) {
-          addToast(t("branch.failedToSwitch", { error: getErrorMessage(err) }), "error");
-          switched = false;
-        }
-      }
-      if (switched) {
-        clearBranchScopedSelection();
-        addToast(t("branch.switchedTo", { name: branchName }), "success");
-      }
-    } finally {
-      await invalidateAll();
-      setSwitchingBranch(false);
-    }
-  };
-
-  const handleSwitch = async (branchName: string) => {
-    if (!activeRepoPath || branchName === currentBranch) return;
-
-    if (isDirty) {
-      setPendingSwitch(branchName);
-      return;
-    }
-
-    await switchTo(activeRepoPath, branchName, "bring");
-  };
-
-  const handleSwitchConfirm = async (action: "leave" | "bring") => {
-    if (!activeRepoPath || !pendingSwitch) return;
-    const target = pendingSwitch;
-    setPendingSwitch(null);
-    await switchTo(activeRepoPath, target, action);
   };
 
   const handleCreate = async (name: string, fromBranch: string) => {
@@ -308,10 +263,6 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
     onClose();
   };
 
-  const handleCopyName = (branchName: string) => {
-    navigator.clipboard.writeText(branchName);
-    addToast(t("branch.copiedName"), "success");
-  };
 
   const placeMenu = useCurrentPlaceMenu(currentBranch);
   const repoTitle = mainWorktree?.path.split("/").filter(Boolean).pop() ?? activeRepoName;
@@ -387,13 +338,13 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           branches={branches}
           worktrees={worktrees}
           currentBranch={currentBranch}
-          onSwitch={handleSwitch}
+          onSwitch={checkout}
           onOpenWorktree={openWorktree}
           onCompare={handleCompare}
           onMerge={handleMerge}
           onRename={setPendingRename}
           onDelete={handleDelete}
-          onCopyName={handleCopyName}
+          onCopyName={actions.copy}
           onCreateBranch={() => setShowCreateDialog(true)}
           onClose={onClose}
         />
@@ -410,14 +361,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         />
       )}
 
-      {pendingSwitch && (
-        <SwitchBranchDialog
-          currentBranch={currentBranch ?? t("branch.detachedHead")}
-          targetBranch={pendingSwitch}
-          onConfirm={handleSwitchConfirm}
-          onClose={() => setPendingSwitch(null)}
-        />
-      )}
+      {checkoutDialog}
 
       {pendingRename && (
         <RenameBranchDialog

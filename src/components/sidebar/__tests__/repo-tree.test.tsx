@@ -13,6 +13,9 @@ import type { BranchInfo, RepoInfo, RepoSyncStatus, WorktreeInfo } from "@/types
 vi.mock("@/api/commands", () => ({
   getWorktrees: vi.fn(),
   getBranches: vi.fn(),
+  removeWorktree: vi.fn(async () => {}),
+  getStatus: vi.fn(async () => []),
+  switchBranch: vi.fn(async () => {}),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), ask: vi.fn() }));
 
@@ -83,6 +86,7 @@ function makeData(
     overflow: opts.overflow ?? [],
     now: NOW,
     branchOf: (p) => branches[p] ?? null,
+    defaultBranchOf: (p) => ({ path: p, name: "main", hasLocal: true, remoteRef: "origin/main" }),
   };
 }
 
@@ -202,9 +206,9 @@ describe("RepoTree — cards and levels", () => {
     expect(item("feat/login")).toHaveAttribute("aria-level", "4");
     expect(item("feat/login").style.paddingLeft).toBe("16px");
     expect(item("api").style.paddingLeft).toBe("8px");
-    // main은 기본 폴더가 체크아웃하고 있어 보기 줄이 따로 없다.
-    await waitFor(() => expect(getBranches).toHaveBeenCalledWith(API));
-    expect(screen.queryByRole("treeitem", { name: "View main (no checkout)" })).toBeNull();
+    // main은 기본 폴더가 체크아웃하고 있어 워크스페이스 카드 안에는 보기 줄이 따로 없다.
+    const productCard = item("product").closest(".bg-card") as HTMLElement;
+    expect(within(productCard).queryByRole("treeitem", { name: "View main (no checkout)" })).toBeNull();
     expect(item("feat/login").closest(".bg-card")).toBe(item("product").closest(".bg-card"));
   });
 
@@ -303,6 +307,22 @@ describe("RepoTree — hover card", () => {
     expect(card).toHaveTextContent("2 uncommitted files");
     expect(card).toHaveTextContent("3 commits to push");
     fireEvent.mouseLeave(item(PRIMARY_MAIN));
+    expect(hoverCard()).toBeNull();
+  });
+
+  it("closes the card when its row goes away, and does not open it for a row that is already gone", async () => {
+    renderTree(makeData(baseSignals));
+    fireEvent.click(item("api"));
+    fireEvent.mouseEnter(item(PRIMARY_MAIN));
+    await screen.findByTestId("sidebar-hover-card");
+    // Folding the card unmounts the row without a mouseleave.
+    fireEvent.keyDown(item("api"), { key: "ArrowLeft" });
+    await waitFor(() => expect(hoverCard()).toBeNull());
+
+    fireEvent.keyDown(item("api"), { key: "ArrowRight" });
+    fireEvent.mouseEnter(item(PRIMARY_MAIN));
+    fireEvent.keyDown(item("api"), { key: "ArrowLeft" });
+    await new Promise((r) => setTimeout(r, 450));
     expect(hoverCard()).toBeNull();
   });
 
@@ -462,6 +482,19 @@ describe("RepoTree — right-click menus", () => {
   const menuLabels = () => within(screen.getByRole("menu")).getAllByRole("menuitem").map((m) => m.textContent);
   const menuItem = (name: string) => within(screen.getByRole("menu")).getByRole("menuitem", { name });
 
+  it("forgets a removed worktree as the place to reopen its repository", async () => {
+    const { ask } = await import("@tauri-apps/plugin-dialog");
+    vi.mocked(ask).mockResolvedValue(true);
+    useRepositoryStore.setState({ activeWorktrees: { [API]: WT } });
+    renderTree(makeData(baseSignals));
+    fireEvent.click(item("api"));
+    // 클릭이 저장소를 열며 기억된 워크트리로 가지 않게, 다른 곳을 연 상태로 둔다.
+    useRepositoryStore.setState({ activeRepoPath: SOLO, activeRepo: repos[2], activeWorktrees: { [API]: WT } });
+    fireEvent.contextMenu(item("feat/login"));
+    fireEvent.click(menuItem("Remove worktree…"));
+    await waitFor(() => expect(useRepositoryStore.getState().activeWorktrees[API]).toBeUndefined());
+  });
+
   it("offers open, view, folder actions, copy and removal (last) on a worktree line", async () => {
     const { ask } = await import("@tauri-apps/plugin-dialog");
     vi.mocked(ask).mockResolvedValue(false);
@@ -510,6 +543,15 @@ describe("RepoTree — right-click menus", () => {
     fireEvent.contextMenu(await screen.findByRole("treeitem", { name: "View main (no checkout)" }));
     expect(menuLabels()).toEqual(["View without checkout", "Check out here", "Copy branch name"]);
     expect((menuItem("Check out here") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("checks out the view-only default branch in the open repository once its lists are loaded", async () => {
+    const { switchBranch } = await import("@/api/commands");
+    useRepositoryStore.setState({ activeRepoPath: SOLO, activeRepo: repos[2] });
+    renderTree(makeData(baseSignals));
+    fireEvent.contextMenu(await screen.findByRole("treeitem", { name: "View main (no checkout)" }));
+    fireEvent.click(menuItem("Check out here"));
+    await waitFor(() => expect(switchBranch).toHaveBeenCalledWith(SOLO, "main"));
   });
 
   it("sorts, creates a workspace and folds everything from the account line", () => {

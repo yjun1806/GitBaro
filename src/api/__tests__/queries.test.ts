@@ -21,6 +21,8 @@ describe("invalidateAfterSync", () => {
       ["remoteTags", "/repo"],
       ["reviewStatus", ["/repo"]],
       ["workspaceHistory", "/repo", "headOid", 50],
+      ["worktreeHeadHistory", "/repo-feat", "headOid"],
+      ["defaultBranches", ["/repo"]],
       // 이 무효화가 건드리면 안 되는 무관한 키.
       ["unrelatedQuery", "/repo"],
     ];
@@ -36,6 +38,8 @@ describe("invalidateAfterSync", () => {
     expect(isStale(["reviewStatus", ["/repo"]])).toBe(true);
     expect(isStale(["workspaceHistory", "/repo", "headOid", 50])).toBe(true);
     expect(isStale(["branches", "/repo"])).toBe(true);
+    expect(isStale(["worktreeHeadHistory", "/repo-feat", "headOid"])).toBe(true);
+    expect(isStale(["defaultBranches", ["/repo"]])).toBe(true);
     expect(isStale(["unrelatedQuery", "/repo"])).toBe(false);
   });
 });

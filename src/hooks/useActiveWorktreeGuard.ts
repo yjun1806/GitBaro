@@ -1,15 +1,12 @@
-import { useEffect, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useCallback, useEffect, useRef } from "react";
 import { useStatus } from "@/api/queries";
+import { TAURI_EVENTS } from "@/api/events";
+import { useTauriEvent } from "./useTauriEvent";
 import { useRepositoryStore } from "@/stores/repository";
 import { useVerifyWorktree } from "./useVerifyWorktree";
 
 /** 파일 이벤트가 몰려 올 때(폴더를 통째로 지우면 수백 건) 한 번만 확인하려고 기다리는 시간(ms). */
 export const WORKTREE_CHECK_DEBOUNCE_MS = 500;
-
-interface FsChangePayload {
-  repoPath: string;
-}
 
 /**
  * 지금 연 워크트리가 앱 밖에서 지워졌는지(`git worktree remove`, 폴더 삭제) 지켜본다. 지워졌으면
@@ -38,32 +35,27 @@ export function useActiveWorktreeGuard(): void {
     if (linked && statusFailed) check.current();
   }, [linked, statusFailed, errorUpdatedAt]);
 
+  // 이벤트가 몰려 와도 한 번만 확인한다.
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const schedule = useCallback(() => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => check.current(), WORKTREE_CHECK_DEBOUNCE_MS);
+  }, []);
+
   useEffect(() => {
     if (!linked || !activeRepoPath) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const schedule = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => check.current(), WORKTREE_CHECK_DEBOUNCE_MS);
-    };
-    const onFocus = () => schedule();
-    window.addEventListener("focus", onFocus);
-
-    let mounted = true;
-    const unlisteners: (() => void)[] = [];
-    for (const event of ["fs:change", "fs:git-dir-change"]) {
-      listen<FsChangePayload>(event, (e) => {
-        if (e.payload.repoPath === activeRepoPath) schedule();
-      })
-        .then((fn) => (mounted ? unlisteners.push(fn) : fn()))
-        .catch(() => {
-          // 이벤트를 못 받아도 포커스와 상태 조회 실패로 확인한다.
-        });
-    }
+    window.addEventListener("focus", schedule);
     return () => {
-      mounted = false;
-      clearTimeout(timer);
-      window.removeEventListener("focus", onFocus);
-      unlisteners.forEach((fn) => fn());
+      clearTimeout(timer.current);
+      window.removeEventListener("focus", schedule);
     };
-  }, [linked, activeRepoPath]);
+  }, [linked, activeRepoPath, schedule]);
+
+  // 이벤트를 못 받아도 포커스와 상태 조회 실패로 확인한다.
+  // 기본 폴더를 연 동안에는 구독하지 않는다.
+  const onFsEvent = ({ repoPath }: { repoPath: string }) => {
+    if (repoPath === activeRepoPath) schedule();
+  };
+  useTauriEvent(TAURI_EVENTS.fsChange, onFsEvent, linked);
+  useTauriEvent(TAURI_EVENTS.fsGitDirChange, onFsEvent, linked);
 }

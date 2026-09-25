@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gitHubBranchUrl, gitHubCommitUrl, gitHubRepoUrl, joinRepoPath } from "@/lib/utils";
+import { gitHubBranchUrl, gitHubCommitUrl, gitHubRemoteBranchUrl, gitHubRepoUrl, joinRepoPath } from "@/lib/utils";
 
 describe("GitHub links for menus", () => {
   it("prefers origin among GitHub remotes and ignores other hosts", () => {
@@ -19,6 +19,18 @@ describe("GitHub links for menus", () => {
     expect(gitHubBranchUrl(repo, "feat/x")).toBe("https://github.com/me/app/tree/feat/x");
     expect(gitHubBranchUrl(repo, "origin/feat/x", true)).toBe("https://github.com/me/app/tree/feat/x");
     expect(gitHubBranchUrl(repo, "fix#1")).toBe("https://github.com/me/app/tree/fix%231");
+  });
+
+  it("opens a remote branch on its own remote's repository", () => {
+    const remotes = [
+      { name: "origin", url: "https://github.com/me/app.git" },
+      { name: "upstream", url: "git@github.com:up/app.git" },
+      { name: "corp", url: "https://gitlab.com/corp/app.git" },
+    ];
+    expect(gitHubRemoteBranchUrl(remotes, "upstream/feature-x")).toBe("https://github.com/up/app/tree/feature-x");
+    expect(gitHubRemoteBranchUrl(remotes, "origin/feat/x")).toBe("https://github.com/me/app/tree/feat/x");
+    expect(gitHubRemoteBranchUrl(remotes, "corp/main")).toBeNull();
+    expect(gitHubRemoteBranchUrl(remotes, "gone/main")).toBeNull();
   });
 
   it("joins a repository path and a relative path with one slash", () => {

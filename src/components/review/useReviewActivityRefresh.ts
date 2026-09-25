@@ -1,7 +1,6 @@
-import { useEffect, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ActivityEvent } from "@/types";
+import { TAURI_EVENTS } from "@/api/events";
+import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { activityInvalidationKeys, activityTargetOf, type ReviewRepoPaths } from "./review-model";
 
 /**
@@ -12,35 +11,14 @@ import { activityInvalidationKeys, activityTargetOf, type ReviewRepoPaths } from
  */
 export function useReviewActivityRefresh(repos: readonly ReviewRepoPaths[]): void {
   const queryClient = useQueryClient();
-  const reposRef = useRef(repos);
-  useEffect(() => {
-    reposRef.current = repos;
+  useTauriEvent(TAURI_EVENTS.repoActivity, (activity) => {
+    const target = activityTargetOf(activity.path, repos);
+    if (!target) return;
+    for (const queryKey of activityInvalidationKeys(target.root)) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
+    if (activity.kind === "git") {
+      for (const key of ["reviewStatus", "repoSyncStatus", "commitHistory"]) void queryClient.invalidateQueries({ queryKey: [key] });
+    }
   });
-
-  useEffect(() => {
-    let mounted = true;
-    let unlisten: (() => void) | undefined;
-    listen<ActivityEvent>("repo:activity", (event) => {
-      if (!mounted) return;
-      const target = activityTargetOf(event.payload.path, reposRef.current);
-      if (!target) return;
-      for (const queryKey of activityInvalidationKeys(target.root)) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
-      if (event.payload.kind === "git") {
-        for (const key of ["reviewStatus", "repoSyncStatus", "commitHistory"]) void queryClient.invalidateQueries({ queryKey: [key] });
-      }
-    })
-      .then((fn) => {
-        if (mounted) unlisten = fn;
-        else fn();
-      })
-      .catch(() => {
-        /* 이벤트를 못 받아도 쿼리의 주기적 갱신이 대신한다 */
-      });
-    return () => {
-      mounted = false;
-      unlisten?.();
-    };
-  }, [queryClient]);
 }

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { isImeComposing } from "@/lib/keyboard";
+import { useMenuActions } from "@/hooks/useMenuActions";
 import type { WorktreeInfo } from "@/types";
 import { AnchoredPanel } from "@/components/ui/AnchoredPanel";
 import { PanelEmptyState, PanelHeader, PanelSearch, PanelSectionHeader } from "@/components/ui/PanelHeader";
@@ -46,6 +47,7 @@ export function WorktreePanel({
   onClose,
 }: WorktreePanelProps) {
   const { t } = useTranslation();
+  const actions = useMenuActions();
   const titleId = "worktree-panel-title";
   const [query, setQuery] = useState("");
   const [activePath, setActivePath] = useState<string | null>(null);
@@ -180,7 +182,7 @@ export function WorktreePanel({
             setMenu(null);
           }}
           onCopyPath={() => {
-            navigator.clipboard.writeText(menu.wt.path);
+            actions.copy(menu.wt.path);
             setMenu(null);
           }}
           onRemove={() => {

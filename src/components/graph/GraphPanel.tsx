@@ -14,7 +14,7 @@ import {
 } from "@/api/queries";
 import { CommitGraph, type WorktreeHead } from "./CommitGraph";
 import { useGraphReview } from "./useGraphReview";
-import { normalizePath, type GraphWip } from "./graph-model";
+import { type GraphWip } from "./graph-model";
 import { worktreeColor } from "./worktree-history";
 import { useGraphWorktreesStore } from "./graph-worktrees";
 import { activeRange, useBranchRangeStore } from "@/components/branch/branch-range";
@@ -34,7 +34,7 @@ import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { ViewBranchPicker } from "./ViewBranchPicker";
 import { useHistoryView } from "./useHistoryView";
 import { GitStatusLine } from "@/components/review/GitStatusLine";
-import { cn } from "@/lib/utils";
+import { cn, trimTrailingSlash } from "@/lib/utils";
 
 /** Which graph-panel tab a `ui.activeTab` value belongs to. */
 export type GraphPanelTab = "graph" | "stash" | "actions";
@@ -251,14 +251,14 @@ function useWorktreeFilter(allWips: GraphWip[]) {
 
   const infoByPath = useMemo(() => {
     const map = new Map<string, WorktreeInfo>();
-    for (const w of worktreeList ?? []) map.set(normalizePath(w.path), w);
+    for (const w of worktreeList ?? []) map.set(trimTrailingSlash(w.path), w);
     return map;
   }, [worktreeList]);
 
   const chips = useMemo<WorktreeChip[]>(
     () =>
       [...allWips].sort(chipOrder).map((w) => {
-        const info = infoByPath.get(normalizePath(w.path));
+        const info = infoByPath.get(trimTrailingSlash(w.path));
         return {
           path: w.path,
           branch: w.branch,
@@ -279,7 +279,7 @@ function useWorktreeFilter(allWips: GraphWip[]) {
   const wips = useMemo(() => allWips.filter((w) => visible.has(w.path)), [allWips, visible]);
   const heads = useMemo(() => {
     const out = wips.flatMap((w) => {
-      const head = w.isCurrent ? null : infoByPath.get(normalizePath(w.path))?.head;
+      const head = w.isCurrent ? null : infoByPath.get(trimTrailingSlash(w.path))?.head;
       return head ? [{ path: w.path, head }] : [];
     });
     return out.length > 0 ? out : NO_HEADS;

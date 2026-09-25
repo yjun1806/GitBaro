@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampPanelToViewport } from "./panel-position";
+import { clampPanelToViewport } from "@/lib/panel-position";
 
 const VIEWPORT = { width: 1400, height: 900 };
 const PANEL = { width: 300, height: 400 };

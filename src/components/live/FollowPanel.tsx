@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { RepoWorkSwitcher } from "@/components/commit/WorkSwitcher";
-import { listen } from "@tauri-apps/api/event";
+import { TAURI_EVENTS } from "@/api/events";
+import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
 import { fetchFileDiff, useFileDiff, useStashMutations, useWipFiles, useWorktrees } from "@/api/queries";
@@ -16,9 +17,8 @@ import { FOLLOW_KEY, useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { diffDelta, type DiffDelta } from "@/lib/diff-delta";
 import { FileStatusBadge } from "@/lib/file-status";
-import { cn, formatRelativeTime, getErrorMessage } from "@/lib/utils";
+import { cn, formatRelativeTime, getErrorMessage, trimTrailingSlash } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
-import { normalizePath } from "@/components/graph/graph-model";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import {
   OverlapBanner,
@@ -29,7 +29,7 @@ import {
 import { SideBySideDiff } from "@/components/worktree/SideBySideDiff";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import type { MaximizedFiles } from "@/components/layout/maximized-files";
-import type { ActivityEvent, DiffOutput, StatusEntry, WipFile } from "@/types";
+import type { DiffOutput, StatusEntry, WipFile } from "@/types";
 import { useWorkingFileMenu } from "@/components/commit/useWorkingFileMenu";
 import { useFileMenu } from "@/components/commit/useFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
@@ -47,7 +47,7 @@ const BASELINE_LIMIT = 30;
 const TOAST_MS = 8_000;
 
 function samePath(a: string, b: string): boolean {
-  return normalizePath(a) === normalizePath(b);
+  return trimTrailingSlash(a) === trimTrailingSlash(b);
 }
 
 /** 「따라가는 중」·「따라가기 멈춤」 알약. WIP 행과 파일 목록 머리에 붙는다. */
@@ -93,25 +93,9 @@ function useFollowRefresh(path: string, polled: boolean): void {
     return () => unregisterWatchPaths(FOLLOW_WATCH_KEY);
   }, [path, registerWatchPaths, unregisterWatchPaths]);
 
-  useEffect(() => {
-    let mounted = true;
-    let unlisten: (() => void) | undefined;
-    listen<ActivityEvent>("repo:activity", (event) => {
-      if (!mounted || !samePath(event.payload.path, path)) return;
-      refreshFollowed(queryClient, path);
-    })
-      .then((fn) => {
-        if (mounted) unlisten = fn;
-        else fn();
-      })
-      .catch(() => {
-        /* 이벤트를 못 받으면 다음에 고를 때 다시 읽는다 */
-      });
-    return () => {
-      mounted = false;
-      unlisten?.();
-    };
-  }, [path, queryClient]);
+  useTauriEvent(TAURI_EVENTS.repoActivity, (activity) => {
+    if (samePath(activity.path, path)) refreshFollowed(queryClient, path);
+  });
 
   useEffect(() => {
     if (!polled) return;

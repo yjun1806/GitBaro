@@ -1,4 +1,4 @@
-import { repoAccountsByPath, type Workspace } from "@/lib/repo-tree";
+import { repoAccountsByPath, workspaceMembership, type Workspace } from "@/lib/repo-tree";
 import type { RepoInfo } from "@/types";
 
 /** 이름 앞부분이 같은 저장소가 이만큼 모이면 워크스페이스를 제안한다. */
@@ -15,7 +15,7 @@ export interface WorkspaceSuggestion {
 
 export interface SuggestWorkspaceOptions {
   accounts?: { id: string; username: string }[];
-  /** 이미 워크스페이스에 든 저장소는 제안에서 뺀다. */
+  /** 이미 워크스페이스에 든 저장소(`workspaceMembership` 기준)는 제안에서 뺀다. */
   workspaces?: Workspace[];
   dismissed?: string[];
 }
@@ -41,7 +41,8 @@ export function suggestWorkspace(
   { accounts = [], workspaces = [], dismissed = [] }: SuggestWorkspaceOptions = {},
 ): WorkspaceSuggestion[] {
   const accountByPath = repoAccountsByPath(repos, accounts);
-  const inWorkspace = new Set(workspaces.flatMap((w) => w.repoPaths));
+  // 저장된 경로가 아니라 사이드바가 실제로 워크스페이스 아래에 두는 저장소만 뺀다.
+  const { claimedBy: inWorkspace } = workspaceMembership(workspaces, repos, accountByPath);
   const dismissedSet = new Set(dismissed);
 
   const groups = new Map<string, { accountKey: string; name: string; paths: string[] }>();

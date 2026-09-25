@@ -6,6 +6,7 @@ import {
   isHeadDetached,
   getBranchDivergence,
   getRepoSyncStatus,
+  getDefaultBranches,
   getUnpushedCommits,
   getRecentBranches,
   getCommitHistory,
@@ -35,7 +36,7 @@ import {
   abortMergeOrRebase,
   continueMergeOrRebase,
 } from "./commands";
-import type { ChangesScope, HistoryTarget, RepoSyncStatus } from "@/types";
+import type { ChangesScope, DefaultBranch, HistoryTarget, RepoSyncStatus } from "@/types";
 import { useSelectionStore } from "@/stores/selection";
 import { selectionAfterStashPushed, selectionAfterStashRemoved } from "@/lib/stash-selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
@@ -113,6 +114,10 @@ export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> 
       // pull 뒤의 파일 목록. 빠지면 최대 30초(staleTime) 동안 옛 목록이 남는다(W7 리뷰).
       "changesVsDefault",
       "fileDiffVsDefault",
+      // fetch가 origin/HEAD를 바꾸거나 원격 기본 브랜치를 처음 받아 올 수 있다.
+      "defaultBranches",
+      // 그래프에 함께 그린 다른 워크트리의 이력. HEAD가 그대로여도 push·fetch 뒤 원격 라벨이 바뀐다.
+      "worktreeHeadHistory",
     ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
   );
 }
@@ -136,6 +141,25 @@ export function useRepoSyncStatuses(repoPaths: string[]) {
     refetchIntervalInBackground: false,
     select: (statuses): Record<string, RepoSyncStatus> =>
       Object.fromEntries(statuses.map((s) => [s.path, s])),
+  });
+}
+
+/** 기본 브랜치는 거의 바뀌지 않으므로 오래 둔다. fetch·체크아웃 뒤에는 무효화한다. */
+const DEFAULT_BRANCHES_STALE_MS = 5 * 60_000;
+
+/**
+ * 여러 저장소의 기본 브랜치를 한 번의 묶음 호출(`get_default_branches`)로 읽는다.
+ * 경로별 맵으로 돌려준다. 키는 정렬한 경로 목록이라 저장소 목록이 바뀔 때만 다시 부른다.
+ */
+export function useDefaultBranches(repoPaths: string[]) {
+  const sortedPaths = [...repoPaths].sort();
+  return useQuery({
+    queryKey: ["defaultBranches", sortedPaths],
+    queryFn: () => getDefaultBranches(sortedPaths),
+    enabled: sortedPaths.length > 0,
+    staleTime: DEFAULT_BRANCHES_STALE_MS,
+    refetchOnWindowFocus: false,
+    select: (items): Record<string, DefaultBranch> => Object.fromEntries(items.map((d) => [d.path, d])),
   });
 }
 

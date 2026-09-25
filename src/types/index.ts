@@ -515,6 +515,11 @@ export interface ActivityWatchResult {
  */
 export type ActivityKind = "workTree" | "git";
 
+/** Payload of the `fs:change` and `fs:git-dir-change` events: the watched repository path. */
+export interface FsChangePayload {
+  repoPath: string;
+}
+
 /** Payload of the `repo:activity` event. */
 export interface ActivityEvent {
   path: string;

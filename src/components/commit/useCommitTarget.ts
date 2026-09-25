@@ -1,8 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useBranches, useCommitHistoryInfinite } from "@/api/queries";
-import { normalizePath, wipTarget } from "@/components/graph/graph-model";
+import { wipTarget } from "@/components/graph/graph-model";
 import { wipBranchText } from "@/components/graph/GraphRow";
+import { trimTrailingSlash } from "@/lib/utils";
 
 /**
  * 커밋 입력 머리의 「<브랜치>에 커밋 · <워크트리>」에 쓸 글자. 지금 연 워크트리의 브랜치(없으면 HEAD SHA)와
@@ -17,7 +18,7 @@ export function useCommitTarget(): { branchText: string; worktreeText: string } 
   const { data: history } = useCommitHistoryInfinite(activeRepoPath);
   const headOid = history?.pages[0]?.[0]?.id ?? null;
   const isMain =
-    activeRepoPath === null || ownerPath === null || normalizePath(ownerPath) === normalizePath(activeRepoPath);
+    activeRepoPath === null || ownerPath === null || trimTrailingSlash(ownerPath) === trimTrailingSlash(activeRepoPath);
   const target = wipTarget({ path: activeRepoPath ?? "", branch, isMain, headOid });
   return {
     // 브랜치 목록을 받기 전에는 「브랜치 없음」으로 잘못 말하지 않는다.

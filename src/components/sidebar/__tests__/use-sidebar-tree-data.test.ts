@@ -20,8 +20,13 @@ const reviewRepos: RepoReviewStatus[] = [
 ];
 
 const syncCalls: string[][] = [];
+const defaultBranchCalls: string[][] = [];
 
 vi.mock("@/api/queries", () => ({
+  useDefaultBranches: (paths: string[]) => {
+    defaultBranchCalls.push(paths);
+    return { data: { [API]: { path: API, name: "main", hasLocal: true, remoteRef: "origin/main" } } };
+  },
   useRepoSyncStatuses: (paths: string[]) => {
     syncCalls.push(paths);
     const data: Record<string, RepoSyncStatus> = {
@@ -63,6 +68,7 @@ const repo: RepoInfo = {
 
 beforeEach(() => {
   syncCalls.length = 0;
+  defaultBranchCalls.length = 0;
   useRepositoryStore.setState({ repos: [repo] });
   useWorkspaceStore.setState({ workspaces: [], collapsed: [] });
   useActivityTargetsStore.setState({ extraByKey: {} });
@@ -76,6 +82,13 @@ describe("useSidebarTreeData", () => {
     expect(syncCalls[syncCalls.length - 1]).toEqual([API, WT]);
     expect(result.current.signals[WT].dirtyCount).toBe(2);
     expect(result.current.branchOf(WT)).toBe("feat/login");
+  });
+
+  it("reads every repository's default branch in one batched call", () => {
+    const { result } = renderHook(() => useSidebarTreeData());
+    expect(defaultBranchCalls[defaultBranchCalls.length - 1]).toEqual([API]);
+    expect(result.current.defaultBranchOf(API)?.name).toBe("main");
+    expect(result.current.defaultBranchOf("/r/other")).toBeUndefined();
   });
 
   it("does not register watch targets itself (the tree does, from what it shows)", () => {

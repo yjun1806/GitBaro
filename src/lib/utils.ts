@@ -92,6 +92,30 @@ export function gitHubBranchUrl(repoUrl: string, branch: string, isRemote = fals
   return `${repoUrl}/tree/${name.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+/**
+ * 바뀐 파일 수. 일부만 스테이지한 파일은 스테이지된 줄과 안 된 줄로 두 번 나오므로 경로로 센다.
+ */
+export function countChangedFiles(entries: readonly { path: string }[]): number {
+  return new Set(entries.map((e) => e.path)).size;
+}
+
+/**
+ * 원격 브랜치(`upstream/feat/x`)를 GitHub에서 여는 주소. 그 원격의 주소를 쓴다(origin이 아닐 수 있다).
+ * 원격 이름이 `/`를 품을 수 있으므로 가장 긴 원격 이름부터 맞춘다. GitHub 원격이 아니거나 맞는
+ * 원격이 없으면 null.
+ */
+export function gitHubRemoteBranchUrl(
+  remotes: readonly { name: string; url: string }[],
+  remoteRef: string,
+): string | null {
+  const remote = remotes
+    .filter((r) => remoteRef.startsWith(`${r.name}/`))
+    .sort((a, b) => b.name.length - a.name.length)[0];
+  const repoUrl = remote ? getGitHubWebUrl(remote.url) : null;
+  if (!remote || !repoUrl) return null;
+  return gitHubBranchUrl(repoUrl, remoteRef.slice(remote.name.length + 1));
+}
+
 /** 저장소 경로와 저장소 안 상대 경로를 잇는다. */
 export function joinRepoPath(repoPath: string, relativePath: string): string {
   return `${repoPath.replace(/\/+$/, "")}/${relativePath.replace(/^\/+/, "")}`;
@@ -113,8 +137,12 @@ export function getFileName(path: string): string {
  * Used to tell when adding a folder found a repository above it.
  */
 export function isSameFolder(a: string, b: string): boolean {
-  const trim = (p: string) => p.replace(/\/+$/, "") || "/";
-  return trim(a) === trim(b);
+  return trimTrailingSlash(a) === trimTrailingSlash(b);
+}
+
+/** 경로 비교용: 끝의 `/`를 뗀다. 루트(`/`, `//`)는 `/`로 둔다. */
+export function trimTrailingSlash(path: string): string {
+  return path.replace(/\/+$/, "") || "/";
 }
 
 /** Whether `error` is a backend `AppError` of the given `type`. */

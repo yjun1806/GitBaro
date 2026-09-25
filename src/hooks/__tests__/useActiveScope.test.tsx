@@ -14,7 +14,7 @@ import { useAccountStore } from "@/stores/account";
 import {
   REPOS_STORAGE_KEY,
   REPOS_STORAGE_VERSION,
-  migrateRepositoryState,
+  sanitizeRepositoryState,
   useRepositoryStore,
 } from "@/stores/repository";
 import {
@@ -281,7 +281,7 @@ describe("workspaceWatchPaths", () => {
 });
 
 describe("저장 형식", () => {
-  it("gitbaro-repos v0 값을 v1로 옮기면서 기존 값을 모두 살린다", async () => {
+  it("gitbaro-repos v0 값을 기존 값 그대로 복원하고 v0으로 저장한다", async () => {
     const v0 = {
       repos: [xames, gitbaro],
       activeRepoPath: "/repos/xames-wt/feature",
@@ -311,16 +311,49 @@ describe("저장 형식", () => {
     act(() => useRepositoryStore.getState().toggleFavorite(xames.path));
     const saved = JSON.parse(localStorage.getItem(REPOS_STORAGE_KEY)!);
     expect(saved.version).toBe(REPOS_STORAGE_VERSION);
-    expect(saved.version).toBe(1);
+    // 버전을 올리면 migrate가 없는 이전 빌드가 저장값을 버린다.
+    expect(saved.version).toBe(0);
     expect(saved.state.collapsedGroups).toEqual(["mos"]);
   });
 
-  it("v0 변환은 깨진 필드만 버리고 나머지는 그대로 둔다", () => {
+  it("잠시 v1로 저장한 값도 버리지 않고 복원한다", async () => {
+    const v1 = { repos: [xames, gitbaro], activeRepoPath: gitbaro.path, favoriteRepos: [xames.path] };
+    localStorage.setItem(REPOS_STORAGE_KEY, JSON.stringify({ state: v1, version: 1 }));
+
+    await useRepositoryStore.persist.rehydrate();
+
+    const s = useRepositoryStore.getState();
+    expect(s.repos).toEqual([xames, gitbaro]);
+    expect(s.activeRepoPath).toBe(gitbaro.path);
+    expect(s.favoriteRepos).toEqual([xames.path]);
+  });
+
+  it("같은 버전의 값에서도 깨진 필드만 버리고 나머지는 복원한다", async () => {
+    useRepositoryStore.setState({ favoriteRepos: [], activeWorktrees: {} });
+    localStorage.setItem(
+      REPOS_STORAGE_KEY,
+      JSON.stringify({
+        state: { repos: [xames], favoriteRepos: "x", activeWorktrees: { a: "b", c: 1 } },
+        version: 0,
+      }),
+    );
+
+    await useRepositoryStore.persist.rehydrate();
+
+    const s = useRepositoryStore.getState();
+    expect(s.repos).toEqual([xames]);
+    expect(s.favoriteRepos).toEqual([]);
+    expect(s.activeWorktrees).toEqual({ a: "b" });
+  });
+
+  it("거르기는 깨진 필드만 버리고 나머지는 그대로 둔다", () => {
     expect(
-      migrateRepositoryState(
-        { repos: [xames], activeRepoPath: 3, favoriteRepos: "x", activeWorktrees: { a: "b", c: 1 } },
-        0,
-      ),
+      sanitizeRepositoryState({
+        repos: [xames],
+        activeRepoPath: 3,
+        favoriteRepos: "x",
+        activeWorktrees: { a: "b", c: 1 },
+      }),
     ).toEqual({ repos: [xames], activeWorktrees: { a: "b" } });
   });
 

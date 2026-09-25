@@ -43,7 +43,7 @@ export function GhAccountDetectedDialog({
   return (
     <Dialog
       labelledBy={titleId}
-      overlayClassName="z-[60] bg-black/50"
+      overlayClassName="z-[60] bg-(--overlay)"
       className="bg-card rounded-xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-5"
     >
         {/* Header */}

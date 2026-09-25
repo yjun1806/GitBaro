@@ -14,6 +14,7 @@ import { RepoLaneCommitGraph } from "@/components/graph/CommitGraph";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
 import type { WorkspaceRepoHistory } from "@/types";
 import { WorkspaceTitle } from "./WorkspaceTitle";
+import { StatusActivity } from "./StatusActivity";
 import { ReviewFilesPanel, type ReviewSelection } from "./ReviewFilesPanel";
 import { WorkSwitcher } from "@/components/commit/WorkSwitcher";
 import type { RepoLaneGraph } from "@/components/graph/repo-lanes";
@@ -153,6 +154,8 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                   {showAll ? t("review.hideQuiet") : t("review.showAll", { count: data.hiddenCount })}
                 </button>
               ) : null}
+              {/* 저장소 화면의 git 상태 줄과 같은 자리: 오프라인 표시, 도는 git 명령, 작업 기록 열기. */}
+              <StatusActivity />
             </div>
             {tab === "graph" && (
               <RepoLaneCommitGraph

@@ -105,34 +105,38 @@ export function AccountHeader({
   ];
   return (
     <>
-      <TreeRowFrame
-        level={1}
-        depth={0}
-        label={label}
-        expanded={expanded}
-        chevron="leading"
-        surface="frame"
-        onToggle={onToggle}
-        onContextMenu={
-          menuSections.length > 0
-            ? (e) => {
-                e.preventDefault();
-                setMenuAt(contextMenuPoint(e));
-              }
-            : undefined
-        }
-        className="gap-1.5 group"
-      >
-        {/* 계정 이름 + 저장소 수가 너비를 먼저 갖는다 — 정렬·워크스페이스 버튼은 hover/focus/열림 때만
-            나타나 이름을 밀어내지 않는다(W-Top-T4: 「MONDAY…」로 잘리던 문제). */}
-        <span
-          title={ownerType === "Organization" ? t("sidebarTree.card.organization", { name: label }) : label}
-          className="text-[11.5px] font-bold text-muted-foreground truncate min-w-0"
+      {/* 정렬·새 워크스페이스 버튼은 트리 항목 밖(형제)에 둔다. 트리 항목 안에 버튼을 두면 화면 읽기
+          프로그램이 항목 이름에 섞어 읽고, 트리 안에서 Tab이 닿는 곳이 여럿이 된다. */}
+      <div role="none" className="relative group">
+        <TreeRowFrame
+          level={1}
+          depth={0}
+          label={label}
+          expanded={expanded}
+          chevron="leading"
+          surface="frame"
+          onToggle={onToggle}
+          onContextMenu={
+            menuSections.length > 0
+              ? (e) => {
+                  e.preventDefault();
+                  setMenuAt(contextMenuPoint(e));
+                }
+              : undefined
+          }
+          className="gap-1.5"
         >
-          {label}
-        </span>
-        <span className="text-[10.5px] text-[var(--faint)] tabular-nums shrink-0">{repoCount}</span>
-        <span className="flex-1" />
+          {/* 계정 이름 + 저장소 수가 너비를 먼저 갖는다 — 정렬·워크스페이스 버튼은 hover/focus/열림 때만
+              나타나 이름을 밀어내지 않는다(W-Top-T4: 「MONDAY…」로 잘리던 문제). */}
+          <span
+            title={ownerType === "Organization" ? t("sidebarTree.card.organization", { name: label }) : label}
+            className="text-[11.5px] font-bold text-muted-foreground truncate min-w-0"
+          >
+            {label}
+          </span>
+          <span className="text-[10.5px] text-[var(--faint)] tabular-nums shrink-0">{repoCount}</span>
+          <span className="flex-1" />
+        </TreeRowFrame>
         {showActions && (
           <span
             className={cn(
@@ -158,7 +162,7 @@ export function AccountHeader({
             </button>
           </span>
         )}
-      </TreeRowFrame>
+      </div>
       {menuAt && (
         <ContextMenu
           sections={menuSections}

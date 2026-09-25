@@ -6,6 +6,7 @@ import { Eye, FolderGit2, GitBranch, Trash2 } from "lucide-react";
 import { removeWorktree } from "@/api/commands";
 import { useMenuActions } from "@/hooks/useMenuActions";
 import { useToastStore } from "@/stores/toast";
+import { useRepositoryStore } from "@/stores/repository";
 import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { ContextMenu, contextMenuPoint, type ContextMenuSection } from "@/components/ui/ContextMenu";
 import { copyMenuItem, folderMenuItems } from "@/components/ui/menu-items";
@@ -110,6 +111,9 @@ function FolderRowMenu({
     const { addToast } = useToastStore.getState();
     try {
       await removeWorktree(repo.path, folder.path);
+      // 이 저장소를 다시 열 때 지운 워크트리로 돌아가지 않도록 기억을 지운다.
+      const { activeWorktrees, rememberWorktree } = useRepositoryStore.getState();
+      if (activeWorktrees[repo.path] === folder.path) rememberWorktree(repo.path, null);
       addToast(t("worktree.removed", { path: folderName }), "success");
     } catch (err) {
       addToast(t("worktree.failedToRemove", { error: getErrorMessage(err) }), "error");

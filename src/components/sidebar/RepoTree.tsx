@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { ChevronsDownUp, ChevronsUpDown, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { repoNodeKey, workspaceNodeKey, type AccountNode, type RepoNode } from "@/lib/repo-tree";
@@ -25,6 +25,7 @@ import {
 } from "./tree-model";
 import { useSidebarWatchPaths, type SidebarTreeData } from "./useSidebarTreeData";
 import { useSidebarRowMenus } from "./useSidebarRowMenus";
+import { useTreeKeyboard } from "./useTreeKeyboard";
 
 interface RepoTreeProps {
   data: SidebarTreeData;
@@ -64,6 +65,8 @@ function accountRepoCount(account: AccountNode): number {
  */
 export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }: RepoTreeProps) {
   const { t } = useTranslation();
+  const treeRef = useRef<HTMLDivElement>(null);
+  const treeKeyboard = useTreeKeyboard(treeRef);
   const repos = useRepositoryStore((s) => s.repos);
   const activePath = useRepositoryStore((s) => s.activeRepoPath);
   // 워크트리를 보는 중이면 activeRepoPath는 워크트리 경로다. 그 줄이 가려져 있을 때
@@ -260,7 +263,14 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
 
           {/* 끌어서 놓기는 검색으로 거르지 않은 전체 트리(`tree`)의 순서로 계산한다. */}
           <TreeDndProvider tree={tree}>
-            <div role="tree" aria-label={t("sidebarTree.tree")} className="flex flex-col gap-3">
+            <div
+              ref={treeRef}
+              role="tree"
+              aria-label={t("sidebarTree.tree")}
+              className="flex flex-col gap-3"
+              onKeyDown={treeKeyboard.onKeyDown}
+              onFocus={treeKeyboard.onFocus}
+            >
               {visibleTree.map((account) => {
                 const accountOpen = isOpen(account.key);
                 const quietOpen = openQuiet.includes(account.accountKey);

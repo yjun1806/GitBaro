@@ -11,7 +11,7 @@ import {
   useCommitAvatars,
   useMergeState,
 } from "@/api/queries";
-import { cn } from "@/lib/utils";
+import { cn, trimTrailingSlash } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { CommitDetail } from "@/components/history/CommitDetail";
 import { StashDetailView } from "@/components/stash/StashDetailView";
@@ -20,7 +20,6 @@ import { ChangesView } from "@/components/commit/ChangesView";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import { FollowPanel, FollowRepoFooter } from "@/components/live/FollowPanel";
 import { useFollowStore } from "@/stores/follow";
-import { normalizePath } from "@/components/graph/graph-model";
 import { parseWorkingFileKey, workingFileItems, workingFileKey } from "@/components/commit/working-files";
 import { useWorkingFileMenu } from "@/components/commit/useWorkingFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
@@ -207,7 +206,7 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
 
   // 지금 연 워크트리가 병합 중이면 WIP 행을 다시 골라도 스테이징 목록(충돌 배너)을 먼저 보인다.
   const followingMergingRepo =
-    merging && followTarget !== null && activeRepoPath !== null && normalizePath(followTarget) === normalizePath(activeRepoPath);
+    merging && followTarget !== null && activeRepoPath !== null && trimTrailingSlash(followTarget) === trimTrailingSlash(activeRepoPath);
 
   // WIP 행을 고르면 그 워크트리를 따라간다(D4). 커밋은 따라가기 칸의 「커밋…」으로 스테이징 목록을 연다.
   if (activeTab === "changes" && followTarget !== null && !followingMergingRepo) {

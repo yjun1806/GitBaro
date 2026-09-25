@@ -51,6 +51,16 @@ describe("suggestWorkspace", () => {
     expect(result).toEqual([]);
   });
 
+  it("다른 계정 워크스페이스에 적혀 있어 트리에서 빠진 저장소는 다시 센다", () => {
+    const result = suggestWorkspace(xamesFamily, {
+      workspaces: [{ id: "w1", name: "x", accountKey: "someone", repoPaths: ["/repos/xames"] }],
+    });
+
+    expect(result.map((r) => r.repoPaths)).toEqual([
+      ["/repos/xames", "/repos/xames-admin", "/repos/xames-backend"],
+    ]);
+  });
+
   it("닫은 제안은 다시 내지 않는다", () => {
     expect(suggestWorkspace(xamesFamily, { dismissed: ["mos/xames"] })).toEqual([]);
   });

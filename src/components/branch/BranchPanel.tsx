@@ -23,7 +23,7 @@ import { useSetHistoryView } from "@/components/graph/useHistoryView";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { useRepositoryStore } from "@/stores/repository";
 import { useMenuActions } from "@/hooks/useMenuActions";
-import { gitHubBranchUrl, gitHubRepoUrl } from "@/lib/utils";
+import { gitHubRemoteBranchUrl } from "@/lib/utils";
 
 /** 관찰자를 쓸 수 없는 환경(테스트 등)에서 기반 브랜치를 계산할 앞쪽 행 수. */
 const FALLBACK_VISIBLE_ROWS = 30;
@@ -81,7 +81,7 @@ export function BranchPanel({
   const [sortBy, setSortBy] = useState<BranchPanelSort>("recent");
   const [collapsed, setCollapsed] = useState<ReadonlySet<BranchPanelSection>>(new Set());
   const { data: recentNames } = useRecentBranches(activeRepoPath);
-  const gitHubUrl = useRepositoryStore((s) => gitHubRepoUrl(s.activeRepo?.remotes ?? []));
+  const remotes = useRepositoryStore((s) => s.activeRepo?.remotes);
   const menuActions = useMenuActions();
 
   const sections = useMemo(
@@ -303,11 +303,12 @@ export function BranchPanel({
             viewRow(menu.row);
             setMenu(null);
           }}
-          onOpenOnGitHub={
-            gitHubUrl && (menu.row.branch.isRemote || menu.row.branch.upstream)
-              ? () => menuActions.openInBrowser(gitHubBranchUrl(gitHubUrl, menu.row.branch.name, menu.row.branch.isRemote))
-              : undefined
-          }
+          onOpenOnGitHub={(() => {
+            // 로컬 브랜치는 추적하는 원격 브랜치(이름이 다를 수 있다)를, 그 원격의 주소로 연다.
+            const ref = menu.row.branch.isRemote ? menu.row.branch.name : menu.row.branch.upstream;
+            const url = ref ? gitHubRemoteBranchUrl(remotes ?? [], ref) : null;
+            return url ? () => menuActions.openInBrowser(url) : undefined;
+          })()}
           onCheckout={() => {
             runPrimary(menu.row);
             setMenu(null);

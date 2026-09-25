@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "@/i18n/config";
+import { useToastStore } from "@/stores/toast";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import type { BranchInfo, RepoInfo, WorktreeInfo } from "@/types";
@@ -85,6 +86,15 @@ describe("BranchZone — branch panel wiring", () => {
     expect(useBranchRangeStore.getState().range).toEqual({ repoPath: REPO, base: "main", target: "docs/y", head: "main" });
     expect(useUIStore.getState().activeTab).toBe("history");
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("reports a failed copy of the branch name instead of claiming success", async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn(() => Promise.reject(new Error("denied"))) } });
+    useToastStore.setState({ toasts: [] });
+    renderZone();
+    fireEvent.contextMenu(document.querySelector<HTMLElement>('[data-branch-name="docs/y"]')!.querySelector("button")!);
+    fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Copy branch name" }));
+    await vi.waitFor(() => expect(useToastStore.getState().toasts.map((toast) => toast.type)).toEqual(["error"]));
   });
 
   it("opens the merge dialog for the row's branch", () => {

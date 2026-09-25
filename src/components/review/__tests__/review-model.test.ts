@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   activityInvalidationKeys,
+  dedupeReviewMembers,
   isHiddenReviewRepo,
   isOnDefaultBranch,
   activityTargetOf,
@@ -111,6 +112,22 @@ describe("activityInvalidationKeys", () => {
     expect(activityInvalidationKeys("/w/app-feat")).toEqual([
       ["status", "/w/app-feat"],
       ["fileDiff", "/w/app-feat"],
+    ]);
+  });
+});
+
+describe("dedupeReviewMembers", () => {
+  const member = (path: string, worktrees: string[]) => ({ path, worktrees: worktrees.map((p) => ({ path: p })) });
+
+  it("keeps each worktree in the first repository that lists it and drops a repository that is another's worktree", () => {
+    const out = dedupeReviewMembers([
+      member("/r/api", ["/r/api", "/r/api-feat"]),
+      member("/r/web", ["/r/web"]),
+      member("/r/api-feat/", ["/r/api", "/r/api-feat"]),
+    ]);
+    expect(out.map((m) => [m.path, m.worktrees.map((w) => w.path)])).toEqual([
+      ["/r/api", ["/r/api", "/r/api-feat"]],
+      ["/r/web", ["/r/web"]],
     ]);
   });
 });

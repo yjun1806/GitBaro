@@ -293,6 +293,8 @@ function ResultLabel({ result }: { result: RemoteRowResult }) {
       );
     case "conflict":
       return <span className="text-warning">{t("multiRepoRemote.result.conflict")}</span>;
+    case "busy":
+      return <span className="text-muted-foreground">{t("multiRepoRemote.result.busy")}</span>;
     case "failed":
       return <span className="text-danger">{t("multiRepoRemote.result.failed")}</span>;
   }

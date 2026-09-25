@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useBranches, useWorktrees } from "@/api/queries";
-import { normalizePath } from "@/components/graph/graph-model";
 import type { BranchInfo, WorktreeInfo } from "@/types";
+import { trimTrailingSlash } from "@/lib/utils";
 
 export interface BasePickerProps {
   /** 저장소(워크트리) 경로. */
@@ -17,8 +17,8 @@ export interface BasePickerProps {
 
 /** 이 워크트리가 갈라져 나온 브랜치(워크트리 기반). 모르거나 메인 워크트리면 null. */
 export function worktreeBaseOf(path: string, worktrees: readonly WorktreeInfo[]): string | null {
-  const key = normalizePath(path);
-  return worktrees.find((w) => normalizePath(w.path) === key)?.base?.name ?? null;
+  const key = trimTrailingSlash(path);
+  return worktrees.find((w) => trimTrailingSlash(w.path) === key)?.base?.name ?? null;
 }
 
 /** 기준으로 고를 수 있는 브랜치: 로컬·원격(`origin/HEAD` 같은 별칭과 비교 대상 자신은 뺀다). */

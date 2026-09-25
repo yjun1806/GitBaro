@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { Eye, GitBranch, GitCompare, Globe, Trash2 } from "lucide-react";
@@ -14,7 +14,7 @@ import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { DeleteBranchDialog } from "@/components/branch/DeleteBranchDialog";
 import { ContextMenu, type ContextMenuSection } from "@/components/ui/ContextMenu";
 import { copyMenuItem } from "@/components/ui/menu-items";
-import { getErrorMessage, gitHubBranchUrl, gitHubRepoUrl } from "@/lib/utils";
+import { getErrorMessage, gitHubBranchUrl, gitHubRemoteBranchUrl, gitHubRepoUrl } from "@/lib/utils";
 import type { RefLabel } from "@/types";
 import { checkedOutBranch, useSetHistoryView } from "./useHistoryView";
 
@@ -39,6 +39,7 @@ export function useRefLabelMenu(): {
   const addToast = useToastStore((s) => s.addToast);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const gitHubUrl = useRepositoryStore((s) => gitHubRepoUrl(s.activeRepo?.remotes ?? []));
+  const remotes = useRepositoryStore((s) => s.activeRepo?.remotes);
   const { data: branches } = useBranches(activeRepoPath);
   const currentBranch = checkedOutBranch(branches);
   const setView = useSetHistoryView();
@@ -73,6 +74,13 @@ export function useRefLabelMenu(): {
     const isTag = label.kind === "tag";
     const isRemote = label.kind === "remoteBranch";
     const info = branches?.find((b) => b.name === label.name && b.isRemote === isRemote);
+    // 태그는 저장소 주소로, 브랜치는 그 원격 브랜치(로컬이면 추적 브랜치)의 원격 주소로 연다.
+    const remoteRef = isRemote ? label.name : (info?.upstream ?? null);
+    const branchUrl = isTag
+      ? gitHubUrl && gitHubBranchUrl(gitHubUrl, label.name)
+      : remoteRef
+        ? gitHubRemoteBranchUrl(remotes ?? [], remoteRef)
+        : null;
     const isCurrent = !isRemote && !isTag && label.name === currentBranch;
     const sections: ContextMenuSection[] = [];
     if (!isTag) {
@@ -112,10 +120,10 @@ export function useRefLabelMenu(): {
           label: t("menu.viewOnGitHub"),
           icon: <Globe className={ICON} />,
           onClick: () => {
-            if (gitHubUrl) actions.openInBrowser(gitHubBranchUrl(gitHubUrl, label.name, isRemote));
+            if (branchUrl) actions.openInBrowser(branchUrl);
           },
           // 로컬에만 있는 브랜치는 GitHub에 없다.
-          disabled: gitHubUrl === null || (!isRemote && !isTag && !info?.upstream),
+          disabled: branchUrl === null,
         },
       ],
     });
@@ -157,5 +165,7 @@ export function useRefLabelMenu(): {
     </>
   );
 
-  return { open: (label, { x, y }) => setMenu({ label, x, y }), element };
+  // 그래프 행(`memo`)에 넘기므로 렌더마다 새 함수를 만들지 않는다.
+  const open = useCallback((label: RefLabel, { x, y }: { x: number; y: number }) => setMenu({ label, x, y }), []);
+  return { open, element };
 }

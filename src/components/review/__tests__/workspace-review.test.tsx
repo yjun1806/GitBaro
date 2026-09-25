@@ -256,6 +256,32 @@ describe("WorkspaceReview", () => {
     expect(names).toEqual(["xames-app", "xames-backend", "xames-backend · xames-backend-feat"]);
   });
 
+  it("shows a linked worktree once when it is also registered as a repository", () => {
+    reviewRepos = [
+      ...baseReviewRepos(),
+      { repoPath: API_WT, worktrees: baseReviewRepos()[1].worktrees },
+    ];
+    histories = { ...baseHistories(), [API_WT]: history(API_WT, "feat/api-wt", [commit("api1", 200)]) };
+    useRepositoryStore.setState({ repos: [repo(APP), repo(API), repo(DESIGN), repo(API_WT)] });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <WorkspaceReview workspaceId="w1" paths={[APP, API, DESIGN, API_WT]} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getAllByRole("button", { name: /Uncommitted changes · .* · 1 file$/ })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
+    const names = screen.getByText(/^files-by-repo /).textContent!.replace("files-by-repo ", "").split(",");
+    expect(names).toEqual(["xames-app", "xames-backend", "xames-backend · xames-backend-feat"]);
+  });
+
+  it("reaches the activity log from the workspace header", async () => {
+    const { useUIStore } = await import("@/stores/ui");
+    useUIStore.setState({ isActivityLogOpen: false });
+    renderReview();
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("activity.title") }));
+    expect(useUIStore.getState().isActivityLogOpen).toBe(true);
+  });
+
   it("opens the commit detail of the picked repository", () => {
     const { container } = renderReview();
     fireEvent.click(container.querySelector('[data-commit-id="api1"]') as HTMLElement);

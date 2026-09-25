@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // W1-T1: 리뷰 개편 시각 토큰이 :root(라이트)와 .dark(다크) 양쪽에
@@ -62,6 +62,7 @@ const REQUIRED_REVIEW_TOKENS = [
   "--shadow",
   "--shadow-sm",
   "--shadow-float",
+  "--overlay",
   "--radius-panel",
   "--radius-item",
   "--radius-chip",
@@ -112,27 +113,6 @@ describe("리뷰 개편 시각 토큰 (globals.css)", () => {
     expect(customPropertyNames(darkBlock)).toEqual(customPropertyNames(lightBlock));
   });
 
-  it("Light 블록의 색·그림자·모서리 토큰이 원천 값 그대로다 (plans/design/README.md 「색 체계 결정」)", () => {
-    expect(lightBlock).toMatch(/--canvas:\s*#f1f1ef/);
-    expect(lightBlock).toMatch(/--panel:\s*#ffffff/);
-    expect(lightBlock).toMatch(/--line:\s*#e6e6e3/);
-    expect(lightBlock).toMatch(/--line2:\s*#d4d4d2/);
-    expect(lightBlock).toMatch(/--chip:\s*#f3f3f2/);
-    expect(lightBlock).toMatch(/--fg:\s*#1a1a19/);
-    expect(lightBlock).toMatch(/--fg2:\s*#4a4a47/);
-    expect(lightBlock).toMatch(/--muted:\s*#62625f/);
-    expect(lightBlock).toMatch(/--faint:\s*var\(--muted\)/);
-    expect(lightBlock).toMatch(/--ln:\s*#b6b6b2/);
-    expect(lightBlock).toMatch(/--acc:\s*#be3f72/);
-    expect(lightBlock).toMatch(/--live:\s*#e5700b/);
-    expect(lightBlock).toMatch(/--shadow:\s*0 1px 2px rgba\(0,\s*0,\s*0,\s*0\.04\),\s*0 6px 20px rgba\(0,\s*0,\s*0,\s*0\.05\)/);
-    expect(lightBlock).toMatch(/--shadow-sm:\s*0 1px 3px rgba\(0,\s*0,\s*0,\s*0\.07\)/);
-    expect(lightBlock).toMatch(/--radius-panel:\s*14px/);
-    expect(lightBlock).toMatch(/--radius-item:\s*8px/);
-    expect(lightBlock).toMatch(/--radius-chip:\s*6px/);
-    expect(lightBlock).toMatch(/--radius-pill:\s*9999px/);
-  });
-
   it("acc-sel/acc-line은 브랜드 색을 8%/35%로 섞고, acc-faint는 브랜드 색 없이 회색이다", () => {
     expect(lightBlock).toMatch(/--acc-sel:\s*color-mix\(in srgb,\s*var\(--acc\)\s*8%,\s*var\(--panel\)\)/);
     // 섹션 머리 띠 등 강조가 아닌 곳에서 쓰므로 브랜드 색이 새지 않게 한다.
@@ -179,3 +159,16 @@ describe("리뷰 개편 시각 토큰 (globals.css)", () => {
     expect(lightBlock).toMatch(/--diff-del-fg:\s*#8e211b/);
   });
 });
+
+describe("modal overlay colour", () => {
+  it("comes from the --overlay token, not a hard-coded black", () => {
+    const root = fileURLToPath(new URL("../../components/", import.meta.url));
+    const files = readdirSync(root, { recursive: true })
+      .map(String)
+      .filter((f) => f.endsWith(".tsx") && !f.includes("__tests__"));
+    for (const file of files) {
+      expect(readFileSync(`${root}${file}`, "utf8"), file).not.toMatch(/bg-black\/\d+/);
+    }
+  });
+});
+

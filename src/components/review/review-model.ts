@@ -1,3 +1,5 @@
+import { trimTrailingSlash } from "@/lib/utils";
+
 /**
  * 워크스페이스 리뷰 화면의 판단 규칙(순수 함수).
  */
@@ -52,13 +54,30 @@ export interface ReviewRepoPaths {
   worktreePaths: readonly string[];
 }
 
-function trimSlash(path: string): string {
-  return path.length > 1 ? path.replace(/\/+$/, "") : path;
+function covers(root: string, path: string): boolean {
+  const r = trimTrailingSlash(root);
+  return path === r || path.startsWith(`${r}/`);
 }
 
-function covers(root: string, path: string): boolean {
-  const r = trimSlash(root);
-  return path === r || path.startsWith(`${r}/`);
+/**
+ * 한 워크트리를 한 저장소에만 둔다. 링크된 워크트리를 저장소로도 등록하면 두 저장소가 같은
+ * 워크트리 목록을 돌려줘 WIP 행·파일 칸·수가 두 번 나온다. 앞 저장소가 이미 가진 워크트리는
+ * 뒤 저장소에서 빼고, 저장소 경로 자체가 앞 저장소의 워크트리면 그 저장소를 통째로 뺀다.
+ * 입력 순서(워크스페이스에 적힌 순서)를 지킨다.
+ */
+export function dedupeReviewMembers<T extends { path: string; worktrees: readonly { path: string }[] }>(
+  members: readonly T[],
+): T[] {
+  const claimed = new Set<string>();
+  const out: T[] = [];
+  for (const member of members) {
+    if (claimed.has(trimTrailingSlash(member.path))) continue;
+    const worktrees = member.worktrees.filter((w) => !claimed.has(trimTrailingSlash(w.path)));
+    worktrees.forEach((w) => claimed.add(trimTrailingSlash(w.path)));
+    claimed.add(trimTrailingSlash(member.path));
+    out.push({ ...member, worktrees });
+  }
+  return out;
 }
 
 /** 활동 이벤트가 가리키는 워크트리(메인 작업 트리 포함)와 그 저장소. */
@@ -74,12 +93,12 @@ export interface ActivityTarget {
  * 잘못 가지 않게). 워크스페이스 밖의 경로면 null.
  */
 export function activityTargetOf(path: string, repos: readonly ReviewRepoPaths[]): ActivityTarget | null {
-  const target = trimSlash(path);
+  const target = trimTrailingSlash(path);
   let best: (ActivityTarget & { depth: number }) | null = null;
   for (const repo of repos) {
     for (const root of [repo.repoPath, ...repo.worktreePaths]) {
       if (!covers(root, target)) continue;
-      const depth = trimSlash(root).length;
+      const depth = trimTrailingSlash(root).length;
       if (!best || depth > best.depth) best = { repoPath: repo.repoPath, root, depth };
     }
   }
@@ -101,6 +120,6 @@ export function activityInvalidationKeys(root: string): unknown[][] {
 
 /** 경로의 마지막 부분(저장소·워크트리 이름). */
 export function baseName(path: string): string {
-  const trimmed = trimSlash(path);
+  const trimmed = trimTrailingSlash(path);
   return trimmed.slice(trimmed.lastIndexOf("/") + 1) || path;
 }

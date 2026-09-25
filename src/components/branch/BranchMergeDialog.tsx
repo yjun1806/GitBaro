@@ -30,7 +30,6 @@ export function BranchMergeDialog({ repoPath, currentBranch, source, isDirty, on
       onClose={onClose}
       labelledBy={titleId}
       closeOnBackdrop
-      overlayClassName="z-50 bg-black/50"
       className="bg-popover border border-border rounded-xl shadow-2xl w-[440px] max-h-[80vh] flex flex-col"
     >
       <div className="flex items-center justify-between px-5 py-4 border-b border-border">

@@ -9,8 +9,15 @@ import {
   type LaneWip,
   type RepoLaneGraph,
 } from "@/components/graph/repo-lanes";
+import { countChangedFiles } from "@/lib/utils";
 import type { CommitInfo, ReviewWorktree, WorkspaceRepoHistory } from "@/types";
-import { baseName, splitReviewRepos, type ReviewRepoPaths, type ReviewRepoSignals } from "./review-model";
+import {
+  baseName,
+  dedupeReviewMembers,
+  splitReviewRepos,
+  type ReviewRepoPaths,
+  type ReviewRepoSignals,
+} from "./review-model";
 
 /** 리뷰 화면의 저장소 하나. */
 export interface ReviewRepo extends ReviewRepoSignals {
@@ -55,13 +62,17 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
   const members = useMemo(() => {
     const scanByRepo = new Map(review.repos.map((r) => [r.repoPath, r]));
     const nameByPath = new Map(allRepos.map((r) => [r.path, r.name]));
-    return memberPaths.map((path) => {
-      const scanned = scanByRepo.get(path)?.worktrees;
+    const scanned = memberPaths.map((path) => {
+      const found = scanByRepo.get(path)?.worktrees;
       const worktrees: ReviewWorktree[] =
-        scanned && scanned.length > 0 ? scanned : [{ path, branch: null, headOid: null, isMain: true }];
-      const main = worktrees.find((w) => w.isMain) ?? worktrees[0];
-      return { path, name: nameByPath.get(path) ?? baseName(path), worktrees, main };
+        found && found.length > 0 ? found : [{ path, branch: null, headOid: null, isMain: true }];
+      return { path, name: nameByPath.get(path) ?? baseName(path), worktrees };
     });
+    // 링크된 워크트리를 저장소로도 등록했으면 그 워크트리를 한 번만 센다.
+    return dedupeReviewMembers(scanned).map((m) => ({
+      ...m,
+      main: m.worktrees.find((w) => w.isMain) ?? m.worktrees[0],
+    }));
   }, [memberPaths, review.repos, allRepos]);
 
   const histories = useWorkspaceHistories(
@@ -81,7 +92,7 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
     const lane =
       history && !history.error ? { commits: history.commits, hasBase: history.baseStatus === "found" } : null;
     const wipCount = m.worktrees.reduce(
-      (sum, w) => sum + new Set((statuses[w.path] ?? []).map((e) => e.path)).size,
+      (sum, w) => sum + countChangedFiles(statuses[w.path] ?? []),
       0,
     );
     const unpushed = m.worktrees.flatMap((w) => {
@@ -123,7 +134,7 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
         branch: w.branch,
         isMain: w.isMain,
         headOid: w.headOid,
-        count: new Set((statuses[w.path] ?? []).map((e) => e.path)).size,
+        count: countChangedFiles(statuses[w.path] ?? []),
         changedAt: lastChangedAt[w.path] ?? null,
       })),
     )

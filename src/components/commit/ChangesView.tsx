@@ -25,7 +25,7 @@ import {
   stageableEntries,
 } from "@/lib/file-selection";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
-import { isComposerCollapsed } from "./composer-state";
+import { canCommit, isComposerCollapsed } from "./composer-state";
 import { isFreshWorkingFocus } from "./useOpenWorkingChanges";
 import { RepoWorkSwitcher } from "./WorkSwitcher";
 import { CommitComposer } from "./CommitComposer";
@@ -235,7 +235,7 @@ function ChangesViewBody() {
   };
 
   const handleCommit = async () => {
-    if (!activeRepoPath || !commitSummary.trim() || stagedFiles.length === 0) return;
+    if (!activeRepoPath || !canCommit(commitSummary, stagedFiles.length, mergeState)) return;
     const repoPath = activeRepoPath;
     setIsCommitting(true);
     try {
@@ -449,7 +449,7 @@ function ChangesViewBody() {
         ]
           .filter(Boolean)
           .join(" · ")}
-        canCommit={stagedFiles.length > 0 && commitSummary.trim().length > 0}
+        canCommit={canCommit(commitSummary, stagedFiles.length, mergeState)}
         isCommitting={isCommitting}
         onCommit={() => void handleCommit()}
       />
