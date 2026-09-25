@@ -1002,6 +1002,7 @@
       "upToDate_pull": "Nothing to pull",
       "noUpstream": "No tracking branch",
       "upstreamGone": "Remote branch is gone",
+      "notTracked": "Not fetched by this clone",
       "detachedHead": "No branch",
       "unborn": "No commits",
       "noRemote": "No remote",

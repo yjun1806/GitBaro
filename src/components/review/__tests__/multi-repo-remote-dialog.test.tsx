@@ -138,6 +138,17 @@ describe("MultiRepoRemoteDialog", () => {
     expect(screen.getByRole("checkbox", { name: "Pull xames-app first, then push" })).toBeTruthy();
   });
 
+  it("says a branch this clone does not fetch is not tracked, not gone", async () => {
+    commands.planRemoteOp.mockImplementation(() =>
+      Promise.resolve([
+        plan("xames-app", { command: "git pull origin feat", skip: true, skipReason: "notTracked" }),
+      ]),
+    );
+    renderDialog("pull");
+    const row = await screen.findByTestId("plan-row-xames-app");
+    expect(within(row).getByText("Not fetched by this clone")).toBeTruthy();
+  });
+
   it("labels a repository whose fetch failed as planned from the last fetch", async () => {
     commands.gitFetch.mockImplementation((path: string) =>
       path === "/repos/xames-app" ? Promise.reject(new Error("offline")) : Promise.resolve(),

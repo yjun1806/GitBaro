@@ -37,6 +37,9 @@ pub enum RemotePlanSkipReason {
     NoUpstream,
     /// Pull: 추적 브랜치는 설정돼 있지만 그 원격 브랜치가 사라졌다(원격에서 지운 뒤 fetch --prune).
     UpstreamGone,
+    /// Pull: 추적 브랜치가 설정돼 있지만 이 클론의 fetch refspec 이 그 브랜치를 받지 않는다
+    /// (`--single-branch`·얕은 클론). 원격에는 있을 수 있다.
+    NotTracked,
     /// 체크아웃한 브랜치가 없다(detached HEAD).
     DetachedHead,
     /// 커밋이 하나도 없는 저장소.
@@ -230,7 +233,13 @@ fn plan_pull(repo: &Repository, target: &SyncTarget, base: RepoRemotePlan) -> Re
     };
     if ahead_behind.is_none() {
         // 설정은 있는데 추적 브랜치 ref 가 없다: 받을 곳이 없으므로 「받을 것 없음」이 아니다.
-        plan.skipped(RemotePlanSkipReason::UpstreamGone)
+        // fetch refspec 이 그 브랜치를 받는 경우에만 「원격에서 사라짐」이다. 받지 않으면
+        // (`--single-branch` 클론) ref 가 처음부터 없었을 뿐이다.
+        if is_fetched_by_refspec(repo, branch) {
+            plan.skipped(RemotePlanSkipReason::UpstreamGone)
+        } else {
+            plan.skipped(RemotePlanSkipReason::NotTracked)
+        }
     } else if behind == 0 {
         plan.skipped(RemotePlanSkipReason::UpToDate)
     } else {
@@ -314,6 +323,15 @@ fn upstream_ahead_behind(repo: &Repository, branch: &str) -> Option<(u32, u32)> 
     let (l, u) = (local.get().target()?, upstream.get().target()?);
     let (a, b) = repo.graph_ahead_behind(l, u).ok()?;
     Some((a as u32, b as u32))
+}
+
+/// `branch.<name>.merge` 가 원격의 fetch refspec 으로 `refs/remotes/...` 이름에 이어지는가.
+/// libgit2 의 upstream 이름 계산은 refspec 에 맞는 것이 없으면 실패한다(ref 가 있는지는 보지 않는다).
+fn is_fetched_by_refspec(repo: &Repository, branch: &str) -> bool {
+    repo.branch_upstream_name(&format!("refs/heads/{}", branch))
+        .ok()
+        .and_then(|name| name.as_str().map(|n| n.starts_with("refs/remotes/")))
+        .unwrap_or(false)
 }
 
 /// 마지막으로 성공한 fetch 시각. `FETCH_HEAD`는 워크트리마다 따로 있고, 없으면 공용 git 폴더를 본다.
@@ -715,6 +733,29 @@ mod tests {
         assert_eq!(plan.skip_reason, Some(RemotePlanSkipReason::UpstreamGone));
         let json = serde_json::to_value(&plan).unwrap();
         assert_eq!(json["skipReason"], "upstreamGone");
+    }
+
+    #[test]
+    fn pull_of_a_branch_this_single_branch_clone_does_not_fetch_is_not_called_gone() {
+        // `--single-branch` 클론의 fetch refspec 은 main 만 받는다. 원격에 있는 feat 를 추적하게 해도
+        // refs/remotes/origin/feat 는 생기지 않는다 — 원격에서 지운 것이 아니다.
+        let root = tmp_dir("single-branch");
+        let (origin, _) = clone_with_origin(&root);
+        let work = root.join("narrow");
+        git(
+            &root,
+            &["clone", "-q", "--single-branch", "--branch", "main", p(&origin), p(&work)],
+        );
+        git(&origin, &["branch", "feat", "main"]);
+        git(&work, &["checkout", "-q", "-b", "feat"]);
+        git(&work, &["config", "branch.feat.remote", "origin"]);
+        git(&work, &["config", "branch.feat.merge", "refs/heads/feat"]);
+
+        let plan = plan_repo(p(&work), RemotePlanOp::Pull);
+        assert!(plan.skip);
+        assert_eq!(plan.skip_reason, Some(RemotePlanSkipReason::NotTracked));
+        let json = serde_json::to_value(&plan).unwrap();
+        assert_eq!(json["skipReason"], "notTracked");
     }
 
     #[test]

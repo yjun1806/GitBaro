@@ -740,6 +740,8 @@ export type RemotePlanSkipReason =
   | "noUpstream"
   /** Pull: 추적 브랜치는 설정돼 있지만 원격 브랜치가 사라졌다. */
   | "upstreamGone"
+  /** Pull: 추적 브랜치는 설정돼 있지만 이 클론(`--single-branch` 등)이 그 브랜치를 받지 않는다. */
+  | "notTracked"
   | "detachedHead"
   | "unborn"
   | "noRemote"
