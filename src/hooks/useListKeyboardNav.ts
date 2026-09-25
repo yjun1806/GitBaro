@@ -38,12 +38,8 @@ export function useListKeyboardNav<T>({
 
   // Clamp activeIndex when items change
   useEffect(() => {
-    if (items.length === 0) {
-      setActiveIndex(-1);
-    } else if (activeIndex >= items.length) {
-      setActiveIndex(items.length - 1);
-    }
-  }, [items.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    setActiveIndex((i) => (items.length === 0 ? -1 : Math.min(i, items.length - 1)));
+  }, [items.length]);
 
   // Scroll into view when activeIndex changes
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   getStatus,
@@ -128,12 +128,17 @@ export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> 
  * 원격 자동 최신화(useAutoSync) 완료 시 `["repoSyncStatus"]` 무효화로
  * 갱신된다. 키를 정렬된 경로 목록으로 삼아 레포 목록 변화에만 반응한다.
  */
-export function useRepoSyncStatuses(repoPaths: string[]) {
+/**
+ * `keepPrevious`를 켜면 경로 목록이 바뀌어 조회 키가 바뀌는 동안 앞 결과를 그대로 돌려준다
+ * (새 결과가 오기 전 잠깐 비어 표시가 깜박이지 않게).
+ */
+export function useRepoSyncStatuses(repoPaths: string[], { keepPrevious = false } = {}) {
   const sortedPaths = [...repoPaths].sort();
   return useQuery({
     queryKey: ["repoSyncStatus", sortedPaths],
     queryFn: () => getRepoSyncStatus(sortedPaths),
     enabled: sortedPaths.length > 0,
+    placeholderData: keepPrevious ? keepPreviousData : undefined,
     staleTime: 15_000,
     // 오프라인 libgit2 계산이라 저비용 — 전체 레포의 dirty/ahead가 이벤트 없이도
     // 주기적으로 갱신되도록 포그라운드 폴링을 둔다. behind는 원격 자동 최신화(useAutoSync)가 갱신.

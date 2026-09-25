@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { TAURI_EVENTS } from "@/api/events";
@@ -54,12 +54,13 @@ type SelectedFile = FileRef & { oldPath: string | null; status: FileStatus; scop
 
 /** 내용이 같으면(원소가 모두 같은 참조면) 이전 배열을 돌려준다. `useQueries` 결과처럼 렌더마다 새로 생기는 배열용. */
 function useShallowStable<T>(items: readonly T[]): readonly T[] {
-  const ref = useRef(items);
-  const prev = ref.current;
-  if (prev !== items && (prev.length !== items.length || prev.some((item, i) => item !== items[i]))) {
-    ref.current = items;
+  const [stable, setStable] = useState(items);
+  if (stable !== items && (stable.length !== items.length || stable.some((item, i) => item !== items[i]))) {
+    // 렌더 중 상태 갱신 — React가 이번 렌더를 버리고 새 값으로 곧바로 다시 돌린다.
+    setStable(items);
+    return items;
   }
-  return ref.current;
+  return stable;
 }
 
 function sameFile(a: FileRef | null, b: FileRef | null): boolean {

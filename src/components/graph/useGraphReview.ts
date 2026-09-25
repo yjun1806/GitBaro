@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useRepositoryStore } from "@/stores/repository";
-import { useActivityTargetsStore } from "@/stores/activity-targets";
+import { pathsFromWatchKey, useActivityTargetsStore, watchPathsKey } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { useReviewStatus } from "@/hooks/useReviewStatus";
 import { useCurrentBranch } from "@/hooks/useCurrentBranch";
@@ -91,11 +91,10 @@ export function useGraphReview(): GraphReview {
 
   const registerWatchPaths = useActivityTargetsStore((s) => s.registerWatchPaths);
   const unregisterWatchPaths = useActivityTargetsStore((s) => s.unregisterWatchPaths);
-  const watchKey = worktreePaths.join("\u0000");
+  const watchKey = watchPathsKey(worktreePaths);
   useEffect(() => {
-    registerWatchPaths(GRAPH_WATCH_KEY, worktreePaths);
-    // watchKey가 내용을 대신 비교한다(20초마다 새 배열이 와도 같은 목록이면 다시 등록하지 않는다).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // 배열 대신 watchKey로 내용을 비교한다(20초마다 새 배열이 와도 같은 목록이면 다시 등록하지 않는다).
+    registerWatchPaths(GRAPH_WATCH_KEY, pathsFromWatchKey(watchKey));
   }, [watchKey, registerWatchPaths]);
   useEffect(() => () => unregisterWatchPaths(GRAPH_WATCH_KEY), [unregisterWatchPaths]);
 

@@ -92,6 +92,5 @@ export function useGitEvents() {
       mounted = false;
       cleanups.forEach((fn) => fn());
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [addStart, addComplete, updateProgress]);
 }

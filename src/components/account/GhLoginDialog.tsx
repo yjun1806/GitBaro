@@ -91,7 +91,7 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
         void cancelGhLogin(loginIdRef.current).catch(() => {});
       }
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [startLogin]);
 
   const handleCopyCode = async () => {
     await navigator.clipboard.writeText(userCode);
