@@ -56,14 +56,22 @@ export function worktreeHolding(
  * - 원격에만 있는 브랜치: 백엔드가 그 원격을 추적하는 로컬 브랜치를 만든다(`switch_branch`).
  * 체크아웃에 성공하면 보기를 끝내고 현재 체크아웃을 보여 준다.
  */
-export function useCheckoutBranch(): { checkout: (branchName: string) => void; element: ReactNode } {
+export function useCheckoutBranch(): {
+  checkout: (branchName: string) => void;
+  element: ReactNode;
+  /** 브랜치·변경·워크트리 목록을 다 읽었는가. 읽기 전에 체크아웃하면 변경이 없는 것으로 보고 묻지 않는다. */
+  ready: boolean;
+} {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const ownerRepoPath = useOwnerRepoPath();
-  const { data: branches = [] } = useBranches(activeRepoPath);
-  const { data: statusFiles = [] } = useStatus(activeRepoPath);
-  const { data: worktrees = [] } = useWorktrees(ownerRepoPath);
+  const { data: branchData } = useBranches(activeRepoPath);
+  const { data: statusData } = useStatus(activeRepoPath);
+  const { data: worktreeData } = useWorktrees(ownerRepoPath);
+  const branches = branchData ?? [];
+  const statusFiles = statusData ?? [];
+  const worktrees = worktreeData ?? [];
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
   const [pending, setPending] = useState<string | null>(null);
   const currentBranch = branches.find((b) => b.isHead && !b.isRemote)?.name ?? null;
@@ -143,5 +151,9 @@ export function useCheckoutBranch(): { checkout: (branchName: string) => void; e
     />
   ) : null;
 
-  return { checkout, element };
+  return {
+    checkout,
+    element,
+    ready: branchData !== undefined && statusData !== undefined && worktreeData !== undefined,
+  };
 }

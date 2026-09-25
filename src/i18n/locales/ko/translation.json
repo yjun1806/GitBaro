@@ -1284,6 +1284,20 @@
     "chipShowOnly": "이 워크트리만 함께 보기",
     "chipHide": "그래프에서 숨기기",
     "chipShow": "그래프에 보이기",
-    "worktreeMenu": "워크트리 메뉴"
+    "worktreeMenu": "워크트리 메뉴",
+    "fetch": "Fetch",
+    "favorite": "즐겨찾기에 추가",
+    "unfavorite": "즐겨찾기에서 빼기",
+    "moveToWorkspace": "{{name}}(으)로 옮기기",
+    "removeFromWorkspace": "{{name}}에서 빼기",
+    "openPrimaryFolder": "기본 폴더 열기",
+    "viewInPrimary": "기본 폴더에서 이 브랜치 보기",
+    "removeWorktree": "워크트리 제거…",
+    "checkoutHere": "여기서 체크아웃",
+    "collapseAllInAccount": "이 계정 모두 접기",
+    "expandAllInAccount": "이 계정 모두 펴기",
+    "accountMenu": "계정 메뉴",
+    "openWorkspace": "워크스페이스 열기",
+    "fetchAll": "저장소 모두 Fetch…"
   }
 }

@@ -1309,6 +1309,20 @@
     "chipShowOnly": "Show only this one",
     "chipHide": "Hide from graph",
     "chipShow": "Show in graph",
-    "worktreeMenu": "Worktree menu"
+    "worktreeMenu": "Worktree menu",
+    "fetch": "Fetch",
+    "favorite": "Add to favorites",
+    "unfavorite": "Remove from favorites",
+    "moveToWorkspace": "Move to {{name}}",
+    "removeFromWorkspace": "Take out of {{name}}",
+    "openPrimaryFolder": "Open primary folder",
+    "viewInPrimary": "View this branch in the primary folder",
+    "removeWorktree": "Remove worktree…",
+    "checkoutHere": "Check out here",
+    "collapseAllInAccount": "Collapse all in this account",
+    "expandAllInAccount": "Expand all in this account",
+    "accountMenu": "Account menu",
+    "openWorkspace": "Open workspace",
+    "fetchAll": "Fetch all repositories…"
   }
 }

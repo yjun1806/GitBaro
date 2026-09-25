@@ -53,7 +53,7 @@ const DEFAULT_DEPS: RemoteDeps = {
   pull: (path, accountId) => gitPull(path, accountId),
   // force push는 이 창에서 제공하지 않는다.
   push: (path, accountId) => gitPush(path, accountId, false),
-  plan: planRemoteOp,
+  plan: (paths, op) => planRemoteOp(paths, op),
 };
 
 /** 계획상 실행할 줄인가(처음부터 체크한다). 계정이 없거나 계획이 건너뛴 저장소는 아니다. */

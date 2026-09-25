@@ -8,6 +8,10 @@ import {
   Bot,
   Trash2,
   RefreshCw,
+  Download,
+  Star,
+  Layers,
+  LogOut,
 } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -16,6 +20,11 @@ import type { ContextMenuSection } from "@/components/ui/ContextMenu";
 import { revealInFinder, openInTerminal, openRepoInEditor, openAiCliInTerminal } from "@/api/commands";
 import { getGitHubWebUrl } from "@/lib/utils";
 import { useAutoSyncStore } from "@/stores/auto-sync";
+import { useRepositoryStore } from "@/stores/repository";
+import { useAccountStore } from "@/stores/account";
+import { useWorkspaceStore } from "@/stores/workspace";
+import { repoAccountsByPath } from "@/lib/repo-tree";
+import { useFetchRepo } from "@/hooks/useFetchRepo";
 import type { RepoInfo, AppSettings } from "@/types";
 
 const AI_CLI_DISPLAY_NAMES: Record<string, string> = {
@@ -63,6 +72,22 @@ export function RepoHeaderContextMenu({
 }: RepoHeaderContextMenuProps) {
   const { t } = useTranslation();
   const openAutoSyncSettings = useAutoSyncStore((s) => s.openSettings);
+  const favorite = useRepositoryStore((s) => s.favoriteRepos.includes(repo.path));
+  const toggleFavorite = useRepositoryStore((s) => s.toggleFavorite);
+  const repos = useRepositoryStore((s) => s.repos);
+  const accounts = useAccountStore((s) => s.accounts);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const addRepoToWorkspace = useWorkspaceStore((s) => s.addRepoToWorkspace);
+  const removeRepoFromWorkspace = useWorkspaceStore((s) => s.removeRepoFromWorkspace);
+  const fetchRepo = useFetchRepo();
+
+  // 워크스페이스는 한 계정 안에만 있다. 같은 계정의 다른 워크스페이스로만 옮길 수 있다.
+  const account = repoAccountsByPath(repos, accounts).get(repo.path);
+  const currentWorkspace = workspaces.find((w) => w.repoPaths.includes(repo.path)) ?? null;
+  const moveTargets =
+    account && !account.pending
+      ? workspaces.filter((w) => w.accountKey === account.key && w.id !== currentWorkspace?.id)
+      : [];
 
   const gitHubUrl = repo.remotes
     .map((r) => getGitHubWebUrl(r.url))
@@ -76,56 +101,29 @@ export function RepoHeaderContextMenu({
   const aiCliName = AI_CLI_DISPLAY_NAMES[aiCliId] ?? "";
   const hasAiCli = aiCliId !== "" && aiCliName !== "";
 
+  const icon = "w-3.5 h-3.5";
   const sections: ContextMenuSection[] = [
     {
       items: [
         {
-          label: t("repo.contextMenu.copyName"),
-          icon: <Copy className="w-3.5 h-3.5" />,
+          label: t("repo.contextMenu.revealInFinder"),
+          icon: <FolderOpen className={icon} />,
           onClick: () => {
-            navigator.clipboard.writeText(repo.name);
+            revealInFinder(repo.path);
           },
-        },
-        {
-          label: t("repo.contextMenu.copyPath"),
-          icon: <Copy className="w-3.5 h-3.5" />,
-          onClick: () => {
-            navigator.clipboard.writeText(repo.path);
-          },
-        },
-      ],
-    },
-    {
-      items: [
-        {
-          label: t("repo.contextMenu.viewOnGitHub"),
-          icon: <Globe className="w-3.5 h-3.5" />,
-          onClick: () => {
-            if (gitHubUrl) {
-              openUrl(gitHubUrl);
-            }
-          },
-          disabled: !gitHubUrl,
         },
         {
           label: t("repo.contextMenu.openInTerminal"),
-          icon: <Terminal className="w-3.5 h-3.5" />,
+          icon: <Terminal className={icon} />,
           onClick: () => {
             openInTerminal(repo.path);
-          },
-        },
-        {
-          label: t("repo.contextMenu.revealInFinder"),
-          icon: <FolderOpen className="w-3.5 h-3.5" />,
-          onClick: () => {
-            revealInFinder(repo.path);
           },
         },
         {
           label: hasEditor
             ? t("repo.contextMenu.openInEditor", { editor: editorName })
             : t("repo.contextMenu.openInEditorFallback"),
-          icon: <Code2 className="w-3.5 h-3.5" />,
+          icon: <Code2 className={icon} />,
           onClick: () => {
             openRepoInEditor(repo.path);
           },
@@ -135,7 +133,7 @@ export function RepoHeaderContextMenu({
           label: hasAiCli
             ? t("repo.contextMenu.openAiCli", { cli: aiCliName })
             : t("repo.contextMenu.openAiCliFallback"),
-          icon: <Bot className="w-3.5 h-3.5" />,
+          icon: <Bot className={icon} />,
           onClick: () => {
             openAiCliInTerminal(repo.path, aiCliId);
           },
@@ -146,8 +144,68 @@ export function RepoHeaderContextMenu({
     {
       items: [
         {
+          label: t("menu.fetch"),
+          icon: <Download className={icon} />,
+          onClick: () => void fetchRepo(repo),
+          // 원격이나 계정이 없으면 받아 올 곳이 없다.
+          disabled: repo.remotes.length === 0 || !repo.accountId,
+        },
+        {
+          label: t("repo.contextMenu.viewOnGitHub"),
+          icon: <Globe className={icon} />,
+          onClick: () => {
+            if (gitHubUrl) {
+              openUrl(gitHubUrl);
+            }
+          },
+          disabled: !gitHubUrl,
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          label: t("repo.contextMenu.copyName"),
+          icon: <Copy className={icon} />,
+          onClick: () => {
+            navigator.clipboard.writeText(repo.name);
+          },
+        },
+        {
+          label: t("repo.contextMenu.copyPath"),
+          icon: <Copy className={icon} />,
+          onClick: () => {
+            navigator.clipboard.writeText(repo.path);
+          },
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          label: favorite ? t("menu.unfavorite") : t("menu.favorite"),
+          icon: <Star className={icon} />,
+          onClick: () => toggleFavorite(repo.path),
+        },
+        ...moveTargets.map((w) => ({
+          label: t("menu.moveToWorkspace", { name: w.name }),
+          icon: <Layers className={icon} />,
+          onClick: () => {
+            addRepoToWorkspace(w.id, repo.path);
+          },
+        })),
+        ...(currentWorkspace
+          ? [
+              {
+                label: t("menu.removeFromWorkspace", { name: currentWorkspace.name }),
+                icon: <LogOut className={icon} />,
+                onClick: () => removeRepoFromWorkspace(repo.path),
+              },
+            ]
+          : []),
+        {
           label: t("autoSync.menuItem"),
-          icon: <RefreshCw className="w-3.5 h-3.5" />,
+          icon: <RefreshCw className={icon} />,
           onClick: () => openAutoSyncSettings(repo.path),
           // 계정이나 원격이 없으면 자동으로 확인할 수 없다.
           disabled: repo.remotes.length === 0,
@@ -158,7 +216,7 @@ export function RepoHeaderContextMenu({
       items: [
         {
           label: t("repo.contextMenu.remove"),
-          icon: <Trash2 className="w-3.5 h-3.5" />,
+          icon: <Trash2 className={icon} />,
           variant: "danger" as const,
           onClick: async () => {
             const confirmed = await ask(

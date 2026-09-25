@@ -20,6 +20,7 @@ import {
 } from "./row-style";
 import { DraggableRow, DropAfterLine } from "./TreeDnd";
 import { TreeRowFrame } from "./TreeRowFrame";
+import type { FolderRow } from "./useSidebarRowMenus";
 import { isLivePath, isWatchedPath, repoPaths } from "./tree-model";
 import type { SidebarTreeData } from "./useSidebarTreeData";
 
@@ -39,6 +40,10 @@ export interface RepoActions {
   /** 저장소의 기본 폴더를 열고 그 자리에서 브랜치를 체크아웃하지 않고 본다. */
   onViewBranch: (repo: RepoInfo, target: ViewTarget) => void;
   onContextMenu: (repo: RepoInfo, e: MouseEvent) => void;
+  /** 작업 폴더 줄 우클릭(`useSidebarRowMenus`). */
+  onFolderContextMenu?: (repo: RepoInfo, folder: FolderRow, e: MouseEvent) => void;
+  /** 보기만 하는 기본 브랜치 줄 우클릭. */
+  onViewContextMenu?: (repo: RepoInfo, target: Extract<ViewTarget, { kind: "ref" }>, e: MouseEvent) => void;
 }
 
 /** 경로 하나(또는 여럿의 합)의 오른쪽 표시 값. */
@@ -146,6 +151,7 @@ export function RepoFolderRows({ node, level, depth, data, selection, actions }:
             selected={selected}
             hover={{ kind: "worktree", repoPath: repo.path, path, isPrimary }}
             onSelect={() => (isPrimary ? actions.onSelectRepo(repo) : actions.onSelectWorktree(repo, path))}
+            onContextMenu={(e) => actions.onFolderContextMenu?.(repo, { path, isPrimary, branch: data.branchOf(path) }, e)}
           >
             <span className={ROW_ICON_SLOT}>
               <GitBranch className="w-3 h-3" aria-hidden="true" />
@@ -165,6 +171,7 @@ export function RepoFolderRows({ node, level, depth, data, selection, actions }:
           selected={viewingHere?.kind === "ref" && viewingHere.name === viewTarget.name}
           hover={{ kind: "branch", repoPath: repo.path, branch: viewTarget.name }}
           onSelect={() => actions.onViewBranch(repo, viewTarget)}
+          onContextMenu={(e) => actions.onViewContextMenu?.(repo, viewTarget, e)}
         >
           <span className={ROW_ICON_SLOT}>
             <Eye className="w-3 h-3" aria-hidden="true" />
