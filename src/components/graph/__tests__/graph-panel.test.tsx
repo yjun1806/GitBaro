@@ -139,6 +139,7 @@ const branchList: { name: string; isHead: boolean; isRemote: boolean }[] = [];
 const changesVsDefaultByPath: Record<string, unknown> = {};
 
 const unpushedState = vi.hoisted(() => ({ value: undefined as unknown }));
+const stashPush = vi.hoisted(() => vi.fn(async (_message?: string) => "stash-oid" as string | null));
 vi.mock("@/api/queries", async (importOriginal) => ({
   useChangesVsDefaultOnHead: (entries: readonly { path: string }[]) =>
     entries.map((e) => ({ data: changesVsDefaultByPath[e.path] })),
@@ -173,6 +174,7 @@ vi.mock("@/api/queries", async (importOriginal) => ({
   useReviewStatusQuery: () => ({ data: scan, isLoading: false }),
   useNewCommitCountsQuery: () => ({ data: [], isLoading: false }),
   useUnpushedCommits: () => ({ data: unpushedState.value }),
+  useStashMutations: () => ({ push: { mutateAsync: stashPush } }),
 }));
 
 const { GraphPanel } = await import("@/components/graph/GraphPanel");
@@ -343,11 +345,14 @@ describe("GraphPanel commit graph", () => {
     expect(within(menu).getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
       i18n.t("history.contextMenu.createBranch"),
       i18n.t("history.contextMenu.checkout"),
-      i18n.t("history.contextMenu.reset"),
-      i18n.t("history.contextMenu.revert"),
       i18n.t("history.contextMenu.cherryPick"),
+      i18n.t("history.contextMenu.revert"),
       i18n.t("history.contextMenu.copyHash"),
+      i18n.t("menu.copyShortSha"),
       i18n.t("history.contextMenu.copyMessage"),
+      i18n.t("menu.viewOnGitHub"),
+      // 되돌릴 수 없는 reset은 맨 아래에 따로 둔다.
+      i18n.t("history.contextMenu.reset"),
     ]);
   });
 
@@ -521,11 +526,14 @@ describe("GraphPanel worktree chips (D5)", () => {
     const disabledOf = (id: string) => {
       fireEvent.contextMenu(document.querySelector(`[data-commit-id="${id}"]`) as HTMLElement);
       const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
-      const out = items.filter((m) => (m as HTMLButtonElement).disabled).map((m) => m.textContent);
+      // 이 저장소에는 GitHub 원격이 없어 「GitHub에서 보기」는 늘 막혀 있다. 여기서는 reset·revert만 본다.
+      const out = items
+        .filter((m) => (m as HTMLButtonElement).disabled && m.textContent !== i18n.t("menu.viewOnGitHub"))
+        .map((m) => m.textContent);
       fireEvent.keyDown(document, { key: "Escape" });
       return out;
     };
-    expect(disabledOf("f1")).toEqual([i18n.t("history.contextMenu.reset"), i18n.t("history.contextMenu.revert")]);
+    expect(disabledOf("f1")).toEqual([i18n.t("history.contextMenu.revert"), i18n.t("history.contextMenu.reset")]);
     expect(disabledOf("c1")).toEqual([]);
   });
 
@@ -796,5 +804,123 @@ describe("GraphPanel commits not on any remote", () => {
     renderPanel();
     expect(document.querySelector('[data-commit-id="c1"] circle[data-dot]')?.getAttribute("data-dot")).toBe("plain");
     expect(document.querySelector("[data-remote-boundary]")).toBeNull();
+  });
+});
+
+describe("GraphPanel right-click menus", () => {
+  const menuItems = () => within(screen.getByRole("menu")).getAllByRole("menuitem");
+  const item = (name: string) => within(screen.getByRole("menu")).getByRole("menuitem", { name });
+
+  it("opens another worktree from its WIP row, and offers staging and stash only on the open one", () => {
+    renderPanel();
+    const other = screen.getByRole("button", { name: "Uncommitted changes · feat/x branch · app-feat · 4 files" });
+    fireEvent.contextMenu(other);
+    expect(menuItems().map((m) => m.textContent)).toEqual([
+      "Show changes",
+      "Open this worktree",
+      "Reveal in Finder",
+      "Open in Terminal",
+      "Open in editor",
+      "Copy path",
+      "Copy branch name",
+    ]);
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    const own = screen.getByRole("button", { name: "Uncommitted changes · main branch · primary folder · 1 file" });
+    fireEvent.contextMenu(own);
+    expect(menuItems().map((m) => m.textContent).slice(0, 3)).toEqual([
+      "Show changes",
+      "Stage and commit…",
+      "Stash Changes",
+    ]);
+    fireEvent.click(item("Stage and commit…"));
+    expect(useUIStore.getState().activeTab).toBe("changes");
+
+    fireEvent.contextMenu(other);
+    fireEvent.click(item("Open this worktree"));
+    expect(openWorktree).toHaveBeenCalledWith(FEAT);
+  });
+
+  it("follows the worktree from “Show changes”, like a click on the row", () => {
+    renderPanel();
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Uncommitted changes · feat/x branch · app-feat · 4 files" }));
+    fireEvent.click(item("Show changes"));
+    expect(useFollowStore.getState().target).toBe(FEAT);
+  });
+
+  it("gives branch labels their own menu: view, checkout, compare, copy, and delete last", () => {
+    branchList.push(
+      { name: "main", isHead: true, isRemote: false },
+      { name: "feat/y", isHead: false, isRemote: false },
+    );
+    history.pages[0][1] = commit("c2", ["c3"], { refs: [{ name: "feat/y", kind: "localBranch", isHead: false }] });
+    try {
+      renderPanel();
+      const label = document.querySelector('[data-ref-label="feat/y"]') as HTMLElement;
+      fireEvent.contextMenu(label);
+      // 이름표 메뉴는 커밋 메뉴 대신 열린다.
+      expect(screen.getAllByRole("menu")).toHaveLength(1);
+      expect(menuItems().map((m) => m.textContent)).toEqual([
+        "View without checkout",
+        i18n.t("branch.contextMenu.checkout"),
+        i18n.t("branch.contextMenu.compare"),
+        i18n.t("branch.contextMenu.copyName"),
+        "View on GitHub",
+        "Delete branch…",
+      ]);
+      fireEvent.click(item("Delete branch…"));
+      // 삭제는 확인 창을 거친다.
+      expect(screen.getByRole("dialog")).toBeTruthy();
+
+      fireEvent.contextMenu(document.querySelector('[data-ref-label="main"]') as HTMLElement);
+      // 지금 브랜치는 보기·체크아웃·비교·삭제를 막는다.
+      const disabled = menuItems()
+        .filter((m) => (m as HTMLButtonElement).disabled)
+        .map((m) => m.textContent);
+      expect(disabled).toEqual([
+        "View without checkout",
+        i18n.t("branch.contextMenu.checkout"),
+        i18n.t("branch.contextMenu.compare"),
+        "View on GitHub",
+        "Delete branch…",
+      ]);
+    } finally {
+      history.pages[0][1] = commit("c2", ["c3"]);
+    }
+  });
+
+  it("starts a range compare from a branch label", () => {
+    branchList.push(
+      { name: "main", isHead: true, isRemote: false },
+      { name: "feat/y", isHead: false, isRemote: false },
+    );
+    history.pages[0][1] = commit("c2", ["c3"], { refs: [{ name: "feat/y", kind: "localBranch", isHead: false }] });
+    try {
+      renderPanel();
+      fireEvent.contextMenu(document.querySelector('[data-ref-label="feat/y"]') as HTMLElement);
+      fireEvent.click(item(i18n.t("branch.contextMenu.compare")));
+      expect(useBranchRangeStore.getState().range).toMatchObject({ repoPath: REPO, base: "main", target: "feat/y" });
+    } finally {
+      history.pages[0][1] = commit("c2", ["c3"]);
+    }
+  });
+
+  it("shows only one other worktree from its chip's menu", () => {
+    worktreeState.list = [
+      { path: REPO, head: "c1", branch: "main", isMain: true, isBare: false, isLocked: false, lockReason: null, isDirty: false, isPrunable: false, base: null },
+      { path: FEAT, head: "f1", branch: "feat/x", isMain: false, isBare: false, isLocked: false, lockReason: null, isDirty: false, isPrunable: false, base: null },
+    ];
+    useGraphWorktreesStore.setState({ shownByRepo: { [REPO]: [] } });
+    renderPanel();
+    const chips = screen.getByRole("group", { name: "Worktrees to show together in the graph" });
+    const featChip = within(chips).getAllByRole("button").find((b) => b.textContent?.startsWith("feat/x"))!;
+    fireEvent.contextMenu(featChip);
+    fireEvent.click(item("Show only this one"));
+    expect(useGraphWorktreesStore.getState().shownByRepo[REPO]).toEqual([FEAT]);
+    // 지금 연 워크트리 칩은 늘 보이므로 켜고 끄는 항목을 막는다.
+    const mainChip = within(chips).getAllByRole("button").find((b) => b.textContent?.startsWith("main"))!;
+    fireEvent.contextMenu(mainChip);
+    expect((item("Show only this one") as HTMLButtonElement).disabled).toBe(true);
+    expect((item("Open this worktree") as HTMLButtonElement).disabled).toBe(true);
   });
 });

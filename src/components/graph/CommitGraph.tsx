@@ -24,9 +24,12 @@ import { useCommitActions } from "@/hooks/useCommitActions";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { computeGraphLanes } from "@/lib/graph-lanes";
-import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
+import { formatRelativeTime, getErrorMessage, gitHubRepoUrl } from "@/lib/utils";
 import { HistoryView } from "@/components/history/HistoryView";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import { useWipRowMenu } from "./useWipRowMenu";
+import { useRefLabelMenu } from "./useRefLabelMenu";
 import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
 import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
 import type { CommitInfo, HistoryTarget } from "@/types";
@@ -207,6 +210,7 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
   const activeTab = useUIStore((s) => s.activeTab);
   const followTarget = useFollowStore((s) => s.target);
   const followModeOf = useFollowModeOf();
+  const menu = useWipRowMenu(selection.selectWip);
   return (
     <>
       {wips.map((wip) => {
@@ -228,9 +232,11 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
             // 지금 연 워크트리는 여기서 바로 커밋한다. 다른 워크트리는 행을 눌러 따라간 뒤 그 워크트리를 연다.
             action={wip.isCurrent && (wip.count ?? 0) > 0 ? <WorkingChangesButton count={wip.count ?? 0} /> : undefined}
             onSelect={() => selection.selectWip(wip)}
+            onContextMenu={(e) => menu.open(wip, contextMenuPoint(e))}
           />
         );
       })}
+      {menu.element}
     </>
   );
 }
@@ -398,6 +404,7 @@ function CommitGraphList({
   }, [isLoading, activeRepoPath]);
 
   const menu = useCommitMenu(activeRepoPath);
+  const refMenu = useRefLabelMenu();
 
 
   return (
@@ -471,8 +478,10 @@ function CommitGraphList({
                   onContextMenu={(e) => {
                     e.preventDefault();
                     selectCommit(commit.id);
-                    menu.open(commit, e.clientX, e.clientY, !viewing && ownIds.has(commit.id));
+                    const point = contextMenuPoint(e);
+                    menu.open(commit, point.x, point.y, !viewing && ownIds.has(commit.id));
                   }}
+                  onRefContextMenu={(label, e) => refMenu.open(label, contextMenuPoint(e))}
                 />
               </Fragment>
             );
@@ -487,6 +496,7 @@ function CommitGraphList({
       </div>
 
       {menu.element}
+      {refMenu.element}
     </div>
   );
 }
@@ -516,6 +526,7 @@ function useCommitMenu(repoPath: string | null) {
   );
   const [resetTarget, setResetTarget] = useState<CommitInfo | null>(null);
   const [branchTarget, setBranchTarget] = useState<CommitInfo | null>(null);
+  const gitHubUrl = useRepositoryStore((s) => gitHubRepoUrl(s.activeRepo?.remotes ?? []));
 
   const confirmThen = async (message: string, title: string, run: () => void) => {
     const ok = await ask(message, { title, kind: "warning" });
@@ -548,35 +559,33 @@ function useCommitMenu(repoPath: string | null) {
       {target && (
         <CommitContextMenu
           position={{ x: target.x, y: target.y }}
-          onCopyHash={() => navigator.clipboard.writeText(target.commit.id)}
-          onCopyMessage={() => navigator.clipboard.writeText(target.commit.message)}
-          onCreateBranch={() => setBranchTarget(target.commit)}
-          onCheckout={() =>
-            void confirmThen(
-              t("history.checkoutConfirm", { shortId: target.commit.shortId }),
-              t("history.contextMenu.checkout"),
-              () => checkout(target.commit.id),
-            )
-          }
-          onReset={() => setResetTarget(target.commit)}
-          onRevert={() =>
-            void confirmThen(
-              // 병합 커밋은 첫 번째 부모 기준으로 되돌린다(백엔드가 -m 1 사용).
-              t(target.commit.parentIds.length > 1 ? "history.revertMergeConfirm" : "history.revertConfirm", {
-                shortId: target.commit.shortId,
-              }),
-              t("history.contextMenu.revert"),
-              () => revert(target.commit.id),
-            )
-          }
-          onCherryPick={() =>
-            void confirmThen(
-              t("history.cherryPickConfirm", { shortId: target.commit.shortId }),
-              t("history.contextMenu.cherryPick"),
-              () => cherryPick(target.commit.id),
-            )
-          }
-          isMergeCommit={target.commit.parentIds.length > 1}
+          commit={target.commit}
+          gitHubUrl={gitHubUrl}
+          git={{
+            onCreateBranch: () => setBranchTarget(target.commit),
+            onCheckout: () =>
+              void confirmThen(
+                t("history.checkoutConfirm", { shortId: target.commit.shortId }),
+                t("history.contextMenu.checkout"),
+                () => checkout(target.commit.id),
+              ),
+            onReset: () => setResetTarget(target.commit),
+            onRevert: () =>
+              void confirmThen(
+                // 병합 커밋은 첫 번째 부모 기준으로 되돌린다(백엔드가 -m 1 사용).
+                t(target.commit.parentIds.length > 1 ? "history.revertMergeConfirm" : "history.revertConfirm", {
+                  shortId: target.commit.shortId,
+                }),
+                t("history.contextMenu.revert"),
+                () => revert(target.commit.id),
+              ),
+            onCherryPick: () =>
+              void confirmThen(
+                t("history.cherryPickConfirm", { shortId: target.commit.shortId }),
+                t("history.contextMenu.cherryPick"),
+                () => cherryPick(target.commit.id),
+              ),
+          }}
           notInHistory={!target.inHistory}
           onClose={() => setTarget(null)}
         />
@@ -677,6 +686,12 @@ export function RepoLaneCommitGraph({
     (chain: number) => (lanePaths[chain] ? repoLaneColor(lanePaths[chain]) : "var(--faint)"),
     [lanePaths],
   );
+  // 커밋 우클릭: 복사·GitHub 보기만 있는 메뉴. 여러 저장소의 커밋이라 체크아웃·reset 같은 동작은
+  // 그 저장소 화면에서 한다.
+  const repos = useRepositoryStore((s) => s.repos);
+  const [commitMenu, setCommitMenu] = useState<{ commit: CommitInfo; repoPath: string; x: number; y: number } | null>(
+    null,
+  );
 
   const commitRows = useMemo(
     () => graph.rows.filter((r) => r.kind === "commit"),
@@ -756,6 +771,11 @@ export function RepoLaneCommitGraph({
                     wipAbove={false}
                     leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
                     onClick={() => onSelectCommit(row.repoPath, row.commit, row.key)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      onSelectCommit(row.repoPath, row.commit, row.key);
+                      setCommitMenu({ commit: row.commit, repoPath: row.repoPath, ...contextMenuPoint(e) });
+                    }}
                   />
                 );
               }
@@ -774,6 +794,14 @@ export function RepoLaneCommitGraph({
           })
         )}
       </div>
+      {commitMenu && (
+        <CommitContextMenu
+          commit={commitMenu.commit}
+          gitHubUrl={gitHubRepoUrl(repos.find((r) => r.path === commitMenu.repoPath)?.remotes ?? [])}
+          position={{ x: commitMenu.x, y: commitMenu.y }}
+          onClose={() => setCommitMenu(null)}
+        />
+      )}
     </div>
   );
 }

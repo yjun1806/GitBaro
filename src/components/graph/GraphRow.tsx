@@ -124,6 +124,8 @@ interface GraphRowProps {
   leading?: ReactNode;
   onClick: () => void;
   onContextMenu?: (e: MouseEvent) => void;
+  /** 브랜치·태그 이름표 우클릭. 주면 행의 메뉴 대신 이름표 메뉴를 연다. */
+  onRefContextMenu?: (label: RefLabel, e: MouseEvent) => void;
   ref?: Ref<HTMLButtonElement>;
 }
 
@@ -151,6 +153,7 @@ export function GraphRow({
   leading,
   onClick,
   onContextMenu,
+  onRefContextMenu,
   ref,
 }: GraphRowProps) {
   const { t } = useTranslation();
@@ -199,12 +202,22 @@ export function GraphRow({
           />
           {leading}
           {commit.refs.map((label) => (
-            <RefBadge
+            <span
               key={`${label.kind}:${label.name}`}
-              label={label}
-              remoteTags={remoteTags}
-              laneColor={refColor?.(label)}
-            />
+              className="contents"
+              data-ref-label={label.name}
+              onContextMenu={
+                onRefContextMenu
+                  ? (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onRefContextMenu(label, e);
+                    }
+                  : undefined
+              }
+            >
+              <RefBadge label={label} remoteTags={remoteTags} laneColor={refColor?.(label)} />
+            </span>
           ))}
           <span className={cn("truncate text-foreground", isSelected ? "font-bold" : "font-medium")}>
             {commit.summary}
@@ -328,6 +341,8 @@ interface GraphWipRowProps {
   /** 행 오른쪽 끝의 버튼(「작업 중인 변경 N」). 행 버튼 밖에 둔다(버튼 안에 버튼을 넣지 않는다). */
   action?: ReactNode;
   onSelect: () => void;
+  /** 행 우클릭(`useWipRowMenu`). */
+  onContextMenu?: (e: MouseEvent) => void;
 }
 
 /**
@@ -350,6 +365,7 @@ export function GraphWipRow({
   trailing,
   action,
   onSelect,
+  onContextMenu,
 }: GraphWipRowProps) {
   const { t } = useTranslation();
   const x = laneX(layout?.lane ?? 0);
@@ -365,6 +381,14 @@ export function GraphWipRow({
       )}
       style={{ height: H }}
       data-testid="wip-row"
+      onContextMenu={
+        onContextMenu
+          ? (e) => {
+              e.preventDefault();
+              onContextMenu(e);
+            }
+          : undefined
+      }
     >
     <button
       type="button"

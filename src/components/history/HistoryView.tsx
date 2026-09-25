@@ -19,13 +19,14 @@ import { CommitItem } from "@/components/history/CommitItem";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
 import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
 import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
-import { getErrorMessage } from "@/lib/utils";
+import { getErrorMessage, gitHubRepoUrl } from "@/lib/utils";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import type { CommitInfo } from "@/types";
 
 export function HistoryView() {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const gitHubUrl = useRepositoryStore((s) => gitHubRepoUrl(s.activeRepo?.remotes ?? []));
   const accounts = useAccountStore((s) => s.accounts);
   const repoAccountId = useRepoAccountId();
   const {
@@ -258,14 +259,15 @@ export function HistoryView() {
       {menu && (
         <CommitContextMenu
           position={{ x: menu.x, y: menu.y }}
-          onCopyHash={() => navigator.clipboard.writeText(menu.commit.id)}
-          onCopyMessage={() => navigator.clipboard.writeText(menu.commit.message)}
-          onCreateBranch={() => setBranchTarget(menu.commit)}
-          onCheckout={() => handleCheckout(menu.commit)}
-          onReset={() => setResetTarget(menu.commit)}
-          onRevert={() => handleRevert(menu.commit)}
-          onCherryPick={() => handleCherryPick(menu.commit)}
-          isMergeCommit={menu.commit.parentIds.length > 1}
+          commit={menu.commit}
+          gitHubUrl={gitHubUrl}
+          git={{
+            onCreateBranch: () => setBranchTarget(menu.commit),
+            onCheckout: () => handleCheckout(menu.commit),
+            onReset: () => setResetTarget(menu.commit),
+            onRevert: () => handleRevert(menu.commit),
+            onCherryPick: () => handleCherryPick(menu.commit),
+          }}
           onClose={() => setMenu(null)}
         />
       )}

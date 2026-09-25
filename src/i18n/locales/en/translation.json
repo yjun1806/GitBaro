@@ -1289,6 +1289,26 @@
     "openUrlFailed": "Couldn't open the browser: {{error}}",
     "fileMenu": "File menu",
     "copyRelativePath": "Copy relative path",
-    "copyFullPath": "Copy full path"
+    "copyFullPath": "Copy full path",
+    "copyShortSha": "Copy short SHA",
+    "viewOnGitHub": "View on GitHub",
+    "commitMenu": "Commit menu",
+    "revealInFinder": "Reveal in Finder",
+    "openInTerminal": "Open in Terminal",
+    "openInEditor": "Open in editor",
+    "copyPath": "Copy path",
+    "showChanges": "Show changes",
+    "openStaging": "Stage and commit…",
+    "openWorktree": "Open this worktree",
+    "wipMenu": "Uncommitted changes menu",
+    "viewBranch": "View without checkout",
+    "copyTagName": "Copy tag name",
+    "deleteBranch": "Delete branch…",
+    "tagMenu": "Tag menu",
+    "branchMenu": "Branch menu",
+    "chipShowOnly": "Show only this one",
+    "chipHide": "Hide from graph",
+    "chipShow": "Show in graph",
+    "worktreeMenu": "Worktree menu"
   }
 }

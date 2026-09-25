@@ -1264,6 +1264,26 @@
     "openUrlFailed": "브라우저를 열지 못했어요: {{error}}",
     "fileMenu": "파일 메뉴",
     "copyRelativePath": "상대 경로 복사",
-    "copyFullPath": "전체 경로 복사"
+    "copyFullPath": "전체 경로 복사",
+    "copyShortSha": "짧은 SHA 복사",
+    "viewOnGitHub": "GitHub에서 보기",
+    "commitMenu": "커밋 메뉴",
+    "revealInFinder": "Finder에서 보기",
+    "openInTerminal": "터미널에서 열기",
+    "openInEditor": "편집기에서 열기",
+    "copyPath": "경로 복사",
+    "showChanges": "변경 보기",
+    "openStaging": "스테이징하고 커밋하기…",
+    "openWorktree": "이 워크트리 열기",
+    "wipMenu": "커밋 안 한 변경 메뉴",
+    "viewBranch": "체크아웃하지 않고 보기",
+    "copyTagName": "태그 이름 복사",
+    "deleteBranch": "브랜치 삭제…",
+    "tagMenu": "태그 메뉴",
+    "branchMenu": "브랜치 메뉴",
+    "chipShowOnly": "이 워크트리만 함께 보기",
+    "chipHide": "그래프에서 숨기기",
+    "chipShow": "그래프에 보이기",
+    "worktreeMenu": "워크트리 메뉴"
   }
 }
