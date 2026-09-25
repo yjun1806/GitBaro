@@ -83,6 +83,7 @@ function makeData(
     overflow: opts.overflow ?? [],
     now: NOW,
     branchOf: (p) => branches[p] ?? null,
+    defaultBranchOf: (p) => ({ path: p, name: "main", hasLocal: true, remoteRef: "origin/main" }),
   };
 }
 
@@ -202,9 +203,9 @@ describe("RepoTree — cards and levels", () => {
     expect(item("feat/login")).toHaveAttribute("aria-level", "4");
     expect(item("feat/login").style.paddingLeft).toBe("16px");
     expect(item("api").style.paddingLeft).toBe("8px");
-    // main은 기본 폴더가 체크아웃하고 있어 보기 줄이 따로 없다.
-    await waitFor(() => expect(getBranches).toHaveBeenCalledWith(API));
-    expect(screen.queryByRole("treeitem", { name: "View main (no checkout)" })).toBeNull();
+    // main은 기본 폴더가 체크아웃하고 있어 워크스페이스 카드 안에는 보기 줄이 따로 없다.
+    const productCard = item("product").closest(".bg-card") as HTMLElement;
+    expect(within(productCard).queryByRole("treeitem", { name: "View main (no checkout)" })).toBeNull();
     expect(item("feat/login").closest(".bg-card")).toBe(item("product").closest(".bg-card"));
   });
 

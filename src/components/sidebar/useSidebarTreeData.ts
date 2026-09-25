@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRepoSyncStatuses } from "@/api/queries";
+import { useDefaultBranches, useRepoSyncStatuses } from "@/api/queries";
 import { useReviewStatus, type WorktreeReviewStatus } from "@/hooks/useReviewStatus";
 import { buildRepoTree, type AccountNode, type PathSignals, type WorktreeInput } from "@/lib/repo-tree";
 import { useAccountStore } from "@/stores/account";
@@ -7,7 +7,7 @@ import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
-import type { RepoReviewStatus, RepoSyncStatus } from "@/types";
+import type { DefaultBranch, RepoReviewStatus, RepoSyncStatus } from "@/types";
 import { buildSignals, syncStatusPaths, worktreesByRepoFrom } from "./tree-model";
 
 /** 사이드바가 활동 감시 대상에 경로를 더할 때 쓰는 키. */
@@ -49,6 +49,8 @@ export interface SidebarTreeData {
   now: number;
   /** 경로(저장소·워크트리)의 지금 브랜치. 모르면 null. */
   branchOf: (path: string) => string | null;
+  /** 저장소의 기본 브랜치. 아직 모르면 undefined. */
+  defaultBranchOf: (repoPath: string) => DefaultBranch | undefined;
 }
 
 /**
@@ -58,6 +60,7 @@ export interface SidebarTreeData {
  * - 커밋하지 않은 파일 수와 ↑↓: 저장소와 링크된 워크트리 경로 전체를 `repo_sync_status` 한 번의
  *   묶음 호출로 읽는다(20초). 저장소가 늘어도 호출 수는 늘지 않는다.
  * - 파일 변경 시각: `live-changes` 스토어.
+ * - 기본 브랜치: 모든 저장소를 `get_default_branches` 한 번의 묶음 호출로 읽는다(5분, fetch·체크아웃 뒤 무효화).
  *
  * 감시 대상 등록은 화면의 펼침 상태(검색, 조용한 저장소 줄)를 아는 `RepoTree`가
  * `useSidebarWatchPaths`로 한다.
@@ -85,6 +88,7 @@ export function useSidebarTreeData(): SidebarTreeData {
     [repoPathList, review.repos],
   );
   const { data: syncData } = useRepoSyncStatuses(statusPaths);
+  const { data: defaultBranches } = useDefaultBranches(repoPathList);
   // 워크트리 목록이 바뀌면 조회 키가 바뀌어 잠깐 결과가 비는데, 그동안 앞 결과를 보여 줘
   // 표시가 깜박이지 않게 한다.
   const lastSync = useRef<Record<string, RepoSyncStatus>>(EMPTY_SYNC);
@@ -127,6 +131,7 @@ export function useSidebarTreeData(): SidebarTreeData {
     (path: string) => syncByPath[path]?.branch || reviewByPath[path]?.branch || null,
     [syncByPath, reviewByPath],
   );
+  const defaultBranchOf = useCallback((repoPath: string) => defaultBranches?.[repoPath], [defaultBranches]);
 
   return {
     tree,
@@ -140,6 +145,7 @@ export function useSidebarTreeData(): SidebarTreeData {
     overflow,
     now,
     branchOf,
+    defaultBranchOf,
   };
 }
 

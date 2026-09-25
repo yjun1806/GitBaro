@@ -65,27 +65,33 @@ describe("hover card change time", () => {
 });
 
 describe("viewOnlyDefaultBranch", () => {
-  const b = (name: string, isDefault: boolean, isRemote = false) => ({ name, isDefault, isRemote });
+  const def = (hasLocal: boolean, remoteRef: string | null = "origin/main") => ({
+    path: "/r/app",
+    name: "main",
+    hasLocal,
+    remoteRef,
+  });
 
   it("offers the local default branch when no working folder has it checked out", () => {
-    expect(viewOnlyDefaultBranch([b("main", true), b("feat/x", false)], ["feat/x"])).toEqual({
-      kind: "ref",
-      name: "main",
-      isRemote: false,
-    });
+    expect(viewOnlyDefaultBranch(def(true), ["feat/x"])).toEqual({ kind: "ref", name: "main", isRemote: false });
   });
 
   it("offers nothing when a working folder already has it checked out", () => {
-    expect(viewOnlyDefaultBranch([b("main", true)], ["feat/x", "main"])).toBeNull();
+    expect(viewOnlyDefaultBranch(def(true), ["feat/x", "main"])).toBeNull();
   });
 
-  it("falls back to the remote default branch, matching a checkout by its short name", () => {
-    const branches = [b("origin/main", true, true)];
-    expect(viewOnlyDefaultBranch(branches, ["feat/x"])).toEqual({ kind: "ref", name: "origin/main", isRemote: true });
-    expect(viewOnlyDefaultBranch(branches, ["main"])).toBeNull();
+  it("offers the remote copy when only the remote default branch exists", () => {
+    expect(viewOnlyDefaultBranch(def(false), ["feat/x"])).toEqual({
+      kind: "ref",
+      name: "origin/main",
+      isRemote: true,
+    });
+    expect(viewOnlyDefaultBranch(def(false), ["main"])).toBeNull();
   });
 
-  it("offers nothing before the branch list arrives", () => {
+  it("offers nothing before the default branch is known or when the repository cannot be read", () => {
     expect(viewOnlyDefaultBranch(undefined, [])).toBeNull();
+    expect(viewOnlyDefaultBranch({ path: "/r/app", name: null, hasLocal: false, remoteRef: null }, [])).toBeNull();
+    expect(viewOnlyDefaultBranch(def(false, null), [])).toBeNull();
   });
 });

@@ -1,14 +1,12 @@
 import type { MouseEvent } from "react";
 import { Eye, GitBranch, Loader2, Star } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { getBranches } from "@/api/commands";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
 import { middleEllipsis } from "@/lib/middle-ellipsis";
 import type { RepoNode } from "@/lib/repo-tree";
 import { cn } from "@/lib/utils";
 import type { ViewTarget } from "@/stores/history-view";
-import type { RepoInfo } from "@/types";
+import type { DefaultBranch, RepoInfo } from "@/types";
 import { RowSignals, type RowSignalValues } from "./RowSignals";
 import {
   BRANCH_MAX_CHARS,
@@ -59,35 +57,16 @@ export function signalValues(paths: string[], data: SidebarTreeData): RowSignalV
 }
 
 /**
- * 체크아웃하지 않고 볼 기본 브랜치. 로컬 기본 브랜치가 있으면 그것을, 없으면 원격 기본 브랜치를 쓴다.
- * 작업 폴더 중 하나가 이미 체크아웃하고 있으면 그 줄이 대신하므로 null.
+ * 체크아웃하지 않고 볼 기본 브랜치. 로컬 기본 브랜치가 있으면 그것을, 없으면 원격 사본(`origin/main`)을 쓴다.
+ * 작업 폴더 중 하나가 이미 기본 브랜치를 체크아웃하고 있으면 그 줄이 대신하므로 null.
  */
 export function viewOnlyDefaultBranch(
-  branches: readonly { name: string; isRemote: boolean; isDefault: boolean }[] | undefined,
+  def: DefaultBranch | undefined,
   checkedOut: readonly (string | null)[],
 ): ViewTarget | null {
-  const def = branches?.find((b) => b.isDefault && !b.isRemote) ?? branches?.find((b) => b.isDefault && b.isRemote);
-  if (!def) return null;
-  const shortName = def.isRemote ? def.name.slice(def.name.indexOf("/") + 1) : def.name;
-  if (checkedOut.includes(def.name) || checkedOut.includes(shortName)) return null;
-  return { kind: "ref", name: def.name, isRemote: def.isRemote };
-}
-
-/** 기본 브랜치는 거의 바뀌지 않으므로 오래 둔다. */
-const DEFAULT_BRANCH_STALE_MS = 5 * 60_000;
-
-/**
- * 카드의 보기 줄에 쓸 브랜치 목록. 툴바가 쓰는 `["branches", path]` 키는 fetch·체크아웃 때마다 모든
- * 저장소 것이 한꺼번에 무효화되어, 펼친 카드 수만큼 다시 불린다. 그래서 사이드바는 별도 키로 5분 둔다.
- * 어느 폴더가 무엇을 체크아웃했는지는 이 목록이 아니라 동기화 상태(`branchOf`)로 판단한다.
- */
-function useSidebarBranches(repoPath: string) {
-  return useQuery({
-    queryKey: ["sidebarBranches", repoPath],
-    queryFn: () => getBranches(repoPath),
-    staleTime: DEFAULT_BRANCH_STALE_MS,
-    refetchOnWindowFocus: false,
-  }).data;
+  if (!def?.name || checkedOut.includes(def.name)) return null;
+  if (def.hasLocal) return { kind: "ref", name: def.name, isRemote: false };
+  return def.remoteRef ? { kind: "ref", name: def.remoteRef, isRemote: true } : null;
 }
 
 export function RepoAvatar({ repo }: { repo: RepoInfo }) {
@@ -119,7 +98,6 @@ interface FolderRowsProps {
 export function RepoFolderRows({ node, level, depth, data, selection, actions }: FolderRowsProps) {
   const { t } = useTranslation();
   const { repo, worktrees } = node;
-  const branches = useSidebarBranches(repo.path);
   const folders = [
     { path: repo.path, isPrimary: true },
     ...worktrees.map((w) => ({ path: w.path, isPrimary: false })),
@@ -131,7 +109,7 @@ export function RepoFolderRows({ node, level, depth, data, selection, actions }:
     return head ? head.slice(0, 7) : t("sidebarTree.card.detached");
   };
   const viewTarget = viewOnlyDefaultBranch(
-    branches,
+    data.defaultBranchOf(repo.path),
     folders.map((f) => data.branchOf(f.path)),
   );
   const viewingHere = selection.activePath === repo.path ? selection.viewing : null;

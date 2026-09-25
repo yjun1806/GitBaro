@@ -118,6 +118,8 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         // 브랜치를 만들거나 바꾸면 「파일별 변경」(D7)의 기준(브랜치)과 목록도 바뀐다(W7 리뷰).
         "changesVsDefault",
         "fileDiffVsDefault",
+        // 사이드바의 「보기만 하는 기본 브랜치」 줄은 기본 브랜치를 체크아웃한 폴더가 있는지에 따라 바뀐다.
+        "defaultBranches",
       ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
     );
 

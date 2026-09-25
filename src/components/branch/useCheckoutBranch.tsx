@@ -29,6 +29,7 @@ const CHECKOUT_QUERY_KEYS = [
   "worktrees",
   "changesVsDefault",
   "fileDiffVsDefault",
+  "defaultBranches",
 ];
 
 function trimSlash(path: string): string {
