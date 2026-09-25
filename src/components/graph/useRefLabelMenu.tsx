@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { Eye, GitBranch, GitCompare, Globe, Trash2 } from "lucide-react";
@@ -157,5 +157,7 @@ export function useRefLabelMenu(): {
     </>
   );
 
-  return { open: (label, { x, y }) => setMenu({ label, x, y }), element };
+  // 그래프 행(`memo`)에 넘기므로 렌더마다 새 함수를 만들지 않는다.
+  const open = useCallback((label: RefLabel, { x, y }: { x: number; y: number }) => setMenu({ label, x, y }), []);
+  return { open, element };
 }

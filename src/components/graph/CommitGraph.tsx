@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -31,7 +31,7 @@ import { useWipRowMenu } from "./useWipRowMenu";
 import { useRefLabelMenu } from "./useRefLabelMenu";
 import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
 import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
-import type { CommitInfo, HistoryTarget } from "@/types";
+import type { CommitInfo, HistoryTarget, RefLabel } from "@/types";
 import type { GraphRowLayout } from "@/lib/graph-lanes";
 import {
   edgePath,
@@ -251,7 +251,7 @@ function CommitGraphList({
     () => (remoteTagNames ? new Set(remoteTagNames) : null),
     [remoteTagNames],
   );
-  const { data: githubAvatarMap = {} } = useCommitAvatars(activeRepoPath);
+  const { data: githubAvatarMap } = useCommitAvatars(activeRepoPath);
 
   const accountAvatarMap = useMemo(
     () => new Map(accounts.map((a) => [a.email.toLowerCase(), a.avatarUrl])),
@@ -377,6 +377,22 @@ function CommitGraphList({
 
   const menu = useCommitMenu(activeRepoPath);
   const refMenu = useRefLabelMenu();
+  const openCommitMenu = menu.open;
+  const openRefMenu = refMenu.open;
+  // 행은 `memo`라, 콜백이 렌더마다 바뀌지 않아야 고른 행·강조 행만 다시 그린다.
+  const handleRowContextMenu = useCallback(
+    (commit: CommitInfo, e: MouseEvent) => {
+      e.preventDefault();
+      selectCommit(commit.id);
+      const point = contextMenuPoint(e);
+      openCommitMenu(commit, point.x, point.y, !viewing && ownIds.has(commit.id));
+    },
+    [selectCommit, openCommitMenu, viewing, ownIds],
+  );
+  const handleRefContextMenu = useCallback(
+    (label: RefLabel, e: MouseEvent) => openRefMenu(label, contextMenuPoint(e)),
+    [openRefMenu],
+  );
 
 
   return (
@@ -427,29 +443,24 @@ function CommitGraphList({
                     colorOf={colorOf}
                   />
                 )}
-                <GraphRow
-                  ref={itemRef(index)}
+                <HistoryGraphRow
+                  index={index}
+                  itemRef={itemRef}
                   commit={commit}
                   layout={layout}
                   graphWidth={graphWidth}
                   colorOf={colorOf}
                   remoteTags={remoteTags}
-                  avatarUrl={accountAvatarMap.get(emailKey) || githubAvatarMap[emailKey] || undefined}
+                  avatarUrl={accountAvatarMap.get(emailKey) || githubAvatarMap?.[emailKey] || undefined}
                   isSelected={selectedCommitId === commit.id}
                   isHighlighted={activeIndex === index}
-                  wipAbove={false}
                   dot={dotOf(commit)}
                   laneTitle={laneTitle}
                   refColor={refColor}
                   remoteBoundary={boundaryIdx === index}
-                  onClick={() => selectCommit(commit.id)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    selectCommit(commit.id);
-                    const point = contextMenuPoint(e);
-                    menu.open(commit, point.x, point.y, !viewing && ownIds.has(commit.id));
-                  }}
-                  onRefContextMenu={(label, e) => refMenu.open(label, contextMenuPoint(e))}
+                  onSelect={selectCommit}
+                  onRowContextMenu={handleRowContextMenu}
+                  onRefContextMenu={handleRefContextMenu}
                 />
               </Fragment>
             );
@@ -517,6 +528,11 @@ function useCommitMenu(repoPath: string | null) {
     }
   };
 
+  const open = useCallback(
+    (commit: CommitInfo, x: number, y: number, inHistory = true) => setTarget({ commit, x, y, inHistory }),
+    [],
+  );
+
   const handleResetConfirm = (mode: ResetMode) => {
     if (resetTarget) reset(resetTarget.id, mode);
     setResetTarget(null);
@@ -580,10 +596,55 @@ function useCommitMenu(repoPath: string | null) {
      * `inHistory`: 지금 연 워크트리의 이력에 있는 커밋인지. 칩으로 함께 그린 다른 워크트리의
      * 커밋이면(D5) 이 워크트리를 그 커밋으로 옮기는 reset·revert를 막는다.
      */
-    open: (commit: CommitInfo, x: number, y: number, inHistory = true) => setTarget({ commit, x, y, inHistory }),
+    open,
     element,
   };
 }
+
+interface HistoryGraphRowProps {
+  index: number;
+  itemRef: (index: number) => (el: HTMLElement | null) => void;
+  commit: CommitInfo;
+  layout: GraphRowLayout;
+  graphWidth: number;
+  colorOf: (chain: number) => string;
+  remoteTags: Set<string> | null;
+  avatarUrl: string | undefined;
+  isSelected: boolean;
+  isHighlighted: boolean;
+  dot: CommitDot;
+  laneTitle: (chain: number) => string | undefined;
+  refColor: (label: RefLabel) => string | null;
+  remoteBoundary: boolean;
+  onSelect: (commitId: string) => void;
+  onRowContextMenu: (commit: CommitInfo, e: MouseEvent) => void;
+  onRefContextMenu: (label: RefLabel, e: MouseEvent) => void;
+}
+
+/**
+ * 커밋 목록의 한 행. 활동 이벤트나 선택이 바뀔 때 불러온 모든 행이 다시 그려지지 않도록
+ * `memo`로 감싸고, 행마다 다른 콜백은 커밋 id·커밋을 받는 공통 콜백으로 바꿔 넘긴다.
+ */
+const HistoryGraphRow = memo(function HistoryGraphRow({
+  index,
+  itemRef,
+  commit,
+  onSelect,
+  onRowContextMenu,
+  ...rest
+}: HistoryGraphRowProps) {
+  const ref = useMemo(() => itemRef(index), [itemRef, index]);
+  return (
+    <GraphRow
+      {...rest}
+      ref={ref}
+      commit={commit}
+      wipAbove={false}
+      onClick={() => onSelect(commit.id)}
+      onContextMenu={(e) => onRowContextMenu(commit, e)}
+    />
+  );
+});
 
 /* --- 저장소별 레인 모드(워크스페이스 리뷰, W4-T3) --- */
 
