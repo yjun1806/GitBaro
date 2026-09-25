@@ -10,6 +10,8 @@ import { GraphPanel } from "@/components/graph/GraphPanel";
 import { WorkspaceReview } from "@/components/review/WorkspaceReview";
 import { FilesByRepo } from "@/components/review/FilesByRepo";
 import { useFilesViewStore } from "@/components/review/files-view";
+import { PrDetailPane } from "@/components/pr/PrDetailPane";
+import { usePrViewStore } from "@/components/pr/pr-view";
 import { Card, ContentArea, EmptyState } from "./ContentArea";
 import { GraphSplit } from "./GraphSplit";
 import { useDiffMaximizeReset } from "./useDiffMaximize";
@@ -54,6 +56,7 @@ export function MainColumn() {
   const activeRepoName = useRepositoryStore((s) => s.activeRepo?.name ?? null);
   const filesOpen = useFilesViewStore((s) => s.repoTabOpen);
   const groupBy = useFilesViewStore((s) => s.groupBy);
+  const prOpen = usePrViewStore((s) => s.open);
   const scope = useActiveScope();
   // 다른 저장소·워크스페이스로 옮기거나 목록을 열면 diff 크게 보기를 끝낸다(숨긴 목록으로 돌아올 길이 없어진다).
   useDiffMaximizeReset(`${scope?.kind === "workspace" ? scope.id : ""}:${activeRepoPath ?? ""}:${repoListOpen}`);
@@ -79,6 +82,8 @@ export function MainColumn() {
                   repos={[{ path: activeRepoPath, name: activeRepoName ?? activeRepoPath }]}
                   groupBy={groupBy}
                 />
+              ) : prOpen ? (
+                <PrDetailPane />
               ) : (
                 <ContentArea activeTab={activeTab} />
               )

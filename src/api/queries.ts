@@ -920,3 +920,95 @@ export function useChangesVsDefaultOnHead(
     })),
   });
 }
+
+// Read-only PR viewer
+import { getPullRequest, getPullRequestFileDiff, listPullRequestFiles, listPullRequests } from "@/api/commands";
+import type { PrStateFilter } from "@/types";
+
+/** PR 목록·상세를 다시 읽는 주기. GraphQL 한 번에 1점 안팎이라 한도(시간당 5000점)에 여유가 있다. */
+export const PULL_REQUEST_POLL_MS = 60_000;
+
+export function pullRequestsKey(repoPath: string | null, accountId: string | null, state: PrStateFilter) {
+  return ["pullRequests", repoPath, accountId, state] as const;
+}
+
+export function pullRequestKey(repoPath: string | null, accountId: string | null, number: number | null) {
+  return ["pullRequest", repoPath, accountId, number] as const;
+}
+
+export function usePullRequests(repoPath: string | null, accountId: string | null, state: PrStateFilter) {
+  return useQuery({
+    queryKey: pullRequestsKey(repoPath, accountId, state),
+    queryFn: () => listPullRequests(repoPath!, accountId!, state),
+    enabled: repoPath !== null && accountId !== null,
+    refetchInterval: PULL_REQUEST_POLL_MS,
+    refetchIntervalInBackground: false,
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function usePullRequest(repoPath: string | null, accountId: string | null, number: number | null) {
+  return useQuery({
+    queryKey: pullRequestKey(repoPath, accountId, number),
+    queryFn: () => getPullRequest(repoPath!, accountId!, number!),
+    enabled: repoPath !== null && accountId !== null && number !== null,
+    refetchInterval: PULL_REQUEST_POLL_MS,
+    refetchIntervalInBackground: false,
+    staleTime: 30_000,
+  });
+}
+
+/** 바뀐 파일은 head 커밋이 바뀔 때만 다시 읽는다(키에 head를 넣는다). */
+export function usePullRequestFiles(
+  repoPath: string | null,
+  accountId: string | null,
+  number: number | null,
+  headSha: string | null,
+) {
+  return useQuery({
+    queryKey: ["pullRequestFiles", repoPath, accountId, number, headSha],
+    queryFn: () => listPullRequestFiles(repoPath!, accountId!, number!),
+    enabled: repoPath !== null && accountId !== null && number !== null && headSha !== null,
+    staleTime: Infinity,
+  });
+}
+
+export function usePullRequestFileDiff(
+  repoPath: string | null,
+  target: { baseSha: string; headSha: string; path: string; oldPath: string | null } | null,
+) {
+  return useQuery({
+    queryKey: ["pullRequestFileDiff", repoPath, target?.baseSha, target?.headSha, target?.path, target?.oldPath],
+    queryFn: () => getPullRequestFileDiff(repoPath!, target!.baseSha, target!.headSha, target!.path, target!.oldPath),
+    enabled: repoPath !== null && target !== null,
+    staleTime: Infinity,
+  });
+}
+
+/** 「새로 고침」: 백엔드가 잠깐 들고 있는 답을 건너뛰고 목록(과 연 PR)을 다시 읽는다. */
+export function useRefreshPullRequests() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    async (repoPath: string, accountId: string, state: PrStateFilter, number: number | null) => {
+      const jobs: Promise<unknown>[] = [
+        queryClient.fetchQuery({
+          queryKey: pullRequestsKey(repoPath, accountId, state),
+          queryFn: () => listPullRequests(repoPath, accountId, state, true),
+          staleTime: 0,
+        }),
+      ];
+      if (number !== null) {
+        jobs.push(
+          queryClient.fetchQuery({
+            queryKey: pullRequestKey(repoPath, accountId, number),
+            queryFn: () => getPullRequest(repoPath, accountId, number, true),
+            staleTime: 0,
+          }),
+        );
+      }
+      await Promise.allSettled(jobs);
+    },
+    [queryClient],
+  );
+}
