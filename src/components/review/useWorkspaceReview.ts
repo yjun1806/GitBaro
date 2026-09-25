@@ -9,6 +9,7 @@ import {
   type LaneWip,
   type RepoLaneGraph,
 } from "@/components/graph/repo-lanes";
+import { countChangedFiles } from "@/lib/utils";
 import type { CommitInfo, ReviewWorktree, WorkspaceRepoHistory } from "@/types";
 import {
   baseName,
@@ -91,7 +92,7 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
     const lane =
       history && !history.error ? { commits: history.commits, hasBase: history.baseStatus === "found" } : null;
     const wipCount = m.worktrees.reduce(
-      (sum, w) => sum + new Set((statuses[w.path] ?? []).map((e) => e.path)).size,
+      (sum, w) => sum + countChangedFiles(statuses[w.path] ?? []),
       0,
     );
     const unpushed = m.worktrees.flatMap((w) => {
@@ -133,7 +134,7 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
         branch: w.branch,
         isMain: w.isMain,
         headOid: w.headOid,
-        count: new Set((statuses[w.path] ?? []).map((e) => e.path)).size,
+        count: countChangedFiles(statuses[w.path] ?? []),
         changedAt: lastChangedAt[w.path] ?? null,
       })),
     )
