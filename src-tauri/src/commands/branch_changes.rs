@@ -23,8 +23,8 @@ use std::collections::HashSet;
 use std::path::{Component, Path};
 
 use git2::{
-    Delta, Diff, DiffFindOptions, DiffOptions, ErrorCode, Index, IndexEntryExtendedFlag, Oid, Patch, Repository,
-    Tree,
+    Delta, Diff, DiffFindOptions, DiffOptions, ErrorCode, Index, IndexEntryExtendedFlag, ObjectType, Oid, Patch,
+    Repository, Tree,
 };
 use serde::Serialize;
 
@@ -32,7 +32,7 @@ use crate::error::AppError;
 use crate::git::engine::FileStatus;
 use crate::git::binary::{detect_file_type, extension_to_mime, PreviewFileType};
 use crate::git::merge_base::{divergence_point, BaseStatus, DivergencePoint};
-use crate::git::untracked::{is_too_large_untracked, untracked_lines, UntrackedLines};
+use crate::git::untracked::{is_too_large_untracked, untracked_lines, UntrackedLines, UNTRACKED_COUNT_LIMIT};
 use crate::git::worktree_base::default_branch_with_fallback;
 
 /// 바뀐 파일 하나.
@@ -49,6 +49,10 @@ pub struct ChangedFile {
     pub is_binary: bool,
     /// 추적하지 않는 새 파일이 1 MiB(`UNTRACKED_COUNT_LIMIT`)를 넘어 읽지 않았다. 줄 수는 0 이다.
     pub too_large: bool,
+    /// 이 목록이 보여 주는 쪽(커밋이면 그 트리, 작업 트리면 디스크)의 파일 내용 id. 「봤음」 표시가
+    /// 내용이 바뀌었는지 가리는 데 쓴다. 보통은 blob OID 이고, 1 MiB 를 넘는 작업 트리 파일은 읽지 않고
+    /// `size:<바이트>:mtime:<나노초>` 로 대신한다. 지운 파일이거나 읽지 못하면 `None`.
+    pub blob_id: Option<String>,
 }
 
 /// `get_changes_vs_default` 의 결과. 저장소 하나.
@@ -281,12 +285,42 @@ fn to_workdir(repo: &Repository, old: Option<&Tree>, workdir: &Diff) -> Result<V
     let mut diff = tree_to_workdir(repo, old, workdir, &mut workdir_opts())?;
     let mut files = changed_files(repo, &mut diff)?;
     let untracked_copies = untracked_copies_of_deleted(repo, &files, workdir);
-    if untracked_copies.is_empty() {
-        return Ok(files);
+    if !untracked_copies.is_empty() {
+        files.extend(untracked_copies);
+        files.sort_by(|a, b| a.path.cmp(&b.path));
     }
-    files.extend(untracked_copies);
-    files.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(files)
+    Ok(files
+        .into_iter()
+        .map(|file| {
+            let blob_id = (file.status != FileStatus::Deleted).then(|| workdir_content_id(repo, &file.path)).flatten();
+            ChangedFile { blob_id, ..file }
+        })
+        .collect())
+}
+
+/// 작업 트리 파일의 내용 id. diff 가 준 id 는 stat 캐시에 따라 비어 있을 수 있어 디스크에서 직접 구한다.
+///
+/// 1 MiB(`UNTRACKED_COUNT_LIMIT`)까지는 blob OID 를 계산하고(쓰지 않는다), 그보다 크면 읽지 않고
+/// 크기·수정 시각으로 대신한다. 링크는 대상 경로가 내용이다. sparse checkout 으로 디스크에 없으면
+/// 인덱스의 blob 이다. 어느 쪽도 없으면 `None`.
+fn workdir_content_id(repo: &Repository, rel_path: &str) -> Option<String> {
+    let full = repo.workdir()?.join(rel_path);
+    let Ok(meta) = std::fs::symlink_metadata(&full) else {
+        let index = repo.index().ok()?;
+        return index.get_path(Path::new(rel_path), 0).map(|entry| entry.id.to_string());
+    };
+    if meta.file_type().is_symlink() {
+        let target = std::fs::read_link(&full).ok()?;
+        return Oid::hash_object(ObjectType::Blob, target.as_os_str().as_encoded_bytes()).ok().map(|o| o.to_string());
+    }
+    if !meta.is_file() {
+        return None;
+    }
+    if meta.len() > UNTRACKED_COUNT_LIMIT {
+        let mtime = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
+        return Some(format!("size:{}:mtime:{mtime}", meta.len()));
+    }
+    Oid::hash_file(ObjectType::Blob, &full).ok().map(|o| o.to_string())
 }
 
 /// 「삭제」로 나온 파일 중 디스크에 추적하지 않는 파일로 남아 있는 것(`git rm --cached`).
@@ -336,6 +370,7 @@ fn untracked_file(repo: &Repository, path: String) -> ChangedFile {
         deletions: 0,
         is_binary,
         too_large,
+        blob_id: None,
     }
 }
 
@@ -385,7 +420,10 @@ fn changed_files(repo: &Repository, diff: &mut Diff) -> Result<Vec<ChangedFile>,
         }
         let (additions, deletions, is_binary) = line_counts(&delta, patch)?;
 
-        files.push(ChangedFile { path, old_path, status, additions, deletions, is_binary, too_large: false });
+        // 트리 쪽 새 파일 id. 작업 트리와 비교했으면 `to_workdir` 가 디스크 내용으로 바꾼다.
+        let new_id = delta.new_file().id();
+        let blob_id = (status != FileStatus::Deleted && !new_id.is_zero()).then(|| new_id.to_string());
+        files.push(ChangedFile { path, old_path, status, additions, deletions, is_binary, too_large: false, blob_id });
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)
@@ -1079,6 +1117,49 @@ mod tests {
     }
 
     #[test]
+    fn blob_ids_follow_the_file_content_on_each_side() {
+        use crate::git::untracked::UNTRACKED_COUNT_LIMIT;
+        let dir = tmp_dir("blob-id").join("r");
+        feature_repo(&dir);
+        let committed_a = head_of(&dir, "HEAD:a.txt");
+
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
+        // 커밋한 변경은 HEAD 트리의 blob, 작업 트리가 같으면 합친 목록도 같은 id 다.
+        assert_eq!(find(&c.committed, "a.txt").blob_id.as_deref(), Some(committed_a.as_str()));
+        assert_eq!(find(&c.files, "a.txt").blob_id.as_deref(), Some(committed_a.as_str()));
+
+        // 에이전트가 다시 고치면 작업 트리 쪽 id 가 바뀌고, 커밋 쪽은 그대로다.
+        write(&dir, "a.txt", "one\ntwo\nthree\nfour\n");
+        write(&dir, "new.txt", "fresh\n");
+        std::fs::remove_file(dir.join("b.txt")).unwrap();
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
+        let edited = find(&c.files, "a.txt").blob_id.clone().unwrap();
+        assert_ne!(edited, committed_a);
+        assert_eq!(find(&c.uncommitted, "a.txt").blob_id.as_deref(), Some(edited.as_str()));
+        assert_eq!(find(&c.committed, "a.txt").blob_id.as_deref(), Some(committed_a.as_str()));
+        // git 과 같은 blob id 다(필터가 없을 때).
+        let out = Command::new("git").args(["hash-object", "a.txt"]).current_dir(&dir).output().unwrap();
+        assert_eq!(edited, String::from_utf8(out.stdout).unwrap().trim());
+        let untracked = find(&c.uncommitted, "new.txt");
+        assert_eq!(untracked.status, FileStatus::Untracked);
+        assert!(untracked.blob_id.is_some());
+        assert_eq!(find(&c.uncommitted, "b.txt").blob_id, None, "지운 파일은 내용이 없다");
+
+        // 1 MiB 를 넘는 새 파일은 읽지 않고 크기·수정 시각을 쓴다.
+        write(&dir, "big.log", &"x\n".repeat(UNTRACKED_COUNT_LIMIT as usize / 2 + 1));
+        let c = changes_vs_default(dir.to_str().unwrap(), None, None).unwrap();
+        let big = find(&c.uncommitted, "big.log").blob_id.clone().unwrap();
+        assert!(big.starts_with(&format!("size:{}:mtime:", UNTRACKED_COUNT_LIMIT + 2)), "{big}");
+
+        // 보는 브랜치(체크아웃 안 함)는 그 브랜치 트리의 blob 이다.
+        git(&dir, &["stash", "-u", "-q"]);
+        git(&dir, &["checkout", "-q", "main"]);
+        let v = changes_vs_default(dir.to_str().unwrap(), None, Some("feat")).unwrap();
+        assert_eq!(find(&v.files, "a.txt").blob_id.as_deref(), Some(committed_a.as_str()));
+        let _ = std::fs::remove_dir_all(dir.parent().unwrap());
+    }
+
+    #[test]
     fn serialized_shape_matches_the_typescript_types() {
         // src/types/index.ts 의 BranchChanges·BranchChangedFile 와 키가 같아야 한다.
         let dir = tmp_dir("shape").join("r");
@@ -1099,7 +1180,7 @@ mod tests {
         );
         assert_eq!(
             keys(&json["committed"][0]),
-            vec!["additions", "deletions", "isBinary", "oldPath", "path", "status", "tooLarge"]
+            vec!["additions", "blobId", "deletions", "isBinary", "oldPath", "path", "status", "tooLarge"]
         );
         assert_eq!(json["baseStatus"], "found");
         assert_eq!(json["committed"][0]["status"], "modified");
