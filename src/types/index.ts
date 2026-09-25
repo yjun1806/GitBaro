@@ -168,12 +168,28 @@ export interface BranchInfo {
   name: string;
   isHead: boolean;
   isRemote: boolean;
+  /**
+   * 기본 브랜치(origin/HEAD → 로컬 main → master)이거나 그 원격 사본(`origin/main`,
+   * 로컬 기본 브랜치에 추적 브랜치가 있으면 그것).
+   */
   isDefault: boolean;
   upstream: string | null;
   aheadBehind: { ahead: number; behind: number } | null;
   lastCommitTime: number | null;
   isFullyMerged: boolean;
   lastCommitAuthor: { name: string; email: string } | null;
+}
+
+/** `get_default_branches`의 한 항목. 저장소를 열지 못하면 `name`·`remoteRef`가 null이다. */
+export interface DefaultBranch {
+  /** 요청에 넘긴 경로 그대로. */
+  path: string;
+  /** 기본 브랜치 이름(`main`). origin/HEAD → 로컬 main → master 순으로 찾는다. */
+  name: string | null;
+  /** 그 이름의 로컬 브랜치가 있다. */
+  hasLocal: boolean;
+  /** 원격 사본(`origin/main`). 로컬 기본 브랜치의 추적 브랜치, 없으면 `origin/<name>`. */
+  remoteRef: string | null;
 }
 
 /**

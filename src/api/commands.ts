@@ -6,6 +6,7 @@ import type {
   BinaryPreview,
   RepoInfo,
   BranchInfo,
+  DefaultBranch,
   BranchDivergence,
   RepoSyncStatus,
   UnpushedCommits,
@@ -295,6 +296,11 @@ export async function getOwnerType(
 // Branches
 export async function getBranches(repoPath: string): Promise<BranchInfo[]> {
   return invoke("get_branches", { repoPath });
+}
+
+/** 여러 저장소의 기본 브랜치. 결과는 `paths` 순서와 같고, 열지 못한 저장소도 실패하지 않는다. */
+export async function getDefaultBranches(paths: string[]): Promise<DefaultBranch[]> {
+  return invoke("get_default_branches", { paths });
 }
 
 /** HEAD points at a commit, not a branch. An unborn (orphan) branch is not detached. */

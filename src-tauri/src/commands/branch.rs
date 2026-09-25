@@ -5,7 +5,7 @@ use crate::git::commit::commit_to_info;
 use crate::git::engine::{BranchCompareResult, MergePreCheckResult, MergeStrategy};
 use crate::git::libgit::working_tree_dirty_summary;
 use crate::git::worktree_base::{
-    default_branch_name, default_branch_with_fallback, resolve_worktree_base_cached, WorktreeBase,
+    default_branch_with_fallback, resolve_worktree_base_cached, WorktreeBase,
 };
 use serde_json::{json, Value};
 
@@ -26,21 +26,79 @@ pub async fn is_head_detached(repo_path: String) -> Result<bool, AppError> {
     .map_err(|e| AppError::Channel(e.to_string()))?
 }
 
+/// 저장소의 기본 브랜치와 그 원격 사본. `get_default_branches` 의 한 항목.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DefaultBranch {
+    /// 요청에 넘긴 경로 그대로.
+    pub path: String,
+    /// 기본 브랜치 이름(`main`). 규칙은 `default_branch_with_fallback`. 못 찾거나 열지 못하면 `None`.
+    pub name: Option<String>,
+    /// 그 이름의 로컬 브랜치가 있다.
+    pub has_local: bool,
+    /// 원격 사본(`origin/main`). 로컬 기본 브랜치의 추적 브랜치, 없으면 `origin/<name>`. 없으면 `None`.
+    pub remote_ref: Option<String>,
+}
+
+/// 기본 브랜치 판정. `get_branches` 의 `isDefault` 와 사이드바가 같은 답을 쓴다.
+fn default_branch_refs(repo: &git2::Repository) -> DefaultBranch {
+    let name = default_branch_with_fallback(repo);
+    let local = name.as_deref().and_then(|n| repo.find_branch(n, git2::BranchType::Local).ok());
+    let upstream = local
+        .as_ref()
+        .and_then(|b| b.upstream().ok())
+        .and_then(|u| u.name().ok().flatten().map(str::to_string));
+    let origin_copy = name.as_deref().map(|n| format!("origin/{n}")).filter(|r| {
+        repo.find_branch(r, git2::BranchType::Remote).is_ok()
+    });
+    DefaultBranch {
+        path: String::new(),
+        has_local: local.is_some(),
+        remote_ref: upstream.or(origin_copy),
+        name,
+    }
+}
+
+/// 여러 저장소의 기본 브랜치를 한 번에. 결과는 `paths` 순서와 같다.
+/// 열지 못한 저장소는 `name`·`remoteRef` 가 비어 있다(실패하지 않는다).
+#[tauri::command]
+pub async fn get_default_branches(paths: Vec<String>) -> Result<Vec<DefaultBranch>, AppError> {
+    tokio::task::spawn_blocking(move || {
+        paths
+            .into_iter()
+            .map(|path| {
+                let found = git2::Repository::open(&path).map(|repo| default_branch_refs(&repo));
+                match found {
+                    Ok(found) => DefaultBranch { path, ..found },
+                    Err(_) => DefaultBranch { path, name: None, has_local: false, remote_ref: None },
+                }
+            })
+            .collect()
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))
+}
+
 #[tauri::command]
 pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
     let result = tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
         let branches = repo.branches(None)?;
 
-        // origin/HEAD로부터 default branch 이름 판별
-        let default_branch_name = default_branch_name(&repo);
+        // 기본 브랜치: 백엔드 공통 규칙(origin/HEAD → 로컬 main → master)과 그 원격 사본
+        let default = default_branch_refs(&repo);
 
-        // default branch OID (isFullyMerged 계산용)
-        let default_oid = default_branch_name.as_deref().and_then(|name| {
-            repo.find_branch(name, git2::BranchType::Local)
-                .ok()
-                .and_then(|b| b.get().target())
-        });
+        // default branch OID (isFullyMerged 계산용). 로컬이 없으면 원격 사본.
+        let default_oid = default
+            .name
+            .as_deref()
+            .filter(|_| default.has_local)
+            .and_then(|name| repo.find_branch(name, git2::BranchType::Local).ok())
+            .or_else(|| {
+                let remote = default.remote_ref.as_deref()?;
+                repo.find_branch(remote, git2::BranchType::Remote).ok()
+            })
+            .and_then(|b| b.get().target());
 
         // HEAD 이름 기준으로 is_head 판별 (워크트리에서도 올바르게 동작)
         let head_name = repo.head()
@@ -99,8 +157,11 @@ pub async fn get_branches(repo_path: String) -> Result<Vec<Value>, AppError> {
                 None
             };
 
-            let is_default = !is_remote
-                && default_branch_name.as_deref() == Some(name.as_str());
+            let is_default = if is_remote {
+                default.remote_ref.as_deref() == Some(name.as_str())
+            } else {
+                default.name.as_deref() == Some(name.as_str())
+            };
 
             // 로컬 non-default 브랜치에 대해 isFullyMerged 계산
             let fully_merged = if !is_remote && !is_default {
@@ -929,6 +990,70 @@ mod tests {
         assert!(!on_branch);
         assert!(!unborn, "unborn 브랜치를 detached로 판정함");
         assert!(detached);
+    }
+
+    /// 원격 `origin`(origin/HEAD 없음)과 clone 한 작업 폴더. 원격·로컬 모두 `main` 과 `feat`.
+    fn clone_without_origin_head(name: &str) -> std::path::PathBuf {
+        let tmp = std::env::temp_dir().join(format!("gitbaro-defaults-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let seed = tmp.join("seed");
+        std::fs::create_dir_all(&seed).unwrap();
+        git(&seed, &["init", "-q", "-b", "main"]);
+        git(&seed, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        git(&seed, &["branch", "feat"]);
+        git(&tmp, &["clone", "-q", "seed", "work"]);
+        let work = tmp.join("work");
+        git(&work, &["remote", "set-head", "origin", "--delete"]);
+        git(&work, &["branch", "-q", "feat", "origin/feat"]);
+        work
+    }
+
+    #[tokio::test]
+    async fn get_branches_uses_the_shared_default_rule_for_local_and_remote() {
+        // origin/HEAD 가 없어도 로컬 main 이 기본 브랜치이고, 그 원격 사본도 기본으로 표시한다.
+        let work = clone_without_origin_head("list");
+        let list = get_branches(work.to_string_lossy().to_string()).await.unwrap();
+        let default_of = |name: &str| {
+            list.iter().find(|b| b["name"] == name).unwrap_or_else(|| panic!("{name}: {list:?}"))["isDefault"]
+                .as_bool()
+                .unwrap()
+        };
+        assert!(default_of("main"));
+        assert!(default_of("origin/main"));
+        assert!(!default_of("feat"));
+        assert!(!default_of("origin/feat"));
+        let _ = std::fs::remove_dir_all(work.parent().unwrap());
+    }
+
+    #[tokio::test]
+    async fn get_default_branches_answers_per_path_without_failing() {
+        let work = clone_without_origin_head("batch");
+        let trunk = work.parent().unwrap().join("trunk");
+        std::fs::create_dir_all(&trunk).unwrap();
+        git(&trunk, &["init", "-q", "-b", "trunk"]);
+        git(&trunk, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        let missing = work.parent().unwrap().join("missing");
+        let paths: Vec<String> =
+            [&work, &trunk, &missing].iter().map(|p| p.to_string_lossy().to_string()).collect();
+
+        let got = get_default_branches(paths.clone()).await.unwrap();
+        assert_eq!(
+            got,
+            vec![
+                DefaultBranch {
+                    path: paths[0].clone(),
+                    name: Some("main".into()),
+                    has_local: true,
+                    remote_ref: Some("origin/main".into()),
+                },
+                DefaultBranch { path: paths[1].clone(), name: None, has_local: false, remote_ref: None },
+                DefaultBranch { path: paths[2].clone(), name: None, has_local: false, remote_ref: None },
+            ]
+        );
+        let json = serde_json::to_value(&got[0]).unwrap();
+        assert_eq!(json["hasLocal"], true);
+        assert_eq!(json["remoteRef"], "origin/main");
+        let _ = std::fs::remove_dir_all(work.parent().unwrap());
     }
 
     fn field<'a>(v: &'a Value, key: &str) -> &'a Value {
