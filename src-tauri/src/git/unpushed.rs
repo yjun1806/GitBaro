@@ -6,6 +6,8 @@
 
 use git2::{Oid, Repository};
 
+use crate::git::walk::newest_first;
+
 /// 세는 비용을 막으려고 이 개수에서 멈춘다. 원격이 있는데 한 번도 fetch하지 않은 큰 저장소 등.
 pub const UNPUSHED_LIMIT: usize = 10_000;
 
@@ -20,14 +22,43 @@ pub struct UnpushedSummary {
     pub has_remote: bool,
 }
 
-/// `tip`에서 닿지만 어느 원격 추적 브랜치에서도 닿지 않는 커밋(최신 순, 많아야 `limit`개).
-pub fn commits_not_on_any_remote(repo: &Repository, tip: Oid, limit: usize) -> Result<Vec<Oid>, git2::Error> {
+/// `tips`에서 닿지만 어느 원격 추적 브랜치에서도 닿지 않는 커밋(최신 순, 많아야 `limit`개).
+///
+/// 규칙(원격 표시와 히스토리의 「올리지 않음」 표시가 함께 쓴다):
+/// - 원격이 하나도 설정돼 있지 않으면 올릴 곳이 없으므로 비어 있다.
+/// - `upstream`(추적 브랜치 끝)도 숨긴다. `branch.<x>.remote = .`처럼 추적 브랜치가 로컬
+///   브랜치여도 거기 이미 있는 커밋은 올린 것으로 본다. 원격 추적 브랜치면 이미 숨긴 것과 같다.
+/// - 원격은 있지만 아직 fetch하지 않아 원격 추적 브랜치가 없으면 모든 커밋이 원격에 없다.
+///   이때는 숨길 것이 없으므로 `limit`개만 읽고 멈춘다(`git::walk`).
+pub fn commits_not_on_any_remote(
+    repo: &Repository,
+    tips: &[Oid],
+    upstream: Option<Oid>,
+    limit: usize,
+) -> Result<Vec<Oid>, git2::Error> {
+    if tips.is_empty() || repo.remotes()?.is_empty() {
+        return Ok(Vec::new());
+    }
+    let has_remote_refs = repo.references_glob("refs/remotes/*")?.next().is_some();
+    if !has_remote_refs && upstream.is_none() {
+        return newest_first(repo, tips, limit);
+    }
+    // 숨길 커밋이 있으면 libgit2가 원격에 없는 커밋을 모두 모은 뒤에 내준다. 정렬은 하지 않는다:
+    // 모으는 순서가 이미 커밋 시각 순이고, 위상 정렬은 한 번 더 전체를 훑는다.
     let mut walk = repo.revwalk()?;
-    walk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
-    walk.push(tip)?;
-    // 추적 브랜치가 하나도 없으면 아무것도 숨기지 않는다(모든 커밋이 원격에 없다).
+    for tip in tips {
+        walk.push(*tip)?;
+    }
+    if let Some(upstream) = upstream {
+        walk.hide(upstream)?;
+    }
     walk.hide_glob("refs/remotes/*")?;
     walk.take(limit).collect()
+}
+
+/// 로컬 브랜치의 추적 브랜치 끝. 추적 브랜치가 없거나 사라졌으면 `None`.
+pub fn upstream_tip(branch: &git2::Branch) -> Option<Oid> {
+    branch.upstream().ok().and_then(|up| up.get().target())
 }
 
 /// 지금 체크아웃한 HEAD 기준 요약. HEAD가 없으면(빈 저장소) 빈 목록이다.
@@ -35,17 +66,15 @@ pub fn commits_not_on_any_remote(repo: &Repository, tip: Oid, limit: usize) -> R
 pub fn head_unpushed(repo: &Repository, limit: usize) -> Result<UnpushedSummary, git2::Error> {
     let has_remote = !repo.remotes()?.is_empty();
     let head = repo.head().ok();
-    let has_upstream = head
+    let branch = head
         .as_ref()
         .filter(|h| h.is_branch())
         .and_then(|h| h.shorthand())
-        .and_then(|name| repo.find_branch(name, git2::BranchType::Local).ok())
-        .is_some_and(|b| b.upstream().is_ok());
-    let tip = head.and_then(|h| h.target());
-    let oids = match (has_remote, tip) {
-        (true, Some(tip)) => commits_not_on_any_remote(repo, tip, limit)?,
-        _ => Vec::new(),
-    };
+        .and_then(|name| repo.find_branch(name, git2::BranchType::Local).ok());
+    let has_upstream = branch.as_ref().is_some_and(|b| b.upstream().is_ok());
+    let upstream = branch.as_ref().and_then(upstream_tip);
+    let tips: Vec<Oid> = head.and_then(|h| h.target()).into_iter().collect();
+    let oids = commits_not_on_any_remote(repo, &tips, upstream, limit)?;
     Ok(UnpushedSummary { oids, has_upstream, has_remote })
 }
 
@@ -149,6 +178,35 @@ mod tests {
         let s = summary(&work);
         assert!(!s.has_remote);
         assert!(s.oids.is_empty(), "올릴 곳이 없으면 세지 않는다");
+    }
+
+    #[test]
+    fn a_never_fetched_remote_counts_only_up_to_the_limit() {
+        use crate::git::walk::tests::{delete_commit_object, git as git_in, linear_repo};
+        let dir = std::env::temp_dir()
+            .join(format!("gitbaro-unpushed-never-fetched-{}", std::process::id()));
+        let oids = linear_repo(&dir, 10);
+        git_in(&dir, &["remote", "add", "origin", "https://example.invalid/r.git"]);
+        // 한도 밖의 오래된 커밋이 깨져 있다. 전체를 훑으면 실패한다.
+        delete_commit_object(&dir, oids[6]);
+        let repo = Repository::open(&dir).unwrap();
+        let s = head_unpushed(&repo, 3).unwrap();
+        assert_eq!(s.oids, oids[..3].to_vec());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_local_upstream_counts_as_pushed() {
+        // branch.<x>.remote = . : 추적 브랜치가 로컬 main이다.
+        let work = clone_pair("local-upstream");
+        git(&work, &["checkout", "-q", "-b", "feat/x"]);
+        commit(&work, "on main too");
+        git(&work, &["branch", "-f", "main", "HEAD"]);
+        git(&work, &["branch", "-q", "--set-upstream-to=main"]);
+        let mine = commit(&work, "mine");
+        let s = summary(&work);
+        assert!(s.has_upstream);
+        assert_eq!(s.oids, vec![mine], "로컬 추적 브랜치에 있는 커밋은 올린 것으로 본다");
     }
 
     #[test]
