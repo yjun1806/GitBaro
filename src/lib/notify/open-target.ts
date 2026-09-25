@@ -3,6 +3,8 @@ import { useAccountStore } from "@/stores/account";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useUIStore } from "@/stores/ui";
+import { usePrViewStore } from "@/components/pr/pr-view";
+import { useFilesViewStore } from "@/components/review/files-view";
 import type { NotificationTarget } from "./target";
 
 /** 창을 앞으로 가져온다. 최소화돼 있으면 되살린다. */
@@ -31,6 +33,10 @@ export function openNotificationTarget(target: NotificationTarget): void {
   rememberWorktree(target.repoPath, target.worktreePath === target.repoPath ? null : target.worktreePath);
   if (repo.accountId) useAccountStore.getState().setActiveAccount(repo.accountId);
 
+  // PR 보기·「파일별 변경」 탭이 열려 있으면 그 뒤에 가려진다. GraphPanel은 탭 값이 바뀔 때만
+  // 둘을 닫으므로, 이미 같은 탭이었을 때를 위해 여기서 닫는다.
+  usePrViewStore.getState().setOpen(false);
+  useFilesViewStore.getState().setRepoTabOpen(false);
   const { setActiveTab } = useUIStore.getState();
   const selection = useSelectionStore.getState();
   if (target.kind === "commit") {
