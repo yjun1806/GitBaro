@@ -21,6 +21,7 @@ vi.mock("@/api/queries", () => ({
 import { useRepositoryStore } from "@/stores/repository";
 import { useSyncStore } from "@/stores/sync";
 import { makeRepo } from "@/lib/__tests__/repo-tree-fixtures";
+import { avatarColorFromHue } from "@/lib/avatar-color";
 
 const { MultiRepoRemoteDialog } = await import("@/components/review/MultiRepoRemoteDialog");
 
@@ -69,7 +70,7 @@ beforeEach(async () => {
   commands.gitFetch.mockImplementation(() => Promise.resolve());
   commands.gitPush.mockImplementation(() => Promise.resolve());
   commands.planRemoteOp.mockImplementation(() => Promise.resolve(PUSH_PLANS));
-  useRepositoryStore.setState({ repos, activeRepoPath: null, activeRepo: null });
+  useRepositoryStore.setState({ repos, activeRepoPath: null, activeRepo: null, repoPrefs: {} });
   useSyncStore.setState({ syncingByRepo: {}, lastFetchedByRepo: {} });
   unpushed.byPath = {};
 });
@@ -107,6 +108,17 @@ describe("MultiRepoRemoteDialog", () => {
     expect(within(list).getByText("and 2 more")).toBeTruthy();
     // 올릴 것이 없는 저장소에는 목록이 없다.
     expect(screen.queryByTestId("unpushed-/repos/xames-design")).toBeNull();
+  });
+
+  it("shows each repository by its display name and chosen avatar color", async () => {
+    useRepositoryStore.setState({ repoPrefs: { "/repos/xames-app": { alias: "Mobile", hue: 150 } } });
+    renderDialog();
+    const row = await screen.findByTestId("plan-row-Mobile");
+    const tile = row.querySelector<HTMLElement>('span[aria-hidden="true"]')!;
+    const expected = document.createElement("span");
+    expected.style.background = avatarColorFromHue(150).background;
+    expect(tile.textContent).toBe("M");
+    expect(tile.style.background).toBe(expected.style.background);
   });
 
   it("unchecks and dims a repository with nothing to push", async () => {

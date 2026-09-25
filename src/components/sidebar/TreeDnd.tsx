@@ -23,7 +23,8 @@ import {
 import { Ban, GripVertical, Layers } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AccountNode } from "@/lib/repo-tree";
-import { avatarColor, avatarInitial } from "@/lib/avatar-color";
+import { avatarInitial } from "@/lib/avatar-color";
+import { useRepoAvatarColor } from "@/hooks/useRepoDisplay";
 import { cn } from "@/lib/utils";
 import { useToastStore } from "@/stores/toast";
 import type { WorkspaceError } from "@/stores/workspace";
@@ -207,7 +208,8 @@ function dropFailureKey(reason: WorkspaceError): string {
 export function DragPreview({ data, blockedReason }: { data: RowDragData; blockedReason: WorkspaceError | null }) {
   const { t } = useTranslation();
   const blocked = blockedReason !== null;
-  const color = data.path ? avatarColor(data.path) : null;
+  const repoColor = useRepoAvatarColor();
+  const color = data.path ? repoColor(data.path) : null;
   return (
     <div
       className={cn(

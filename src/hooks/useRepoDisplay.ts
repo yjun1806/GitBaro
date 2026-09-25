@@ -15,6 +15,11 @@ export function useRepoAvatarColor(): (path: string) => AvatarColor {
   return useCallback((path) => repoAvatarColor(path, prefs), [prefs]);
 }
 
+/** 지금 연 저장소(워크트리면 소유 저장소)의 표시 이름. 없으면 빈 문자열. */
+export function useActiveRepoName(): string {
+  return useRepositoryStore((s) => (s.activeRepo ? repoDisplayName(s.activeRepo, s.repoPrefs) : ""));
+}
+
 /** 이 저장소의 표시 이름. 저장소 목록 밖에서(알림·토스트) 쓴다. */
 export function repoNameNow(repo: { path: string; name: string }): string {
   return repoDisplayName(repo, useRepositoryStore.getState().repoPrefs);

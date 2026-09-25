@@ -2,7 +2,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Check, Loader2, X } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
-import { avatarColor } from "@/lib/avatar-color";
+import { useRepoAvatarColor } from "@/hooks/useRepoDisplay";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { remoteErrorKey } from "@/lib/remote-error";
 import {
@@ -197,7 +197,8 @@ function PlanRow({ row, op, checked, locked, result, onToggle }: PlanRowProps) {
   const { t } = useTranslation();
   const selectable = isSelectable(row);
   const { plan } = row;
-  const color = avatarColor(row.name);
+  // 이름(`row.name`)은 이미 표시 이름이다. 색은 저장소 설정에서 고른 색을 따른다.
+  const color = useRepoAvatarColor()(plan.path);
   return (
     <div
       data-testid={`plan-row-${row.name}`}

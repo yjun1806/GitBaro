@@ -20,6 +20,7 @@ import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { useCurrentPlaceMenu } from "./useCurrentPlaceMenu";
+import { useActiveRepoName } from "@/hooks/useRepoDisplay";
 
 interface WorktreeZoneProps {
   isOpen: boolean;
@@ -61,7 +62,7 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
     }
   };
 
-  const repoName = activeRepoPath?.split("/").filter(Boolean).pop() ?? "";
+  const repoName = useActiveRepoName();
 
   return (
     <div

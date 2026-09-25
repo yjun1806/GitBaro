@@ -66,7 +66,7 @@ beforeEach(async () => {
   await i18n.changeLanguage("en");
   onClose.mockReset();
   openWorktree.mockReset();
-  useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
+  useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO, repoPrefs: {} });
   useUIStore.setState({ activeTab: "stash" });
   useBranchRangeStore.getState().clear();
 });
@@ -101,5 +101,11 @@ describe("BranchZone — branch panel wiring", () => {
     renderZone();
     fireEvent.click(row("docs/y").getByRole("button", { name: "Merge…" }));
     expect(screen.getByText("merge-panel:docs/y")).toBeTruthy();
+  });
+
+  it("names the repository by its display name in the panel subtitle", () => {
+    useRepositoryStore.setState({ repoPrefs: { [REPO]: { alias: "Shop front" } } });
+    renderZone();
+    expect(within(screen.getByRole("dialog", { name: "Branches" })).getByText("Shop front")).toBeTruthy();
   });
 });
