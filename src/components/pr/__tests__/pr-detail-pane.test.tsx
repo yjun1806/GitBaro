@@ -15,12 +15,21 @@ vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(async () => {}) }))
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 // diff 그리기는 DiffViewer의 몫이다. 여기서는 무엇을 넘겼는지만 본다.
 vi.mock("@/components/diff/DiffViewer", () => ({
-  DiffViewer: ({ diff, revealLine }: { diff: DiffOutput | null; revealLine?: number | null }) => (
+  DiffViewer: ({
+    diff,
+    revealLine,
+    revealNonce,
+  }: {
+    diff: DiffOutput | null;
+    revealLine?: number | null;
+    revealNonce?: number;
+  }) => (
     <div data-testid="diff-viewer">
       <span data-testid="diff-path">{diff?.filePath}</span>
       <span data-testid="diff-lines">{diff?.hunks.flatMap((h) => h.lines.map((l) => `${l.lineType}:${l.newLineNo ?? "-"}`)).join(",")}</span>
       <span data-testid="diff-old">{diff?.oldContent}</span>
       <span data-testid="diff-reveal">{revealLine ?? ""}</span>
+      <span data-testid="diff-reveal-nonce">{revealNonce ?? ""}</span>
     </div>
   ),
 }));
@@ -112,6 +121,10 @@ describe("PrDetailPane", () => {
     expect(screen.getByText("Why this line?")).toBeTruthy();
     fireEvent.click(screen.getByTitle(i18n.t("pr.thread.reveal")));
     expect(screen.getByTestId("diff-reveal").textContent).toBe("11");
+    // 같은 줄을 다시 누르면 nonce가 바뀌어 diff가 다시 그 줄로 간다.
+    const nonce = screen.getByTestId("diff-reveal-nonce").textContent;
+    fireEvent.click(screen.getByTitle(i18n.t("pr.thread.reveal")));
+    expect(screen.getByTestId("diff-reveal-nonce").textContent).not.toBe(nonce);
 
     // 지난 코드 스레드는 접혀 있다가 펼치면 diff 조각과 함께 보인다.
     expect(screen.queryByText("Stale remark")).toBeNull();

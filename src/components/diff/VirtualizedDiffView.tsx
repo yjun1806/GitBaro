@@ -292,6 +292,8 @@ interface VirtualizedDiffViewProps {
   freshLines?: ReadonlySet<number>;
   /** 이 새 쪽 줄 번호가 보이도록 스크롤한다. 값이 바뀔 때만 움직인다. */
   revealLine?: number | null;
+  /** 바뀌면 같은 줄이라도 다시 스크롤한다(같은 스레드를 다시 눌렀을 때). */
+  revealNonce?: number;
   /** 줄 우클릭. 누른 곳이 코드 줄이면 그 줄, 접힌 구간 머리나 빈칸이면 null을 넘긴다. */
   onLineContextMenu?: (line: DiffMenuLine | null, e: React.MouseEvent) => void;
   /** 줄 번호 더블클릭. 주면 줄 번호 칸이 눌러 볼 수 있는 모양이 된다. */
@@ -368,6 +370,7 @@ export function VirtualizedDiffView({
   fontSize,
   freshLines,
   revealLine = null,
+  revealNonce = 0,
   onLineContextMenu,
   onLineNumberDoubleClick,
   find = null,
@@ -454,10 +457,12 @@ export function VirtualizedDiffView({
   }, [anchorLine, rows, virtualizer]);
 
   // 따라가기가 새 줄을 알리면 그 줄을 화면 가운데로 가져온다. 같은 값으로 다시 부르지 않도록
-  // 마지막으로 옮긴 줄을 기억한다(같은 파일이 다시 조회돼 행 배열만 바뀔 때).
-  const revealedRef = useRef<number | null>(null);
+  // 마지막으로 옮긴 줄을 기억한다(같은 파일이 다시 조회돼 행 배열만 바뀔 때). `revealNonce`가
+  // 바뀌면 같은 줄이라도 다시 옮긴다.
+  const revealedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (revealLine === null || revealedRef.current === revealLine) return;
+    const revealKey = `${revealLine}:${revealNonce}`;
+    if (revealLine === null || revealedRef.current === revealKey) return;
     const at = rows.findIndex((r) => {
       if (r.kind !== "line") return false;
       const lineNo = isSplit
@@ -466,9 +471,9 @@ export function VirtualizedDiffView({
       return lineNo === revealLine;
     });
     if (at < 0) return;
-    revealedRef.current = revealLine;
+    revealedRef.current = revealKey;
     virtualizer.scrollToIndex(at, { align: "center" });
-  }, [revealLine, rows, isSplit, diffFile, virtualizer]);
+  }, [revealLine, revealNonce, rows, isSplit, diffFile, virtualizer]);
 
   // 창 너비가 바뀌어 접히는 지점이 달라져도 따로 다시 재지 않는다 — 각 행에 붙은
   // `measureElement`의 ResizeObserver가 높이 변화를 행마다 보고한다. 뷰포트 폭 변화에
@@ -504,10 +509,21 @@ export function VirtualizedDiffView({
 
   const activeMatch: FindMatch | null =
     found && found.matches.length > 0 && find ? found.matches[Math.min(find.active, found.matches.length - 1)] : null;
-  const findNonce = find?.nonce;
+  // 일치 번호·찾는 말·`nonce`가 바뀔 때만 스크롤한다. 행 배열이 새로 만들어질 때(접힌 구간 펼치기,
+  // 작업 트리 diff 재조회)는 `activeMatch`가 새 객체가 되지만 사용자가 보던 자리를 지킨다.
+  // 일치가 아직 없으면 기억하지 않는다 — 행이 도착해 일치가 생기면 그때 옮긴다.
+  const findScrollKey = find && regex ? `${regex.source}\u0000${regex.flags}\u0000${find.active}\u0000${find.nonce}` : null;
+  const findScrolledRef = useRef<string | null>(null);
   useEffect(() => {
-    if (activeMatch) virtualizer.scrollToIndex(activeMatch.row, { align: "center" });
-  }, [activeMatch, findNonce, virtualizer]);
+    if (findScrollKey === null) {
+      // 닫았다 다시 열면 같은 말이어도 다시 옮긴다.
+      findScrolledRef.current = null;
+      return;
+    }
+    if (!activeMatch || findScrolledRef.current === findScrollKey) return;
+    findScrolledRef.current = findScrollKey;
+    virtualizer.scrollToIndex(activeMatch.row, { align: "center" });
+  }, [activeMatch, findScrollKey, virtualizer]);
 
   // 보이는 칸만 칠한다. 스크롤하면 행이 바뀌므로 렌더마다 다시 칠한다(화면에 있는 수십 줄뿐이다).
   useEffect(() => {

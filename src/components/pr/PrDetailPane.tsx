@@ -65,7 +65,9 @@ function PrDetail({ pr, repoPath, accountId }: { pr: PullRequestDetail; repoPath
   const files = usePullRequestFiles(repoPath, accountId, pr.number, pr.headSha);
   const selectedFile = usePrViewStore((s) => s.selectedFile);
   const selectFile = usePrViewStore((s) => s.selectFile);
-  const [revealLine, setRevealLine] = useState<number | null>(null);
+  // 같은 줄을 다시 눌러도 다시 스크롤하도록 누를 때마다 nonce를 올린다.
+  const [reveal, setReveal] = useState<{ line: number | null; nonce: number }>({ line: null, nonce: 0 });
+  const revealAt = (line: number | null) => setReveal((r) => ({ line, nonce: r.nonce + 1 }));
   const { data: branches } = useBranches(repoPath);
   const threads = useMemo(() => threadsByFile(pr.threads), [pr.threads]);
   const [fileMenu, setFileMenu] = useState<{ file: PrFile; x: number; y: number } | null>(null);
@@ -77,7 +79,7 @@ function PrDetail({ pr, repoPath, accountId }: { pr: PullRequestDetail; repoPath
 
   const openFile = (path: string | null, line: number | null = null) => {
     selectFile(path);
-    setRevealLine(line);
+    revealAt(line);
   };
   const openThread = (thread: PrReviewThread) => openFile(thread.path, revealLineOf(thread));
   const openFileMenu = (path: string, e: React.MouseEvent) => {
@@ -122,8 +124,9 @@ function PrDetail({ pr, repoPath, accountId }: { pr: PullRequestDetail; repoPath
             threads={threads.get(file.path)}
             repoPath={repoPath}
             editorRepoPath={headCheckedOut ? repoPath : null}
-            revealLine={revealLine}
-            onReveal={setRevealLine}
+            revealLine={reveal.line}
+            revealNonce={reveal.nonce}
+            onReveal={revealAt}
           />
         ) : (
           <PrOverview pr={pr} onOpenThread={openThread} />
