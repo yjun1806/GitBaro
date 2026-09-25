@@ -3,6 +3,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use crate::error::AppError;
+use crate::github::cache;
 use serde_json::Value;
 
 const GITHUB_API_BASE: &str = "https://api.github.com";
@@ -166,6 +167,76 @@ impl GitHubClient {
         Ok(body)
     }
 
+    /// GET with `If-None-Match`: a 304 reuses the body cached for the same
+    /// token and URL, and does not count against the hourly rate limit.
+    pub async fn get_conditional(
+        &self,
+        token: &str,
+        path: &str,
+        query: &[(&str, &str)],
+    ) -> Result<Value, AppError> {
+        let url = format!("{}{}", self.base_url, path);
+        let query_text: Vec<String> = query.iter().map(|(k, v)| format!("{k}={v}")).collect();
+        let key = cache::cache_key(token, &format!("GET {}?{}", path, query_text.join("&")));
+        let cached = cache::etag_for(&key);
+
+        let mut request = self
+            .http
+            .get(&url)
+            .headers(self.auth_headers(token)?)
+            .query(query);
+        if let Some((etag, _)) = &cached {
+            request = request.header(reqwest::header::IF_NONE_MATCH, etag.as_str());
+        }
+        let response = request.send().await?;
+
+        if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+            if let Some((_, body)) = cached {
+                return Ok(body);
+            }
+        }
+        let etag = response
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        let body = self.handle_response(response).await?;
+        cache::put(key, etag, &body);
+        Ok(body)
+    }
+
+    /// POST a GraphQL query. Answers are reused for `cache::GRAPHQL_TTL`
+    /// unless `force` is set. GraphQL reports most failures inside a 200
+    /// response, so `errors` are mapped onto the REST-style `AppError`s the
+    /// rest of the app already handles (404 no access, rate limit).
+    pub async fn graphql(
+        &self,
+        token: &str,
+        query: &str,
+        variables: Value,
+        force: bool,
+    ) -> Result<Value, AppError> {
+        let key = cache::cache_key(token, &format!("POST /graphql {} {}", query, variables));
+        if !force {
+            if let Some(body) = cache::fresh(&key, cache::GRAPHQL_TTL) {
+                return Ok(body);
+            }
+        }
+        let url = format!("{}/graphql", self.base_url);
+        let response = self
+            .http
+            .post(&url)
+            .headers(self.auth_headers(token)?)
+            .json(&serde_json::json!({ "query": query, "variables": variables }))
+            .send()
+            .await?;
+        let body = self.handle_response(response).await?;
+        graphql_error(&body)?;
+        let data = body["data"].clone();
+        cache::put(key, None, &data);
+        Ok(data)
+    }
+
     pub async fn patch_empty(&self, token: &str, path: &str) -> Result<(), AppError> {
         let url = format!("{}{}", self.base_url, path);
         let response = self
@@ -266,6 +337,24 @@ impl GitHubClient {
     }
 }
 
+/// The first GraphQL error as an `AppError`, or Ok when the answer has none.
+/// A partial answer (data plus errors) is still an error when `data` is null.
+pub(crate) fn graphql_error(body: &Value) -> Result<(), AppError> {
+    let Some(first) = body["errors"].as_array().and_then(|e| e.first()) else {
+        return Ok(());
+    };
+    let message = first["message"].as_str().unwrap_or("GitHub GraphQL error").to_string();
+    match first["type"].as_str() {
+        Some("RATE_LIMITED") => Err(AppError::RateLimit {
+            reset_at: "unknown".to_string(),
+        }),
+        Some("NOT_FOUND") => Err(AppError::GithubApi { status: 404, message }),
+        Some("FORBIDDEN") => Err(AppError::GithubApi { status: 403, message }),
+        _ if body["data"].is_null() => Err(AppError::GithubApi { status: 0, message }),
+        _ => Ok(()),
+    }
+}
+
 impl Default for GitHubClient {
     fn default() -> Self {
         Self::new()
@@ -291,5 +380,20 @@ mod tests {
         assert!(validate_path_segment("repo?query").is_err());
         assert!(validate_path_segment("repo#frag").is_err());
         assert!(validate_path_segment("../../etc").is_err());
+    }
+
+    #[test]
+    fn graphql_errors_map_to_app_errors() {
+        use serde_json::json;
+        assert!(graphql_error(&json!({"data": {"x": 1}})).is_ok());
+        let not_found = json!({"data": {"repository": null}, "errors": [{"type": "NOT_FOUND", "message": "no"}]});
+        assert!(matches!(graphql_error(&not_found), Err(AppError::GithubApi { status: 404, .. })));
+        let limited = json!({"data": null, "errors": [{"type": "RATE_LIMITED", "message": "slow"}]});
+        assert!(matches!(graphql_error(&limited), Err(AppError::RateLimit { .. })));
+        let other = json!({"data": null, "errors": [{"message": "bad query"}]});
+        assert!(matches!(graphql_error(&other), Err(AppError::GithubApi { status: 0, .. })));
+        // 일부만 실패한 답은 쓸 수 있는 데이터가 있으면 그대로 쓴다.
+        let partial = json!({"data": {"x": 1}, "errors": [{"type": "SOMETHING", "message": "m"}]});
+        assert!(graphql_error(&partial).is_ok());
     }
 }

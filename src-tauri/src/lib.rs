@@ -111,6 +111,10 @@ pub fn run() {
             commands::worktree::remove_worktree,
             commands::actions::list_workflow_runs,
             commands::actions::get_workflow_run_jobs,
+            commands::pull_request::list_pull_requests,
+            commands::pull_request::get_pull_request,
+            commands::pull_request::list_pull_request_files,
+            commands::pull_request::get_pull_request_file_diff,
             commands::watch::start_repo_watch,
             commands::watch::stop_repo_watch,
             // W1-T3
