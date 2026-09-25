@@ -182,3 +182,14 @@
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* diff 안 찾기(find-highlight.ts). CSS Custom Highlight API로 칠하므로 DOM은 그대로다.
+   `::highlight()`는 배경·글자색만 받는다. 전체는 호박색을 옅게, 지금 것은 진하게 칠한다.
+   `color-mix()`는 최소 타깃(macOS 10.15)에 없어 rgba로 적는다 — --amber-400(#fbbf24)과 같은 색. */
+::highlight(diff-find) {
+  background-color: rgba(251, 191, 36, 0.35);
+}
+::highlight(diff-find-current) {
+  background-color: var(--amber-400);
+  color: var(--gray-1000);
+}

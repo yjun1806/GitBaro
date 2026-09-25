@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Loader2 } from "lucide-react";
 import { paint, type PaintLabels } from "@/lib/md-diff/paint";
 import { useDocDiff } from "@/lib/md-diff/use-doc-diff";
+import { clearFindHighlights, documentRanges, paintFindHighlights } from "./find-highlight";
 import "./md-diff.css";
 
 interface MarkdownDiffViewProps {
@@ -14,6 +15,9 @@ interface MarkdownDiffViewProps {
    * `reason`이 `"timeout"`이면 계산이 너무 오래 걸려 Worker를 끊은 경우다.
    */
   onError: (reason: string) => void;
+  /** 찾기. 줄 보기와 같은 모양이다(`VirtualizedDiffView`의 `find`). */
+  find?: { regex: RegExp; active: number; nonce: number } | null;
+  onFindResult?: (count: number, capped: boolean) => void;
 }
 
 /**
@@ -23,7 +27,7 @@ interface MarkdownDiffViewProps {
  * 삭제 글자를 끼워 넣는 작업이라, React가 같은 서브트리를 소유하면 리렌더 때마다
  * 그 수술이 통째로 날아간다. 그래서 컨테이너 하나만 React가 잡고 안쪽은 통째로 맡긴다.
  */
-export function MarkdownDiffView({ oldContent, newContent, onError }: MarkdownDiffViewProps) {
+export function MarkdownDiffView({ oldContent, newContent, onError, find = null, onFindResult }: MarkdownDiffViewProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement>(null);
   const state = useDocDiff(oldContent, newContent);
@@ -61,6 +65,33 @@ export function MarkdownDiffView({ oldContent, newContent, onError }: MarkdownDi
   useEffect(() => {
     if (state.status === "error") onError(state.error);
   }, [state, onError]);
+
+  // 찾기 — 위의 `paint` 효과 뒤에 선언해야 칠해진 문서에서 찾는다(효과는 선언 순서대로 돈다).
+  // 문서는 가상 목록이 아니라 한 번에 다 그려지므로 찾은 Range를 그대로 들고 있다.
+  const [found, setFound] = useState<{ ranges: Range[]; capped: boolean } | null>(null);
+  const regex = find?.regex ?? null;
+  useEffect(() => {
+    if (!regex || state.status !== "ready" || !hostRef.current) {
+      setFound(null);
+      return;
+    }
+    const result = documentRanges(hostRef.current, regex);
+    setFound(result);
+    onFindResult?.(result.ranges.length, result.capped);
+  }, [regex, state, labels, onFindResult]);
+
+  const active = find?.active ?? 0;
+  const findNonce = find?.nonce;
+  useEffect(() => {
+    if (!found) return;
+    const current = found.ranges[Math.min(active, found.ranges.length - 1)] ?? null;
+    paintFindHighlights(found.ranges, current);
+    current?.startContainer.parentElement?.scrollIntoView({ block: "center" });
+  }, [found, active, findNonce]);
+  useEffect(() => {
+    if (!regex) return;
+    return clearFindHighlights;
+  }, [regex]);
 
   // 오류는 부모가 통합 보기로 전환하며 토스트로 설명한다 — 여기서 또 말하면 두 번 말하는 셈이다.
   if (state.status !== "ready") {

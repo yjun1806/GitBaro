@@ -439,6 +439,20 @@
     "codeChanged": "Code changed",
     "htmlChanged": "HTML block changed"
   },
+  "diffFind": {
+    "placeholder": "Find in diff",
+    "count": "{{current}} / {{total}}",
+    "noResults": "No results",
+    "caseSensitive": "Match case",
+    "previous": "Previous match (Shift+Enter)",
+    "next": "Next match (Enter)",
+    "close": "Close (Esc)",
+    "open": "Find in diff (⌘F)"
+  },
+  "editor": {
+    "openAtLine": "Open line {{line}} in editor",
+    "doubleClickToOpen": "Double-click to open this line in the editor"
+  },
   "sync": {
     "publishFailed": "Publish failed: {{error}}",
     "noRemoteError": "This repository has no remote to sync with. Add a remote first.",

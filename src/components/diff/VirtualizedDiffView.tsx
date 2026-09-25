@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronUp, ChevronDown, UnfoldVertical } from "lucide-react";
 import { DiffOverviewRuler } from "./DiffOverviewRuler";
+import { findLineMatches, type FindCell, type FindMatch, type FindSide } from "./diff-find";
+import { clearFindHighlights, paintFindHighlights, rangesIn, textNodesOf } from "./find-highlight";
 import {
   DiffFile,
   DiffLineType,
@@ -256,16 +258,25 @@ function resolveContent(
   return { text: rawLine, cls: "diff-line-content-raw" };
 }
 
-function ContentCell({ content, style }: { content: RenderedContent; style: React.CSSProperties }) {
+function ContentCell({
+  content,
+  style,
+  findSide,
+}: {
+  content: RenderedContent;
+  style: React.CSSProperties;
+  /** 찾기가 이 칸을 알아보는 표시. */
+  findSide: FindSide;
+}) {
   if (content.html !== undefined) {
     return (
-      <span className={content.cls} style={style}>
+      <span className={content.cls} style={style} data-find-cell={findSide}>
         <span dangerouslySetInnerHTML={{ __html: content.html }} />
       </span>
     );
   }
   return (
-    <span className={content.cls} style={style}>
+    <span className={content.cls} style={style} data-find-cell={findSide}>
       {content.text}
     </span>
   );
@@ -283,6 +294,15 @@ interface VirtualizedDiffViewProps {
   revealLine?: number | null;
   /** 줄 우클릭. 누른 곳이 코드 줄이면 그 줄, 접힌 구간 머리나 빈칸이면 null을 넘긴다. */
   onLineContextMenu?: (line: DiffMenuLine | null, e: React.MouseEvent) => void;
+  /** 줄 번호 더블클릭. 주면 줄 번호 칸이 눌러 볼 수 있는 모양이 된다. */
+  onLineNumberDoubleClick?: (line: DiffMenuLine) => void;
+  /**
+   * 찾기. 있으면 일치를 칠하고, `active`번째 일치로 스크롤한다. `nonce`가 바뀌면 같은 일치라도
+   * 다시 스크롤한다(일치가 하나뿐일 때 다음을 누른 경우).
+   */
+  find?: { regex: RegExp; active: number; nonce: number } | null;
+  /** 찾기 결과 수. 찾기 조건이나 행 배열이 바뀔 때마다 알린다. */
+  onFindResult?: (count: number, capped: boolean) => void;
 }
 
 /** 우클릭한 diff 줄. */
@@ -293,6 +313,42 @@ export interface DiffMenuLine {
   lineNumber: number;
   /** 옛 쪽(지운 줄)인지 새 쪽인지. */
   side: "old" | "new";
+  /**
+   * 편집기에서 열 새 쪽 줄 번호. 새 쪽 줄은 그 번호, 지운 줄은 가장 가까운 새 쪽 줄
+   * (지운 자리 바로 뒤, 없으면 바로 앞)이다. 새 파일에 줄이 하나도 없으면 null.
+   */
+  editorLine: number | null;
+}
+
+/**
+ * 지운 줄(`index`)에서 가장 가까운 새 쪽 줄 번호. 지운 자리 바로 뒤의 줄을 먼저 보고,
+ * 파일 끝을 지웠으면 바로 앞 줄을 쓴다. 접힌 줄도 줄 번호가 있으므로 함께 본다.
+ */
+function nearestNewLine(diffFile: DiffFile, isSplit: boolean, index: number): number | null {
+  const len = isSplit ? diffFile.splitLineLength : diffFile.unifiedLineLength;
+  const newAt = (i: number) =>
+    isSplit ? diffFile.getSplitRightLine(i).lineNumber : diffFile.getUnifiedLine(i).newLineNumber;
+  for (let i = index; i < len; i++) {
+    const n = newAt(i);
+    if (n != null) return n;
+  }
+  for (let i = index - 1; i >= 0; i--) {
+    const n = newAt(i);
+    if (n != null) return n;
+  }
+  return null;
+}
+
+/** 행 하나에서 찾을 칸들: 통합 보기는 한 줄, 나란히 보기는 옛 쪽·새 쪽. 접힌 구간 머리는 뺀다. */
+function findCellsOf(diffFile: DiffFile, isSplit: boolean, row: DiffRow | undefined): FindCell[] {
+  if (!row || row.kind !== "line") return [];
+  if (!isSplit) return [{ side: "line", text: lineText(diffFile.getUnifiedLine(row.index).value) }];
+  const cells: FindCell[] = [];
+  const left = diffFile.getSplitLeftLine(row.index);
+  const right = diffFile.getSplitRightLine(row.index);
+  if (left.lineNumber != null) cells.push({ side: "old", text: lineText(left.value) });
+  if (right.lineNumber != null) cells.push({ side: "new", text: lineText(right.value) });
+  return cells;
 }
 
 /** 줄 내용 끝의 줄바꿈을 뗀다. */
@@ -313,6 +369,9 @@ export function VirtualizedDiffView({
   freshLines,
   revealLine = null,
   onLineContextMenu,
+  onLineNumberDoubleClick,
+  find = null,
+  onFindResult,
 }: VirtualizedDiffViewProps) {
   const { t } = useTranslation();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -431,6 +490,47 @@ export function VirtualizedDiffView({
     return () => ro.disconnect();
   }, []);
 
+  // ── 찾기 ──
+  // 행 배열 전체를 한 번 훑는다(5만 줄도 수 ms). 정규식이 같으면 다시 훑지 않는다 —
+  // 다음·이전으로 움직일 때는 `active`만 바뀐다.
+  const regex = find?.regex ?? null;
+  const found = useMemo(
+    () => (regex ? findLineMatches(rows.length, (r) => findCellsOf(diffFile, isSplit, rows[r]), regex) : null),
+    [regex, rows, diffFile, isSplit],
+  );
+  useEffect(() => {
+    if (found) onFindResult?.(found.matches.length, found.capped);
+  }, [found, onFindResult]);
+
+  const activeMatch: FindMatch | null =
+    found && found.matches.length > 0 && find ? found.matches[Math.min(find.active, found.matches.length - 1)] : null;
+  const findNonce = find?.nonce;
+  useEffect(() => {
+    if (activeMatch) virtualizer.scrollToIndex(activeMatch.row, { align: "center" });
+  }, [activeMatch, findNonce, virtualizer]);
+
+  // 보이는 칸만 칠한다. 스크롤하면 행이 바뀌므로 렌더마다 다시 칠한다(화면에 있는 수십 줄뿐이다).
+  useEffect(() => {
+    const root = contentRef.current;
+    if (!regex || !root) return;
+    const all: Range[] = [];
+    let current: Range | null = null;
+    for (const cell of root.querySelectorAll<HTMLElement>("[data-find-cell]")) {
+      const row = Number(cell.closest("[data-index]")?.getAttribute("data-index"));
+      const side = cell.getAttribute("data-find-cell") as FindSide;
+      const ranges = rangesIn(textNodesOf(cell), regex);
+      all.push(...ranges);
+      if (activeMatch && activeMatch.row === row && activeMatch.side === side) {
+        current = ranges[activeMatch.nth] ?? null;
+      }
+    }
+    paintFindHighlights(all, current);
+  });
+  useEffect(() => {
+    if (!regex) return;
+    return clearFindHighlights;
+  }, [regex]);
+
   /**
    * 눈금자용 — 행 인덱스를 문서 전체에서의 위치(0~1)로.
    *
@@ -461,12 +561,14 @@ export function VirtualizedDiffView({
     padding: "0 6px",
     userSelect: "none",
     color: "var(--diff-plain-lineNumber-color--)",
+    cursor: onLineNumberDoubleClick ? "pointer" : undefined,
     // 행이 여러 줄로 접혀도 번호는 첫 줄 높이에 놓인다(칸 배경은 flex가 알아서 늘린다).
     lineHeight: `${rowHeight}px`,
     whiteSpace: "pre",
   };
 
   const contentStyle = contentStyleFor(rowHeight);
+  const numTitle = onLineNumberDoubleClick ? t("editor.doubleClickToOpen") : undefined;
 
   const expandBtnStyle: React.CSSProperties = {
     display: "inline-flex",
@@ -558,9 +660,13 @@ export function VirtualizedDiffView({
           boxShadow: fresh ? FRESH_MARK : undefined,
         }}
       >
-        <span style={{ ...numStyle, background: numberBg(type) }}>{line.oldLineNumber ?? ""}</span>
-        <span style={{ ...numStyle, background: numberBg(type) }}>{line.newLineNumber ?? ""}</span>
-        <ContentCell content={content} style={contentStyle} />
+        <span data-line-no="old" title={numTitle} style={{ ...numStyle, background: numberBg(type) }}>
+          {line.oldLineNumber ?? ""}
+        </span>
+        <span data-line-no="new" title={numTitle} style={{ ...numStyle, background: numberBg(type) }}>
+          {line.newLineNumber ?? ""}
+        </span>
+        <ContentCell content={content} style={contentStyle} findSide="line" />
       </div>
     );
   };
@@ -582,14 +688,18 @@ export function VirtualizedDiffView({
 
     return (
       <>
-        <span style={{ ...numStyle, background: isEmpty ? "var(--diff-empty-content--)" : numberBg(type) }}>
+        <span
+          data-line-no={side}
+          title={isEmpty ? undefined : numTitle}
+          style={{ ...numStyle, background: isEmpty ? "var(--diff-empty-content--)" : numberBg(type) }}
+        >
           {line.lineNumber ?? ""}
         </span>
         <span
           data-fresh={fresh || undefined}
           style={{ display: "flex", background: bg, flex: 1, minWidth: 0, boxShadow: fresh ? FRESH_MARK : undefined }}
         >
-          {!isEmpty && <ContentCell content={content} style={contentStyle} />}
+          {!isEmpty && <ContentCell content={content} style={contentStyle} findSide={side} />}
         </span>
       </>
     );
@@ -615,27 +725,42 @@ export function VirtualizedDiffView({
     );
   };
 
-  // 우클릭한 줄을 찾는다. 행은 `data-index`, 나란히 보기의 좌우는 `data-side`로 가린다.
+  // 이벤트가 난 줄을 찾는다. 행은 `data-index`, 나란히 보기의 좌우는 `data-side`로 가린다.
+  // 통합 보기는 옛 번호 칸을 눌렀으면 옛 쪽으로 본다(지운 줄이 아니면 새 쪽 번호도 있다).
+  const lineAt = (target: Element): DiffMenuLine | null => {
+    const rowEl = target.closest("[data-index]");
+    const row = rowEl ? rows[Number(rowEl.getAttribute("data-index"))] : undefined;
+    if (row?.kind !== "line") return null;
+    if (isSplit) {
+      const side = target.closest("[data-side]")?.getAttribute("data-side") === "old" ? "old" : "new";
+      const l = side === "old" ? diffFile.getSplitLeftLine(row.index) : diffFile.getSplitRightLine(row.index);
+      if (l.lineNumber == null) return null;
+      const editorLine = side === "new" ? l.lineNumber : nearestNewLine(diffFile, true, row.index);
+      return { text: lineText(l.value), lineNumber: l.lineNumber, side, editorLine };
+    }
+    const l = diffFile.getUnifiedLine(row.index);
+    const lineNumber = l.newLineNumber ?? l.oldLineNumber;
+    if (lineNumber == null) return null;
+    const editorLine = l.newLineNumber ?? nearestNewLine(diffFile, false, row.index);
+    return { text: lineText(l.value), lineNumber, side: l.newLineNumber != null ? "new" : "old", editorLine };
+  };
+
   const handleContextMenu = (e: React.MouseEvent) => {
     if (!onLineContextMenu || !(e.target instanceof Element)) return;
-    const rowEl = e.target.closest("[data-index]");
-    const row = rowEl ? rows[Number(rowEl.getAttribute("data-index"))] : undefined;
-    let line: DiffMenuLine | null = null;
-    if (row?.kind === "line") {
-      if (isSplit) {
-        const side = e.target.closest("[data-side]")?.getAttribute("data-side") === "old" ? "old" : "new";
-        const l = side === "old" ? diffFile.getSplitLeftLine(row.index) : diffFile.getSplitRightLine(row.index);
-        if (l.lineNumber != null) line = { text: lineText(l.value), lineNumber: l.lineNumber, side };
-      } else {
-        const l = diffFile.getUnifiedLine(row.index);
-        const lineNumber = l.newLineNumber ?? l.oldLineNumber;
-        if (lineNumber != null) {
-          line = { text: lineText(l.value), lineNumber, side: l.newLineNumber != null ? "new" : "old" };
-        }
-      }
-    }
+    const line = lineAt(e.target);
     e.preventDefault();
     onLineContextMenu(line, e);
+  };
+
+  // 줄 번호 칸 더블클릭 → 편집기에서 그 줄. 본문 더블클릭은 단어 고르기로 남겨 둔다.
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (!onLineNumberDoubleClick || !(e.target instanceof Element)) return;
+    if (!e.target.closest("[data-line-no]")) return;
+    const line = lineAt(e.target);
+    if (!line) return;
+    e.preventDefault();
+    window.getSelection()?.removeAllRanges();
+    onLineNumberDoubleClick(line);
   };
 
   const renderRow = (row: DiffRow) => {
@@ -651,6 +776,7 @@ export function VirtualizedDiffView({
         style={DIFF_SCROLL_STYLE}
         data-theme={isDark ? "dark" : "light"}
         onContextMenu={handleContextMenu}
+        onDoubleClick={handleDoubleClick}
       >
         <div
           ref={contentRef}

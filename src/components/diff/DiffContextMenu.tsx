@@ -18,8 +18,8 @@ interface DiffContextMenuProps {
 }
 
 /**
- * diff 본문 우클릭 메뉴: 고른 글 복사, 그 줄 복사, 파일을 편집기에서 열기, 경로 복사.
- * 편집기 열기 명령은 줄 번호를 받지 않아 파일만 연다. hunk 단위 스테이지는 이 앱에 없어 두지 않는다.
+ * diff 본문 우클릭 메뉴: 고른 글 복사, 그 줄 복사, 편집기에서 그 줄·파일 열기, 경로 복사.
+ * 지운 줄은 가장 가까운 새 쪽 줄에서 연다. hunk 단위 스테이지는 이 앱에 없어 두지 않는다.
  */
 export function DiffContextMenu({ selection, line, filePath, repoPath, position, onClose }: DiffContextMenuProps) {
   const { t } = useTranslation();
@@ -44,6 +44,15 @@ export function DiffContextMenu({ selection, line, filePath, repoPath, position,
     ...(copyItems.length > 0 ? [{ items: copyItems }] : []),
     {
       items: [
+        ...(repoPath && line?.editorLine != null
+          ? [
+              {
+                label: t("editor.openAtLine", { line: line.editorLine }),
+                icon: <Code2 className={icon} />,
+                onClick: () => actions.openFileInEditor(repoPath, filePath, line.editorLine ?? undefined),
+              },
+            ]
+          : []),
         ...(repoPath
           ? [
               {
