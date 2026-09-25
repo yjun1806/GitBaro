@@ -650,6 +650,8 @@ export interface BranchChangedFile {
   additions: number;
   deletions: number;
   isBinary: boolean;
+  /** 추적하지 않는 새 파일이 1 MiB를 넘어 읽지 않았다. 줄 수는 0이다. */
+  tooLarge?: boolean;
 }
 
 /**
@@ -689,7 +691,10 @@ export interface BranchChanges {
   files: BranchChangedFile[];
 }
 
-/** `get_file_diff_vs_default`의 결과. 파일 하나를 갈라진 지점 → 작업 트리로 비교한다. */
+/**
+ * `get_file_diff_vs_default`의 결과. 파일 하나를 갈라진 지점 → 작업 트리로 비교한다.
+ * 1 MiB를 넘는 새 파일은 읽지 않는다: `binary`가 true이고 `binaryPreview.meta.tooLarge`가 true다.
+ */
 export interface FileDiffVsDefault extends DiffOutput {
   /** 이름을 바꾼 파일이면 갈라진 지점에서의 경로. */
   oldPath: string | null;

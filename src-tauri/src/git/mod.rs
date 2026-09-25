@@ -11,6 +11,7 @@ pub mod remote;
 pub mod stash;
 pub mod status;
 pub mod unpushed;
+pub mod untracked;
 pub mod walk;
 pub mod worktree_base;
 
