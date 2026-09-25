@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type RefObject } from "react";
 import { isEditableTarget } from "@/components/layout/useDiffMaximize";
+import { isDialogOpen } from "@/lib/use-dialog-a11y";
 import { compileFindRegex, stepMatch } from "./diff-find";
 
 /** 입력을 멈추고 이만큼 지나면 찾는다. 5만 줄에서도 한 번 훑는 데 수 ms지만 글자마다 돌 필요는 없다. */
@@ -16,8 +17,10 @@ function isFindShortcut(e: KeyboardEvent): boolean {
  * ⌘F가 이 뷰어의 것인가. 포커스가 안에 있거나 포인터가 올라가 있으면 이 뷰어다.
  * 둘 다 아니어도 화면에 diff 뷰어가 이것 하나이고 다른 입력 칸에서 누른 게 아니면 받는다 —
  * 파일 목록을 누른 직후처럼 포커스가 목록에 남아 있을 때도 찾기가 열리게.
+ * 모달이 떠 있으면 그 뒤의 뷰어는 받지 않는다(모달 안의 뷰어만 받는다).
  */
 function ownsShortcut(root: HTMLElement, e: KeyboardEvent): boolean {
+  if (isDialogOpen() && !root.closest('[aria-modal="true"]')) return false;
   const doc = root.ownerDocument;
   if (root.contains(doc.activeElement) || root.matches(":hover")) return true;
   if (isEditableTarget(e.target)) return false;

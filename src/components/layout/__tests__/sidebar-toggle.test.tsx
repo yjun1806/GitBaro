@@ -7,6 +7,7 @@ import type { SidebarTreeData } from "@/components/sidebar/useSidebarTreeData";
 import { HiddenSidebarLead } from "../SidebarToggle";
 import { isSidebarToggleShortcut, useSidebarToggleShortcut } from "../useSidebarToggleShortcut";
 import { RepoRail } from "../RepoRail";
+import { Dialog } from "@/components/ui/Dialog";
 
 // 사이드바 안의 트리·설정 조회는 Tauri를 부른다. 여기서는 머리 줄과 숨김 상태만 본다.
 vi.mock("@/components/sidebar/RepoTree", () => ({ RepoTree: () => <div>repo-tree</div> }));
@@ -87,6 +88,19 @@ describe("⌘\\ shortcut", () => {
     render(<ShortcutHost />);
     pressKey({ key: "\\", code: "Backslash", metaKey: true });
     expect(useUIStore.getState().sidebarHidden).toBe(true);
+    pressKey({ key: "\\", code: "Backslash", metaKey: true });
+    expect(useUIStore.getState().sidebarHidden).toBe(false);
+  });
+
+  it("does nothing while a modal dialog is open", () => {
+    render(
+      <>
+        <ShortcutHost />
+        <Dialog ariaLabel="settings">
+          <button type="button">ok</button>
+        </Dialog>
+      </>,
+    );
     pressKey({ key: "\\", code: "Backslash", metaKey: true });
     expect(useUIStore.getState().sidebarHidden).toBe(false);
   });

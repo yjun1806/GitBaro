@@ -27,6 +27,7 @@ const { DiffViewer } = await import("../DiffViewer");
 const { useUIStore } = await import("@/stores/ui");
 const { useDiffMaximizeEscape } = await import("@/components/layout/useDiffMaximize");
 const { FIND_DEBOUNCE_MS } = await import("../use-diff-find");
+const { Dialog } = await import("@/components/ui/Dialog");
 
 // 3행의 foo를 Foo로 바꿨다. 옛 쪽·새 쪽을 모두 세면 foo는 3개(대소문자 무시)다:
 // 1행 "foo one", 지운 3행 "foo", 더한 3행 "Foo".
@@ -171,6 +172,20 @@ describe("diff find bar", () => {
     root.focus();
     fireEvent.keyDown(root, { key: "f", metaKey: true });
     expect(screen.getByRole("search")).toBeTruthy();
+  });
+
+  it("leaves ⌘F alone while a modal dialog is open over the diff", () => {
+    // 설정 창 뒤에서 찾기 칸이 열려 포커스를 가져가면 안 된다. 창 바깥(body)에서 눌린 경우도 같다.
+    render(
+      <>
+        <Harness />
+        <Dialog ariaLabel="Settings">
+          <button type="button">ok</button>
+        </Dialog>
+      </>,
+    );
+    fireEvent.keyDown(document.body, { key: "f", metaKey: true });
+    expect(screen.queryByRole("search")).toBeNull();
   });
 
   it("leaves ⌘F alone when typing in another field and a second diff is on screen", () => {

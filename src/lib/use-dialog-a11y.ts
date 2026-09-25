@@ -19,6 +19,14 @@ const FOCUSABLE =
 /** Open dialog/popover panels, innermost last. Only the top one reacts to keys that reach the document. */
 const panelStack: symbol[] = [];
 
+/**
+ * Is a dialog or popover panel open? Window-level shortcuts (⌘F, ⌘\) check this so they don't act
+ * on, or pull focus into, the view behind a modal.
+ */
+export function isDialogOpen(): boolean {
+  return panelStack.length > 0;
+}
+
 function focusableIn(panel: HTMLElement): HTMLElement[] {
   return Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
     (el) => !el.closest("[inert]") && el.getAttribute("aria-hidden") !== "true",
