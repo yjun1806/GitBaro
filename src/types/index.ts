@@ -493,11 +493,19 @@ export interface ActivityWatchResult {
   overflow: string[];
 }
 
+/**
+ * 무엇이 바뀌었나. `workTree`: 작업 트리 파일(무시한 파일·빌드 결과 제외).
+ * `git`: 그 경로의 커밋·스테이징·브랜치 이동(HEAD, index, `refs/heads/*`). 파일은 그대로일 수 있다.
+ */
+export type ActivityKind = "workTree" | "git";
+
 /** Payload of the `repo:activity` event. */
 export interface ActivityEvent {
   path: string;
   /** Epoch ms of the emission. */
   at: number;
+  /** 백엔드는 항상 보낸다. 없으면 `workTree`로 본다. */
+  kind?: ActivityKind;
 }
 
 // W1-T4 — 새 커밋 기준선 (Rust: src-tauri/src/git/new_commits.rs)

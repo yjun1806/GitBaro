@@ -8,8 +8,11 @@
 //! unchanged; this one only ever emits a timestamp, for up to
 //! [`MAX_ACTIVITY_TARGETS`] paths at a time.
 
+use git2::Repository;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -87,21 +90,115 @@ pub fn diff_targets(old: &[PathBuf], new: &[PathBuf]) -> TargetDiff {
     }
 }
 
-/// Attributes a changed path to the watched root it belongs to, or `None`
-/// when it should not count as activity.
+/// What kind of change a `repo:activity` event reports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ActivityKind {
+    /// A file in the working tree changed (not ignored, not build output).
+    WorkTree,
+    /// Git metadata of that path changed: a commit, staging, a branch switch
+    /// or a branch moved (HEAD, index, `refs/heads/*`, `packed-refs`). Nothing
+    /// in the working tree has to change for this — e.g. `git commit`.
+    Git,
+}
+
+/// Where a watched path keeps its git metadata. Both paths are canonical.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitLayout {
+    /// The path's own git dir: `<repo>/.git`, or `<repo>/.git/worktrees/<name>`
+    /// for a linked worktree (its HEAD and index live here).
+    pub git_dir: PathBuf,
+    /// The dir shared by all worktrees of the repository, where branches
+    /// (`refs/heads/*`, `packed-refs`) live. Same as `git_dir` for the main
+    /// working tree.
+    pub common_dir: PathBuf,
+}
+
+/// Reads the git layout of a watched path. `None` when it is not a repository
+/// or worktree root.
+pub fn git_layout(root: &Path) -> Option<GitLayout> {
+    let repo = Repository::open(root).ok()?;
+    Some(GitLayout {
+        git_dir: canonicalize_best_effort(repo.path()),
+        common_dir: canonicalize_best_effort(&crate::commands::watch::common_dir(repo.path())),
+    })
+}
+
+/// The branch `git_dir/HEAD` points at (`main`), or `None` when detached or
+/// unreadable.
+pub fn head_branch(git_dir: &Path) -> Option<String> {
+    let head = std::fs::read_to_string(git_dir.join("HEAD")).ok()?;
+    head.trim().strip_prefix("ref: refs/heads/").map(str::to_string)
+}
+
+/// Watched paths whose git metadata `path` belongs to. Only changes that can
+/// alter what the review screen shows count: HEAD and index of that path's
+/// own git dir, and the branch it has checked out (`refs/heads/<branch>`,
+/// `packed-refs`) in the shared dir. `objects/`, `logs/`, lock files and
+/// other worktrees' metadata are noise.
+pub fn classify_git_change(
+    path: &Path,
+    layouts: &[(PathBuf, GitLayout)],
+    branch_of: &dyn Fn(&Path) -> Option<String>,
+) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    for (root, layout) in layouts {
+        let own = path
+            .strip_prefix(&layout.git_dir)
+            .is_ok_and(|rel| rel == Path::new("HEAD") || rel == Path::new("index"));
+        let shared = path.strip_prefix(&layout.common_dir).is_ok_and(|rel| {
+            if rel == Path::new("packed-refs") {
+                return true;
+            }
+            match rel.strip_prefix("refs/heads") {
+                Ok(name) => branch_of(&layout.git_dir).is_some_and(|b| Path::new(&b) == name),
+                Err(_) => false,
+            }
+        });
+        if (own || shared) && !roots.contains(root) {
+            roots.push(root.clone());
+        }
+    }
+    roots
+}
+
+/// Attributes a changed path to the watched roots it belongs to and says what
+/// kind of change it is. Empty when it should not count as activity.
 ///
-/// - `.git/` internals never count (staging, status refresh, and GitBaro's own
-///   other watcher already cover that; this one is about working-tree edits).
+/// - Git metadata counts as [`ActivityKind::Git`] for the paths it affects
+///   (see [`classify_git_change`]); all other `.git` internals never count.
 /// - Build output and dependency installs inside the root (`super::fs_events::
 ///   IGNORED_DIRS` — `node_modules`, `target`, `dist`, `.next`, `build`) never
 ///   count either, matching the existing single-repo watcher: otherwise
 ///   `cargo build` or `pnpm install` inside a watched repo would mark it as
 ///   "just changed" even though no tracked or untracked source file moved.
+///   Files matched by `.gitignore` are dropped later, by [`IgnoreCache`].
 /// - When a watched root sits inside another watched root (a worktree folder
 ///   under its parent repository, `.gitignore:23`/`:39` — `.claude/worktrees/x`,
 ///   `.worktrees/x`), the change is attributed to the deepest (most specific)
 ///   containing root only, so it is never double-counted.
-pub fn classify_activity(path: &Path, watched: &[PathBuf]) -> Option<PathBuf> {
+pub fn classify_activity(
+    path: &Path,
+    watched: &[PathBuf],
+    layouts: &[(PathBuf, GitLayout)],
+    branch_of: &dyn Fn(&Path) -> Option<String>,
+) -> Vec<(PathBuf, ActivityKind)> {
+    let git_roots = classify_git_change(path, layouts, branch_of);
+    if !git_roots.is_empty() {
+        return git_roots.into_iter().map(|root| (root, ActivityKind::Git)).collect();
+    }
+    let in_git_dir = layouts
+        .iter()
+        .any(|(_, l)| path.starts_with(&l.git_dir) || path.starts_with(&l.common_dir));
+    if in_git_dir {
+        return Vec::new();
+    }
+    worktree_root(path, watched).map(|root| vec![(root, ActivityKind::WorkTree)]).unwrap_or_default()
+}
+
+/// The deepest watched root containing `path`, unless the path is inside
+/// `.git` or build/dependency output.
+fn worktree_root(path: &Path, watched: &[PathBuf]) -> Option<PathBuf> {
     let root = watched
         .iter()
         .filter(|root| path.starts_with(root.as_path()))
@@ -118,24 +215,74 @@ pub fn classify_activity(path: &Path, watched: &[PathBuf]) -> Option<PathBuf> {
     Some(root.clone())
 }
 
+/// Git dirs to watch besides the roots themselves: a linked worktree keeps
+/// its HEAD and index under the main repository's `.git`, which may not be
+/// inside any watched root. Dirs already covered by a watched root (or by
+/// another entry) are left out.
+pub fn extra_git_watches(watched: &[PathBuf], layouts: &[(PathBuf, GitLayout)]) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    for (_, layout) in layouts {
+        for dir in [&layout.common_dir, &layout.git_dir] {
+            let covered = watched.iter().chain(dirs.iter()).any(|root| dir.starts_with(root));
+            if !covered {
+                dirs.push(dir.clone());
+            }
+        }
+    }
+    dirs
+}
+
+/// Answers "is this changed file ignored by `.gitignore`?" per watched root,
+/// keeping one opened repository per root. `__pycache__`, `.pytest_cache`,
+/// coverage output and the like must not count as live changes: they never
+/// show up in `git status` either.
+#[derive(Default)]
+pub struct IgnoreCache {
+    repos: HashMap<PathBuf, Option<Repository>>,
+}
+
+impl IgnoreCache {
+    /// Forgets roots that are no longer watched.
+    pub fn retain(&mut self, watched: &[PathBuf]) {
+        self.repos.retain(|root, _| watched.contains(root));
+    }
+
+    /// `true` when `path` (inside `root`) is ignored and not tracked. A tracked
+    /// file stays visible even if an ignore rule matches it, like in git.
+    pub fn is_ignored(&mut self, root: &Path, path: &Path) -> bool {
+        let repo = self.repos.entry(root.to_path_buf()).or_insert_with(|| Repository::open(root).ok());
+        let Some(repo) = repo.as_ref() else { return false };
+        let Ok(rel) = path.strip_prefix(root) else { return false };
+        if rel.as_os_str().is_empty() || !repo.is_path_ignored(rel).unwrap_or(false) {
+            return false;
+        }
+        let tracked = repo.index().ok().is_some_and(|mut index| {
+            // The cached index may be stale; re-read it only if it changed on disk.
+            let _ = index.read(false);
+            index.get_path(rel, 0).is_some()
+        });
+        !tracked
+    }
+}
+
 /// Coalesces repeated activity on the same root into one emission per
 /// [`ACTIVITY_WINDOW`]. The first change after a quiet period emits
 /// immediately (fast feedback); further changes during the window are
 /// recorded and flushed once, after the window elapses.
-pub struct ActivityThrottle {
+pub struct ActivityThrottle<K = PathBuf> {
     window: Duration,
-    last_emit: HashMap<PathBuf, Instant>,
-    pending: HashMap<PathBuf, Instant>,
+    last_emit: HashMap<K, Instant>,
+    pending: HashMap<K, Instant>,
 }
 
-impl ActivityThrottle {
+impl<K: Clone + Eq + Hash> ActivityThrottle<K> {
     pub fn new(window: Duration) -> Self {
         Self { window, last_emit: HashMap::new(), pending: HashMap::new() }
     }
 
     /// Records that `root` changed at `now`. Returns `true` when it should be
     /// emitted right away.
-    pub fn record(&mut self, root: PathBuf, now: Instant) -> bool {
+    pub fn record(&mut self, root: K, now: Instant) -> bool {
         let quiet = match self.last_emit.get(&root) {
             Some(&last) => now.duration_since(last) >= self.window,
             None => true,
@@ -152,8 +299,8 @@ impl ActivityThrottle {
 
     /// Roots whose pending change is now due (their window since the last
     /// emission has elapsed). Marks them emitted as of `now`.
-    pub fn due(&mut self, now: Instant) -> Vec<PathBuf> {
-        let ready: Vec<PathBuf> = self
+    pub fn due(&mut self, now: Instant) -> Vec<K> {
+        let ready: Vec<K> = self
             .pending
             .keys()
             .filter(|root| {
@@ -189,8 +336,8 @@ pub(crate) fn canonicalize_best_effort(path: &Path) -> PathBuf {
 }
 
 /// Watches a dynamic set of directories (up to [`MAX_ACTIVITY_TARGETS`]) and
-/// calls `callback(root, at_epoch_ms)` at most once per [`ACTIVITY_WINDOW`]
-/// per root when something inside it changes.
+/// calls `callback(root, at_epoch_ms, kind)` at most once per
+/// [`ACTIVITY_WINDOW`] per root and kind when something inside it changes.
 ///
 /// Internally, everything is tracked and matched against incoming FS events
 /// in **canonical** form (notify/FSEvents reports canonical paths — see
@@ -210,12 +357,16 @@ pub struct ActivityWatcher {
     watched: Arc<Mutex<Vec<PathBuf>>>,
     /// Canonical path -> the original path the caller last registered it as.
     labels: Arc<Mutex<HashMap<PathBuf, PathBuf>>>,
+    /// Git layout of each watched path that is a repository or worktree root.
+    layouts: Arc<Mutex<Vec<(PathBuf, GitLayout)>>>,
+    /// Git dirs watched in addition to the roots (see [`extra_git_watches`]).
+    extra: Mutex<Vec<PathBuf>>,
 }
 
 impl ActivityWatcher {
     pub fn new<F>(callback: F) -> Result<Self, AppError>
     where
-        F: Fn(PathBuf, i64) + Send + 'static,
+        F: Fn(PathBuf, i64, ActivityKind) + Send + 'static,
     {
         let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
         let watcher = notify::recommended_watcher(move |res| {
@@ -225,20 +376,28 @@ impl ActivityWatcher {
 
         let watched: Arc<Mutex<Vec<PathBuf>>> = Arc::new(Mutex::new(Vec::new()));
         let labels: Arc<Mutex<HashMap<PathBuf, PathBuf>>> = Arc::new(Mutex::new(HashMap::new()));
+        let layouts: Arc<Mutex<Vec<(PathBuf, GitLayout)>>> = Arc::new(Mutex::new(Vec::new()));
         let watched_for_thread = watched.clone();
         let labels_for_thread = labels.clone();
+        let layouts_for_thread = layouts.clone();
 
         std::thread::spawn(move || {
-            let mut throttle = ActivityThrottle::new(ACTIVITY_WINDOW);
+            let mut throttle = ActivityThrottle::<(PathBuf, ActivityKind)>::new(ACTIVITY_WINDOW);
+            let mut ignores = IgnoreCache::default();
             loop {
                 match rx.recv_timeout(Duration::from_millis(200)) {
                     Ok(Ok(event)) => {
                         let now = Instant::now();
                         let targets = watched_for_thread.lock().unwrap().clone();
+                        let layouts = layouts_for_thread.lock().unwrap().clone();
+                        ignores.retain(&targets);
                         for path in &event.paths {
-                            if let Some(root) = classify_activity(path, &targets) {
-                                if throttle.record(root.clone(), now) {
-                                    callback(to_original(&labels_for_thread, &root), now_ms());
+                            for (root, kind) in classify_activity(path, &targets, &layouts, &head_branch) {
+                                if kind == ActivityKind::WorkTree && ignores.is_ignored(&root, path) {
+                                    continue;
+                                }
+                                if throttle.record((root.clone(), kind), now) {
+                                    callback(to_original(&labels_for_thread, &root), now_ms(), kind);
                                 }
                             }
                         }
@@ -251,13 +410,13 @@ impl ActivityWatcher {
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
 
-                for root in throttle.due(Instant::now()) {
-                    callback(to_original(&labels_for_thread, &root), now_ms());
+                for (root, kind) in throttle.due(Instant::now()) {
+                    callback(to_original(&labels_for_thread, &root), now_ms(), kind);
                 }
             }
         });
 
-        Ok(Self { watcher: Mutex::new(watcher), watched, labels })
+        Ok(Self { watcher: Mutex::new(watcher), watched, labels, layouts, extra: Mutex::new(Vec::new()) })
     }
 
     /// Applies a new requested target list: canonicalizes, dedupes, caps at
@@ -300,12 +459,40 @@ impl ActivityWatcher {
 
         let resolved = demote_failed_watches(capped, &failed);
         *watched = resolved.watched.clone();
+        self.update_git_watches(&resolved.watched);
 
         let label_of = |p: &PathBuf| canonical_to_original.get(p).cloned().unwrap_or_else(|| p.clone());
         ResolvedTargets {
             watched: resolved.watched.iter().map(label_of).collect(),
             overflow: resolved.overflow.iter().map(label_of).collect(),
         }
+    }
+}
+
+impl ActivityWatcher {
+    /// Records the git layout of each watched root and watches the git dirs
+    /// that no root covers. A git dir that fails to watch only loses `git`
+    /// events; working-tree events for its root are unaffected.
+    fn update_git_watches(&self, roots: &[PathBuf]) {
+        let layouts: Vec<(PathBuf, GitLayout)> =
+            roots.iter().filter_map(|root| git_layout(root).map(|l| (root.clone(), l))).collect();
+        let wanted = extra_git_watches(roots, &layouts);
+        *self.layouts.lock().unwrap() = layouts;
+
+        let mut extra = self.extra.lock().unwrap();
+        let diff = diff_targets(&extra, &wanted);
+        let mut w = self.watcher.lock().unwrap();
+        for dir in &diff.removed {
+            let _ = w.unwatch(dir);
+        }
+        let mut now_watched: Vec<PathBuf> = extra.iter().filter(|d| !diff.removed.contains(d)).cloned().collect();
+        for dir in diff.added {
+            match w.watch(&dir, RecursiveMode::Recursive) {
+                Ok(()) => now_watched.push(dir),
+                Err(e) => tracing::warn!("[activity] git dir not watched {}: {}", dir.display(), e),
+            }
+        }
+        *extra = now_watched;
     }
 }
 
@@ -324,6 +511,24 @@ mod tests {
 
     fn p(s: &str) -> PathBuf {
         PathBuf::from(s)
+    }
+
+    /// Working-tree classification only (no git layouts known).
+    fn worktree_of(path: &str, watched: &[PathBuf]) -> Option<PathBuf> {
+        match classify_activity(Path::new(path), watched, &[], &|_| None).as_slice() {
+            [] => None,
+            [(root, ActivityKind::WorkTree)] => Some(root.clone()),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    fn main_repo(root: &str) -> (PathBuf, GitLayout) {
+        let git = p(root).join(".git");
+        (p(root), GitLayout { git_dir: git.clone(), common_dir: git })
+    }
+
+    fn linked(root: &str, common: &str, name: &str) -> (PathBuf, GitLayout) {
+        (p(root), GitLayout { git_dir: p(common).join("worktrees").join(name), common_dir: p(common) })
     }
 
     #[test]
@@ -361,10 +566,77 @@ mod tests {
     }
 
     #[test]
-    fn classify_ignores_git_internals() {
+    fn classify_ignores_git_internals_without_a_layout() {
         let watched = vec![p("/repo")];
-        assert_eq!(classify_activity(Path::new("/repo/.git/index"), &watched), None);
-        assert_eq!(classify_activity(Path::new("/repo/.git/refs/heads/main"), &watched), None);
+        assert_eq!(worktree_of("/repo/.git/index", &watched), None);
+        assert_eq!(worktree_of("/repo/.git/refs/heads/main", &watched), None);
+    }
+
+    #[test]
+    fn commits_staging_and_branch_moves_are_git_activity() {
+        let watched = vec![p("/repo")];
+        let layouts = vec![main_repo("/repo")];
+        let on_main = |_: &Path| Some("main".to_string());
+        for path in ["/repo/.git/HEAD", "/repo/.git/index", "/repo/.git/refs/heads/main", "/repo/.git/packed-refs"] {
+            assert_eq!(
+                classify_activity(Path::new(path), &watched, &layouts, &on_main),
+                vec![(p("/repo"), ActivityKind::Git)],
+                "{path}"
+            );
+        }
+        // Noise: objects, logs, locks, other branches, remote-tracking refs.
+        for path in [
+            "/repo/.git/objects/ab/cdef",
+            "/repo/.git/logs/HEAD",
+            "/repo/.git/index.lock",
+            "/repo/.git/refs/heads/other",
+            "/repo/.git/refs/remotes/origin/main",
+            "/repo/.git/FETCH_HEAD",
+        ] {
+            assert!(classify_activity(Path::new(path), &watched, &layouts, &on_main).is_empty(), "{path}");
+        }
+    }
+
+    #[test]
+    fn a_linked_worktree_gets_its_own_git_activity() {
+        let watched = vec![p("/repo"), p("/wt")];
+        let layouts = vec![main_repo("/repo"), linked("/wt", "/repo/.git", "wt")];
+        // main checks out `main`, the worktree `feat`.
+        let branch_of = |git_dir: &Path| {
+            Some(if git_dir.ends_with("worktrees/wt") { "feat" } else { "main" }.to_string())
+        };
+        let kinds = |path: &str| classify_activity(Path::new(path), &watched, &layouts, &branch_of);
+        assert_eq!(kinds("/repo/.git/worktrees/wt/index"), vec![(p("/wt"), ActivityKind::Git)]);
+        assert_eq!(kinds("/repo/.git/worktrees/wt/HEAD"), vec![(p("/wt"), ActivityKind::Git)]);
+        assert_eq!(kinds("/repo/.git/refs/heads/feat"), vec![(p("/wt"), ActivityKind::Git)]);
+        assert_eq!(kinds("/repo/.git/refs/heads/main"), vec![(p("/repo"), ActivityKind::Git)]);
+        assert!(kinds("/repo/.git/worktrees/wt/logs/HEAD").is_empty());
+        // packed-refs may move either branch.
+        assert_eq!(
+            kinds("/repo/.git/packed-refs"),
+            vec![(p("/repo"), ActivityKind::Git), (p("/wt"), ActivityKind::Git)]
+        );
+    }
+
+    #[test]
+    fn nested_branch_names_match_their_ref_path() {
+        let watched = vec![p("/repo")];
+        let layouts = vec![main_repo("/repo")];
+        let on_feat = |_: &Path| Some("feat/x".to_string());
+        assert_eq!(
+            classify_activity(Path::new("/repo/.git/refs/heads/feat/x"), &watched, &layouts, &on_feat),
+            vec![(p("/repo"), ActivityKind::Git)]
+        );
+    }
+
+    #[test]
+    fn git_dirs_outside_every_root_are_watched_once() {
+        // Only the linked worktree is watched: its git dir lives in the main repo's `.git`.
+        let layouts = vec![linked("/wt", "/repo/.git", "wt")];
+        assert_eq!(extra_git_watches(&[p("/wt")], &layouts), vec![p("/repo/.git")]);
+        // The main repo is watched too, so its `.git` is already covered.
+        let layouts = vec![main_repo("/repo"), linked("/wt", "/repo/.git", "wt")];
+        assert!(extra_git_watches(&[p("/repo"), p("/wt")], &layouts).is_empty());
     }
 
     #[test]
@@ -374,13 +646,10 @@ mod tests {
         // worktree only, not for the parent repo too.
         let watched = vec![p("/repo"), p("/repo/.worktrees/feature")];
         assert_eq!(
-            classify_activity(Path::new("/repo/.worktrees/feature/src/lib.rs"), &watched),
+            worktree_of("/repo/.worktrees/feature/src/lib.rs", &watched),
             Some(p("/repo/.worktrees/feature"))
         );
-        assert_eq!(
-            classify_activity(Path::new("/repo/src/main.rs"), &watched),
-            Some(p("/repo"))
-        );
+        assert_eq!(worktree_of("/repo/src/main.rs", &watched), Some(p("/repo")));
     }
 
     #[test]
@@ -397,19 +666,39 @@ mod tests {
             "/repo/.next/cache/x",
             "/repo/build/out.bin",
         ] {
-            assert_eq!(classify_activity(Path::new(path), &watched), None, "{path}");
+            assert_eq!(worktree_of(path, &watched), None, "{path}");
         }
         // A source file still counts.
-        assert_eq!(
-            classify_activity(Path::new("/repo/src/main.rs"), &watched),
-            Some(p("/repo"))
-        );
+        assert_eq!(worktree_of("/repo/src/main.rs", &watched), Some(p("/repo")));
     }
 
     #[test]
     fn classify_returns_none_outside_every_watched_root() {
         let watched = vec![p("/repo")];
-        assert_eq!(classify_activity(Path::new("/other/file.txt"), &watched), None);
+        assert_eq!(worktree_of("/other/file.txt", &watched), None);
+    }
+
+    #[test]
+    fn gitignored_files_do_not_count_but_tracked_ones_do() {
+        let dir = TempDir::new("ignore");
+        let root = dir.0.clone();
+        git(&root, &["init", "-q"]);
+        std::fs::write(root.join(".gitignore"), "__pycache__/\n.pytest_cache/\n*.log\n").unwrap();
+        std::fs::write(root.join("kept.log"), "tracked despite the rule").unwrap();
+        git(&root, &["add", "-f", ".gitignore", "kept.log"]);
+        std::fs::create_dir_all(root.join("pkg/__pycache__")).unwrap();
+        std::fs::write(root.join("pkg/__pycache__/m.pyc"), "x").unwrap();
+
+        let mut cache = IgnoreCache::default();
+        assert!(cache.is_ignored(&root, &root.join("pkg/__pycache__/m.pyc")));
+        assert!(cache.is_ignored(&root, &root.join("pkg/__pycache__")));
+        assert!(cache.is_ignored(&root, &root.join(".pytest_cache/v/cache/nodeids")));
+        assert!(cache.is_ignored(&root, &root.join("run.log")));
+        assert!(!cache.is_ignored(&root, &root.join("kept.log")), "tracked files still count");
+        assert!(!cache.is_ignored(&root, &root.join("pkg/m.py")));
+        // Not a repository: nothing is ignored.
+        let plain = TempDir::new("ignore-plain");
+        assert!(!cache.is_ignored(&plain.0, &plain.0.join("x.log")));
     }
 
     #[test]
@@ -475,69 +764,158 @@ mod tests {
 
     // -- Integration tests against the real OS watcher (notify) --------
 
-    fn unique_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "gitbaro-activity-{}-{}-{}",
-            name,
-            std::process::id(),
-            std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    /// A temp dir removed on drop, also when the test panics.
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new(name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!(
+                "gitbaro-activity-{}-{}-{}",
+                name,
+                std::process::id(),
+                std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+            ));
+            std::fs::create_dir_all(&dir).unwrap();
+            TempDir(dir)
+        }
     }
 
-    /// Waits until `rx` receives an event whose path is `expected` (canonical
-    /// comparison, since the callback echoes the caller's original path), up
-    /// to a few seconds.
-    fn wait_for_activity(rx: &mpsc::Receiver<PathBuf>, expected: &Path, timeout: Duration) -> bool {
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .output()
+            .expect("git 실행 실패");
+        assert!(out.status.success(), "git {:?}: {}", args, String::from_utf8_lossy(&out.stderr));
+    }
+
+    /// Waits until `rx` receives an event for `expected` of `kind` (the
+    /// callback echoes the caller's original path), up to `timeout`. Returns
+    /// every event received before it, or `None` on timeout.
+    fn wait_for_activity(
+        rx: &mpsc::Receiver<(PathBuf, ActivityKind)>,
+        expected: &Path,
+        kind: ActivityKind,
+        timeout: Duration,
+    ) -> Option<Vec<(PathBuf, ActivityKind)>> {
         let deadline = Instant::now() + timeout;
+        let mut before = Vec::new();
         while let Some(left) = deadline.checked_duration_since(Instant::now()) {
             match rx.recv_timeout(left) {
-                Ok(path) if path == expected => return true,
-                Ok(_) => continue,
-                Err(_) => return false,
+                Ok((path, k)) if path == expected && k == kind => return Some(before),
+                Ok(other) => before.push(other),
+                Err(_) => return None,
             }
         }
-        false
+        None
+    }
+
+    fn recording_watcher() -> (ActivityWatcher, mpsc::Receiver<(PathBuf, ActivityKind)>) {
+        let (tx, rx) = mpsc::channel();
+        let watcher = ActivityWatcher::new(move |path, _at, kind| {
+            let _ = tx.send((path, kind));
+        })
+        .unwrap();
+        (watcher, rx)
     }
 
     /// `set_targets` must not just compute the diff — it has to actually call
     /// `watch`/`unwatch` on the OS watcher, so added paths start reporting
     /// activity and removed paths stop.
+    ///
+    /// The "no events after unwatch" check does not wait a fixed time: after
+    /// writing into the removed path it writes into the still-watched one and
+    /// waits for that event. Events arrive in order on one channel, so an
+    /// event for the removed path would have arrived before it.
     #[test]
     fn set_targets_watches_added_paths_and_unwatches_removed_paths_on_the_real_watcher() {
-        let a = unique_dir("added");
-        let b = unique_dir("removed-later");
-        let (tx, rx) = mpsc::channel::<PathBuf>();
-        let watcher = ActivityWatcher::new(move |path, _at| {
-            let _ = tx.send(path);
-        })
-        .unwrap();
+        let a = TempDir::new("added");
+        let b = TempDir::new("removed-later");
+        let (a, b) = (&a.0, &b.0);
+        let (watcher, rx) = recording_watcher();
 
         // Register both; original (non-canonical-looking) spelling is what
         // must come back in `watched` and in the emitted event.
         let resolved = watcher.set_targets(&[a.clone(), b.clone()]);
-        assert!(resolved.watched.contains(&a));
-        assert!(resolved.watched.contains(&b));
+        assert!(resolved.watched.contains(a));
+        assert!(resolved.watched.contains(b));
         std::thread::sleep(Duration::from_millis(300));
 
         std::fs::write(a.join("file.txt"), "hello").unwrap();
-        assert!(wait_for_activity(&rx, &a, Duration::from_secs(5)), "expected activity under {a:?}");
+        assert!(
+            wait_for_activity(&rx, a, ActivityKind::WorkTree, Duration::from_secs(5)).is_some(),
+            "expected activity under {a:?}"
+        );
 
         // Drop `b` from the target list — edits inside it must stop being
         // reported once unwatch() has actually run.
-        let resolved = watcher.set_targets(std::slice::from_ref(&a));
-        assert!(!resolved.watched.contains(&b));
+        let resolved = watcher.set_targets(std::slice::from_ref(a));
+        assert!(!resolved.watched.contains(b));
         std::thread::sleep(Duration::from_millis(300));
 
         std::fs::write(b.join("file.txt"), "hello").unwrap();
+        std::fs::write(a.join("sentinel.txt"), "after b").unwrap();
+        // `a` emitted less than 2s ago, so its sentinel event is flushed at the window's end.
+        let before = wait_for_activity(&rx, a, ActivityKind::WorkTree, Duration::from_secs(8))
+            .expect("the sentinel write under `a` must be reported");
         assert!(
-            !wait_for_activity(&rx, &b, Duration::from_millis(800)),
-            "expected no activity under {b:?} after it was unwatched"
+            !before.iter().any(|(path, _)| path == b),
+            "expected no activity under {b:?} after it was unwatched: {before:?}"
         );
+    }
 
-        let _ = std::fs::remove_dir_all(&a);
-        let _ = std::fs::remove_dir_all(&b);
+    /// A commit changes nothing in the working tree, only git metadata. It
+    /// must still be reported (as `git`), or the review screen keeps showing
+    /// the committed files as uncommitted until the next poll.
+    #[test]
+    fn a_commit_without_file_changes_is_reported_as_git_activity() {
+        let dir = TempDir::new("commit");
+        let root = &dir.0;
+        git(root, &["init", "-q", "-b", "main"]);
+        git(root, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        let (watcher, rx) = recording_watcher();
+        watcher.set_targets(std::slice::from_ref(root));
+        std::thread::sleep(Duration::from_millis(300));
+
+        git(root, &["commit", "-q", "--allow-empty", "-m", "second"]);
+        let before = wait_for_activity(&rx, root, ActivityKind::Git, Duration::from_secs(5))
+            .expect("expected git activity for the commit");
+        assert!(before.iter().all(|(_, k)| *k == ActivityKind::Git), "no working-tree event: {before:?}");
+    }
+
+    /// A linked worktree keeps its HEAD and index under the main repository's
+    /// `.git`, outside the watched folder. Its commits must be reported too.
+    #[test]
+    fn a_commit_in_a_linked_worktree_is_reported_for_that_worktree() {
+        let dir = TempDir::new("linked");
+        let main = dir.0.join("main");
+        let wt = dir.0.join("wt");
+        std::fs::create_dir_all(&main).unwrap();
+        git(&main, &["init", "-q", "-b", "main"]);
+        git(&main, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        git(&main, &["worktree", "add", "-q", "-b", "feat", wt.to_str().unwrap()]);
+        let (watcher, rx) = recording_watcher();
+        let resolved = watcher.set_targets(std::slice::from_ref(&wt));
+        assert_eq!(resolved.watched, vec![wt.clone()]);
+        std::thread::sleep(Duration::from_millis(300));
+
+        git(&wt, &["commit", "-q", "--allow-empty", "-m", "in the worktree"]);
+        assert!(
+            wait_for_activity(&rx, &wt, ActivityKind::Git, Duration::from_secs(5)).is_some(),
+            "expected git activity for the linked worktree"
+        );
     }
 
     /// A path that does not exist (or was removed) fails `notify::Watcher::
@@ -553,7 +931,7 @@ mod tests {
         ));
         let _ = std::fs::remove_dir_all(&missing); // make sure it does not exist
 
-        let watcher = ActivityWatcher::new(|_, _| {}).unwrap();
+        let watcher = ActivityWatcher::new(|_, _, _| {}).unwrap();
         let resolved = watcher.set_targets(std::slice::from_ref(&missing));
 
         assert!(!resolved.watched.contains(&missing), "a path that fails to watch must not be reported as watched");
@@ -566,11 +944,13 @@ mod tests {
     /// for whether "지금 바뀌는 곳" needs to fall back to polling-only.
     #[test]
     fn measures_the_cost_of_watching_the_full_40_path_cap() {
-        let dirs: Vec<PathBuf> = (0..MAX_ACTIVITY_TARGETS).map(|i| unique_dir(&format!("cap{i}"))).collect();
-        let watcher = ActivityWatcher::new(|_, _| {}).unwrap();
+        // Removed on drop, also when an assertion below fails.
+        let dirs: Vec<TempDir> = (0..MAX_ACTIVITY_TARGETS).map(|i| TempDir::new(&format!("cap{i}"))).collect();
+        let paths: Vec<PathBuf> = dirs.iter().map(|d| d.0.clone()).collect();
+        let watcher = ActivityWatcher::new(|_, _, _| {}).unwrap();
 
         let start = Instant::now();
-        let resolved = watcher.set_targets(&dirs);
+        let resolved = watcher.set_targets(&paths);
         let elapsed = start.elapsed();
 
         assert_eq!(resolved.watched.len(), MAX_ACTIVITY_TARGETS);
@@ -591,9 +971,5 @@ mod tests {
             "[activity bench] set_targets() for {} paths (initial registration, cold) took {:?}",
             MAX_ACTIVITY_TARGETS, elapsed
         );
-
-        for dir in &dirs {
-            let _ = std::fs::remove_dir_all(dir);
-        }
     }
 }

@@ -65,7 +65,7 @@ fn watch_targets(repo_path: &Path) -> WatchTargets {
 /// The common dir of a linked worktree is named by the `commondir` file in its
 /// git dir (relative to it). A regular repo has none; its git dir is the common
 /// dir. (git2 0.19 does not expose `git_repository_commondir`.)
-fn common_dir(git_dir: &Path) -> PathBuf {
+pub(crate) fn common_dir(git_dir: &Path) -> PathBuf {
     std::fs::read_to_string(git_dir.join("commondir"))
         .map(|rel| git_dir.join(rel.trim()))
         .unwrap_or_else(|_| git_dir.to_path_buf())
