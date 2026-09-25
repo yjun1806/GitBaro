@@ -68,4 +68,22 @@ describe("renderPrMarkdown", () => {
     expect(el.querySelector('a[href="mailto:a@example.com"]')).not.toBeNull();
     expect(el.querySelector('img[src="https://example.com/logo.png"]')).not.toBeNull();
   });
+
+  it("turns images the app cannot load into a link to GitHub", () => {
+    // github.com/user-attachments는 CSP img-src 밖이고, 비공개 이미지는 쿠키가 있어야 보인다.
+    // 깨진 그림 대신 GitHub에서 보라는 링크를 둔다. CSP가 허용하는 호스트의 그림은 그대로 둔다.
+    const div = document.createElement("div");
+    div.innerHTML = renderPrMarkdown(
+      [
+        '<img alt="shot" src="https://github.com/user-attachments/assets/abc">',
+        "![x](https://example.com/x.png)",
+        "![ok](https://raw.githubusercontent.com/acme/app/main/a.png)",
+      ].join("\n\n"),
+      { href: "https://github.com/acme/app/pull/42", label: "Image · View on GitHub" },
+    );
+    const imgs = [...div.querySelectorAll("img")].map((img) => img.getAttribute("src"));
+    expect(imgs).toEqual(["https://raw.githubusercontent.com/acme/app/main/a.png"]);
+    const links = [...div.querySelectorAll('a[href="https://github.com/acme/app/pull/42"]')];
+    expect(links.map((a) => a.textContent)).toEqual(["Image · View on GitHub", "Image · View on GitHub"]);
+  });
 });

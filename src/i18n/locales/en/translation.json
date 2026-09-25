@@ -1303,6 +1303,7 @@
     "refresh": "Refresh from GitHub",
     "openListOnGitHub": "Open pull requests on GitHub",
     "openOnGitHub": "Open on GitHub",
+    "imageOnGitHub": "Image · View on GitHub",
     "moreOnGitHub": "See the rest on GitHub",
     "retry": "Try again",
     "noAccount": "Assign a GitHub account to this repository to see its pull requests",
