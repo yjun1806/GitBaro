@@ -92,6 +92,13 @@ export function gitHubBranchUrl(repoUrl: string, branch: string, isRemote = fals
   return `${repoUrl}/tree/${name.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+/**
+ * 바뀐 파일 수. 일부만 스테이지한 파일은 스테이지된 줄과 안 된 줄로 두 번 나오므로 경로로 센다.
+ */
+export function countChangedFiles(entries: readonly { path: string }[]): number {
+  return new Set(entries.map((e) => e.path)).size;
+}
+
 /** 저장소 경로와 저장소 안 상대 경로를 잇는다. */
 export function joinRepoPath(repoPath: string, relativePath: string): string {
   return `${repoPath.replace(/\/+$/, "")}/${relativePath.replace(/^\/+/, "")}`;

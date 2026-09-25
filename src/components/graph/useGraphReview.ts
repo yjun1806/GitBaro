@@ -6,6 +6,7 @@ import { useReviewStatus } from "@/hooks/useReviewStatus";
 import { useCurrentBranch } from "@/hooks/useCurrentBranch";
 import { useRepoSyncStatuses, useStatus } from "@/api/queries";
 import { syncStatusPaths } from "@/components/sidebar/tree-model";
+import { countChangedFiles } from "@/lib/utils";
 import { normalizePath, orderWipRows, type GraphWip } from "./graph-model";
 
 /** 그래프가 보이는 워크트리를 활동 감시 대상으로 더할 때 쓰는 키. */
@@ -49,7 +50,8 @@ export function useGraphReview(): GraphReview {
   const { data: syncByPath } = useRepoSyncStatuses(statusPaths);
 
   const currentKey = activeRepoPath ? normalizePath(activeRepoPath) : null;
-  const currentCount = statusEntries ? statusEntries.length : null;
+  // 일부만 스테이지한 파일이 두 줄로 나오므로 줄이 아니라 파일 수를 센다.
+  const currentCount = statusEntries ? countChangedFiles(statusEntries) : null;
 
   const wips = useMemo(() => {
     if (!activeRepoPath) return [];

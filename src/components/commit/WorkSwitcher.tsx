@@ -4,7 +4,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useUIStore } from "@/stores/ui";
 import { useStatus } from "@/api/queries";
-import { cn } from "@/lib/utils";
+import { cn, countChangedFiles } from "@/lib/utils";
 import { useHistoryViewStore, viewTargetFor } from "@/stores/history-view";
 import { useOpenWorkingChanges } from "./useOpenWorkingChanges";
 
@@ -106,7 +106,7 @@ export function RepoWorkSwitcher({ mode }: { mode: WorkMode }) {
   // 브랜치 목록을 읽지 않으려고 보기 상태를 바로 읽는다. 체크아웃한 브랜치를 보는 보기는 그래프 쪽이 곧 지운다.
   const target = useHistoryViewStore((s) => viewTargetFor(s, activeRepoPath));
   const openWorking = useOpenWorkingChanges();
-  const workingCount = status ? new Set(status.map((e) => e.path)).size : null;
+  const workingCount = status ? countChangedFiles(status) : null;
   return (
     <WorkSwitcher
       mode={mode}
