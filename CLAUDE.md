@@ -87,7 +87,7 @@ GitBaro/
 ├── package.json
 ├── tsconfig.json
 ├── commitlint.config.cjs          # Conventional Commits enforcement
-└── .husky/                        # Git hooks (pre-commit, commit-msg via commitlint)
+└── .husky/                        # Git hooks (pre-commit: typecheck + lint, commit-msg: commitlint)
 ```
 
 ## Git Implementation Rules (CRITICAL)
@@ -122,10 +122,12 @@ The package manager is **pnpm** (`pnpm-lock.yaml`).
 # Frontend
 pnpm dev                 # Vite dev server (port 1420)
 pnpm build               # tsc + vite build
-pnpm lint                # ESLint (src/**/*.{ts,tsx})
+pnpm lint                # ESLint flat config (eslint.config.js); errors fail, warnings don't
 pnpm typecheck           # tsc --noEmit
 pnpm test                # vitest run
 pnpm test:watch          # vitest watch mode
+
+# The pre-commit hook runs `pnpm typecheck && pnpm lint`; run `pnpm test` yourself before pushing.
 
 # Tauri (full app)
 pnpm tauri dev           # Dev mode with hot reload
