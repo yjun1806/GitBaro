@@ -66,6 +66,8 @@ function renderTree() {
 }
 
 const item = (name: string) => screen.getByRole("treeitem", { name });
+/** 계정 머리글 줄과 그 옆(트리 항목 밖)에 놓인 정렬·새 워크스페이스 버튼. */
+const header = (name: string) => within(item(name).parentElement as HTMLElement);
 const suggestionTitle = () => i18n.t("workspace.suggestion.title", { name: "xames", count: 3 });
 
 beforeEach(async () => {
@@ -164,7 +166,7 @@ describe("workspace create / rename / delete", () => {
     useWorkspaceStore.setState({ dismissedSuggestions: ["acme/xames"] });
     renderTree();
 
-    fireEvent.click(within(item("acme")).getByRole("button", { name: "New workspace" }));
+    fireEvent.click(header("acme").getByRole("button", { name: "New workspace" }));
     const dialog = screen.getByRole("dialog", { name: "New workspace in acme" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
     expect(within(dialog).getByRole("alert")).toHaveTextContent("Enter a name");
@@ -281,17 +283,17 @@ describe("account whose owner is not known yet", () => {
     useRepositoryStore.setState({ repos: [...repos, scratch] });
     renderTree();
 
-    const other = item("Other");
-    expect(within(other).queryByRole("button", { name: "New workspace" })).not.toBeInTheDocument();
-    expect(within(other).queryByRole("button", { name: /Sort:/ })).not.toBeInTheDocument();
-    expect(within(item("acme")).getByRole("button", { name: "New workspace" })).toBeInTheDocument();
+    const other = header("Other");
+    expect(other.queryByRole("button", { name: "New workspace" })).not.toBeInTheDocument();
+    expect(other.queryByRole("button", { name: /Sort:/ })).not.toBeInTheDocument();
+    expect(header("acme").getByRole("button", { name: "New workspace" })).toBeInTheDocument();
   });
 });
 
 describe("sort menu", () => {
   it("shows the current mode and switches the account's sort mode", () => {
     renderTree();
-    const button = within(item("acme")).getByRole("button", { name: /Sort: Custom order/ });
+    const button = header("acme").getByRole("button", { name: /Sort: Custom order/ });
     fireEvent.click(button);
 
     const menu = screen.getByRole("menu", { name: "Sort" });
@@ -307,14 +309,14 @@ describe("sort menu", () => {
     fireEvent.click(within(menu).getByRole("menuitem", { name: "By name" }));
     expect(useWorkspaceStore.getState().sortModeByAccount.acme).toBe("name");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    expect(within(item("acme")).getByRole("button", { name: /Sort: By name/ })).toBeInTheDocument();
+    expect(header("acme").getByRole("button", { name: /Sort: By name/ })).toBeInTheDocument();
     // 메뉴를 여닫아도 계정 행은 접히지 않는다.
     expect(item("acme")).toHaveAttribute("aria-expanded", "true");
   });
 
   it("supports the menu keyboard: arrows move focus and Escape closes", () => {
     renderTree();
-    fireEvent.click(within(item("acme")).getByRole("button", { name: /Sort:/ }));
+    fireEvent.click(header("acme").getByRole("button", { name: /Sort:/ }));
     const menu = screen.getByRole("menu", { name: "Sort" });
     const items = within(menu).getAllByRole("menuitem");
     expect(items[0]).toHaveFocus();
@@ -327,3 +329,43 @@ describe("sort menu", () => {
     expect(useWorkspaceStore.getState().sortModeByAccount.acme).toBeUndefined();
   });
 });
+
+describe("tree keyboard", () => {
+  const items = () => screen.getAllByRole("treeitem");
+
+  it("puts one tree row in the Tab order and moves with arrows, Home/End and ←/→", () => {
+    renderTree();
+    expect(items().filter((el) => el.tabIndex === 0)).toHaveLength(1);
+
+    const account = item("acme");
+    act(() => account.focus());
+    fireEvent.keyDown(account, { key: "ArrowDown" });
+    const second = items()[1];
+    expect(document.activeElement).toBe(second);
+    // Tab 한 번에 닿는 줄은 초점을 받은 줄 하나뿐이다.
+    expect(items().filter((el) => el.tabIndex === 0)).toEqual([second]);
+
+    fireEvent.keyDown(second, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(account);
+    fireEvent.keyDown(account, { key: "End" });
+    expect(document.activeElement).toBe(items()[items().length - 1]);
+    fireEvent.keyDown(document.activeElement!, { key: "Home" });
+    expect(document.activeElement).toBe(account);
+
+    // → on an expanded row goes to its first child; ← on a child goes back to its parent.
+    fireEvent.keyDown(account, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(second);
+    expect(Number(second.getAttribute("aria-level"))).toBeGreaterThan(1);
+    const child = items().find((el) => Number(el.getAttribute("aria-level")) === 3);
+    expect(child).toBeDefined();
+    act(() => child!.focus());
+    fireEvent.keyDown(child!, { key: "ArrowLeft" });
+    expect(Number((document.activeElement as HTMLElement).getAttribute("aria-level"))).toBe(2);
+  });
+
+  it("keeps the account's sort and new-workspace buttons outside the tree row", () => {
+    renderTree();
+    expect(within(item("acme")).queryByRole("button")).toBeNull();
+  });
+});
+

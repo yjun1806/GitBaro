@@ -117,7 +117,8 @@ export function TreeRowFrame({
       aria-expanded={expanded}
       aria-selected={selected}
       data-tree-path={treePath}
-      tabIndex={0}
+      // 트리 안에서 Tab이 닿는 줄은 하나뿐이다(roving tabindex). 어느 줄을 0으로 둘지는 `useTreeKeyboard`가 정한다.
+      tabIndex={-1}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       onContextMenu={(e) => {
