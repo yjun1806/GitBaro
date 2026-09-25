@@ -17,3 +17,17 @@ export const HEADER_HEIGHT_CLASS = "h-[44px]";
  * not the toolbar.
  */
 export const TRAFFIC_LIGHT_INSET_PX = 78;
+
+/**
+ * Width of the sidebar resize handle between the sidebar and the main column.
+ * It is an invisible, frame-colored grab area, so it reads as part of the
+ * sidebar's right gutter — see `SIDEBAR_GUTTER_PX`.
+ */
+export const SIDEBAR_HANDLE_WIDTH = 6;
+
+/**
+ * Sidebar content gutter (left and right). When the pinned sidebar has the
+ * resize handle on its right, the content's right padding is reduced by the
+ * handle width so both gutters look the same.
+ */
+export const SIDEBAR_GUTTER_PX = 10;

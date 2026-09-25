@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { PanelLeft, Loader2, ListTree, Check, HardDrive } from "lucide-react";
 import { useUIStore, type RailMode } from "@/stores/ui";
@@ -15,7 +15,12 @@ import {
   useSidebarWatchPaths,
 } from "@/components/sidebar/useSidebarTreeData";
 import { avatarColor, avatarInitial } from "@/lib/avatar-color";
-import { HEADER_HEIGHT_CLASS, TRAFFIC_LIGHT_INSET_PX } from "@/lib/layout-tokens";
+import {
+  HEADER_HEIGHT_CLASS,
+  SIDEBAR_GUTTER_PX,
+  SIDEBAR_HANDLE_WIDTH,
+  TRAFFIC_LIGHT_INSET_PX,
+} from "@/lib/layout-tokens";
 import { cn } from "@/lib/utils";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
 import { TOOLBAR_ICON, toolbarButtonClass } from "@/components/toolbar/toolbar-button";
@@ -302,7 +307,15 @@ export function RepoRail({ expandedWidth = RAIL_EXPANDED_WIDTH }: RepoRailProps)
         </div>
 
         {isExpanded ? (
-          <div className="flex-1 min-h-0 px-2.5 pt-2.5 pb-1">
+          // 고정 사이드바는 오른쪽에 폭 조절 손잡이(창 틀 색)가 붙어 오른쪽 여백처럼 보인다.
+          // 그 폭만큼 오른쪽 안쪽 여백을 줄여 좌우 여백을 같게 맞춘다. 스크롤 칸도 같은 값을 쓴다.
+          <div
+            className="flex-1 min-h-0 pt-2.5 pb-1 pl-(--sb-gutter-l) pr-(--sb-gutter-r)"
+            style={{
+              "--sb-gutter-l": `${SIDEBAR_GUTTER_PX}px`,
+              "--sb-gutter-r": `${SIDEBAR_GUTTER_PX - (railMode === "expanded" ? SIDEBAR_HANDLE_WIDTH : 0)}px`,
+            } as CSSProperties}
+          >
             <RepoTree
               data={treeData}
               fetchingPath={fetchingPath}

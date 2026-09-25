@@ -8,13 +8,13 @@ export const INDENT_PX = 8;
 /** 행 좌우 안쪽 여백(px). 양쪽이 같다. 선택 막대(3px)는 이 여백 안에 그려진다. */
 export const ROW_PAD_X = 8;
 
-/** 사이드바에서 선택된 줄의 왼쪽 막대(브랜드 색). 부모는 `relative`여야 한다. 카드 안 행 안쪽에 그린다. */
+/** 사이드바에서 선택된 줄의 왼쪽 막대(브랜드 색). 부모는 `relative`여야 한다. 행 채움 안쪽에 둥근 막대로 그려 둥근 모서리 밖으로 삐져나오지 않게 한다. */
 export function SelectionBar() {
   return (
     <span
       aria-hidden="true"
       data-testid="selection-bar"
-      className="absolute left-0 top-[5px] bottom-[5px] w-[3px] rounded-r-[2px] bg-(--acc)"
+      className="absolute left-[3px] top-[7px] bottom-[7px] w-[3px] rounded-full bg-(--acc)"
     />
   );
 }
