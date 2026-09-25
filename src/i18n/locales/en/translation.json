@@ -141,7 +141,6 @@
     "create": "New Branch",
     "name": "Branch name",
     "from": "Create from",
-    "delete": "Delete Branch",
     "deleteConfirm": "Are you sure you want to delete {{name}}?",
     "deleteUnmergedWarning": "This branch has not been fully merged. Unmerged commits may be lost.",
     "local": "Local",
@@ -269,9 +268,7 @@
     "selectRepo": "Select a repository"
   },
   "account": {
-    "switch": "Switch Account",
     "add": "Add Another Account",
-    "manage": "Manage Accounts",
     "remove": "Remove Account",
     "removeConfirm": "Remove {{username}} from GitBaro?",
     "logout": "Log Out",
@@ -315,7 +312,6 @@
     "create": "Create New Repository",
     "open": "Open Repository",
     "noRepos": "No repositories",
-    "search": "Search repositories",
     "addRepository": "Add Repository",
     "addLocal": "Add Local Repository",
     "cloneRepo": "Clone Repository",
@@ -525,11 +521,6 @@
     "ignored": "Ignored",
     "conflicted": "Conflicted"
   },
-  "pr": {
-    "open": "Open",
-    "merged": "Merged",
-    "closed": "Closed"
-  },
   "error": {
     "generic": "Something went wrong",
     "network": "Network connection lost",
@@ -558,11 +549,6 @@
     "failedToStop": "Failed to stop preview: {{error}}",
     "disabledCommit": "Commit disabled during preview",
     "disabledSync": "Sync disabled during preview"
-  },
-  "conflict": {
-    "title": "Merge Conflicts",
-    "openTool": "Open in External Merge Tool",
-    "files": "{{count}} conflicted files"
   },
   "mergeRecovery": {
     "mergeInProgress": "Merge in progress",
@@ -787,7 +773,6 @@
     "graphTab": "Commit graph",
     "stashTab": "Stash",
     "uncommitted": "Uncommitted changes",
-    "uncommittedCount": "Uncommitted changes ({{count}})",
     "noRepoTitle": "No repository selected",
     "noRepoDescription": "Pick a repository in the sidebar, or add one.",
     "openRepoList": "All repositories",
@@ -909,7 +894,6 @@
     "worktree": "Worktree",
     "fileCount_one": "{{count}} file",
     "fileCount_other": "{{count}} files",
-    "wipWorktreeLabel": "Uncommitted changes in {{name}} ({{count}})",
     "seenHere": "Seen up to here",
     "seenHereAt": "Seen up to here · {{time}}",
     "seenToday": "today {{time}}",
@@ -959,17 +943,7 @@
     "changedFiles_other": "Changed files {{count}}"
   },
   "activeScope": {
-    "workspaceDescription_one": "{{count}} repository. Pick a repository in the sidebar to see its graph.",
-    "workspaceDescription_other": "{{count}} repositories. Pick a repository in the sidebar to see its graph.",
-    "pickRepo": "Pick a repository",
-    "actions": {
-      "fetch": "Fetch",
-      "pull": "Pull",
-      "push": "Push",
-      "branch": "Branch",
-      "merge": "Merge",
-      "stash": "Stash"
-    }
+    "pickRepo": "Pick a repository"
   },
   "review": {
     "subtitle_one": "Workspace · {{account}} · showing {{shown}} of {{count}} repository",
@@ -979,8 +953,6 @@
     "hideQuiet": "Hide quiet repositories",
     "hiddenHint": "Repositories on their default branch with no new commits and no uncommitted changes are hidden",
     "noCommits": "No commits since these repositories branched off their default branch",
-    "wipLabel_one": "Uncommitted changes in {{repo}} ({{count}} file)",
-    "wipLabel_other": "Uncommitted changes in {{repo}} ({{count}} files)",
     "baseRow": "Where each repository branched off its default branch",
     "repoError": "Couldn't read {{repo}}: {{error}}",
     "noDefaultBranch": "No default branch found, so recent commits are shown instead",
@@ -991,8 +963,6 @@
     "selectTitle": "Pick a commit or uncommitted changes",
     "selectHint": "Its files and diff show here.",
     "openToCommit": "Open this working tree",
-    "noChanges": "No uncommitted changes",
-    "staged": "staged",
     "allQuiet_one": "{{count}} quiet repository is hidden: it is on its default branch with no new commits and no uncommitted changes. Use Show all to see it.",
     "allQuiet_other": "All {{count}} repositories are quiet and hidden: they are on their default branch with no new commits and no uncommitted changes. Use Show all to see them.",
     "worktreeNew_one": "{{count}} new commit in another worktree. Open the repository to review it.",

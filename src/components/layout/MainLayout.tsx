@@ -7,7 +7,7 @@ import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import "@/stores/selection"; // ensure cross-store subscriptions are registered
 import { RepoRail } from "./RepoRail";
 import { MainColumn } from "./MainColumn";
-import { SIDEBAR_HANDLE_WIDTH } from "./sidebar-layout";
+import { SIDEBAR_HANDLE_WIDTH } from "@/lib/layout-tokens";
 import { HEADER_HEIGHT_PX } from "@/lib/layout-tokens";
 import { StatusBar } from "./StatusBar";
 import { SplitHandle } from "./SplitHandle";

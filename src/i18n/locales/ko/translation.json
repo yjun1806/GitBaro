@@ -141,7 +141,6 @@
     "create": "새 Branch",
     "name": "Branch 이름",
     "from": "기준 Branch",
-    "delete": "Branch 삭제",
     "deleteConfirm": "{{name}} Branch를 삭제하시겠습니까?",
     "deleteUnmergedWarning": "이 브랜치는 아직 병합되지 않았습니다. 병합되지 않은 커밋이 유실될 수 있습니다.",
     "local": "Local",
@@ -269,9 +268,7 @@
     "selectRepo": "저장소를 선택하세요"
   },
   "account": {
-    "switch": "계정 전환",
     "add": "다른 계정 추가",
-    "manage": "계정 관리",
     "remove": "계정 제거",
     "removeConfirm": "GitBaro에서 {{username}}을 제거하시겠습니까?",
     "logout": "로그아웃",
@@ -315,7 +312,6 @@
     "create": "새 저장소 만들기",
     "open": "저장소 열기",
     "noRepos": "저장소 없음",
-    "search": "저장소 검색",
     "addRepository": "저장소 추가",
     "addLocal": "로컬 저장소 추가",
     "cloneRepo": "저장소 Clone",
@@ -525,11 +521,6 @@
     "ignored": "무시됨",
     "conflicted": "충돌"
   },
-  "pr": {
-    "open": "Open",
-    "merged": "Merged",
-    "closed": "Closed"
-  },
   "error": {
     "generic": "오류가 발생했습니다",
     "network": "네트워크 연결이 끊어졌습니다",
@@ -558,11 +549,6 @@
     "failedToStop": "미리보기 중단 실패: {{error}}",
     "disabledCommit": "미리보기 중에는 Commit할 수 없습니다",
     "disabledSync": "미리보기 중에는 동기화할 수 없습니다"
-  },
-  "conflict": {
-    "title": "Merge 충돌",
-    "openTool": "외부 Merge 도구에서 열기",
-    "files": "{{count}}개의 충돌 파일"
   },
   "mergeRecovery": {
     "mergeInProgress": "Merge 진행 중",
@@ -787,7 +773,6 @@
     "graphTab": "커밋 그래프",
     "stashTab": "스태시",
     "uncommitted": "커밋 안 한 변경",
-    "uncommittedCount": "커밋 안 한 변경 ({{count}})",
     "noRepoTitle": "고른 저장소가 없어요",
     "noRepoDescription": "사이드바에서 저장소를 고르거나 새로 추가하세요.",
     "openRepoList": "모든 저장소",
@@ -908,7 +893,6 @@
     "unpushed": "아직 push 안 함",
     "worktree": "워크트리",
     "fileCount_other": "파일 {{count}}",
-    "wipWorktreeLabel": "{{name}}의 커밋 안 한 변경 ({{count}})",
     "seenHere": "여기까지 확인함",
     "seenHereAt": "여기까지 확인함 · {{time}}",
     "seenToday": "오늘 {{time}}",
@@ -957,17 +941,7 @@
     "changedFiles_other": "바뀐 파일 {{count}}"
   },
   "activeScope": {
-    "workspaceDescription_one": "저장소 {{count}}개. 사이드바에서 저장소를 고르면 그 저장소의 그래프를 봅니다.",
-    "workspaceDescription_other": "저장소 {{count}}개. 사이드바에서 저장소를 고르면 그 저장소의 그래프를 봅니다.",
-    "pickRepo": "저장소를 고르세요",
-    "actions": {
-      "fetch": "Fetch",
-      "pull": "Pull",
-      "push": "Push",
-      "branch": "브랜치",
-      "merge": "Merge",
-      "stash": "Stash"
-    }
+    "pickRepo": "저장소를 고르세요"
   },
   "review": {
     "subtitle_one": "워크스페이스 · {{account}} · 저장소 {{count}}개 중 {{shown}}개 표시",
@@ -977,8 +951,6 @@
     "hideQuiet": "조용한 저장소 숨기기",
     "hiddenHint": "기본 브랜치에 있고 새 커밋도, 커밋 안 한 변경도 없는 저장소는 숨겨요",
     "noCommits": "기본 브랜치에서 갈라진 뒤 커밋이 없어요",
-    "wipLabel_one": "{{repo}}의 커밋 안 한 변경 (파일 {{count}}개)",
-    "wipLabel_other": "{{repo}}의 커밋 안 한 변경 (파일 {{count}}개)",
     "baseRow": "각 저장소가 기본 브랜치에서 갈라진 지점",
     "repoError": "{{repo}}를 읽지 못했어요: {{error}}",
     "noDefaultBranch": "기본 브랜치를 찾지 못해 최근 커밋을 보여 줘요",
@@ -989,8 +961,6 @@
     "selectTitle": "커밋이나 커밋 안 한 변경을 고르세요",
     "selectHint": "고른 것의 파일과 diff가 여기에 나와요.",
     "openToCommit": "이 작업 트리 열기",
-    "noChanges": "커밋 안 한 변경이 없어요",
-    "staged": "스테이징됨",
     "allQuiet_one": "조용한 저장소 {{count}}개를 숨겼어요. 기본 브랜치에 있고 새 커밋도, 커밋 안 한 변경도 없어요. 「모두 보기」로 펼칠 수 있어요.",
     "allQuiet_other": "조용한 저장소 {{count}}개를 모두 숨겼어요. 기본 브랜치에 있고 새 커밋도, 커밋 안 한 변경도 없어요. 「모두 보기」로 펼칠 수 있어요.",
     "worktreeNew_one": "다른 워크트리에 새 커밋 {{count}}개가 있어요. 저장소를 열어 확인하세요.",
