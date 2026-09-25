@@ -40,7 +40,7 @@ import {
 } from "./tree-dnd";
 
 /** 끄는 행과 놓을 행이 dnd-kit에 싣는 값. */
-interface RowDragData {
+export interface RowDragData {
   kind: DragKind;
   label: string;
   /** 저장소 행의 아바타 색을 정하는 경로. */
@@ -132,12 +132,7 @@ export function TreeDndProvider({ tree, children }: TreeDndProviderProps) {
     setIndicator((prev) => (sameIndicator(prev, next) ? prev : next));
   };
 
-  const failureMessage = (reason: WorkspaceError) =>
-    reason === "account-mismatch"
-      ? t("sidebarDnd.otherAccount")
-      : reason === "account-pending"
-        ? t("sidebarDnd.accountPending")
-        : t("sidebarDnd.failed");
+  const failureMessage = (reason: WorkspaceError) => t(dropFailureKey(reason));
 
   const handleDragEnd = (event: DragEndEvent) => {
     const final = indicatorOf(tree, event);
@@ -154,7 +149,9 @@ export function TreeDndProvider({ tree, children }: TreeDndProviderProps) {
     }
   };
 
-  const blocked = indicator?.plan.type === "blocked";
+  // 놓을 수 없는 이유. 미리보기 문구는 놓았을 때 뜰 알림(`failureMessage`)과 같아야 한다.
+  const blockedReason: WorkspaceError | null =
+    indicator?.plan.type === "blocked" ? (indicator.plan.reason ?? "account-mismatch") : null;
 
   // 화면 읽기 프로그램 안내(dnd-kit 기본 문구는 영어뿐이라 번역한다).
   const labelOf = (data: unknown) => (data as RowDragData | undefined)?.label ?? "";
@@ -189,16 +186,27 @@ export function TreeDndProvider({ tree, children }: TreeDndProviderProps) {
           {children}
         </div>
         <DragOverlay dropAnimation={null}>
-          {active && <DragPreview data={active.data} blocked={blocked} />}
+          {active && <DragPreview data={active.data} blockedReason={blockedReason} />}
         </DragOverlay>
       </DndContext>
     </TreeDndContext.Provider>
   );
 }
 
-/** 끄는 동안 포인터를 따라다니는 행 미리보기(시안 `gen_d.py`의 `drag_demo`). */
-function DragPreview({ data, blocked }: { data: RowDragData; blocked: boolean }) {
+/** 놓지 못한 이유의 문구(번역 키). 끄는 동안의 미리보기와 놓은 뒤의 알림이 함께 쓴다. */
+function dropFailureKey(reason: WorkspaceError): string {
+  if (reason === "account-mismatch") return "sidebarDnd.otherAccount";
+  if (reason === "account-pending") return "sidebarDnd.accountPending";
+  return "sidebarDnd.failed";
+}
+
+/**
+ * 끄는 동안 포인터를 따라다니는 행 미리보기(시안 `gen_d.py`의 `drag_demo`).
+ * `blockedReason`이 있으면 그 이유(다른 계정, 계정을 아직 모름)를 아래에 적는다.
+ */
+export function DragPreview({ data, blockedReason }: { data: RowDragData; blockedReason: WorkspaceError | null }) {
   const { t } = useTranslation();
+  const blocked = blockedReason !== null;
   const color = data.path ? avatarColor(data.path) : null;
   return (
     <div
@@ -234,7 +242,7 @@ function DragPreview({ data, blocked }: { data: RowDragData; blocked: boolean })
       {blocked && (
         <span role="status" className="flex items-center gap-1 text-[10.5px] text-destructive">
           <Ban className="w-3 h-3 shrink-0" aria-hidden="true" />
-          {t("sidebarDnd.otherAccount")}
+          {t(dropFailureKey(blockedReason))}
         </span>
       )}
     </div>
