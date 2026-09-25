@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { useMenuKeyboard } from "@/hooks/useMenuKeyboard";
 import { ChevronDown, Loader2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
@@ -128,11 +129,19 @@ interface ActionMenuItem {
   onSelect: () => void;
 }
 
-/** ▾ 버튼이 여는 작은 메뉴. 고르면 닫는다. */
+/**
+ * ▾ 버튼이 여는 작은 메뉴. 고르면 닫는다. 다른 메뉴와 같이 ↑/↓/Home/End로 옮겨 다니고,
+ * Escape는 이 메뉴만 닫는다(뒤의 diff 크게 보기 등은 그대로 둔다).
+ */
 export function ActionMenu({ items, onClose }: { items: ActionMenuItem[]; onClose: () => void }) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const { onKeyDown } = useMenuKeyboard(menuRef, onClose);
   return (
     <div
+      ref={menuRef}
       role="menu"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
       className={cn("absolute right-0 top-full mt-2 w-64 py-1 rounded-xl z-50 overflow-hidden", FLOATING_SURFACE)}
     >
       {items.map((item) => (
