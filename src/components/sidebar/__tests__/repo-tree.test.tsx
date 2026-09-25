@@ -13,6 +13,7 @@ import type { BranchInfo, RepoInfo, RepoSyncStatus, WorktreeInfo } from "@/types
 vi.mock("@/api/commands", () => ({
   getWorktrees: vi.fn(),
   getBranches: vi.fn(),
+  removeWorktree: vi.fn(async () => {}),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), ask: vi.fn() }));
 
@@ -478,6 +479,19 @@ describe("RepoTree — watch targets", () => {
 describe("RepoTree — right-click menus", () => {
   const menuLabels = () => within(screen.getByRole("menu")).getAllByRole("menuitem").map((m) => m.textContent);
   const menuItem = (name: string) => within(screen.getByRole("menu")).getByRole("menuitem", { name });
+
+  it("forgets a removed worktree as the place to reopen its repository", async () => {
+    const { ask } = await import("@tauri-apps/plugin-dialog");
+    vi.mocked(ask).mockResolvedValue(true);
+    useRepositoryStore.setState({ activeWorktrees: { [API]: WT } });
+    renderTree(makeData(baseSignals));
+    fireEvent.click(item("api"));
+    // 클릭이 저장소를 열며 기억된 워크트리로 가지 않게, 다른 곳을 연 상태로 둔다.
+    useRepositoryStore.setState({ activeRepoPath: SOLO, activeRepo: repos[2], activeWorktrees: { [API]: WT } });
+    fireEvent.contextMenu(item("feat/login"));
+    fireEvent.click(menuItem("Remove worktree…"));
+    await waitFor(() => expect(useRepositoryStore.getState().activeWorktrees[API]).toBeUndefined());
+  });
 
   it("offers open, view, folder actions, copy and removal (last) on a worktree line", async () => {
     const { ask } = await import("@tauri-apps/plugin-dialog");
