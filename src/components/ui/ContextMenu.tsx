@@ -15,6 +15,17 @@ export interface ContextMenuSection {
   items: ContextMenuItem[];
 }
 
+/**
+ * 우클릭 메뉴를 띄울 자리. 키보드(메뉴 키, Shift+F10)로 열면 좌표가 0이라 누른 요소 아래에 띄운다.
+ */
+export function contextMenuPoint(e: React.MouseEvent): { x: number; y: number } {
+  if (e.clientX === 0 && e.clientY === 0 && e.currentTarget instanceof Element) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: rect.left + 16, y: rect.bottom };
+  }
+  return { x: e.clientX, y: e.clientY };
+}
+
 interface ContextMenuProps {
   sections: ContextMenuSection[];
   position: { x: number; y: number };
@@ -35,6 +46,24 @@ export function ContextMenu({ sections, position, onClose, ariaLabel }: ContextM
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  // 메뉴 밖을 스크롤하거나(휠) 창 크기를 바꾸거나 창을 떠나면 닫는다. 메뉴는 연 자리에 고정되어
+  // 있어서 아래 목록이 움직이면 엉뚱한 행을 가리킨다. `scroll` 이벤트는 쓰지 않는다 — 우클릭으로
+  // 행을 고르면 목록이 그 행을 보이게 스스로 스크롤하는데, 그때 메뉴가 바로 닫히면 안 된다.
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return;
+      onClose();
+    };
+    window.addEventListener("wheel", onWheel, { capture: true, passive: true });
+    window.addEventListener("resize", onClose);
+    window.addEventListener("blur", onClose);
+    return () => {
+      window.removeEventListener("wheel", onWheel, { capture: true });
+      window.removeEventListener("resize", onClose);
+      window.removeEventListener("blur", onClose);
+    };
   }, [onClose]);
 
   // Adjust position to stay within viewport

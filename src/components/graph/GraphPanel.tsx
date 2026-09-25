@@ -30,6 +30,8 @@ import { useFilesViewStore } from "@/components/review/files-view";
 import { activeRunCount, badgeCount } from "@/components/review/tab-counts";
 import { useBranchChangesTab } from "@/components/review/useChangedFileCount";
 import { CompareChip } from "./CompareChip";
+import { useWorktreeChipMenu } from "./useWorktreeChipMenu";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { ViewBranchPicker } from "./ViewBranchPicker";
 import { useHistoryView } from "./useHistoryView";
 import { GitStatusLine } from "@/components/review/GitStatusLine";
@@ -114,6 +116,7 @@ export function GraphPanel() {
   useEffect(() => () => setFilesOpen(false), [setFilesOpen]);
   const tab: ShownTab = filesOpen ? "files" : graphPanelTabOf(activeTab);
   const worktreeFilter = useWorktreeFilter(review.wips);
+  const chipMenu = useWorktreeChipMenu(worktreeFilter);
 
   // 커밋을 새로 고를 때만 아래 칸을 커밋 상세로 바꾼다. 패널이 다시 마운트될 때
   // (저장소 목록을 열었다 닫을 때 등) 남아 있던 선택으로 스태시·Actions 탭에서
@@ -212,8 +215,10 @@ export function GraphPanel() {
           onToggle={worktreeFilter.toggle}
           onShowAll={worktreeFilter.showAll}
           onShowCurrentOnly={worktreeFilter.showCurrentOnly}
+          onContextMenu={(chip, e) => chipMenu.open(chip, contextMenuPoint(e))}
         />
       )}
+      {chipMenu.element}
       {/* 「main 대비 변경」의 목록과 diff는 이 카드 아래 칸에 그린다(MainColumn). */}
       {tab !== "files" && (
         <div role="tabpanel" className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -311,6 +316,12 @@ function useWorktreeFilter(allWips: GraphWip[]) {
   const showCurrentOnly = useCallback(() => {
     if (ownerPath) setShown(ownerPath, []);
   }, [ownerPath, setShown]);
+  const showOnly = useCallback(
+    (path: string) => {
+      if (ownerPath) setShown(ownerPath, [path]);
+    },
+    [ownerPath, setShown],
+  );
 
-  return { chips, visible, wips, heads, toggle, showAll, showCurrentOnly };
+  return { chips, visible, wips, heads, toggle, showAll, showCurrentOnly, showOnly };
 }

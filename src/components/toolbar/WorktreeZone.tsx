@@ -22,6 +22,7 @@ import { WorktreePanel } from "@/components/worktree/WorktreePanel";
 import { CreateWorktreeDialog } from "@/components/worktree/CreateWorktreeDialog";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
+import { useCurrentPlaceMenu } from "./useCurrentPlaceMenu";
 
 interface WorktreeZoneProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
   const { currentWorktree, isInWorktree, mainWorktree } = useWorktreeContext(activeRepoPath, worktrees);
   const openWorktree = useOpenWorktree(activeRepoPath, worktrees);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const placeMenu = useCurrentPlaceMenu(currentWorktree?.branch ?? null);
 
   // 마운트 시 잔여 미리보기 정리. checkPreviewActive는 GitBaro가 미리보기를 시작하며
   // 남긴 표식 파일만 본다(사용자가 진행 중인 merge는 미리보기로 보지 않는다).
@@ -99,6 +101,7 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
       <button
         ref={triggerRef}
         onClick={onToggle}
+        onContextMenu={placeMenu.onContextMenu}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         // 「기본 폴더」는 브랜치 main과 헷갈리기 쉬워 뜻을 툴팁으로 덧붙인다.
@@ -155,6 +158,8 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
           onClose={onClose}
         />
       )}
+
+      {placeMenu.element}
 
       {showCreateDialog && (
         <CreateWorktreeDialog

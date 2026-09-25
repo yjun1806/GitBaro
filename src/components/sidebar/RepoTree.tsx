@@ -24,6 +24,7 @@ import {
   workspaceRepoKey,
 } from "./tree-model";
 import { useSidebarWatchPaths, type SidebarTreeData } from "./useSidebarTreeData";
+import { useSidebarRowMenus } from "./useSidebarRowMenus";
 
 interface RepoTreeProps {
   data: SidebarTreeData;
@@ -117,6 +118,17 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
     }
   };
 
+  // 계정 하나 안의 워크스페이스·저장소 카드 접기·펴기(계정 머리글 우클릭 메뉴). 계정 머리글 자신은 그대로 둔다.
+  const accountCardKeys = (account: AccountNode) => collapsibleKeys([account]).filter((k) => k !== account.key);
+  const accountFolded = (account: AccountNode) => {
+    const keys = accountCardKeys(account);
+    return keys.length > 0 && keys.every((k) => closed.has(k));
+  };
+  const foldAccount = (account: AccountNode, fold: boolean) => {
+    const keys = accountCardKeys(account);
+    setCollapsed(fold ? [...new Set([...collapsed, ...keys])] : collapsed.filter((k) => !keys.includes(k)));
+  };
+
   useEffect(() => {
     if (pendingView && activePath === pendingView.repoPath) {
       setView(pendingView.target);
@@ -132,17 +144,24 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
     useRepositoryStore.getState().rememberWorktree(repo.path, null);
     onSelectRepo(repo.path);
   };
-  const actions: RepoActions = {
+  const rowActions = {
     onSelectRepo: selectRepo,
-    onSelectWorktree: (repo, worktreePath) => {
+    onSelectWorktree: (repo: RepoInfo, worktreePath: string) => {
       useRepositoryStore.getState().rememberWorktree(repo.path, worktreePath);
       onSelectRepo(repo.path);
     },
-    onViewBranch: (repo, target) => {
+    onViewBranch: (repo: RepoInfo, target: ViewTarget) => {
       if (activePath !== repo.path) selectRepo(repo);
       setPendingView({ repoPath: repo.path, target });
     },
+  };
+  // 작업 폴더 줄·보기 줄의 우클릭 메뉴. 저장소 머리 줄 메뉴는 사이드바(`RepoRail`)가 그린다.
+  const rowMenus = useSidebarRowMenus(rowActions, activePath);
+  const actions: RepoActions = {
+    ...rowActions,
     onContextMenu: onRepoContextMenu,
+    onFolderContextMenu: rowMenus.openFolder,
+    onViewContextMenu: rowMenus.openView,
   };
   const selection: RepoSelection = { activePath, activeOwnerPath, viewing };
 
@@ -256,6 +275,8 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
                       ownerType={ownerTypes[account.label]}
                       expanded={accountOpen}
                       onToggle={() => toggleCollapsed(account.key)}
+                      allFolded={accountFolded(account)}
+                      onFoldAll={(fold) => foldAccount(account, fold)}
                     />
                     {accountOpen &&
                       account.children.map((child) => {
@@ -309,6 +330,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
 
         <AddRepoButton onAdded={onSelectRepo} />
       </div>
+      {rowMenus.element}
     </SidebarHoverCardProvider>
   );
 }

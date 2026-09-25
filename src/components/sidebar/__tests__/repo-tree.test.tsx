@@ -457,3 +457,79 @@ describe("RepoTree — watch targets", () => {
     expect(sidebarPaths()).toEqual([WT]);
   });
 });
+
+describe("RepoTree — right-click menus", () => {
+  const menuLabels = () => within(screen.getByRole("menu")).getAllByRole("menuitem").map((m) => m.textContent);
+  const menuItem = (name: string) => within(screen.getByRole("menu")).getByRole("menuitem", { name });
+
+  it("offers open, view, folder actions, copy and removal (last) on a worktree line", async () => {
+    const { ask } = await import("@tauri-apps/plugin-dialog");
+    vi.mocked(ask).mockResolvedValue(false);
+    renderTree(makeData(baseSignals));
+    fireEvent.click(item("api"));
+    fireEvent.contextMenu(item("feat/login"));
+    expect(menuLabels()).toEqual([
+      "Open this worktree",
+      "View this branch in the primary folder",
+      "Reveal in Finder",
+      "Open in Terminal",
+      "Open in editor",
+      "Copy path",
+      "Copy branch name",
+      "Remove worktree…",
+    ]);
+    // 제거는 확인 창을 거치고, 거절하면 아무것도 지우지 않는다.
+    fireEvent.click(menuItem("Remove worktree…"));
+    await waitFor(() => expect(ask).toHaveBeenCalled());
+  });
+
+  it("views a worktree's branch in the primary folder from its menu", async () => {
+    renderTree(makeData(baseSignals));
+    fireEvent.click(item("api"));
+    useRepositoryStore.setState({ activeRepoPath: API, activeRepo: repos[0] });
+    fireEvent.contextMenu(item("feat/login"));
+    fireEvent.click(menuItem("View this branch in the primary folder"));
+    await waitFor(() =>
+      expect(useHistoryViewStore.getState()).toMatchObject({
+        repoPath: API,
+        target: { kind: "ref", name: "feat/login", isRemote: false },
+      }),
+    );
+  });
+
+  it("has no removal on the primary folder and cannot reopen the folder already open", () => {
+    useRepositoryStore.setState({ activeRepoPath: SOLO, activeRepo: repos[2] });
+    renderTree(makeData(baseSignals));
+    fireEvent.contextMenu(item("dev · Primary folder"));
+    expect(menuLabels()).not.toContain("Remove worktree…");
+    expect((menuItem("Open primary folder") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("checks out the view-only default branch only when that repository is open", async () => {
+    renderTree(makeData(baseSignals));
+    fireEvent.contextMenu(await screen.findByRole("treeitem", { name: "View main (no checkout)" }));
+    expect(menuLabels()).toEqual(["View without checkout", "Check out here", "Copy branch name"]);
+    expect((menuItem("Check out here") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("sorts, creates a workspace and folds everything from the account line", () => {
+    renderTree(makeData(baseSignals));
+    fireEvent.contextMenu(item("acme"));
+    expect(menuLabels()).toEqual([
+      "Custom order (drag)",
+      "By name",
+      "Recent activity",
+      "Needs attention first",
+      "New workspace",
+      "Collapse all in this account",
+    ]);
+    fireEvent.click(menuItem("By name"));
+    expect(useWorkspaceStore.getState().sortModeByAccount.acme).toBe("name");
+    fireEvent.contextMenu(item("acme"));
+    fireEvent.click(menuItem("Collapse all in this account"));
+    // 계정 줄은 펼친 채로 두고 그 안 카드만 접는다.
+    expect(item("acme")).toHaveAttribute("aria-expanded", "true");
+    expect(item("product")).toHaveAttribute("aria-expanded", "false");
+    expect(item("solo")).toHaveAttribute("aria-expanded", "false");
+  });
+});

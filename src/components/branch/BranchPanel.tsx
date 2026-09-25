@@ -20,6 +20,10 @@ import {
 import { nextActiveName } from "./visible-branches";
 import { useHistoryViewStore, viewTargetFor, type ViewTarget } from "@/stores/history-view";
 import { useSetHistoryView } from "@/components/graph/useHistoryView";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import { useRepositoryStore } from "@/stores/repository";
+import { useMenuActions } from "@/hooks/useMenuActions";
+import { gitHubBranchUrl, gitHubRepoUrl } from "@/lib/utils";
 
 /** 관찰자를 쓸 수 없는 환경(테스트 등)에서 기반 브랜치를 계산할 앞쪽 행 수. */
 const FALLBACK_VISIBLE_ROWS = 30;
@@ -77,6 +81,8 @@ export function BranchPanel({
   const [sortBy, setSortBy] = useState<BranchPanelSort>("recent");
   const [collapsed, setCollapsed] = useState<ReadonlySet<BranchPanelSection>>(new Set());
   const { data: recentNames } = useRecentBranches(activeRepoPath);
+  const gitHubUrl = useRepositoryStore((s) => gitHubRepoUrl(s.activeRepo?.remotes ?? []));
+  const menuActions = useMenuActions();
 
   const sections = useMemo(
     () => classifyBranches(branches, worktrees, activeRepoPath, query, { sortBy, recentNames }),
@@ -231,7 +237,7 @@ export function BranchPanel({
             }}
             onContextMenu={(e: ReactMouseEvent) => {
               e.preventDefault();
-              setMenu({ row, x: e.clientX, y: e.clientY });
+              setMenu({ row, ...contextMenuPoint(e) });
             }}
           />
         ))}
@@ -291,7 +297,17 @@ export function BranchPanel({
           isCurrent={menu.row.action === "current"}
           isDefault={menu.row.branch.isDefault}
           isRemote={menu.row.branch.isRemote}
+          isViewed={isViewed(menu.row)}
           position={{ x: menu.x, y: menu.y }}
+          onView={() => {
+            viewRow(menu.row);
+            setMenu(null);
+          }}
+          onOpenOnGitHub={
+            gitHubUrl && (menu.row.branch.isRemote || menu.row.branch.upstream)
+              ? () => menuActions.openInBrowser(gitHubBranchUrl(gitHubUrl, menu.row.branch.name, menu.row.branch.isRemote))
+              : undefined
+          }
           onCheckout={() => {
             runPrimary(menu.row);
             setMenu(null);

@@ -18,6 +18,8 @@ import type { CommitInfo, DiffOutput, FileStatus, RepoSyncStatus, WorkflowRun } 
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { RepoWorkSwitcher } from "@/components/commit/WorkSwitcher";
+import { useFileMenu } from "@/components/commit/useFileMenu";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
 
 function AuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
   const [imgError, setImgError] = useState(false);
@@ -233,6 +235,16 @@ export function CommitDetail({
     onSelectFile?.(path);
   };
 
+  // 파일 우클릭: 그 파일을 고르고 파일 메뉴(편집기·Finder·경로 복사)를 연다.
+  const fileMenu = useFileMenu();
+  const openFileMenu = (path: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    handleFileClick(path);
+    if (!repoPath) return;
+    const status = changedFiles.find((f) => f.path === path)?.status;
+    fileMenu.open({ repoPath, filePath: path, exists: status !== "deleted" }, contextMenuPoint(e));
+  };
+
   const selectedFileIdx = changedFiles.findIndex((f) => f.path === selectedPath);
 
   const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
@@ -371,6 +383,12 @@ export function CommitDetail({
   return (
     <ListDiffSplit
       variant="inline"
+      files={{
+        items: changedFiles.map((f) => ({ key: f.path, path: f.path, status: f.status })),
+        selectedKey: selectedPath,
+        onSelect: handleFileClick,
+        onContextMenu: openFileMenu,
+      }}
       list={
         <>
           {switcher === undefined ? <RepoWorkSwitcher mode="commit" /> : switcher}
@@ -393,6 +411,7 @@ export function CommitDetail({
                   ref={itemRef(index)}
                   title={f.path}
                   onClick={() => handleFileClick(f.path)}
+                  onContextMenu={(e) => openFileMenu(f.path, e)}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors",
                     isSelected
@@ -425,10 +444,14 @@ export function CommitDetail({
       detail={
         <DiffViewer
           maximizable
+          repoPath={repoPath}
           diff={selectedFileDiff ?? null}
           status={changedFiles.find((f) => f.path === selectedPath)?.status ?? "modified"}
         />
       }
-    />
+    >
+      {/* 메뉴는 목록 칸 밖에 둔다 — 크게 보는 동안 목록 칸은 숨겨져도 옆 목록에서 메뉴를 연다. */}
+      {fileMenu.element}
+    </ListDiffSplit>
   );
 }

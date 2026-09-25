@@ -58,3 +58,38 @@ describe("ContextMenu keyboard support", () => {
     expect(other).not.toHaveBeenCalled();
   });
 });
+
+describe("ContextMenu closing", () => {
+  it("closes when the page under it scrolls by wheel, but not when the menu itself does", () => {
+    const { onClose } = renderMenu();
+    fireEvent.wheel(screen.getByRole("menu"));
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.wheel(document.body);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes when the window loses focus or resizes", () => {
+    const { onClose } = renderMenu();
+    fireEvent(window, new Event("blur"));
+    fireEvent(window, new Event("resize"));
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not close on a programmatic scroll (a row scrolled into view on right-click)", () => {
+    const { onClose } = renderMenu();
+    fireEvent.scroll(document.body);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe("contextMenuPoint", () => {
+  it("uses the pointer, or the element's bottom edge when opened from the keyboard", async () => {
+    const { contextMenuPoint } = await import("@/components/ui/ContextMenu");
+    const el = document.createElement("div");
+    el.getBoundingClientRect = () => ({ left: 10, bottom: 40 }) as DOMRect;
+    const fake = (x: number, y: number) =>
+      ({ clientX: x, clientY: y, currentTarget: el }) as unknown as React.MouseEvent;
+    expect(contextMenuPoint(fake(5, 6))).toEqual({ x: 5, y: 6 });
+    expect(contextMenuPoint(fake(0, 0))).toEqual({ x: 26, y: 40 });
+  });
+});

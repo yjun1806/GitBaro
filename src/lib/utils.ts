@@ -68,6 +68,35 @@ export function getGitHubWebUrl(remoteUrl: string): string | null {
   return `https://github.com/${parsed.owner}/${parsed.repo}`;
 }
 
+/** 원격 목록 중 처음 나오는 GitHub 원격의 웹 주소. 없으면 null. `origin`을 먼저 본다. */
+export function gitHubRepoUrl(remotes: readonly { name: string; url: string }[]): string | null {
+  const ordered = [...remotes].sort((a, b) => Number(b.name === "origin") - Number(a.name === "origin"));
+  for (const remote of ordered) {
+    const url = getGitHubWebUrl(remote.url);
+    if (url) return url;
+  }
+  return null;
+}
+
+/** GitHub에서 커밋 하나를 여는 주소. */
+export function gitHubCommitUrl(repoUrl: string, sha: string): string {
+  return `${repoUrl}/commit/${sha}`;
+}
+
+/**
+ * GitHub에서 브랜치를 여는 주소. 원격 브랜치(`origin/feat/x`)는 원격 이름을 뗀다.
+ * 브랜치 이름의 `/`는 그대로 두고 나머지 글자만 URL용으로 바꾼다.
+ */
+export function gitHubBranchUrl(repoUrl: string, branch: string, isRemote = false): string {
+  const name = isRemote && branch.includes("/") ? branch.slice(branch.indexOf("/") + 1) : branch;
+  return `${repoUrl}/tree/${name.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+/** 저장소 경로와 저장소 안 상대 경로를 잇는다. */
+export function joinRepoPath(repoPath: string, relativePath: string): string {
+  return `${repoPath.replace(/\/+$/, "")}/${relativePath.replace(/^\/+/, "")}`;
+}
+
 export function getFileExtension(path: string): string {
   const lastDot = path.lastIndexOf(".");
   if (lastDot === -1) return "";

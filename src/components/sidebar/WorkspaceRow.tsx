@@ -1,7 +1,8 @@
 import { useRef, useState, type MouseEvent } from "react";
-import { Layers, Pencil, Trash2 } from "lucide-react";
+import { Download, Layers, LayoutPanelTop, Pencil, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { ContextMenu } from "@/components/ui/ContextMenu";
+import { ContextMenu, contextMenuPoint } from "@/components/ui/ContextMenu";
+import { MultiRepoRemoteDialog } from "@/components/review/MultiRepoRemoteDialog";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { cn } from "@/lib/utils";
@@ -38,7 +39,7 @@ interface WorkspaceRowProps {
  * 끌어서 계정 안 순서를 바꿀 수 있고, 저장소를 이 행 위에 놓으면 이 워크스페이스에 들어간다.
  * 우클릭 메뉴로 이름을 바꾸거나 삭제한다. 삭제해도 저장소는 계정 바로 아래로 돌아갈 뿐 지우지 않는다.
  */
-type OpenDialog = "rename" | "delete" | null;
+type OpenDialog = "rename" | "delete" | "fetch" | null;
 
 /**
  * 워크스페이스 행을 지운 뒤에도 남는 이웃 트리 행. 바로 위 행(계정 머리글이나 앞 행)은
@@ -70,6 +71,7 @@ export function WorkspaceRow({
   const renameWorkspace = useWorkspaceStore((s) => s.renameWorkspace);
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace);
   const selected = useWorkspaceStore((s) => s.activeWorkspaceId === workspaceId);
+  const memberPaths = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId)?.repoPaths);
   const { selectWorkspace } = useSelectRepo();
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const [dialog, setDialog] = useState<OpenDialog>(null);
@@ -79,13 +81,7 @@ export function WorkspaceRow({
   const handleContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     rowRef.current = e.currentTarget as HTMLElement;
-    // 키보드(메뉴 키)로 열면 좌표가 0이라 행 아래에 띄운다.
-    if (e.clientX === 0 && e.clientY === 0) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setMenuAt({ x: rect.left + 16, y: rect.bottom });
-    } else {
-      setMenuAt({ x: e.clientX, y: e.clientY });
-    }
+    setMenuAt(contextMenuPoint(e));
   };
 
   return (
@@ -125,6 +121,23 @@ export function WorkspaceRow({
             {
               items: [
                 {
+                  label: t("menu.openWorkspace"),
+                  icon: <LayoutPanelTop className="w-3.5 h-3.5" />,
+                  onClick: () => selectWorkspace(workspaceId),
+                  disabled: selected,
+                },
+                {
+                  // 워크스페이스 화면의 Fetch와 같은 확인 창(저장소마다 무엇을 받는지 보여 주고 확인해야 실행).
+                  label: t("menu.fetchAll"),
+                  icon: <Download className="w-3.5 h-3.5" />,
+                  onClick: () => setDialog("fetch"),
+                  disabled: (memberPaths?.length ?? 0) === 0,
+                },
+              ],
+            },
+            {
+              items: [
+                {
                   label: t("workspace.menu.rename"),
                   icon: <Pencil className="w-3.5 h-3.5" />,
                   onClick: () => setDialog("rename"),
@@ -152,6 +165,9 @@ export function WorkspaceRow({
           onSubmit={(next) => renameWorkspace(workspaceId, next)}
           onClose={() => setDialog(null)}
         />
+      )}
+      {dialog === "fetch" && memberPaths && (
+        <MultiRepoRemoteDialog paths={memberPaths} op="fetch" onClose={() => setDialog(null)} />
       )}
       {dialog === "delete" && (
         <DeleteWorkspaceDialog

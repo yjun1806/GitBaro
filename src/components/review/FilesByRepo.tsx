@@ -8,7 +8,11 @@ import { useChangesVsDefaultMany, useFileDiffsVsDefault } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { EmptyState } from "@/components/layout/ContentArea";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
+import type { MaximizedFiles } from "@/components/layout/maximized-files";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import { useFileMenu } from "@/components/commit/useFileMenu";
+import { useFolderMenu } from "@/components/ui/useFolderMenu";
 import { RepoLaneTag } from "@/components/graph/CommitGraph";
 import { normalizePath } from "@/components/graph/graph-model";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
@@ -198,9 +202,45 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
     setSelected({ repoPath, filePath: file.path, oldPath: file.oldPath, status: file.status, scope: null });
   };
 
+  // 파일 우클릭: 그 파일을 고르고 파일 메뉴(편집기·Finder·경로 복사)를 연다.
+  const fileMenu = useFileMenu();
+  // 저장소 그룹 머리 우클릭: 그 저장소(워크트리) 폴더 메뉴.
+  const folderMenu = useFolderMenu();
+  const openFileMenu = (repoPath: string, file: BranchChangedFile, e: React.MouseEvent) => {
+    e.preventDefault();
+    handleSelect(repoPath, file);
+    fileMenu.open({ repoPath, filePath: file.path, exists: file.status !== "deleted" }, contextMenuPoint(e));
+  };
+
   const handleOpenLink = (repoPath: string, file: BranchChangedFile, link: FileLink) => {
     setSelected({ repoPath, filePath: file.path, oldPath: file.oldPath, status: file.status, scope: null });
     setOpenLink({ from: { repoPath, filePath: file.path }, link });
+  };
+
+  // 크게 보는 diff 옆 파일 목록. 이 목록과 같은 순서·같은 선택을 쓴다(저장소가 여럿이면 저장소별로 묶는다).
+  const maximizedEntries = repos.flatMap((repo) =>
+    groupFiles(changesByPath.get(repo.path)?.files ?? [], groupBy).flatMap((group) =>
+      group.files.map((file) => ({ repo, file })),
+    ),
+  );
+  const maximizedFiles: MaximizedFiles = {
+    items: maximizedEntries.map(({ repo, file }) => ({
+      key: fileKey(repo.path, file.path),
+      path: file.path,
+      status: file.status,
+      additions: file.isBinary ? null : file.additions,
+      deletions: file.isBinary ? null : file.deletions,
+      group: repos.length > 1 ? repo.name : undefined,
+    })),
+    selectedKey: selected ? fileKey(selected.repoPath, selected.filePath) : null,
+    onSelect: (key) => {
+      const hit = maximizedEntries.find(({ repo, file }) => fileKey(repo.path, file.path) === key);
+      if (hit) handleSelect(hit.repo.path, hit.file);
+    },
+    onContextMenu: (key, e) => {
+      const hit = maximizedEntries.find(({ repo, file }) => fileKey(repo.path, file.path) === key);
+      if (hit) openFileMenu(hit.repo.path, hit.file, e);
+    },
   };
 
   const nameOf = (path: string) => repos.find((r) => r.path === path)?.name ?? path;
@@ -239,6 +279,10 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
                 collapsed={isCollapsed}
                 onToggle={() => toggleCollapsed(repo.path)}
                 onBaseChange={(base) => setBase(repo.path, base)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  folderMenu.open({ path: repo.path, branch: changes?.branch ?? null }, contextMenuPoint(e));
+                }}
               />
               {isCollapsed ? null : result?.isError ? (
                 <div className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] text-danger">
@@ -264,6 +308,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
                             links={links.get(fileKey(repo.path, file.path)) ?? []}
                             selected={sameFile(selected, { repoPath: repo.path, filePath: file.path })}
                             onSelect={() => handleSelect(repo.path, file)}
+                            onContextMenu={(e) => openFileMenu(repo.path, file, e)}
                             onOpenLink={(link) => handleOpenLink(repo.path, file, link)}
                           />
                         ))}
@@ -300,10 +345,12 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
   );
 
   return (
-    <ListDiffSplit variant="cards" list={list} detail={detail}>
+    <ListDiffSplit variant="cards" list={list} detail={detail} files={maximizedFiles}>
       {/* 다른 화면(ContentArea, FollowPanel)과 달리 이 탭에는 전환 덮개가 없었다(W7 리뷰) —
           브랜치 전환 중에도 목록·diff를 그대로 누를 수 있었다. */}
       <SwitchingOverlay />
+      {fileMenu.element}
+      {folderMenu.element}
     </ListDiffSplit>
   );
 }
@@ -344,6 +391,7 @@ function RepoGroupHeader({
   collapsed,
   onToggle,
   onBaseChange,
+  onContextMenu,
 }: {
   repo: FilesByRepoRepo;
   changes: BranchChanges | undefined;
@@ -351,12 +399,13 @@ function RepoGroupHeader({
   collapsed: boolean;
   onToggle: () => void;
   onBaseChange: (base: string | null) => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const { t } = useTranslation();
   const color = repoLaneColor(repo.path);
   const Chevron = collapsed ? ChevronRight : ChevronDown;
   return (
-    <div className="flex items-center gap-2 pr-3 bg-(--acc-faint) border-b border-(--line)">
+    <div className="flex items-center gap-2 pr-3 bg-(--acc-faint) border-b border-(--line)" onContextMenu={onContextMenu}>
     <button
       type="button"
       onClick={onToggle}
@@ -416,10 +465,11 @@ interface FileRowProps {
   links: readonly FileLink[];
   selected: boolean;
   onSelect: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
   onOpenLink: (link: FileLink) => void;
 }
 
-function FileRow({ file, showDir, links, selected, onSelect, onOpenLink }: FileRowProps) {
+function FileRow({ file, showDir, links, selected, onSelect, onContextMenu, onOpenLink }: FileRowProps) {
   const { t } = useTranslation();
   const { name, dir } = splitPath(file.path);
   const first = links[0];
@@ -429,6 +479,7 @@ function FileRow({ file, showDir, links, selected, onSelect, onOpenLink }: FileR
       tabIndex={0}
       aria-selected={selected}
       onClick={onSelect}
+      onContextMenu={onContextMenu}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -500,7 +551,7 @@ function SelectedFileDiff({ file }: { file: SelectedFile }) {
       </div>
     );
   }
-  return <DiffViewer diff={result.data} status={file.status} maximizable />;
+  return <DiffViewer diff={result.data} status={file.status} maximizable repoPath={file.repoPath} />;
 }
 
 /** 연결된 변경: 두 저장소 파일에서 같은 문자열이 추가된 부분을 나란히 보여 준다. */

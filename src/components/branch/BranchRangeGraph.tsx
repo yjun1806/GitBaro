@@ -11,6 +11,10 @@ import { getErrorMessage } from "@/lib/utils";
 import { GRAPH_COLUMNS, GraphRow } from "@/components/graph/GraphRow";
 import { graphColumnWidth, laneColor } from "@/components/graph/graph-model";
 import { BranchMergeDialog } from "./BranchMergeDialog";
+import { CommitContextMenu } from "@/components/history/CommitContextMenu";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import { gitHubRepoUrl } from "@/lib/utils";
+import type { CommitInfo } from "@/types";
 import { rangeLabel, rangeLaneInput, useBranchRangeStore, type BranchRange } from "./branch-range";
 
 interface BranchRangeGraphProps {
@@ -36,6 +40,9 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
   const { data, isLoading, error } = useBranchComparison(range.repoPath, range.base, range.target);
   const { data: branches = [] } = useBranches(range.repoPath);
   const [showMerge, setShowMerge] = useState(false);
+  // 커밋 우클릭: 복사·GitHub 보기. 범위 안 커밋은 체크아웃한 이력이 아닐 수 있어 git 동작은 두지 않는다.
+  const [commitMenu, setCommitMenu] = useState<{ commit: CommitInfo; x: number; y: number } | null>(null);
+  const gitHubUrl = useRepositoryStore((s) => gitHubRepoUrl(s.activeRepo?.remotes ?? []));
   // 비교 기준은 로컬 브랜치여야 한다(`compare_branches`). 원격 브랜치와는 방향을 바꿀 수 없다.
   const canSwap = branches.some((b) => !b.isRemote && b.name === range.target);
 
@@ -150,11 +157,25 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
                 isSeen={false}
                 wipAbove={false}
                 onClick={() => onSelectCommit(commit.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onSelectCommit(commit.id);
+                  setCommitMenu({ commit, ...contextMenuPoint(e) });
+                }}
               />
             );
           })
         )}
       </div>
+
+      {commitMenu && (
+        <CommitContextMenu
+          commit={commitMenu.commit}
+          gitHubUrl={gitHubUrl}
+          position={{ x: commitMenu.x, y: commitMenu.y }}
+          onClose={() => setCommitMenu(null)}
+        />
+      )}
 
       {showMerge && currentBranch && (
         <BranchMergeDialog

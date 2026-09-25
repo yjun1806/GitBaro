@@ -1,11 +1,14 @@
-import { useState, useRef, useEffect, useId } from "react";
+import { useState, useId } from "react";
 import { useTranslation } from "react-i18next";
-import { Archive } from "lucide-react";
+import { Archive, ArchiveRestore, PackageOpen, Trash2 } from "lucide-react";
 import { StashItem } from "./StashItem";
-import { cn } from "@/lib/utils";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
-import { useMenuKeyboard } from "@/hooks/useMenuKeyboard";
+import { useMenuActions } from "@/hooks/useMenuActions";
 import { Dialog } from "@/components/ui/Dialog";
+import { ContextMenu, contextMenuPoint, type ContextMenuSection } from "@/components/ui/ContextMenu";
+import { copyMenuItem } from "@/components/ui/menu-items";
+
+const ICON = "w-3.5 h-3.5";
 import type { StashEntry } from "@/types";
 
 interface StashListProps {
@@ -69,7 +72,7 @@ export function StashList({
           onClick={() => onSelectStash(entry.index)}
           onContextMenu={(e) => {
             e.preventDefault();
-            setContextMenu({ x: e.clientX, y: e.clientY, index: entry.index });
+            setContextMenu({ ...contextMenuPoint(e), index: entry.index });
           }}
         />
       ))}
@@ -77,6 +80,7 @@ export function StashList({
       {/* Context Menu */}
       {contextMenu && (
         <StashContextMenu
+          entry={stashes.find((s) => s.index === contextMenu.index) ?? stashes[0]}
           position={contextMenu}
           onApply={() => onApply(contextMenu.index)}
           onPop={() => onPop(contextMenu.index)}
@@ -121,6 +125,7 @@ export function StashList({
 }
 
 interface StashContextMenuProps {
+  entry: StashEntry;
   position: { x: number; y: number };
   onApply: () => void;
   onPop: () => void;
@@ -128,52 +133,26 @@ interface StashContextMenuProps {
   onClose: () => void;
 }
 
-function StashContextMenu({ position, onApply, onPop, onDrop, onClose }: StashContextMenuProps) {
+/** 스태시 항목 우클릭 메뉴: 적용·꺼내기, 메시지·SHA 복사, 맨 아래에 삭제(확인 창). */
+function StashContextMenu({ entry, position, onApply, onPop, onDrop, onClose }: StashContextMenuProps) {
   const { t } = useTranslation();
-  const menuRef = useRef<HTMLDivElement>(null);
-  const { onKeyDown, restoreFocus } = useMenuKeyboard(menuRef, onClose);
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    window.addEventListener("mousedown", handleClick);
-    return () => window.removeEventListener("mousedown", handleClick);
-  }, [onClose]);
-
-  const run = (action: () => void) => () => {
-    restoreFocus();
-    action();
-    onClose();
-  };
-
-  const itemClass = "w-full px-3 py-1.5 text-xs text-left transition-colors outline-none";
-
-  return (
-    <div
-      ref={menuRef}
-      role="menu"
-      tabIndex={-1}
-      onKeyDown={onKeyDown}
-      className="fixed z-50 min-w-[160px] bg-popover border border-border rounded-lg shadow-lg py-1 outline-none"
-      style={{ left: position.x, top: position.y }}
-    >
-      <button role="menuitem" className={cn(itemClass, "hover:bg-accent focus-visible:bg-accent")} onClick={run(onApply)}>
-        {t("stash.apply")}
-      </button>
-      <button role="menuitem" className={cn(itemClass, "hover:bg-accent focus-visible:bg-accent")} onClick={run(onPop)}>
-        {t("stash.pop")}
-      </button>
-      <div role="separator" className="border-t border-border my-1" />
-      <button
-        role="menuitem"
-        className={cn(itemClass, "text-danger hover:bg-danger/10 focus-visible:bg-danger/10")}
-        onClick={run(onDrop)}
-      >
-        {t("stash.drop")}
-      </button>
-    </div>
-  );
+  const actions = useMenuActions();
+  const sections: ContextMenuSection[] = [
+    {
+      items: [
+        { label: t("stash.apply"), icon: <ArchiveRestore className={ICON} />, onClick: onApply },
+        { label: t("stash.pop"), icon: <PackageOpen className={ICON} />, onClick: onPop },
+      ],
+    },
+    {
+      items: [
+        copyMenuItem(t("menu.copyStashMessage"), entry.message, actions),
+        copyMenuItem(t("history.contextMenu.copyHash"), entry.commitId, actions),
+      ],
+    },
+    {
+      items: [{ label: t("stash.drop"), icon: <Trash2 className={ICON} />, variant: "danger", onClick: onDrop }],
+    },
+  ];
+  return <ContextMenu sections={sections} position={position} onClose={onClose} ariaLabel={t("menu.stashMenu")} />;
 }

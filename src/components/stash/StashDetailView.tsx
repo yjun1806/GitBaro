@@ -8,7 +8,16 @@ import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
-import type { StashFileSummary } from "@/types";
+import { useFileMenu } from "@/components/commit/useFileMenu";
+import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import type { FileStatus, StashFileSummary } from "@/types";
+
+const FILE_STATUSES: readonly string[] = ["modified", "added", "deleted", "renamed", "copied", "untracked", "ignored", "conflicted"];
+
+/** 스태시 요약의 상태 문자열. 모르는 값은 「수정」으로 본다. */
+function toFileStatus(status: string): FileStatus {
+  return FILE_STATUSES.includes(status) ? (status as FileStatus) : "modified";
+}
 
 interface StashDetailViewProps {
   stashIndex: number;
@@ -36,18 +45,22 @@ function FileSummaryRow({
   isSelected,
   isHighlighted,
   onClick,
+  onContextMenu,
   ref,
 }: {
   file: StashFileSummary;
   isSelected: boolean;
   isHighlighted?: boolean;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   ref?: React.Ref<HTMLButtonElement>;
 }) {
   return (
     <button
       ref={ref}
       onClick={onClick}
+      onContextMenu={onContextMenu}
+      title={file.path}
       className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
         isSelected
           ? "bg-primary/10 text-primary"
@@ -105,6 +118,16 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
     commitId,
     selectedFilePath,
   );
+
+  // 파일 우클릭: 그 파일을 고르고 파일 메뉴를 연다. 스태시의 파일은 작업 폴더에 없을 수도 있다.
+  const fileMenu = useFileMenu();
+  const openFileMenu = (path: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    setSelectedFilePath(path);
+    if (!activeRepoPath) return;
+    const status = stashFiles.find((f) => f.path === path)?.status;
+    fileMenu.open({ repoPath: activeRepoPath, filePath: path, exists: status !== "deleted" }, contextMenuPoint(e));
+  };
 
   const handleApply = async () => {
     try {
@@ -194,6 +217,18 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
       {/* Content: file list + diff */}
       <ListDiffSplit
         variant="inline"
+        files={{
+          items: files.map((f) => ({
+            key: f.path,
+            path: f.path,
+            status: toFileStatus(f.status),
+            additions: f.insertions,
+            deletions: f.deletions,
+          })),
+          selectedKey: selectedFilePath,
+          onSelect: setSelectedFilePath,
+          onContextMenu: openFileMenu,
+        }}
         list={
           <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
           <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
@@ -212,6 +247,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
                 isSelected={selectedFilePath === file.path}
                 isHighlighted={activeIndex === index}
                 onClick={() => setSelectedFilePath(file.path)}
+                onContextMenu={(e) => openFileMenu(file.path, e)}
               />
             ))
           )}
@@ -220,7 +256,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
         detail={
           <>
           {selectedFilePath && fileDiff ? (
-            <DiffViewer diff={fileDiff} status="modified" maximizable />
+            <DiffViewer diff={fileDiff} status="modified" maximizable repoPath={activeRepoPath} />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
               <FileText className="w-8 h-8" />
@@ -229,7 +265,10 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
           )}
           </>
         }
-      />
+      >
+        {/* 메뉴는 목록 칸 밖에 둔다 — 크게 보는 동안 목록 칸은 숨겨져도 옆 목록에서 메뉴를 연다. */}
+        {fileMenu.element}
+      </ListDiffSplit>
     </div>
   );
 }

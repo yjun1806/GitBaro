@@ -28,6 +28,8 @@ export interface WorktreeChipsProps {
   onShowAll?: () => void;
   /** 다른 워크트리를 모두 끈다(「지금 워크트리만」). */
   onShowCurrentOnly?: () => void;
+  /** 칩 우클릭. */
+  onContextMenu?: (chip: WorktreeChip, e: React.MouseEvent) => void;
 }
 
 export function worktreeChipName(chip: Pick<WorktreeChip, "branch" | "path">): string {
@@ -39,7 +41,14 @@ export function worktreeChipName(chip: Pick<WorktreeChip, "branch" | "path">): s
  * 그래프에서 그 워크트리의 레인 색이다. 처음에는 지금 연 워크트리만 켜져 있고, 끝의 버튼으로
  * 나머지를 한 번에 켠다. 지금 연 워크트리는 강조 테두리로 표시하고 늘 보인다.
  */
-export function WorktreeChips({ chips, visible, onToggle, onShowAll, onShowCurrentOnly }: WorktreeChipsProps) {
+export function WorktreeChips({
+  chips,
+  visible,
+  onToggle,
+  onShowAll,
+  onShowCurrentOnly,
+  onContextMenu,
+}: WorktreeChipsProps) {
   const { t } = useTranslation();
   const hiddenCount = chips.filter((c) => !c.isCurrent && !visible.has(c.path)).length;
   const othersShown = chips.some((c) => !c.isCurrent && visible.has(c.path));
@@ -64,6 +73,14 @@ export function WorktreeChips({ chips, visible, onToggle, onShowAll, onShowCurre
             onClick={() => {
               if (!chip.isCurrent) onToggle(chip.path);
             }}
+            onContextMenu={
+              onContextMenu
+                ? (e) => {
+                    e.preventDefault();
+                    onContextMenu(chip, e);
+                  }
+                : undefined
+            }
             className={cn(
               "flex items-center gap-2 shrink-0 h-[30px] px-2.5 rounded-(--radius-item) border text-[12px] transition-colors",
               chip.isCurrent

@@ -43,6 +43,8 @@ interface UIState {
   fileListWidth: number;
   /** diff를 메인 칸 전체로 키웠는가. 저장하지 않는다. */
   isDiffMaximized: boolean;
+  /** 크게 보는 diff 왼쪽에 좁은 파일 목록을 둘지(diff 머리의 버튼, 저장). */
+  maximizedFileListOpen: boolean;
   /**
    * 「작업 중인 변경」을 연 시각(epoch ms). 스테이징 목록(`ChangesView`)이 마운트되거나 이 값이 바뀌면
    * 파일 목록에 포커스를 옮기고 지운다. 저장하지 않는다.
@@ -63,6 +65,7 @@ interface UIState {
   setGraphPanelRatio: (ratio: number) => void;
   setFileListWidth: (width: number) => void;
   setDiffMaximized: (maximized: boolean) => void;
+  setMaximizedFileListOpen: (open: boolean) => void;
   setWorkingFocusAt: (at: number | null) => void;
 }
 
@@ -76,7 +79,7 @@ const REVIEW_BASES: readonly ReviewBasis[] = ["unpushed", "unseen"];
 /** Fields of the UI store written to `gitbaro-ui` (see `partialize`). */
 type PersistedUI = Pick<
   UIState,
-  "railMode" | "sidebarWidth" | "diffLineMode" | "graphPanelRatio" | "fileListWidth" | "reviewBasis"
+  "railMode" | "sidebarWidth" | "diffLineMode" | "graphPanelRatio" | "fileListWidth" | "reviewBasis" | "maximizedFileListOpen"
 >;
 
 /**
@@ -91,7 +94,7 @@ type PersistedUI = Pick<
  * must survive as-is: W2-T2 requires keeping the rail's collapsed/hover
  * modes, so a v0 user's deliberate choice is never silently reset to
  * "expanded".
- * `graphPanelRatio`·`fileListWidth`·`reviewBasis`는 나중에 더한 선택 필드다. 없으면 기본값을 쓰므로
+ * `graphPanelRatio`·`fileListWidth`·`reviewBasis`·`maximizedFileListOpen`은 나중에 더한 선택 필드다. 없으면 기본값을 쓰므로
  * (`sanitizePersistedUI`) 버전을 올리지 않는다. 다른 필드의 뜻은 그대로라 옛 값을 지우지 않는다.
  */
 export const UI_STORE_VERSION = 0;
@@ -125,6 +128,7 @@ export function sanitizePersistedUI(persisted: unknown): Partial<UIState> {
     out.fileListWidth = clampFileListWidth(p.fileListWidth);
   }
   if (REVIEW_BASES.includes(p.reviewBasis as ReviewBasis)) out.reviewBasis = p.reviewBasis as ReviewBasis;
+  if (typeof p.maximizedFileListOpen === "boolean") out.maximizedFileListOpen = p.maximizedFileListOpen;
   return out;
 }
 
@@ -150,6 +154,7 @@ export const useUIStore = create<UIState>()(
       graphPanelRatio: DEFAULT_GRAPH_RATIO,
       fileListWidth: DEFAULT_FILE_LIST_WIDTH,
       isDiffMaximized: false,
+      maximizedFileListOpen: true,
       workingFocusAt: null,
 
       setTheme: (theme) => set({ theme }),
@@ -174,6 +179,7 @@ export const useUIStore = create<UIState>()(
       setGraphPanelRatio: (ratio) => set({ graphPanelRatio: clampGraphRatio(ratio) }),
       setFileListWidth: (width) => set({ fileListWidth: clampFileListWidth(width) }),
       setDiffMaximized: (maximized) => set({ isDiffMaximized: maximized }),
+      setMaximizedFileListOpen: (open) => set({ maximizedFileListOpen: open }),
       setWorkingFocusAt: (at) => set({ workingFocusAt: at }),
     }),
     {
@@ -194,6 +200,7 @@ export const useUIStore = create<UIState>()(
         graphPanelRatio: state.graphPanelRatio,
         fileListWidth: state.fileListWidth,
         reviewBasis: state.reviewBasis,
+        maximizedFileListOpen: state.maximizedFileListOpen,
       }),
       merge: (persisted, current) => ({ ...current, ...sanitizePersistedUI(persisted) }),
     },
