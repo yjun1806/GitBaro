@@ -65,7 +65,7 @@ function AppContent() {
     } catch (err) {
       addToast(t("error.failedToLoadAccounts", { error: getErrorMessage(err) }), "error");
     }
-  }, [setAccounts, setActiveAccount, addToast]);
+  }, [setAccounts, setActiveAccount, addToast, t]);
 
   // 저장 실패는 조용히 넘어가면 사용자가 데이터 유실을 눈치채지 못한다.
   // 다른 초기화 effect보다 먼저 등록해 초기 저장 실패도 놓치지 않는다.
@@ -230,7 +230,7 @@ function AppContent() {
         "error",
       );
     }
-  }, [addRepo, setActiveRepo, addToast]);
+  }, [addRepo, setActiveRepo, addToast, t]);
 
   const handleAccountSelectForRepo = useCallback((accountId: string | null) => {
     // 다이얼로그 정리를 먼저 한다. 저장소 추가가 실패하더라도 다이얼로그가
