@@ -1260,5 +1260,123 @@
     "collapseViewed": "봤음 접기",
     "expandViewed": "봤음 펼치기",
     "listMenu": "변경 목록 메뉴"
+  },
+  "pr": {
+    "tab": "PR",
+    "filterLabel": "보일 PR",
+    "filter": {
+      "open": "열림",
+      "closed": "닫힘",
+      "all": "전체"
+    },
+    "empty": {
+      "open": "열린 PR이 없습니다",
+      "closed": "닫힌 PR이 없습니다",
+      "all": "PR이 아직 없습니다"
+    },
+    "refresh": "GitHub에서 새로 읽기",
+    "openListOnGitHub": "GitHub에서 PR 목록 열기",
+    "openOnGitHub": "GitHub에서 열기",
+    "moreOnGitHub": "나머지는 GitHub에서 보기",
+    "retry": "다시 시도",
+    "noAccount": "이 저장소에 GitHub 계정을 지정하면 PR을 볼 수 있습니다",
+    "noGitHubRemote": "이 저장소에는 GitHub 원격이 없습니다",
+    "currentBranch": "지금 브랜치",
+    "commentCount_one": "코멘트 {{count}}개",
+    "commentCount_other": "코멘트 {{count}}개",
+    "selectTitle": "PR을 고르세요",
+    "selectDescription": "위 목록에서 고르면 설명·파일·코멘트를 여기서 봅니다",
+    "overview": "개요",
+    "changedFiles_one": "바뀐 파일 {{count}}개",
+    "changedFiles_other": "바뀐 파일 {{count}}개",
+    "filesTruncated": "처음 1000개 파일만 보입니다. 전체는 GitHub에서 보기",
+    "conflicting": "base와 충돌",
+    "noDescription": "설명이 없습니다",
+    "noChecks": "마지막 커밋에 체크가 없습니다",
+    "noCodeComments": "코드에 단 코멘트가 없습니다",
+    "noConversation": "아직 대화가 없습니다",
+    "state": {
+      "open": "열림",
+      "draft": "초안",
+      "merged": "병합됨",
+      "closed": "닫힘"
+    },
+    "review": {
+      "approved": "승인됨",
+      "changes_requested": "변경 요청",
+      "review_required": "리뷰 필요"
+    },
+    "reviewer": {
+      "approved": "승인",
+      "changes_requested": "변경 요청",
+      "commented": "코멘트",
+      "dismissed": "기각됨",
+      "pending": "작성 중",
+      "requested": "리뷰 요청됨"
+    },
+    "reviewEvent": {
+      "approved": "승인",
+      "changes_requested": "변경 요청",
+      "commented": "리뷰",
+      "dismissed": "리뷰 기각"
+    },
+    "ci": {
+      "success": "체크 통과",
+      "failure": "체크 실패",
+      "error": "체크 오류",
+      "pending": "체크 진행 중",
+      "expected": "체크 대기"
+    },
+    "section": {
+      "description": "설명",
+      "reviewers": "리뷰어",
+      "labels": "라벨",
+      "checks": "체크",
+      "commits": "커밋",
+      "codeComments": "코드 코멘트",
+      "conversation": "대화"
+    },
+    "thread": {
+      "label": "{{path}}의 리뷰 스레드",
+      "sectionLabel": "이 파일의 리뷰 스레드",
+      "count_one": "리뷰 스레드 {{count}}개",
+      "count_other": "리뷰 스레드 {{count}}개",
+      "openCount_one": "해결 안 된 스레드 {{count}}개",
+      "openCount_other": "해결 안 된 스레드 {{count}}개",
+      "fileLevel": "파일",
+      "oldSide": "옛 줄",
+      "resolved": "해결됨",
+      "outdated": "지난 코드",
+      "outdatedGroup_one": "지난 코드에 단 스레드 {{count}}개(그 뒤로 코드가 바뀜)",
+      "outdatedGroup_other": "지난 코드에 단 스레드 {{count}}개(그 뒤로 코드가 바뀜)",
+      "reveal": "diff에서 이 줄 보기",
+      "moreOnGitHub": "나머지 답글은 GitHub에서 보기"
+    },
+    "file": {
+      "noPatch": "GitHub이 이 파일의 diff를 주지 않았습니다",
+      "noPatchHint": "바이너리이거나 너무 큰 파일입니다. 이 PR의 커밋도 로컬에 없습니다",
+      "patchSource": "GitHub diff",
+      "patchSourceHint": "이 PR의 커밋이 로컬에 없어 GitHub이 준 diff를 보입니다. fetch하면 접힌 줄 펼치기와 문서 보기가 됩니다",
+      "viewOnGitHub": "GitHub에서 파일 보기"
+    },
+    "menu": {
+      "label": "PR #{{number}}",
+      "more": "더 보기",
+      "viewBranch": "체크아웃하지 않고 head 브랜치 보기",
+      "checkout": "head 브랜치 체크아웃",
+      "copyLink": "링크 복사",
+      "copyNumber": "번호 복사",
+      "copyBranch": "브랜치 이름 복사",
+      "copyPath": "파일 경로 복사"
+    },
+    "error": {
+      "title": "PR을 불러오지 못했습니다",
+      "notFound": "이 계정으로는 이 저장소나 PR을 볼 수 없습니다. 저장소에 지정한 계정을 확인하세요",
+      "forbidden": "GitHub이 요청을 거절했습니다. 토큰에 repo 권한이 없을 수 있습니다",
+      "rateLimited": "GitHub API 사용 한도를 다 썼습니다. 잠시 뒤에 다시 시도하세요",
+      "noGitHubRemote": "origin 원격 주소로 GitHub 저장소를 찾지 못했습니다",
+      "network": "GitHub에 연결하지 못했습니다. 네트워크를 확인하세요",
+      "other": "{{error}}"
+    }
   }
 }

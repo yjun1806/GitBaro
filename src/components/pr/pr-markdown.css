@@ -1,0 +1,128 @@
+/* pr-markdown.css — PR 본문·코멘트(렌더된 마크다운).
+ *
+ * 색은 앱 팔레트(`globals.css`)의 토큰만 쓴다. 라이트·다크가 토큰을 따라 바뀐다.
+ * 문서 diff(`md-diff.css`)와 같은 이유로 그리기를 상자 안에 가둔다: `transform`이 안쪽
+ * `position: fixed`의 기준을 이 상자로 바꾸고, `contain: paint`가 상자 밖 그리기를 자른다.
+ */
+
+.pr-md {
+  color: var(--foreground);
+  font-size: 12.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  contain: paint;
+  transform: translateZ(0);
+}
+
+.pr-md > :first-child {
+  margin-top: 0;
+}
+
+.pr-md > :last-child {
+  margin-bottom: 0;
+}
+
+.pr-md h1,
+.pr-md h2,
+.pr-md h3,
+.pr-md h4 {
+  margin: 14px 0 6px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.pr-md h1 {
+  font-size: 16px;
+}
+
+.pr-md h2 {
+  font-size: 14.5px;
+}
+
+.pr-md h3,
+.pr-md h4 {
+  font-size: 13px;
+}
+
+.pr-md p,
+.pr-md ul,
+.pr-md ol,
+.pr-md blockquote,
+.pr-md pre,
+.pr-md table,
+.pr-md details {
+  margin: 0 0 8px;
+}
+
+.pr-md ul,
+.pr-md ol {
+  padding-left: 20px;
+}
+
+.pr-md ul {
+  list-style: disc;
+}
+
+.pr-md ol {
+  list-style: decimal;
+}
+
+.pr-md a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.pr-md blockquote {
+  padding-left: 10px;
+  border-left: 3px solid var(--line);
+  color: var(--muted-foreground);
+}
+
+.pr-md code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--chip);
+}
+
+.pr-md pre {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--chip);
+  overflow-x: auto;
+}
+
+.pr-md pre code {
+  padding: 0;
+  background: none;
+}
+
+.pr-md table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.pr-md th,
+.pr-md td {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+}
+
+.pr-md img {
+  max-width: 100%;
+  height: auto;
+}
+
+.pr-md hr {
+  margin: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.pr-md summary {
+  cursor: pointer;
+}

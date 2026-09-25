@@ -25,3 +25,5 @@ pub mod remote_plan;
 pub mod unpushed;
 // notify
 pub mod notify;
+// Read-only PR viewer
+pub mod pull_request;

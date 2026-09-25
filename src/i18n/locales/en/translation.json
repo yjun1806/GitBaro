@@ -1281,5 +1281,123 @@
     "collapseViewed": "Collapse viewed",
     "expandViewed": "Expand viewed",
     "listMenu": "Changes list menu"
+  },
+  "pr": {
+    "tab": "Pull requests",
+    "filterLabel": "Which pull requests to show",
+    "filter": {
+      "open": "Open",
+      "closed": "Closed",
+      "all": "All"
+    },
+    "empty": {
+      "open": "No open pull requests",
+      "closed": "No closed pull requests",
+      "all": "No pull requests yet"
+    },
+    "refresh": "Refresh from GitHub",
+    "openListOnGitHub": "Open pull requests on GitHub",
+    "openOnGitHub": "Open on GitHub",
+    "moreOnGitHub": "See the rest on GitHub",
+    "retry": "Try again",
+    "noAccount": "Assign a GitHub account to this repository to see its pull requests",
+    "noGitHubRemote": "This repository has no GitHub remote",
+    "currentBranch": "Current branch",
+    "commentCount_one": "{{count}} comment",
+    "commentCount_other": "{{count}} comments",
+    "selectTitle": "Pick a pull request",
+    "selectDescription": "Choose one from the list above to see its description, files and comments",
+    "overview": "Overview",
+    "changedFiles_one": "{{count}} changed file",
+    "changedFiles_other": "{{count}} changed files",
+    "filesTruncated": "Only the first 1000 files are shown. See all on GitHub",
+    "conflicting": "Conflicts with base",
+    "noDescription": "No description",
+    "noChecks": "No checks on the latest commit",
+    "noCodeComments": "No comments on code",
+    "noConversation": "No conversation yet",
+    "state": {
+      "open": "Open",
+      "draft": "Draft",
+      "merged": "Merged",
+      "closed": "Closed"
+    },
+    "review": {
+      "approved": "Approved",
+      "changes_requested": "Changes requested",
+      "review_required": "Review required"
+    },
+    "reviewer": {
+      "approved": "approved",
+      "changes_requested": "requested changes",
+      "commented": "commented",
+      "dismissed": "dismissed",
+      "pending": "pending",
+      "requested": "review requested"
+    },
+    "reviewEvent": {
+      "approved": "approved",
+      "changes_requested": "requested changes",
+      "commented": "reviewed",
+      "dismissed": "dismissed review"
+    },
+    "ci": {
+      "success": "Checks passed",
+      "failure": "Checks failed",
+      "error": "Checks errored",
+      "pending": "Checks running",
+      "expected": "Checks waiting"
+    },
+    "section": {
+      "description": "Description",
+      "reviewers": "Reviewers",
+      "labels": "Labels",
+      "checks": "Checks",
+      "commits": "Commits",
+      "codeComments": "Comments on code",
+      "conversation": "Conversation"
+    },
+    "thread": {
+      "label": "Review thread on {{path}}",
+      "sectionLabel": "Review threads on this file",
+      "count_one": "{{count}} review thread",
+      "count_other": "{{count}} review threads",
+      "openCount_one": "{{count}} unresolved thread",
+      "openCount_other": "{{count}} unresolved threads",
+      "fileLevel": "File",
+      "oldSide": "old line",
+      "resolved": "Resolved",
+      "outdated": "Outdated",
+      "outdatedGroup_one": "{{count}} outdated thread (the code has changed since)",
+      "outdatedGroup_other": "{{count}} outdated threads (the code has changed since)",
+      "reveal": "Show this line in the diff",
+      "moreOnGitHub": "More replies on GitHub"
+    },
+    "file": {
+      "noPatch": "GitHub did not send a diff for this file",
+      "noPatchHint": "It is binary or too large. The PR's commits are not in this clone either",
+      "patchSource": "Diff from GitHub",
+      "patchSourceHint": "The PR's commits are not in this clone, so this is GitHub's diff. Fetch to expand context and see rendered documents",
+      "viewOnGitHub": "View files on GitHub"
+    },
+    "menu": {
+      "label": "Pull request #{{number}}",
+      "more": "More actions",
+      "viewBranch": "View head branch without checkout",
+      "checkout": "Check out head branch",
+      "copyLink": "Copy link",
+      "copyNumber": "Copy number",
+      "copyBranch": "Copy branch name",
+      "copyPath": "Copy file path"
+    },
+    "error": {
+      "title": "Could not load pull requests",
+      "notFound": "This account cannot see this repository or pull request. Check the account assigned to the repository",
+      "forbidden": "GitHub refused the request. The token may lack the repo scope",
+      "rateLimited": "GitHub's API limit is used up for now. Try again in a while",
+      "noGitHubRemote": "Could not find the GitHub repository from the origin remote",
+      "network": "Could not reach GitHub. Check the network",
+      "other": "{{error}}"
+    }
   }
 }

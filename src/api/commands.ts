@@ -1038,3 +1038,89 @@ import type { BranchBaseInfo } from "@/types";
 export async function getBranchBases(repoPath: string, names: string[]): Promise<BranchBaseInfo[]> {
   return invoke("branch_bases", { repoPath, names });
 }
+
+// Read-only PR viewer
+import type {
+  DiffHunk,
+  PrFile,
+  PrFiles,
+  PrFileStatus,
+  PrStateFilter,
+  PullRequestDetail,
+  PullRequestSummary,
+} from "@/types";
+
+/** 백엔드 구간(`kind`)을 화면 구간(`lineType`)으로. */
+function hunksFromRaw(hunks: RawDiffHunk[]): DiffHunk[] {
+  return hunks.map((h) => ({
+    header: h.header,
+    oldStart: h.oldStart,
+    oldLines: h.lines.filter((l) => l.kind !== "addition").length,
+    newStart: h.newStart,
+    newLines: h.lines.filter((l) => l.kind !== "deletion").length,
+    lines: h.lines.map((l) => ({
+      content: l.content,
+      lineType: mapLineKind(l.kind),
+      oldLineNo: l.oldLineNo,
+      newLineNo: l.newLineNo,
+    })),
+  }));
+}
+
+/** 저장소의 PR 목록(최근에 고친 순서, 50개). `force`면 백엔드가 잠깐 들고 있던 답을 버린다. */
+export async function listPullRequests(
+  repoPath: string,
+  accountId: string,
+  state: PrStateFilter,
+  force = false,
+): Promise<PullRequestSummary[]> {
+  return invoke("list_pull_requests", { repoPath, accountId, state, force });
+}
+
+export async function getPullRequest(
+  repoPath: string,
+  accountId: string,
+  number: number,
+  force = false,
+): Promise<PullRequestDetail> {
+  return invoke("get_pull_request", { repoPath, accountId, number, force });
+}
+
+interface RawPrFile extends Omit<PrFile, "hunks" | "status"> {
+  status: string;
+  hunks: RawDiffHunk[] | null;
+}
+
+export async function listPullRequestFiles(repoPath: string, accountId: string, number: number): Promise<PrFiles> {
+  const raw: { files: RawPrFile[]; truncated: boolean } = await invoke("list_pull_request_files", {
+    repoPath,
+    accountId,
+    number,
+  });
+  return {
+    truncated: raw.truncated,
+    files: raw.files.map((f) => ({
+      ...f,
+      status: f.status as PrFileStatus,
+      hunks: f.hunks ? hunksFromRaw(f.hunks) : null,
+    })),
+  };
+}
+
+/** PR 파일 하나의 로컬 diff(공통 조상 → head). base·head 커밋이 로컬에 있어야 한다. */
+export async function getPullRequestFileDiff(
+  repoPath: string,
+  baseSha: string,
+  headSha: string,
+  filePath: string,
+  oldPath: string | null,
+): Promise<FileDiffVsDefault> {
+  const raw: RawFileDiffVsDefault = await invoke("get_pull_request_file_diff", {
+    repoPath,
+    baseSha,
+    headSha,
+    filePath,
+    oldPath,
+  });
+  return fileDiffVsDefaultFromRaw(raw);
+}

@@ -1,0 +1,5 @@
+[
+  { "filename": "src/login.ts", "status": "modified", "additions": 2, "deletions": 1, "patch": "@@ -10,3 +10,4 @@\n a\n-b\n+c\n+d\n e" },
+  { "filename": "docs/new.md", "previous_filename": "docs/old.md", "status": "renamed", "additions": 0, "deletions": 0 },
+  { "filename": "assets/logo.png", "status": "added", "additions": 0, "deletions": 0 }
+]

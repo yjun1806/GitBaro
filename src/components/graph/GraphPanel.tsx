@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Archive, Files, GitCommitVertical, Play } from "lucide-react";
+import { Archive, Files, GitCommitVertical, GitPullRequest, Play } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
@@ -22,6 +22,8 @@ import { WorktreeChips, type WorktreeChip } from "@/components/worktree/Worktree
 import type { WorktreeInfo } from "@/types";
 import { StashView } from "@/components/stash/StashView";
 import { ActionsView } from "@/components/actions/ActionsView";
+import { PrListView } from "@/components/pr/PrListView";
+import { usePrViewStore } from "@/components/pr/pr-view";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import { FilesGroupByPicker } from "@/components/review/FilesGroupByPicker";
@@ -38,8 +40,8 @@ import { cn, trimTrailingSlash } from "@/lib/utils";
 
 /** Which graph-panel tab a `ui.activeTab` value belongs to. */
 export type GraphPanelTab = "graph" | "stash" | "actions";
-/** Tabs the panel shows: the stored ones plus "changes by file" (D7), which is unsaved view state. */
-type ShownTab = GraphPanelTab | "files";
+/** Tabs the panel shows: the stored ones plus "changes by file" (D7) and pull requests, which are unsaved view state. */
+type ShownTab = GraphPanelTab | "files" | "pr";
 
 /**
  * The graph tab covers both "changes" (the uncommitted row is selected) and
@@ -107,7 +109,12 @@ export function GraphPanel() {
   const comparing = !graphListShown;
   useEffect(() => setFilesOpen(false), [activeTab, merging, comparing, setFilesOpen]);
   useEffect(() => () => setFilesOpen(false), [setFilesOpen]);
-  const tab: ShownTab = filesOpen ? "files" : graphPanelTabOf(activeTab);
+  // 「PR」 탭도 저장하지 않는 화면 상태라 같은 때 닫는다.
+  const prOpen = usePrViewStore((s) => s.open);
+  const setPrOpen = usePrViewStore((s) => s.setOpen);
+  useEffect(() => setPrOpen(false), [activeTab, merging, comparing, setPrOpen]);
+  useEffect(() => () => setPrOpen(false), [setPrOpen]);
+  const tab: ShownTab = filesOpen ? "files" : prOpen ? "pr" : graphPanelTabOf(activeTab);
   const worktreeFilter = useWorktreeFilter(review.wips);
   const chipMenu = useWorktreeChipMenu(worktreeFilter);
 
@@ -130,11 +137,21 @@ export function GraphPanel() {
 
   const openGraphTab = () => {
     setFilesOpen(false);
+    setPrOpen(false);
     setActiveTab(selectedCommitId ? "history" : "changes");
   };
   const openStoredTab = (next: "stash" | "actions") => {
     setFilesOpen(false);
+    setPrOpen(false);
     setActiveTab(next);
+  };
+  const openFilesTab = () => {
+    setPrOpen(false);
+    setFilesOpen(true);
+  };
+  const openPrTab = () => {
+    setFilesOpen(false);
+    setPrOpen(true);
   };
 
   return (
@@ -160,7 +177,7 @@ export function GraphPanel() {
           <Tab
             variant="inline"
             active={tab === "files"}
-            onClick={() => setFilesOpen(true)}
+            onClick={openFilesTab}
             icon={<Files className="w-3.5 h-3.5" />}
             count={badgeCount(branchChanges.count)}
           >
@@ -184,6 +201,16 @@ export function GraphPanel() {
           >
             {t("actions.title")}
           </Tab>
+          {hasRemote && (
+            <Tab
+              variant="inline"
+              active={tab === "pr"}
+              onClick={openPrTab}
+              icon={<GitPullRequest className="w-3.5 h-3.5" />}
+            >
+              {t("pr.tab")}
+            </Tab>
+          )}
         </TabGroup>
         {tab === "graph" && <ViewBranchPicker />}
         {tab === "graph" && <CompareChip />}
@@ -213,6 +240,8 @@ export function GraphPanel() {
             />
           ) : tab === "stash" ? (
             <StashView />
+          ) : tab === "pr" ? (
+            <PrListView />
           ) : (
             <ActionsView />
           )}

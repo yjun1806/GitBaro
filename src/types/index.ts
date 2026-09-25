@@ -770,3 +770,150 @@ export interface BranchBaseInfo {
    */
   mergedIntoBase: boolean;
 }
+
+// Read-only PR viewer — shapes of `commands/pull_request.rs`
+/** 목록 필터. 닫힌 목록에는 병합한 PR도 들어간다. */
+export type PrStateFilter = "open" | "closed" | "all";
+export type PrState = "open" | "closed" | "merged";
+/** 리뷰 규칙이 정한 판정. 규칙이 없으면 null. */
+export type PrReviewDecision = "approved" | "changes_requested" | "review_required";
+/** 마지막 커밋의 CI 종합. 체크가 없으면 null. */
+export type PrCiState = "success" | "failure" | "error" | "pending" | "expected";
+
+export interface PrUser {
+  login: string;
+  avatarUrl: string | null;
+}
+
+export interface PrLabel {
+  name: string;
+  /** 16진 색(`#` 없이). */
+  color: string;
+}
+
+export interface PullRequestSummary {
+  number: number;
+  title: string;
+  url: string;
+  state: PrState;
+  isDraft: boolean;
+  author: PrUser;
+  headRef: string;
+  baseRef: string;
+  headSha: string;
+  /** 포크에서 온 PR. 이 저장소 원격에는 head 브랜치가 없다. */
+  isCrossRepository: boolean;
+  headRepo: string | null;
+  reviewDecision: PrReviewDecision | null;
+  ciState: PrCiState | null;
+  commentCount: number;
+  threadCount: number;
+  labels: PrLabel[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PrReviewer {
+  login: string;
+  avatarUrl: string | null;
+  state: "approved" | "changes_requested" | "commented" | "dismissed" | "pending" | "requested";
+  isTeam: boolean;
+}
+
+export interface PrCommit {
+  oid: string;
+  headline: string;
+  authorName: string;
+  author: PrUser | null;
+  authoredAt: string;
+}
+
+export interface PrCheck {
+  name: string;
+  /** `completed` | `in_progress` | `queued` | `pending` 등. */
+  status: string;
+  /** 끝난 체크의 결과: `success` | `failure` | `neutral` | `cancelled` | `skipped` | `timed_out` 등. */
+  conclusion: string | null;
+  url: string | null;
+  description: string | null;
+}
+
+export interface PrConversationItem {
+  kind: "comment" | "review";
+  id: string;
+  author: PrUser;
+  body: string;
+  createdAt: string;
+  url: string;
+  reviewState: "approved" | "changes_requested" | "commented" | "dismissed" | null;
+}
+
+export interface PrThreadComment {
+  id: string;
+  author: PrUser;
+  body: string;
+  createdAt: string;
+  url: string;
+}
+
+export interface PrReviewThread {
+  id: string;
+  path: string;
+  /** 지금 diff에서의 줄 번호(`side` 쪽). 자리를 잃었으면(outdated) null. */
+  line: number | null;
+  originalLine: number | null;
+  startLine: number | null;
+  /** `left`: 지운 쪽(옛 줄 번호), `right`: 새 쪽(새 줄 번호). */
+  side: "left" | "right";
+  isResolved: boolean;
+  isOutdated: boolean;
+  diffHunk: string;
+  comments: PrThreadComment[];
+  commentsTruncated: boolean;
+}
+
+export interface PrTruncation {
+  commits: boolean;
+  comments: boolean;
+  reviews: boolean;
+  threads: boolean;
+  checks: boolean;
+}
+
+export interface PullRequestDetail extends PullRequestSummary {
+  body: string;
+  baseSha: string;
+  mergedAt: string | null;
+  closedAt: string | null;
+  mergeable: "mergeable" | "conflicting" | "unknown";
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  reviewers: PrReviewer[];
+  commits: PrCommit[];
+  commitCount: number;
+  checks: PrCheck[];
+  conversation: PrConversationItem[];
+  threads: PrReviewThread[];
+  truncated: PrTruncation;
+  /** base·head 커밋이 로컬에 있어 파일 diff를 로컬 git으로 만든다. */
+  localDiff: boolean;
+}
+
+export type PrFileStatus = "added" | "removed" | "modified" | "renamed" | "copied" | "changed" | "unchanged";
+
+export interface PrFile {
+  path: string;
+  oldPath: string | null;
+  status: PrFileStatus;
+  additions: number;
+  deletions: number;
+  /** GitHub patch를 화면 모양으로 바꾼 것. 바이너리이거나 너무 커서 patch가 없으면 null. */
+  hunks: DiffHunk[] | null;
+}
+
+export interface PrFiles {
+  files: PrFile[];
+  /** 1000개까지만 읽었다. */
+  truncated: boolean;
+}

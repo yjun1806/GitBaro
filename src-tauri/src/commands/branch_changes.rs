@@ -668,7 +668,7 @@ fn too_large_diff(
 }
 
 /// 저장소 루트 기준의 상대 경로만 받는다(`..`·절대 경로는 거부).
-fn ensure_relative(file_path: &str) -> Result<(), AppError> {
+pub(crate) fn ensure_relative(file_path: &str) -> Result<(), AppError> {
     let ok = !file_path.is_empty()
         && Path::new(file_path).components().all(|c| matches!(c, Component::Normal(_)));
     if ok {
@@ -714,7 +714,7 @@ fn comparison_base<'r>(
     Ok((Some(tree_of(repo, oid)?), Some(oid), is_point, target_tree))
 }
 
-fn patch_hunks(patch: &Patch) -> Result<Vec<VsDefaultDiffHunk>, git2::Error> {
+pub(crate) fn patch_hunks(patch: &Patch) -> Result<Vec<VsDefaultDiffHunk>, git2::Error> {
     (0..patch.num_hunks())
         .map(|h| {
             let (hunk, n) = patch.hunk(h)?;

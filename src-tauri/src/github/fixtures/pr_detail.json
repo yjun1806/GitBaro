@@ -1,0 +1,112 @@
+{
+  "repository": {
+    "pullRequest": {
+      "number": 42,
+      "title": "Add login form",
+      "url": "https://github.com/acme/app/pull/42",
+      "state": "OPEN",
+      "isDraft": false,
+      "createdAt": "2026-09-20T09:00:00Z",
+      "updatedAt": "2026-09-21T12:00:00Z",
+      "mergedAt": null,
+      "closedAt": null,
+      "body": "Adds a **login** form.\n\n<img src=x onerror=alert(1)>",
+      "author": { "login": "agent-bot", "avatarUrl": "https://avatars.githubusercontent.com/u/1" },
+      "headRefName": "feat/login",
+      "baseRefName": "main",
+      "headRefOid": "head111",
+      "baseRefOid": "base000",
+      "isCrossRepository": false,
+      "headRepository": { "nameWithOwner": "acme/app" },
+      "reviewDecision": "CHANGES_REQUESTED",
+      "mergeable": "CONFLICTING",
+      "additions": 40,
+      "deletions": 3,
+      "changedFiles": 3,
+      "labels": { "nodes": [{ "name": "agent", "color": "0e8a16" }] },
+      "reviewRequests": {
+        "nodes": [
+          { "requestedReviewer": { "__typename": "User", "login": "bob", "avatarUrl": "https://avatars.githubusercontent.com/u/3" } },
+          { "requestedReviewer": { "__typename": "Team", "name": "core-team" } },
+          { "requestedReviewer": null }
+        ]
+      },
+      "latestReviews": {
+        "nodes": [
+          { "author": { "login": "alice", "avatarUrl": "https://avatars.githubusercontent.com/u/2" }, "state": "CHANGES_REQUESTED", "submittedAt": "2026-09-21T12:00:00Z" },
+          { "author": { "login": "bob", "avatarUrl": "https://avatars.githubusercontent.com/u/3" }, "state": "APPROVED", "submittedAt": "2026-09-20T11:00:00Z" },
+          { "author": { "login": "carol", "avatarUrl": null }, "state": "PENDING", "submittedAt": null }
+        ]
+      },
+      "commits": {
+        "totalCount": 5,
+        "nodes": [
+          { "commit": { "oid": "c1", "messageHeadline": "feat: add form", "authoredDate": "2026-09-20T08:00:00Z", "author": { "name": "Agent", "user": { "login": "agent-bot", "avatarUrl": "https://avatars.githubusercontent.com/u/1" } } } },
+          { "commit": { "oid": "c2", "messageHeadline": "fix: typo", "authoredDate": "2026-09-20T08:30:00Z", "author": { "name": "Local Name", "user": null } } }
+        ]
+      },
+      "comments": {
+        "totalCount": 2,
+        "nodes": [
+          { "id": "IC_2", "author": { "login": "alice", "avatarUrl": null }, "body": "Second", "createdAt": "2026-09-21T09:00:00Z", "url": "https://github.com/acme/app/pull/42#issuecomment-2" },
+          { "id": "IC_1", "author": { "login": "bob", "avatarUrl": null }, "body": "First", "createdAt": "2026-09-20T10:00:00Z", "url": "https://github.com/acme/app/pull/42#issuecomment-1" }
+        ]
+      },
+      "reviews": {
+        "totalCount": 4,
+        "nodes": [
+          { "id": "R_1", "author": { "login": "bob", "avatarUrl": null }, "state": "APPROVED", "body": "", "submittedAt": "2026-09-20T11:00:00Z", "url": "u1" },
+          { "id": "R_2", "author": { "login": "alice", "avatarUrl": null }, "state": "COMMENTED", "body": "", "submittedAt": "2026-09-20T12:00:00Z", "url": "u2" },
+          { "id": "R_3", "author": { "login": "alice", "avatarUrl": null }, "state": "CHANGES_REQUESTED", "body": "Please fix", "submittedAt": "2026-09-21T12:00:00Z", "url": "u3" },
+          { "id": "R_4", "author": { "login": "carol", "avatarUrl": null }, "state": "PENDING", "body": "draft", "submittedAt": null, "url": "u4" }
+        ]
+      },
+      "reviewThreads": {
+        "totalCount": 2,
+        "nodes": [
+          {
+            "id": "T_1", "isResolved": true, "isOutdated": false, "path": "src/login.ts",
+            "line": 12, "originalLine": 12, "startLine": null, "diffSide": "RIGHT",
+            "comments": {
+              "totalCount": 2,
+              "nodes": [
+                { "id": "C_1", "author": { "login": "alice", "avatarUrl": null }, "body": "Why?", "createdAt": "2026-09-20T12:00:00Z", "url": "c1", "diffHunk": "@@ -10,3 +10,4 @@\n a\n+b" },
+                { "id": "C_2", "author": { "login": "agent-bot", "avatarUrl": null }, "body": "Because.", "createdAt": "2026-09-20T12:05:00Z", "url": "c2", "diffHunk": "@@ -10,3 +10,4 @@\n a\n+b" }
+              ]
+            }
+          },
+          {
+            "id": "T_2", "isResolved": false, "isOutdated": true, "path": "src/old.ts",
+            "line": null, "originalLine": 5, "startLine": null, "diffSide": "LEFT",
+            "comments": {
+              "totalCount": 60,
+              "nodes": [
+                { "id": "C_3", "author": null, "body": "Stale", "createdAt": "2026-09-19T12:00:00Z", "url": "c3", "diffHunk": "@@ -3,3 +3,3 @@\n-x\n+y" }
+              ]
+            }
+          }
+        ]
+      },
+      "statusRollup": {
+        "nodes": [
+          {
+            "commit": {
+              "statusCheckRollup": {
+                "state": "FAILURE",
+                "contexts": {
+                  "totalCount": 4,
+                  "nodes": [
+                    { "__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "FAILURE", "detailsUrl": "https://github.com/acme/app/actions/runs/1" },
+                    { "__typename": "CheckRun", "name": "lint", "status": "IN_PROGRESS", "conclusion": null, "detailsUrl": null },
+                    { "__typename": "StatusContext", "context": "ci/legacy", "state": "ERROR", "targetUrl": "https://ci.example.com/1", "description": "Broke" },
+                    { "__typename": "StatusContext", "context": "deploy/preview", "state": "PENDING", "targetUrl": null, "description": null }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

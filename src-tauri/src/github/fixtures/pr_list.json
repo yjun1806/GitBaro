@@ -1,0 +1,48 @@
+{
+  "repository": {
+    "pullRequests": {
+      "nodes": [
+        {
+          "number": 42,
+          "title": "Add login form",
+          "url": "https://github.com/acme/app/pull/42",
+          "state": "OPEN",
+          "isDraft": false,
+          "createdAt": "2026-09-20T09:00:00Z",
+          "updatedAt": "2026-09-21T12:00:00Z",
+          "author": { "login": "agent-bot", "avatarUrl": "https://avatars.githubusercontent.com/u/1" },
+          "headRefName": "feat/login",
+          "baseRefName": "main",
+          "headRefOid": "head111",
+          "isCrossRepository": false,
+          "headRepository": { "nameWithOwner": "acme/app" },
+          "reviewDecision": "CHANGES_REQUESTED",
+          "comments": { "totalCount": 3 },
+          "reviewThreads": { "totalCount": 2 },
+          "labels": { "nodes": [{ "name": "agent", "color": "0e8a16" }] },
+          "commits": { "nodes": [{ "commit": { "statusCheckRollup": { "state": "FAILURE" } } }] }
+        },
+        {
+          "number": 7,
+          "title": "Fork change",
+          "url": "https://github.com/acme/app/pull/7",
+          "state": "OPEN",
+          "isDraft": true,
+          "createdAt": "2026-09-01T09:00:00Z",
+          "updatedAt": "2026-09-02T09:00:00Z",
+          "author": null,
+          "headRefName": "patch-1",
+          "baseRefName": "main",
+          "headRefOid": "head222",
+          "isCrossRepository": true,
+          "headRepository": null,
+          "reviewDecision": null,
+          "comments": { "totalCount": 0 },
+          "reviewThreads": { "totalCount": 0 },
+          "labels": { "nodes": [] },
+          "commits": { "nodes": [{ "commit": { "statusCheckRollup": null } }] }
+        }
+      ]
+    }
+  }
+}
