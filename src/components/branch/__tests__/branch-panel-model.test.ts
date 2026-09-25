@@ -61,6 +61,29 @@ describe("classifyBranches", () => {
     expect(names(s.remote)).toEqual(["origin/feature/ai-commit"]);
   });
 
+  it("hides a remote branch whose same-name local exists even when the local does not track it", () => {
+    const s = classifyBranches(
+      [branch("main", { isHead: true }), branch("feat"), branch("origin/feat", { isRemote: true })],
+      [],
+      MAIN,
+    );
+    expect(names(s.remote)).toEqual([]);
+    expect(names(s.local)).toEqual(["feat"]);
+  });
+
+  it("keeps a remote branch that a differently named local tracks", () => {
+    const s = classifyBranches(
+      [
+        branch("main", { isHead: true }),
+        branch("mine", { upstream: "origin/feat" }),
+        branch("origin/feat", { isRemote: true }),
+      ],
+      [],
+      MAIN,
+    );
+    expect(names(s.remote)).toEqual(["origin/feat"]);
+  });
+
   it("goes to the worktree instead of switching for a branch another worktree uses", () => {
     const s = classifyBranches(branches, worktrees, AUDIT);
     const action = (name: string) => flattenSections(s).find((r) => r.branch.name === name)?.action;

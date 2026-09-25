@@ -1,5 +1,6 @@
 import { fuzzyFilter } from "@/lib/fuzzy-search";
 import type { BranchInfo, WorktreeInfo } from "@/types";
+import { remoteShortName } from "./branch-name";
 
 /**
  * 브랜치 패널(D6) 행의 주 동작.
@@ -28,7 +29,7 @@ export interface BranchPanelSections {
   inWorktree: BranchPanelRow[];
   /** 그 밖의 로컬 브랜치. */
   local: BranchPanelRow[];
-  /** 로컬 브랜치가 추적하지 않는 원격 브랜치. */
+  /** 같은 이름의 로컬 브랜치가 없는 원격 브랜치. */
   remote: BranchPanelRow[];
 }
 
@@ -45,7 +46,8 @@ const byRecent = (a: BranchPanelRow, b: BranchPanelRow) =>
  *
  * - `branch.isHead`는 `activePath`(지금 연 워크트리)의 HEAD 기준이다.
  * - 다른 워크트리(메인 워크트리 포함)가 체크아웃한 브랜치는 「이동」이다.
- * - 원격 칸에는 로컬 브랜치가 추적하지 않는 원격 브랜치만 둔다(`origin/HEAD` 제외).
+ * - 원격 칸에는 같은 이름의 로컬 브랜치가 없는 원격 브랜치만 둔다(`origin/HEAD` 제외).
+ *   로컬이 있으면 체크아웃이 그 로컬로 전환하므로(`switch_branch`) 로컬 행이 그 자리를 맡는다.
  * - 정렬: 워크트리 칸은 지금 브랜치 → 메인 워크트리 → 이름순, 원격 칸은 최근 커밋순.
  *   로컬 칸은 기본 브랜치를 맨 위에 두고, `sortBy`가 `recent`면 최근에 전환한 브랜치
  *   (`recentNames` 순서) → 최근 커밋순, `name`이면 이름순이다.
@@ -63,9 +65,7 @@ export function classifyBranches(
   for (const wt of worktrees) {
     if (wt.branch && !wt.isBare && !worktreeByBranch.has(wt.branch)) worktreeByBranch.set(wt.branch, wt);
   }
-  const trackedRemotes = new Set(
-    branches.filter((b) => !b.isRemote && b.upstream).map((b) => b.upstream as string),
-  );
+  const localNames = new Set(branches.filter((b) => !b.isRemote).map((b) => b.name));
 
   const inWorktree: BranchPanelRow[] = [];
   const local: BranchPanelRow[] = [];
@@ -73,7 +73,7 @@ export function classifyBranches(
 
   for (const branch of branches) {
     if (branch.isRemote) {
-      if (branch.name.endsWith("/HEAD") || trackedRemotes.has(branch.name)) continue;
+      if (branch.name.endsWith("/HEAD") || localNames.has(remoteShortName(branch.name))) continue;
       remote.push({ branch, section: "remote", worktree: null, action: "switch" });
       continue;
     }

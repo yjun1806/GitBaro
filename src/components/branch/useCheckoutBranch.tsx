@@ -14,6 +14,7 @@ import { selectionAfterStashPushed } from "@/lib/stash-selection";
 import { runWithStashedChanges } from "@/components/toolbar/run-with-stashed-changes";
 import type { WorktreeInfo } from "@/types";
 import { SwitchBranchDialog } from "./SwitchBranchDialog";
+import { checkoutTargetName } from "./branch-name";
 
 /** 체크아웃 뒤 다시 읽을 쿼리. 작업 트리·스태시·이력이 모두 바뀐다. */
 const CHECKOUT_QUERY_KEYS = [
@@ -54,6 +55,8 @@ export function worktreeHolding(
  * - 다른 워크트리가 쓰는 브랜치: 체크아웃 대신 그 워크트리로 이동한다.
  * - 커밋 안 한 변경이 있으면: 스태시에 두고 갈지, 가져갈지 묻는다(`SwitchBranchDialog`).
  * - 원격에만 있는 브랜치: 백엔드가 그 원격을 추적하는 로컬 브랜치를 만든다(`switch_branch`).
+ * - 같은 이름의 로컬 브랜치가 있는 원격 브랜치: 그 로컬 브랜치로 전환한다(백엔드와 같은 규칙).
+ * 목록을 다 읽기 전(`ready`가 아닐 때)의 호출은 무시한다. 변경이 없는 것으로 보고 묻지 않고 전환하면 안 된다.
  * 체크아웃에 성공하면 보기를 끝내고 현재 체크아웃을 보여 준다.
  */
 export function useCheckoutBranch(): {
@@ -124,8 +127,12 @@ export function useCheckoutBranch(): {
     }
   };
 
-  const checkout = (branchName: string) => {
-    if (!activeRepoPath || branchName === currentBranch) return;
+  const ready = branchData !== undefined && statusData !== undefined && worktreeData !== undefined;
+
+  const checkout = (requested: string) => {
+    if (!activeRepoPath || !ready) return;
+    const branchName = checkoutTargetName(requested, branches);
+    if (branchName === currentBranch) return;
     const holder = worktreeHolding(branchName, worktrees, activeRepoPath);
     if (holder) {
       void openWorktree(holder.path);
@@ -151,9 +158,5 @@ export function useCheckoutBranch(): {
     />
   ) : null;
 
-  return {
-    checkout,
-    element,
-    ready: branchData !== undefined && statusData !== undefined && worktreeData !== undefined,
-  };
+  return { checkout, element, ready };
 }
