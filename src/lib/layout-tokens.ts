@@ -12,9 +12,10 @@ export const HEADER_HEIGHT_CLASS = "h-[44px]";
 
 /**
  * Width reserved for macOS's traffic-light buttons under the app's Overlay
- * title bar (`tauri.conf.json`'s `titleBarStyle`). The inset lives on the
- * sidebar side of the header strip (the window's actual top-left corner),
- * not the toolbar.
+ * title bar (`tauri.conf.json`'s `titleBarStyle`). The inset sits at the
+ * window's actual top-left corner: in the sidebar's header row while the
+ * sidebar is shown, and at the start of the toolbar while it is hidden
+ * (`HiddenSidebarLead`), so the toolbar never slides under the traffic lights.
  */
 export const TRAFFIC_LIGHT_INSET_PX = 92;
 

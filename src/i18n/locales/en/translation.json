@@ -360,11 +360,7 @@
   },
   "rail": {
     "repositories": "Repositories",
-    "allRepos": "All repositories",
-    "sidebarControl": "Sidebar control",
-    "expanded": "Expanded",
-    "collapsed": "Collapsed",
-    "expandOnHover": "Expand on hover"
+    "allRepos": "All repositories"
   },
   "notify": {
     "newCommitsTitle_one": "{{repo}} · {{branch}}: {{count}} new commit",
@@ -776,6 +772,8 @@
     "openRepoList": "All repositories",
     "closeRepoList": "Close repository list",
     "resizeSidebar": "Resize sidebar",
+    "hideSidebar": "Hide sidebar",
+    "showSidebar": "Show sidebar",
     "panelTabs": "Main panel",
     "selectCommitOrChanges": "Select a commit or the uncommitted changes row above."
   },
@@ -1423,6 +1421,8 @@
     },
     "general": {
       "sidebar": "Sidebar",
+      "hideSidebar": "Hide sidebar",
+      "hideSidebarDescription": "Show only the main column. Bring the sidebar back with ⌘\\ or the sidebar button at the left of the toolbar.",
       "collapseQuiet": "Fold quiet repositories",
       "collapseQuietDescription": "Repositories with no changes and nothing to push or pull fold into one row at the bottom of their account.",
       "quietMinutes": "Quiet after",

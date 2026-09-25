@@ -15,13 +15,6 @@ import { buildSignals, syncStatusPaths, worktreesByRepoFrom } from "./tree-model
 /** 사이드바가 활동 감시 대상에 경로를 더할 때 쓰는 키. */
 export const SIDEBAR_WATCH_KEY = "sidebar";
 
-/**
- * 트리가 접히거나(railMode collapsed) 마우스가 떠나 있는 hover 모드일 때(트리가 unmount돼
- * `SIDEBAR_WATCH_KEY` 등록이 사라질 때) 대신 쓰는 키. `RepoRail`이 저장소 옆에 따로 만든
- * 워크트리처럼 다른 어디서도 감시하지 않는 경로가 통째로 감시에서 빠지지 않도록 채운다.
- */
-export const SIDEBAR_FALLBACK_WATCH_KEY = "sidebar-collapsed";
-
 /** 「지금 바뀌는 곳」과 조용한 저장소 판정이 시간이 지나면 풀리도록 다시 그리는 간격. */
 const NOW_TICK_MS = 15_000;
 
@@ -159,24 +152,16 @@ export function useSidebarTreeData(): SidebarTreeData {
 }
 
 /**
- * 화면에 워크트리 행이 보이는 경로를 활동 감시 대상(기본 `sidebar` 키)으로 등록하고, 목록이
- * 바뀌면 덮어쓴다. 부르는 컴포넌트가 사라지면(접힌 줄로 바뀌거나 화면이 닫히면) 등록을 지운다.
- *
- * `key`를 다르게 주면 같은 메커니즘을 다른 감시 묶음에도 쓸 수 있다(`RepoRail`의
- * `SIDEBAR_FALLBACK_WATCH_KEY`처럼, 트리가 unmount될 때를 대신 채우는 등록).
+ * 화면에 워크트리 행이 보이는 경로를 활동 감시 대상(`sidebar` 키)으로 등록하고, 목록이
+ * 바뀌면 덮어쓴다. 부르는 컴포넌트가 사라지면(화면이 닫히면) 등록을 지운다.
  */
-export function useSidebarWatchPaths(paths: string[], key: string = SIDEBAR_WATCH_KEY): void {
+export function useSidebarWatchPaths(paths: string[]): void {
   const registerWatchPaths = useActivityTargetsStore((s) => s.registerWatchPaths);
   const unregisterWatchPaths = useActivityTargetsStore((s) => s.unregisterWatchPaths);
   const pathsKey = watchPathsKey(paths);
   useEffect(() => {
     // 배열 대신 pathsKey로 내용을 비교한다(트리가 15초마다 새로 만들어져도 같은 목록이면 다시 등록하지 않는다).
-    registerWatchPaths(key, pathsFromWatchKey(pathsKey));
-  }, [key, pathsKey, registerWatchPaths]);
-  useEffect(() => () => unregisterWatchPaths(key), [key, unregisterWatchPaths]);
-}
-
-/** `worktreesByRepo`의 모든 워크트리 경로를 하나로 편다(순서·저장소 구분 없이). */
-export function allWorktreePaths(worktreesByRepo: Record<string, WorktreeInput[]>): string[] {
-  return Object.values(worktreesByRepo).flatMap((wts) => wts.map((w) => w.path));
+    registerWatchPaths(SIDEBAR_WATCH_KEY, pathsFromWatchKey(pathsKey));
+  }, [pathsKey, registerWatchPaths]);
+  useEffect(() => () => unregisterWatchPaths(SIDEBAR_WATCH_KEY), [unregisterWatchPaths]);
 }

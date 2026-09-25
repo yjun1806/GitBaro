@@ -37,12 +37,12 @@ describe("sanitizePersistedUI — split sizes", () => {
   });
 
   it("keeps an existing v0 user's values when the new fields are missing", () => {
-    // 이 필드가 생기기 전에 저장된 값: 사이드바 모드·폭은 그대로 살고, 새 필드는 기본값을 쓴다.
-    const v0 = { railMode: "hover", sidebarWidth: 380, diffLineMode: "split" };
+    // 이 필드가 생기기 전에 저장된 값: 사이드바 폭은 그대로 살고, 새 필드는 기본값을 쓴다.
+    const v0 = { sidebarWidth: 380, diffLineMode: "split" };
     expect(sanitizePersistedUI(migrateUI(v0, 0))).toEqual(v0);
     const merge = useUIStore.persist.getOptions().merge!;
     const merged = merge(v0, useUIStore.getInitialState());
-    expect(merged.railMode).toBe("hover");
+    expect(merged.sidebarHidden).toBe(false);
     expect(merged.sidebarWidth).toBe(380);
     expect(merged.graphPanelRatio).toBe(DEFAULT_GRAPH_RATIO);
     expect(merged.fileListWidth).toBe(DEFAULT_FILE_LIST_WIDTH);
@@ -65,13 +65,13 @@ describe("sanitizePersistedUI — split sizes", () => {
 describe("sanitizePersistedUI", () => {
   it("keeps well-formed layout preferences", () => {
     expect(
-      sanitizePersistedUI({ railMode: "collapsed", sidebarWidth: 420, diffLineMode: "split" }),
-    ).toEqual({ railMode: "collapsed", sidebarWidth: 420, diffLineMode: "split" });
+      sanitizePersistedUI({ sidebarHidden: true, sidebarWidth: 420, diffLineMode: "split" }),
+    ).toEqual({ sidebarHidden: true, sidebarWidth: 420, diffLineMode: "split" });
   });
 
   it("drops malformed or unknown values instead of breaking the layout", () => {
     expect(
-      sanitizePersistedUI({ railMode: "wide", sidebarWidth: "500", diffLineMode: "document" }),
+      sanitizePersistedUI({ sidebarHidden: "yes", sidebarWidth: "500", diffLineMode: "document" }),
     ).toEqual({});
     expect(sanitizePersistedUI({ sidebarWidth: 12 })).toEqual({});
     expect(sanitizePersistedUI({ sidebarWidth: Number.NaN })).toEqual({});
@@ -87,9 +87,7 @@ describe("sanitizePersistedUI", () => {
 // the activeTab values, and activeTab is never written to storage. sidebarWidth
 // now sizes the tree sidebar instead of the old tab column, but that does not
 // warrant a version bump or a migration (the task's own rule: only bump when a
-// persisted value's *values* change, which activeTab's did not). A v0 user's
-// railMode and sidebarWidth are kept as-is (W2-T2: keep the rail's
-// collapsed/hover modes).
+// persisted value's *values* change, which activeTab's did not).
 describe("ui store after the two-column shell", () => {
   it("does not persist activeTab, so old stored values cannot leak in", () => {
     useUIStore.getState().setActiveTab("stash");
@@ -100,7 +98,7 @@ describe("ui store after the two-column shell", () => {
       "fileListWidth",
       "graphPanelRatio",
       "maximizedFileListOpen",
-      "railMode",
+      "sidebarHidden",
       "sidebarWidth",
     ]);
     expect(sanitizePersistedUI({ activeTab: "changes" })).toEqual({});
@@ -108,7 +106,7 @@ describe("ui store after the two-column shell", () => {
 
   it("starts pinned open at the design's sidebar width", () => {
     expect(DEFAULT_SIDEBAR_WIDTH).toBe(276);
-    expect(useUIStore.getInitialState().railMode).toBe("expanded");
+    expect(useUIStore.getInitialState().sidebarHidden).toBe(false);
     expect(useUIStore.getInitialState().sidebarWidth).toBe(276);
   });
 
@@ -121,7 +119,7 @@ describe("ui store after the two-column shell", () => {
 
 describe("migrateUI", () => {
   it("passes every field through unchanged regardless of version", () => {
-    const v0 = { railMode: "hover", sidebarWidth: 500, diffLineMode: "split" };
+    const v0 = { sidebarHidden: true, sidebarWidth: 500, diffLineMode: "split" };
     expect(migrateUI(v0, 0)).toEqual(v0);
     expect(migrateUI(v0, 1)).toEqual(v0);
   });
@@ -131,35 +129,70 @@ describe("migrateUI", () => {
     expect(sanitizePersistedUI(migrateUI("junk", 0))).toEqual({});
   });
 
-  it("keeps a v0 user's deliberately chosen rail mode and width across rehydration (W2-T2)", async () => {
-    // setState writes storage too, so reset first, then plant the old entry.
-    useUIStore.setState({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH, railMode: "expanded" });
+  it("keeps a hidden sidebar and its width across rehydration", async () => {
+    // setState writes storage too, so reset first, then plant the entry.
+    useUIStore.setState({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH, sidebarHidden: false });
     localStorage.setItem(
       "gitbaro-ui",
-      JSON.stringify({ state: { railMode: "collapsed", sidebarWidth: 500 }, version: 0 }),
+      JSON.stringify({ state: { sidebarHidden: true, sidebarWidth: 500 }, version: 0 }),
     );
     await useUIStore.persist.rehydrate();
-    expect(useUIStore.getState().railMode).toBe("collapsed");
+    expect(useUIStore.getState().sidebarHidden).toBe(true);
     expect(useUIStore.getState().sidebarWidth).toBe(500);
     localStorage.removeItem("gitbaro-ui");
+    useUIStore.setState({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH, sidebarHidden: false });
   });
+});
 
-  it("keeps a deliberately chosen hover rail mode across rehydration", async () => {
-    useUIStore.setState({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH, railMode: "expanded" });
+// 옛 빌드의 railMode(펼침·접힘·hover)는 없앴다. 무엇을 골랐든 업그레이드하면 트리가 보이는
+// 펼침(숨기지 않음)으로 열리고, 다른 저장값은 그대로 산다.
+describe("migration from the removed rail modes", () => {
+  it.each(["expanded", "collapsed", "hover"])("maps an old %s rail to the pinned, visible sidebar", async (railMode) => {
+    const merge = useUIStore.persist.getOptions().merge!;
+    expect(merge({ railMode, sidebarWidth: 340 }, useUIStore.getInitialState()).sidebarHidden).toBe(false);
+
+    // 앱을 켤 때와 같이 기본 상태에서 옛 저장값을 읽는다(setState가 저장소에도 쓰므로 먼저 둔다).
+    useUIStore.setState({ sidebarWidth: DEFAULT_SIDEBAR_WIDTH, sidebarHidden: false, diffLineMode: "unified" });
     localStorage.setItem(
       "gitbaro-ui",
-      JSON.stringify({ state: { railMode: "hover", sidebarWidth: 320, diffLineMode: "unified" }, version: 0 }),
+      JSON.stringify({ state: { railMode, sidebarWidth: 340, diffLineMode: "split", fileListWidth: 360 }, version: 0 }),
     );
     await useUIStore.persist.rehydrate();
-    expect(useUIStore.getState().railMode).toBe("hover");
-    expect(useUIStore.getState().sidebarWidth).toBe(320);
+    const state = useUIStore.getState();
+    expect(state.sidebarHidden).toBe(false);
+    expect(state).toMatchObject({ sidebarWidth: 340, diffLineMode: "split", fileListWidth: 360 });
+    expect(state).not.toHaveProperty("railMode");
+    expect(useUIStore.persist.getOptions().partialize!(state)).not.toHaveProperty("railMode");
     localStorage.removeItem("gitbaro-ui");
+    useUIStore.setState({
+      sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+      diffLineMode: "unified",
+      fileListWidth: DEFAULT_FILE_LIST_WIDTH,
+    });
+  });
+
+  it("does not read the old field when sanitizing", () => {
+    expect(sanitizePersistedUI({ railMode: "collapsed", sidebarWidth: 300 })).toEqual({ sidebarWidth: 300 });
+  });
+});
+
+describe("sidebar toggle", () => {
+  it("hides and shows the sidebar and persists the choice", () => {
+    expect(useUIStore.getState().sidebarHidden).toBe(false);
+    useUIStore.getState().toggleSidebar();
+    expect(useUIStore.getState().sidebarHidden).toBe(true);
+    expect(useUIStore.persist.getOptions().partialize!(useUIStore.getState())).toMatchObject({ sidebarHidden: true });
+    useUIStore.getState().toggleSidebar();
+    expect(useUIStore.getState().sidebarHidden).toBe(false);
+    useUIStore.getState().setSidebarHidden(true);
+    expect(useUIStore.getState().sidebarHidden).toBe(true);
+    useUIStore.getState().setSidebarHidden(false);
   });
 });
 
 describe("sanitizePersistedUI — removed review basis setting", () => {
   it("ignores a leftover reviewBasis from an older build and keeps the other saved fields", () => {
-    const saved = { railMode: "hover", sidebarWidth: 300, diffLineMode: "split" };
+    const saved = { sidebarHidden: true, sidebarWidth: 300, diffLineMode: "split" };
     expect(sanitizePersistedUI({ ...saved, reviewBasis: "unseen" })).toEqual(saved);
   });
 });
@@ -179,29 +212,29 @@ describe("maximized diff file list", () => {
   });
 
   it("restores the choice without touching other saved fields", async () => {
-    useUIStore.setState({ railMode: "expanded", maximizedFileListOpen: true });
+    useUIStore.setState({ sidebarHidden: false, maximizedFileListOpen: true });
     localStorage.setItem(
       "gitbaro-ui",
       JSON.stringify({
-        state: { railMode: "hover", sidebarWidth: 330, reviewBasis: "unseen", maximizedFileListOpen: false },
+        state: { sidebarHidden: true, sidebarWidth: 330, reviewBasis: "unseen", maximizedFileListOpen: false },
         version: 0,
       }),
     );
     await useUIStore.persist.rehydrate();
     const state = useUIStore.getState();
     expect(state.maximizedFileListOpen).toBe(false);
-    expect(state).toMatchObject({ railMode: "hover", sidebarWidth: 330 });
+    expect(state).toMatchObject({ sidebarHidden: true, sidebarWidth: 330 });
     // 옛 빌드가 남긴 reviewBasis는 상태에 들어오지 않고, 다음 저장에서 빠진다.
     expect(state).not.toHaveProperty("reviewBasis");
     expect(useUIStore.persist.getOptions().partialize!(state)).not.toHaveProperty("reviewBasis");
     localStorage.removeItem("gitbaro-ui");
-    useUIStore.setState({ maximizedFileListOpen: true, railMode: "expanded" });
+    useUIStore.setState({ maximizedFileListOpen: true, sidebarHidden: false, sidebarWidth: DEFAULT_SIDEBAR_WIDTH });
   });
 
   it("falls back to open for users who saved before the field existed", () => {
     const merge = useUIStore.persist.getOptions().merge!;
-    const merged = merge({ railMode: "collapsed", sidebarWidth: 300 }, useUIStore.getInitialState());
+    const merged = merge({ sidebarHidden: true, sidebarWidth: 300 }, useUIStore.getInitialState());
     expect(merged.maximizedFileListOpen).toBe(true);
-    expect(merged.railMode).toBe("collapsed");
+    expect(merged.sidebarHidden).toBe(true);
   });
 });

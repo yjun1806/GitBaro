@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, RotateCcw } from "lucide-react";
 import type { AppSettings } from "@/types";
 import { QUIET_MINUTES_OPTIONS, usePreferencesStore } from "@/stores/preferences";
+import { useUIStore } from "@/stores/ui";
 import { SettingsSection } from "../ui/SettingsSection";
 import { SettingsRow } from "../ui/SettingsRow";
 import { Switch } from "../ui/Switch";
@@ -14,13 +15,15 @@ interface GeneralSectionProps {
   onUpdateSettings: (patch: Partial<AppSettings>) => void;
 }
 
-/** 「일반」 칸: 언어, 사이드바의 조용한 저장소, 새 워크트리 위치. */
+/** 「일반」 칸: 언어, 사이드바 숨기기와 조용한 저장소, 새 워크트리 위치. */
 export function GeneralSection({ settings, onUpdateSettings }: GeneralSectionProps) {
   const { t } = useTranslation();
   const collapseQuietRepos = usePreferencesStore((s) => s.collapseQuietRepos);
   const quietMinutes = usePreferencesStore((s) => s.quietMinutes);
   const worktreeParentDir = usePreferencesStore((s) => s.worktreeParentDir);
   const setPreferences = usePreferencesStore((s) => s.setPreferences);
+  const sidebarHidden = useUIStore((s) => s.sidebarHidden);
+  const setSidebarHidden = useUIStore((s) => s.setSidebarHidden);
 
   const handlePickWorktreeDir = async () => {
     const picked = await open({ directory: true, multiple: false, defaultPath: worktreeParentDir ?? undefined });
@@ -43,6 +46,12 @@ export function GeneralSection({ settings, onUpdateSettings }: GeneralSectionPro
       </SettingsSection>
 
       <SettingsSection title={t("settingsPanel.general.sidebar")}>
+        <SettingsRow
+          label={t("settingsPanel.general.hideSidebar")}
+          description={t("settingsPanel.general.hideSidebarDescription")}
+        >
+          <Switch checked={sidebarHidden} onChange={setSidebarHidden} />
+        </SettingsRow>
         <SettingsRow
           label={t("settingsPanel.general.collapseQuiet")}
           description={t("settingsPanel.general.collapseQuietDescription")}

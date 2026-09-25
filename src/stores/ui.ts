@@ -10,9 +10,6 @@ import {
 } from "@/lib/split-size";
 import type { Theme } from "@/types";
 
-/** Repo rail display mode (Supabase-style sidebar control) */
-export type RailMode = "expanded" | "collapsed" | "hover";
-
 /** Line-diff layout the user last picked; remembered across files and restarts. */
 export type DiffLineMode = "unified" | "split";
 
@@ -20,8 +17,8 @@ interface UIState {
   theme: Theme;
   activeTab: "changes" | "history" | "stash" | "actions";
   sidebarWidth: number;
-  isSidebarCollapsed: boolean;
-  railMode: RailMode;
+  /** 사이드바를 통째로 숨겼는가(⌘\, 사이드바 버튼, 저장). 숨기지 않으면 늘 펼친 트리다. */
+  sidebarHidden: boolean;
   repoListOpen: boolean;
   isActivityLogOpen: boolean;
   /** 브랜치 전환(checkout + 재조회) 진행 중 여부. 로딩 피드백 표시에 사용. */
@@ -43,8 +40,8 @@ interface UIState {
   setTheme: (theme: Theme) => void;
   setActiveTab: (tab: "changes" | "history" | "stash" | "actions") => void;
   setSidebarWidth: (width: number) => void;
+  setSidebarHidden: (hidden: boolean) => void;
   toggleSidebar: () => void;
-  setRailMode: (mode: RailMode) => void;
   setRepoListOpen: (open: boolean) => void;
   setActivityLogOpen: (open: boolean) => void;
   setSwitchingBranch: (switching: boolean) => void;
@@ -59,13 +56,12 @@ interface UIState {
 /** Sidebar width in the two-column shell's design (`gen_d.py` sidebar, 276px). */
 export const DEFAULT_SIDEBAR_WIDTH = 276;
 
-const RAIL_MODES: readonly RailMode[] = ["expanded", "collapsed", "hover"];
 const DIFF_LINE_MODES: readonly DiffLineMode[] = ["unified", "split"];
 
 /** Fields of the UI store written to `gitbaro-ui` (see `partialize`). */
 type PersistedUI = Pick<
   UIState,
-  "railMode" | "sidebarWidth" | "diffLineMode" | "graphPanelRatio" | "fileListWidth" | "maximizedFileListOpen"
+  "sidebarHidden" | "sidebarWidth" | "diffLineMode" | "graphPanelRatio" | "fileListWidth" | "maximizedFileListOpen"
 >;
 
 /**
@@ -76,10 +72,12 @@ type PersistedUI = Pick<
  * 버전을 올리지 않습니다"). `sidebarWidth` now sizes the tree sidebar
  * instead of the old tab column, but a stale width only changes how wide the
  * sidebar opens, and `sanitizePersistedUI` already discards anything below
- * `MIN_SIDEBAR_WIDTH` while `MainLayout` clamps the upper bound. `railMode`
- * must survive as-is: W2-T2 requires keeping the rail's collapsed/hover
- * modes, so a v0 user's deliberate choice is never silently reset to
- * "expanded".
+ * `MIN_SIDEBAR_WIDTH` while `MainLayout` clamps the upper bound.
+ * 없앤 `railMode`(펼침·접힘·hover)도 버전을 올리지 않는다. 그 자리를 `sidebarHidden`이 잇는데,
+ * 옛 값은 무엇이었든(접힘·hover 포함) 숨기지 않은 펼침으로 본다. 업그레이드한 사용자가 트리를 바로
+ * 보게 하려는 것이다. `sanitizePersistedUI`는 `railMode`를 읽지 않으므로 `sidebarHidden`이 없는
+ * 옛 저장값은 기본값(false)을 쓰고, 다음 저장 때 `partialize`가 `railMode`를 빼서 사라진다.
+ * 다른 필드(`sidebarWidth` 등)는 그대로 살린다.
  * `graphPanelRatio`·`fileListWidth`·`maximizedFileListOpen`은 나중에 더한 선택 필드다. 없으면 기본값을 쓰므로
  * (`sanitizePersistedUI`) 버전을 올리지 않는다. 다른 필드의 뜻은 그대로라 옛 값을 지우지 않는다.
  * 없앤 `reviewBasis`(검토 기준 설정)도 버전을 올리지 않는다. 옛 저장값에 남은 그 필드는
@@ -101,7 +99,7 @@ export function sanitizePersistedUI(persisted: unknown): Partial<UIState> {
   if (typeof persisted !== "object" || persisted === null) return {};
   const p = persisted as Record<string, unknown>;
   const out: Partial<UIState> = {};
-  if (RAIL_MODES.includes(p.railMode as RailMode)) out.railMode = p.railMode as RailMode;
+  if (typeof p.sidebarHidden === "boolean") out.sidebarHidden = p.sidebarHidden;
   if (typeof p.sidebarWidth === "number" && Number.isFinite(p.sidebarWidth) && p.sidebarWidth >= MIN_SIDEBAR_WIDTH) {
     out.sidebarWidth = p.sidebarWidth;
   }
@@ -126,11 +124,8 @@ export const useUIStore = create<UIState>()(
       activeTab: "changes",
       // W2-T1: 두 칸 셸에서 이 폭은 트리 사이드바 폭이다(시안 276px). 저장된 값이 있으면 그 값을 쓴다.
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
-      isSidebarCollapsed: false,
-      // 시안은 트리 사이드바가 늘 보이는 두 칸이다(gen_d.py sidebar 276px). 새로 설치할
-      // 때만 이 기본값을 쓴다. 저장된 값(옛 rail-only 셸에서 고른 hover/collapsed 포함)이
-      // 있으면 merge()에서 그 값을 그대로 되살린다(W2-T2: rail의 접힘·hover 모드 유지).
-      railMode: "expanded",
+      // 시안은 트리 사이드바가 늘 보이는 두 칸이다(gen_d.py sidebar 276px).
+      sidebarHidden: false,
       repoListOpen: false,
       isActivityLogOpen: false,
       isSwitchingBranch: false,
@@ -147,10 +142,9 @@ export const useUIStore = create<UIState>()(
 
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
 
-      toggleSidebar: () =>
-        set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
+      setSidebarHidden: (hidden) => set({ sidebarHidden: hidden }),
 
-      setRailMode: (mode) => set({ railMode: mode }),
+      toggleSidebar: () => set((state) => ({ sidebarHidden: !state.sidebarHidden })),
 
       setRepoListOpen: (open) => set({ repoListOpen: open }),
 
@@ -175,7 +169,7 @@ export const useUIStore = create<UIState>()(
       // regroup the tabs without migrating it: the graph panel's "commit graph"
       // tab covers "changes" (uncommitted row) and "history".
       partialize: (state) => ({
-        railMode: state.railMode,
+        sidebarHidden: state.sidebarHidden,
         sidebarWidth: state.sidebarWidth,
         diffLineMode: state.diffLineMode,
         graphPanelRatio: state.graphPanelRatio,

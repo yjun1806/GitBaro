@@ -15,6 +15,7 @@ import { cn, getErrorMessage } from "@/lib/utils";
 import { GhLoginDialog } from "@/components/account/GhLoginDialog";
 import { SettingsPanel, type AppSettingsSection } from "@/components/settings/SettingsPanel";
 import { HEADER_HEIGHT_CLASS } from "@/lib/layout-tokens";
+import { HiddenSidebarLead } from "@/components/layout/SidebarToggle";
 import { ToolbarDropdownContext, useToolbarDropdown } from "./useToolbarDropdown";
 import { BranchZone } from "./BranchZone";
 import { WorktreeZone } from "./WorktreeZone";
@@ -41,6 +42,7 @@ export function ToolbarRoot() {
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
   const setTheme = useUIStore((s) => s.setTheme);
+  const sidebarHidden = useUIStore((s) => s.sidebarHidden);
   const { t, i18n } = useTranslation();
 
   const handleOpenSettings = async (section: AppSettingsSection = "general") => {
@@ -122,10 +124,18 @@ export function ToolbarRoot() {
       {/* @container: 툴바 폭에 따라 git 작업 버튼 이름을 숨긴다(ActionButton의 TOOLBAR_LABEL_CLASS). */}
       {/* 머리 줄: 44px 한 줄 flex(items-center). 안의 모든 버튼은 28px 툴바 버튼(toolbar-button.ts)이라
           한 가로 중심선에 놓인다. 오른쪽 버튼은 관련된 것끼리 흰 카드(34px, TOOLBAR_GROUP)에 담고
-          카드 사이는 6px 틈으로 나눈다. 좌우 여백 8px. */}
-      <div className={cn("@container flex items-center gap-1.5 px-2 border-b border-(--line2) bg-(--frame) select-none", HEADER_HEIGHT_CLASS)}>
-        {/* macOS 트래픽 라이트는 사이드바 쪽(맨 왼쪽 위 모서리)에 있다 — 그 자리 예약은
-            RepoRail의 머리글이 진다(TRAFFIC_LIGHT_INSET_PX, layout-tokens.ts). */}
+          카드 사이는 6px 틈으로 나눈다. 좌우 여백 8px. 사이드바를 숨기면 왼쪽 여백 대신 트래픽 라이트
+          자리가 맨 앞에 온다. */}
+      <div
+        className={cn(
+          "@container flex items-center gap-1.5 border-b border-(--line2) bg-(--frame) select-none",
+          sidebarHidden ? "pr-2" : "px-2",
+          HEADER_HEIGHT_CLASS,
+        )}
+      >
+        {/* macOS 트래픽 라이트는 창의 맨 왼쪽 위에 있다. 사이드바가 보이면 그 자리 예약은 RepoRail의
+            머리글이 지고, 숨기면 여기서 예약하고 사이드바를 다시 여는 버튼을 둔다(TRAFFIC_LIGHT_INSET_PX). */}
+        <HiddenSidebarLead />
         {scope?.kind === "workspace" ? (
           <>
             {/* 워크스페이스 리뷰 화면(W4-T3)이 제목을 이 자리에 portal로 그린다. */}

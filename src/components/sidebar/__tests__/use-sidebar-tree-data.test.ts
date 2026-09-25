@@ -51,7 +51,6 @@ vi.mock("@/hooks/useReviewStatus", () => ({
 }));
 
 import {
-  allWorktreePaths,
   SIDEBAR_WATCH_KEY,
   useSidebarTreeData,
   useSidebarWatchPaths,
@@ -109,35 +108,5 @@ describe("useSidebarWatchPaths", () => {
 
     unmount();
     expect(useActivityTargetsStore.getState().extraByKey[SIDEBAR_WATCH_KEY]).toBeUndefined();
-  });
-
-  it("registers under a caller-given key, independent of the default sidebar key", () => {
-    // RepoRail uses this to keep watching worktrees under a fallback key while
-    // RepoTree (which owns SIDEBAR_WATCH_KEY) is unmounted — rail collapsed, or
-    // hover mode with the mouse away.
-    const { unmount } = renderHook(() => useSidebarWatchPaths([WT], "sidebar-collapsed"));
-    expect(useActivityTargetsStore.getState().extraByKey["sidebar-collapsed"]).toEqual([WT]);
-    expect(useActivityTargetsStore.getState().extraByKey[SIDEBAR_WATCH_KEY]).toBeUndefined();
-
-    unmount();
-    expect(useActivityTargetsStore.getState().extraByKey["sidebar-collapsed"]).toBeUndefined();
-  });
-});
-
-describe("allWorktreePaths", () => {
-  it("flattens every repo's worktree paths into one list", () => {
-    expect(
-      allWorktreePaths({
-        [API]: [{ path: API, branch: "main" }],
-        "/other": [
-          { path: "/other", branch: "main" },
-          { path: WT, branch: "feat/login" },
-        ],
-      }),
-    ).toEqual([API, "/other", WT]);
-  });
-
-  it("returns an empty list for no repos", () => {
-    expect(allWorktreePaths({})).toEqual([]);
   });
 });

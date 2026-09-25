@@ -107,6 +107,17 @@ describe("SettingsPanel", () => {
     expect(screen.getByRole("combobox", { name: "Quiet after" })).toBeDisabled();
   });
 
+  it("hides and shows the sidebar from the General section", async () => {
+    const { useUIStore } = await import("@/stores/ui");
+    renderPanel();
+    const hide = screen.getByRole("switch", { name: "Hide sidebar" });
+    expect(hide).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(hide);
+    expect(useUIStore.getState().sidebarHidden).toBe(true);
+    fireEvent.click(hide);
+    expect(useUIStore.getState().sidebarHidden).toBe(false);
+  });
+
   it("picks a folder for new worktrees and can go back to the default", async () => {
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Choose folder…" }));

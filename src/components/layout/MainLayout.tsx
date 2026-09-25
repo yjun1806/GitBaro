@@ -7,6 +7,7 @@ import { useLiveChanges } from "@/hooks/useLiveChanges"; // W1-T3
 import { useSidebarWidth } from "@/hooks/useSidebarWidth";
 import "@/stores/selection"; // ensure cross-store subscriptions are registered
 import { RepoRail } from "./RepoRail";
+import { useSidebarToggleShortcut } from "./useSidebarToggleShortcut";
 import { MainColumn } from "./MainColumn";
 import { SIDEBAR_HANDLE_WIDTH } from "@/lib/layout-tokens";
 import { HEADER_HEIGHT_PX } from "@/lib/layout-tokens";
@@ -24,7 +25,7 @@ import { clampSidebarWidth } from "@/lib/sidebar-width";
 export function MainLayout() {
   const { t } = useTranslation();
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
-  const railMode = useUIStore((s) => s.railMode);
+  const sidebarHidden = useUIStore((s) => s.sidebarHidden);
   const isActivityLogOpen = useUIStore((s) => s.isActivityLogOpen);
 
   // 저장소별 설정에 따라 원격을 주기적으로 확인하고, 안전할 때만 자동으로 받는다
@@ -35,9 +36,8 @@ export function MainLayout() {
   useNotifications();
 
   const sidebarWidth = useSidebarWidth();
-  // 사이드바를 고정으로 펼친 모드에서만 폭을 사용자가 조절한다. 접힘·hover 모드는
-  // 좁은 레일로 남는다(hover는 레일 위에 떠서 펼쳐진다).
-  const isResizable = railMode === "expanded";
+  // ⌘\로 사이드바를 숨기거나 다시 보인다.
+  useSidebarToggleShortcut();
 
   const startWidth = useRef(sidebarWidth);
   const handleDragStart = useCallback(() => {
@@ -60,12 +60,12 @@ export function MainLayout() {
     // 본문 칸(MainColumn)만 층 1 바탕을 깐다.
     <div className="flex flex-col h-screen bg-(--frame) text-foreground overflow-hidden">
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar. When pinned open it takes the user-sized width. */}
-        <RepoRail expandedWidth={isResizable ? sidebarWidth : undefined} />
+        {/* Sidebar at the user-sized width, or out of the way when hidden. */}
+        <RepoRail width={sidebarWidth} />
 
         {/* 시안에는 사이드바와 메인 사이에 선이 없다. 손잡이는 다른 칸 나누기와 같은 모양이다
             (투명한 잡는 영역, 올리면 색이 드러나고, 두 번 누르면 기본 폭). */}
-        {isResizable && (
+        {!sidebarHidden && (
           <SplitHandle
             orientation="vertical"
             size={SIDEBAR_HANDLE_WIDTH}
