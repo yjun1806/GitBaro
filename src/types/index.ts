@@ -645,6 +645,11 @@ export interface BranchChangedFile {
   isBinary: boolean;
   /** 추적하지 않는 새 파일이 1 MiB를 넘어 읽지 않았다. 줄 수는 0이다. */
   tooLarge?: boolean;
+  /**
+   * 이 목록이 보여 주는 쪽(커밋 트리 또는 작업 트리)의 파일 내용 id. 보통 blob OID이고, 1 MiB를 넘는
+   * 작업 트리 파일은 `size:<바이트>:mtime:<나노초>`다. 지운 파일이면 null. 「봤음」 표시가 내용이 바뀌었는지 가린다.
+   */
+  blobId?: string | null;
 }
 
 /**

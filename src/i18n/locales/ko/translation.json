@@ -1208,5 +1208,19 @@
     "copyLine": "{{line}}번 줄 복사",
     "openFileInEditor": "편집기에서 파일 열기",
     "diffMenu": "diff 메뉴"
+  },
+  "fileReview": {
+    "progress_one": "파일 {{count}}개 중 {{viewed}}개 봤음",
+    "progress_other": "파일 {{count}}개 중 {{viewed}}개 봤음",
+    "viewed": "봤음",
+    "markViewed": "봤음으로 표시",
+    "unmarkViewed": "봤음 해제",
+    "markAllViewed": "모두 봤음으로",
+    "unmarkAll": "모두 해제",
+    "viewedGroup_one": "봤음 {{count}}개",
+    "viewedGroup_other": "봤음 {{count}}개",
+    "collapseViewed": "봤음 접기",
+    "expandViewed": "봤음 펼치기",
+    "listMenu": "변경 목록 메뉴"
   }
 }

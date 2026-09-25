@@ -1,17 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { TAURI_EVENTS } from "@/api/events";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown, ChevronRight, FileText, Folder, GitBranch } from "lucide-react";
-import { useChangesVsDefaultMany, useFileDiffsVsDefault } from "@/api/queries";
+import { AlertTriangle, ChevronDown, ChevronRight, FileText, Folder, GitBranch, Square, SquareCheck } from "lucide-react";
+import { useBranches, useChangesVsDefaultMany, useFileDiffsVsDefault } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { EmptyState } from "@/components/layout/ContentArea";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import type { MaximizedFiles } from "@/components/layout/maximized-files";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
-import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import { ContextMenu, contextMenuPoint } from "@/components/ui/ContextMenu";
 import { useFileMenu } from "@/components/commit/useFileMenu";
 import { useFolderMenu } from "@/components/ui/useFolderMenu";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
@@ -19,8 +19,17 @@ import { statusTextColors } from "@/lib/file-status";
 import { cn, getErrorMessage, trimTrailingSlash } from "@/lib/utils";
 import type { BranchChangedFile, BranchChanges, ChangesScope, FileStatus } from "@/types";
 import type { FilesGroupBy } from "./files-view";
-import { changesSummary, tabBaseName, useChangesScopes, useCompareBaseStore } from "./compare-base";
+import { changesSummary, comparisonBaseName, tabBaseName, useChangesScopes, useCompareBaseStore } from "./compare-base";
 import { BasePicker } from "./BasePicker";
+import { ViewedCheckbox } from "@/components/ui/ViewedCheckbox";
+import { ViewedProgress } from "./ViewedProgress";
+import {
+  DETACHED,
+  isViewed,
+  toReviewable,
+  useFileReviewStore,
+  type FileReviewScope,
+} from "@/stores/file-review";
 
 export interface FilesByRepoRepo {
   /** 비교할 저장소(또는 지금 연 워크트리) 경로. */
@@ -76,6 +85,17 @@ function fileKey(repoPath: string, filePath: string): string {
   return `${repoPath}\u0000${filePath}`;
 }
 
+/** 「봤음」 표시의 범위: 이 목록이 보여 주는 브랜치와 비교 기준. */
+function reviewScopeOf(changes: BranchChanges, scope: ChangesScope | null): FileReviewScope {
+  return { branch: changes.branch ?? DETACHED, base: comparisonBaseName(changes, scope?.base ?? null) };
+}
+
+/** 저장소 하나의 파일마다 「봤음」인지. 목록을 아직 못 받았으면 비어 있다. */
+interface RepoReview {
+  scope: FileReviewScope;
+  viewed: ReadonlySet<string>;
+}
+
 /**
  * main 대비 변경(D7, 예전 이름 「main 대비 변경」). 저장소마다 그 저장소의 main(또는 고른 기준 브랜치)과
  * 갈라진 지점 이후로 바뀐 파일(커밋 안 한 변경 포함)을 저장소별 그룹으로 보여 주고, 그룹 머리에 그 저장소의
@@ -115,6 +135,42 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
     return out;
   }, [changesData, paths]);
 
+  // 파일별 「봤음」 표시. 저장소마다 지금 목록의 (브랜치, 기준) 범위에서 지금 내용 그대로 본 파일만 센다.
+  const marksByRepo = useFileReviewStore((s) => s.marksByRepo);
+  const collapseViewed = useFileReviewStore((s) => s.collapseViewed);
+  const setCollapseViewed = useFileReviewStore((s) => s.setCollapseViewed);
+  const markViewed = useFileReviewStore((s) => s.markViewed);
+  const unmarkViewed = useFileReviewStore((s) => s.unmarkViewed);
+  const reviews = useMemo(() => {
+    const out = new Map<string, RepoReview>();
+    paths.forEach((path, i) => {
+      const changes = changesByPath.get(path);
+      if (!changes) return;
+      const scope = reviewScopeOf(changes, scopes[i] ?? null);
+      const marks = marksByRepo[trimTrailingSlash(path)];
+      const viewed = changes.files.filter((f) => isViewed(marks, scope, toReviewable(f))).map((f) => f.path);
+      out.set(path, { scope, viewed: new Set(viewed) });
+    });
+    return out;
+  }, [paths, changesByPath, scopes, marksByRepo]);
+  const isFileViewed = (repoPath: string, filePath: string) => reviews.get(repoPath)?.viewed.has(filePath) ?? false;
+  const toggleViewed = (repoPath: string, file: BranchChangedFile) => {
+    const review = reviews.get(repoPath);
+    if (!review) return;
+    if (review.viewed.has(file.path)) unmarkViewed(repoPath, review.scope, [file.path]);
+    else markViewed(repoPath, review.scope, [toReviewable(file)]);
+  };
+  const setAllViewed = (viewed: boolean) => {
+    for (const [repoPath, review] of reviews) {
+      const files = changesByPath.get(repoPath)?.files ?? [];
+      if (viewed) markViewed(repoPath, review.scope, files.map(toReviewable));
+      else unmarkViewed(repoPath, review.scope, files.map((f) => f.path));
+    }
+  };
+  const fileTotal = [...reviews.keys()].reduce((sum, p) => sum + (changesByPath.get(p)?.files.length ?? 0), 0);
+  const viewedTotal = [...reviews.values()].reduce((sum, r) => sum + r.viewed.size, 0);
+  const [listMenu, setListMenu] = useState<{ x: number; y: number } | null>(null);
+
   const toggleCollapsed = (path: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -134,7 +190,17 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
   const openFileMenu = (repoPath: string, file: BranchChangedFile, e: React.MouseEvent) => {
     e.preventDefault();
     handleSelect(repoPath, file);
-    fileMenu.open({ repoPath, filePath: file.path, exists: file.status !== "deleted" }, contextMenuPoint(e));
+    fileMenu.open(
+      {
+        repoPath,
+        filePath: file.path,
+        exists: file.status !== "deleted",
+        review: reviews.has(repoPath)
+          ? { viewed: isFileViewed(repoPath, file.path), onToggle: () => toggleViewed(repoPath, file) }
+          : undefined,
+      },
+      contextMenuPoint(e),
+    );
   };
 
   // 크게 보는 diff 옆 파일 목록. 이 목록과 같은 순서·같은 선택을 쓴다(저장소가 여럿이면 저장소별로 묶는다).
@@ -151,6 +217,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
       additions: file.isBinary ? null : file.additions,
       deletions: file.isBinary ? null : file.deletions,
       group: repos.length > 1 ? repo.name : undefined,
+      viewed: isFileViewed(repo.path, file.path),
     })),
     selectedKey: selected ? fileKey(selected.repoPath, selected.filePath) : null,
     onSelect: (key) => {
@@ -161,6 +228,10 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
       const hit = maximizedEntries.find(({ repo, file }) => fileKey(repo.path, file.path) === key);
       if (hit) openFileMenu(hit.repo.path, hit.file, e);
     },
+    onToggleViewed: (key) => {
+      const hit = maximizedEntries.find(({ repo, file }) => fileKey(repo.path, file.path) === key);
+      if (hit) toggleViewed(hit.repo.path, hit.file);
+    },
   };
 
 
@@ -169,7 +240,15 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
   const singleChanges = single ? results[0]?.data : undefined;
   const list = (
     <div className="flex flex-col min-h-0 h-full" data-testid="files-by-repo">
-      <div className="flex flex-col gap-1 px-3 py-2.5 border-b border-(--line) shrink-0">
+      <div
+        className="flex flex-col gap-1 px-3 py-2.5 border-b border-(--line) shrink-0"
+        data-testid="files-list-header"
+        onContextMenu={(e) => {
+          if (fileTotal === 0) return;
+          e.preventDefault();
+          setListMenu(contextMenuPoint(e));
+        }}
+      >
         <strong className="text-[12.5px] text-foreground">
           {titleBase ? t("filesByRepo.tab", { base: titleBase }) : t("filesByRepo.tabDefault")}
         </strong>
@@ -180,14 +259,27 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
               : t("filesByRepo.subtitleSingle")
             : t("filesByRepo.subtitleMany", { count: repos.length })}
         </span>
+        {fileTotal > 0 && (
+          <ViewedProgress
+            viewed={viewedTotal}
+            total={fileTotal}
+            collapsed={collapseViewed}
+            onToggleCollapsed={() => setCollapseViewed(!collapseViewed)}
+          />
+        )}
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
         {repos.map((repo, i) => {
           const result = results[i];
           const changes = result?.data;
           const isCollapsed = collapsed.has(repo.path);
+          const viewedHere = reviews.get(repo.path)?.viewed ?? new Set<string>();
+          const hiddenViewed = collapseViewed ? viewedHere.size : 0;
+          const shownFiles =
+            changes && hiddenViewed > 0 ? changes.files.filter((f) => !viewedHere.has(f.path)) : changes?.files ?? [];
           return (
             <section key={repo.path} aria-label={repo.name} data-repo={repo.path}>
+              {changes && <FileReviewUpkeep repoPath={repo.path} changes={changes} scope={scopes[i] ?? null} />}
               <RepoGroupHeader
                 repo={repo}
                 changes={changes}
@@ -213,7 +305,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
                   {changes.files.length === 0 ? (
                     <div className="px-3 py-2 text-[11.5px] text-muted-foreground">{t("filesByRepo.noChanges")}</div>
                   ) : (
-                    groupFiles(changes.files, groupBy).map((group) => (
+                    groupFiles(shownFiles, groupBy).map((group) => (
                       <div key={group.dir ?? ""} role={group.dir === null ? undefined : "group"} aria-label={group.dir ?? undefined}>
                         {group.dir !== null && <FolderHeader dir={group.dir} />}
                         {group.files.map((file) => (
@@ -222,12 +314,26 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
                             file={file}
                             showDir={group.dir === null}
                             selected={sameFile(selected, { repoPath: repo.path, filePath: file.path })}
+                            viewed={viewedHere.has(file.path)}
                             onSelect={() => handleSelect(repo.path, file)}
+                            onToggleViewed={() => toggleViewed(repo.path, file)}
                             onContextMenu={(e) => openFileMenu(repo.path, file, e)}
                           />
                         ))}
                       </div>
                     ))
+                  )}
+                  {hiddenViewed > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setCollapseViewed(false)}
+                      aria-expanded={false}
+                      data-testid="viewed-group"
+                      className="flex w-full items-center gap-1.5 min-h-7 px-3 border-b border-(--line) text-left text-[11.5px] text-muted-foreground hover:bg-accent/60"
+                    >
+                      <ChevronRight className="w-3 h-3 shrink-0" aria-hidden="true" />
+                      {t("fileReview.viewedGroup", { count: hiddenViewed })}
+                    </button>
                   )}
                 </>
               )}
@@ -251,6 +357,31 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
       <SwitchingOverlay />
       {fileMenu.element}
       {folderMenu.element}
+      {listMenu && (
+        <ContextMenu
+          sections={[
+            {
+              items: [
+                {
+                  label: t("fileReview.markAllViewed"),
+                  icon: <SquareCheck className="w-3.5 h-3.5" />,
+                  onClick: () => setAllViewed(true),
+                  disabled: viewedTotal === fileTotal,
+                },
+                {
+                  label: t("fileReview.unmarkAll"),
+                  icon: <Square className="w-3.5 h-3.5" />,
+                  onClick: () => setAllViewed(false),
+                  disabled: viewedTotal === 0,
+                },
+              ],
+            },
+          ]}
+          position={listMenu}
+          onClose={() => setListMenu(null)}
+          ariaLabel={t("fileReview.listMenu")}
+        />
+      )}
     </ListDiffSplit>
   );
 }
@@ -363,11 +494,14 @@ interface FileRowProps {
   /** 파일 이름 옆에 폴더를 흐리게 붙일지(폴더별로 나눴으면 머리에 있으니 뺀다). */
   showDir: boolean;
   selected: boolean;
+  /** 지금 내용 그대로 봤음으로 표시했는가. 흐리게 보인다. */
+  viewed: boolean;
   onSelect: () => void;
+  onToggleViewed: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }
 
-function FileRow({ file, showDir, selected, onSelect, onContextMenu }: FileRowProps) {
+function FileRow({ file, showDir, selected, viewed, onSelect, onToggleViewed, onContextMenu }: FileRowProps) {
   const { t } = useTranslation();
   const { name, dir } = splitPath(file.path);
   return (
@@ -384,31 +518,60 @@ function FileRow({ file, showDir, selected, onSelect, onContextMenu }: FileRowPr
         }
       }}
       title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+      data-viewed={viewed || undefined}
       className={cn(
         "flex items-center gap-2 min-h-7 px-3 border-b border-(--line) cursor-pointer select-none hover:bg-accent/60",
         selected && "bg-(--acc-sel) hover:bg-(--acc-sel)",
       )}
     >
-      <span className={cn("w-2.5 shrink-0 font-mono text-[10.5px] font-bold", statusTextColors[file.status])}>
-        {STATUS_LETTER[file.status]}
+      <span className={cn("flex flex-1 min-w-0 items-center gap-2", viewed && "opacity-50")}>
+        <span className={cn("w-2.5 shrink-0 font-mono text-[10.5px] font-bold", statusTextColors[file.status])}>
+          {STATUS_LETTER[file.status]}
+        </span>
+        <span className="flex-1 min-w-0 truncate text-[12.5px] text-foreground">
+          {name} {showDir && dir && <span className="text-[11px] text-(--faint)">{dir}</span>}
+        </span>
+        {file.isBinary ? (
+          <span className="shrink-0 text-[10.5px] text-(--faint)">{t("filesByRepo.binary")}</span>
+        ) : (
+          <>
+            {file.additions > 0 && (
+              <span className="shrink-0 font-mono text-[11px] text-diff-add-fg">+{file.additions}</span>
+            )}
+            {file.deletions > 0 && (
+              <span className="shrink-0 font-mono text-[11px] text-diff-del-fg">−{file.deletions}</span>
+            )}
+          </>
+        )}
       </span>
-      <span className="flex-1 min-w-0 truncate text-[12.5px] text-foreground">
-        {name} {showDir && dir && <span className="text-[11px] text-(--faint)">{dir}</span>}
-      </span>
-      {file.isBinary ? (
-        <span className="shrink-0 text-[10.5px] text-(--faint)">{t("filesByRepo.binary")}</span>
-      ) : (
-        <>
-          {file.additions > 0 && (
-            <span className="shrink-0 font-mono text-[11px] text-diff-add-fg">+{file.additions}</span>
-          )}
-          {file.deletions > 0 && (
-            <span className="shrink-0 font-mono text-[11px] text-diff-del-fg">−{file.deletions}</span>
-          )}
-        </>
-      )}
+      <ViewedCheckbox viewed={viewed} path={file.path} onToggle={onToggleViewed} />
     </div>
   );
+}
+
+/**
+ * 저장소 하나의 「봤음」 표시 정리: 새 목록에서 빠졌거나 내용이 바뀐 파일의 표시와, 브랜치·기준이
+ * 사라진 표시를 지운다. 화면에는 아무것도 그리지 않는다.
+ */
+function FileReviewUpkeep({
+  repoPath,
+  changes,
+  scope,
+}: {
+  repoPath: string;
+  changes: BranchChanges;
+  scope: ChangesScope | null;
+}) {
+  const reconcile = useFileReviewStore((s) => s.reconcile);
+  const pruneMissingRefs = useFileReviewStore((s) => s.pruneMissingRefs);
+  const { data: branches } = useBranches(repoPath);
+  useEffect(() => {
+    reconcile(repoPath, reviewScopeOf(changes, scope), changes.files.map(toReviewable));
+  }, [reconcile, repoPath, changes, scope]);
+  useEffect(() => {
+    if (branches) pruneMissingRefs(repoPath, new Set(branches.map((b) => b.name)));
+  }, [pruneMissingRefs, repoPath, branches]);
+  return null;
 }
 
 /** 고른 파일 하나를 그 저장소 기준과 갈라진 지점 → 작업 트리(보는 중이면 그 브랜치)로 비교한다. */

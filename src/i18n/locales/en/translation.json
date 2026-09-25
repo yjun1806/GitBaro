@@ -1228,5 +1228,19 @@
     "copyLine": "Copy line {{line}}",
     "openFileInEditor": "Open file in editor",
     "diffMenu": "Diff menu"
+  },
+  "fileReview": {
+    "progress_one": "{{viewed}} of {{count}} file viewed",
+    "progress_other": "{{viewed}} of {{count}} files viewed",
+    "viewed": "Viewed",
+    "markViewed": "Mark as viewed",
+    "unmarkViewed": "Unmark as viewed",
+    "markAllViewed": "Mark all as viewed",
+    "unmarkAll": "Unmark all",
+    "viewedGroup_one": "{{count}} viewed",
+    "viewedGroup_other": "{{count}} viewed",
+    "collapseViewed": "Collapse viewed",
+    "expandViewed": "Expand viewed",
+    "listMenu": "Changes list menu"
   }
 }
