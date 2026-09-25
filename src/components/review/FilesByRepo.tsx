@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { listen } from "@tauri-apps/api/event";
+import { TAURI_EVENTS } from "@/api/events";
+import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, ChevronRight, FileText, Folder, GitBranch } from "lucide-react";
 import { useChangesVsDefaultMany, useFileDiffsVsDefault } from "@/api/queries";
@@ -16,7 +17,7 @@ import { useFolderMenu } from "@/components/ui/useFolderMenu";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
 import { statusTextColors } from "@/lib/file-status";
 import { cn, getErrorMessage, trimTrailingSlash } from "@/lib/utils";
-import type { ActivityEvent, BranchChangedFile, BranchChanges, ChangesScope, FileStatus } from "@/types";
+import type { BranchChangedFile, BranchChanges, ChangesScope, FileStatus } from "@/types";
 import type { FilesGroupBy } from "./files-view";
 import { changesSummary, tabBaseName, useChangesScopes, useCompareBaseStore } from "./compare-base";
 import { BasePicker } from "./BasePicker";
@@ -434,31 +435,15 @@ function SelectedFileDiff({ file }: { file: SelectedFile }) {
 function useChangesActivityRefresh(paths: readonly string[]): void {
   const queryClient = useQueryClient();
   const key = paths.map(trimTrailingSlash).join("\n");
-  useEffect(() => {
-    const watched = new Set(key.split("\n").filter(Boolean));
-    let mounted = true;
-    let unlisten: (() => void) | undefined;
-    listen<ActivityEvent>("repo:activity", (event) => {
-      if (!mounted) return;
-      const path = trimTrailingSlash(event.payload.path);
-      if (!watched.has(path)) return;
-      void queryClient.invalidateQueries({
-        predicate: (q) =>
-          (q.queryKey[0] === "changesVsDefault" || q.queryKey[0] === "fileDiffVsDefault") &&
-          typeof q.queryKey[1] === "string" &&
-          trimTrailingSlash(q.queryKey[1]) === path,
-      });
-    })
-      .then((fn) => {
-        if (mounted) unlisten = fn;
-        else fn();
-      })
-      .catch(() => {
-        /* 이벤트를 못 받아도 주기적 갱신이 대신한다 */
-      });
-    return () => {
-      mounted = false;
-      unlisten?.();
-    };
-  }, [queryClient, key]);
+  const watched = useMemo(() => new Set(key.split("\n").filter(Boolean)), [key]);
+  useTauriEvent(TAURI_EVENTS.repoActivity, (activity) => {
+    const path = trimTrailingSlash(activity.path);
+    if (!watched.has(path)) return;
+    void queryClient.invalidateQueries({
+      predicate: (q) =>
+        (q.queryKey[0] === "changesVsDefault" || q.queryKey[0] === "fileDiffVsDefault") &&
+        typeof q.queryKey[1] === "string" &&
+        trimTrailingSlash(q.queryKey[1]) === path,
+    });
+  });
 }

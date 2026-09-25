@@ -1,11 +1,11 @@
 import { useEffect, useMemo } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { TAURI_EVENTS } from "@/api/events";
+import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { setActivityWatch } from "@/api/commands";
 import { useRepoSyncStatuses } from "@/api/queries";
 import { REPOS_KEY, useActivityTargetsStore, selectActivityTargets } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { useRepositoryStore } from "@/stores/repository";
-import type { ActivityEvent } from "@/types";
 
 /**
  * 여러 저장소·워크트리의 활동 시각을 모은다(W1-T3). `MainLayout`에서 한 번
@@ -64,24 +64,7 @@ export function useLiveChanges(): void {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetsKey, setWatchState]);
 
-  useEffect(() => {
-    let mounted = true;
-    let unlisten: (() => void) | undefined;
-    listen<ActivityEvent>("repo:activity", (event) => {
-      if (!mounted) return;
-      recordChange(event.payload.path, event.payload.at);
-    }).then((fn) => {
-      if (mounted) {
-        unlisten = fn;
-      } else {
-        fn();
-      }
-    });
-    return () => {
-      mounted = false;
-      unlisten?.();
-    };
-  }, [recordChange]);
+  useTauriEvent(TAURI_EVENTS.repoActivity, (activity) => recordChange(activity.path, activity.at));
 
   // 상한을 넘겨 빠진 경로: 기존 20초 폴링의 dirtyLatestMtime 으로 대신 채운다
   // (W1-T2가 repo_sync_status 에 그 필드를 추가했다 — RepoSyncStatus의 필수 필드).
