@@ -5,7 +5,8 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useMenuActions } from "@/hooks/useMenuActions";
 import { ContextMenu, contextMenuPoint, type ContextMenuSection } from "@/components/ui/ContextMenu";
 import { copyMenuItem, folderMenuItems } from "@/components/ui/menu-items";
-import { gitHubBranchUrl, gitHubRepoUrl } from "@/lib/utils";
+import { useBranches } from "@/api/queries";
+import { gitHubRemoteBranchUrl } from "@/lib/utils";
 
 const ICON = "w-3.5 h-3.5";
 
@@ -20,7 +21,11 @@ export function useCurrentPlaceMenu(branch: string | null): {
   const { t } = useTranslation();
   const actions = useMenuActions();
   const path = useRepositoryStore((s) => s.activeRepoPath);
-  const gitHubUrl = useRepositoryStore((s) => gitHubRepoUrl(s.activeRepo?.remotes ?? []));
+  const remotes = useRepositoryStore((s) => s.activeRepo?.remotes);
+  const { data: branches } = useBranches(path);
+  // 추적 브랜치(이름·원격이 다를 수 있다)를 그 원격의 주소로 연다. 추적 브랜치가 없으면 GitHub에 없다.
+  const upstream = branch ? (branches?.find((b) => !b.isRemote && b.name === branch)?.upstream ?? null) : null;
+  const branchUrl = upstream ? gitHubRemoteBranchUrl(remotes ?? [], upstream) : null;
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
 
   let element: ReactNode = null;
@@ -39,9 +44,9 @@ export function useCurrentPlaceMenu(branch: string | null): {
             label: t("menu.viewOnGitHub"),
             icon: <Globe className={ICON} />,
             onClick: () => {
-              if (gitHubUrl && branch) actions.openInBrowser(gitHubBranchUrl(gitHubUrl, branch));
+              if (branchUrl) actions.openInBrowser(branchUrl);
             },
-            disabled: gitHubUrl === null || branch === null,
+            disabled: branchUrl === null,
           },
         ],
       },

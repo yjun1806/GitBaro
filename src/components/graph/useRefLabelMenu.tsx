@@ -14,7 +14,7 @@ import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { DeleteBranchDialog } from "@/components/branch/DeleteBranchDialog";
 import { ContextMenu, type ContextMenuSection } from "@/components/ui/ContextMenu";
 import { copyMenuItem } from "@/components/ui/menu-items";
-import { getErrorMessage, gitHubBranchUrl, gitHubRepoUrl } from "@/lib/utils";
+import { getErrorMessage, gitHubBranchUrl, gitHubRemoteBranchUrl, gitHubRepoUrl } from "@/lib/utils";
 import type { RefLabel } from "@/types";
 import { checkedOutBranch, useSetHistoryView } from "./useHistoryView";
 
@@ -39,6 +39,7 @@ export function useRefLabelMenu(): {
   const addToast = useToastStore((s) => s.addToast);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const gitHubUrl = useRepositoryStore((s) => gitHubRepoUrl(s.activeRepo?.remotes ?? []));
+  const remotes = useRepositoryStore((s) => s.activeRepo?.remotes);
   const { data: branches } = useBranches(activeRepoPath);
   const currentBranch = checkedOutBranch(branches);
   const setView = useSetHistoryView();
@@ -73,6 +74,13 @@ export function useRefLabelMenu(): {
     const isTag = label.kind === "tag";
     const isRemote = label.kind === "remoteBranch";
     const info = branches?.find((b) => b.name === label.name && b.isRemote === isRemote);
+    // 태그는 저장소 주소로, 브랜치는 그 원격 브랜치(로컬이면 추적 브랜치)의 원격 주소로 연다.
+    const remoteRef = isRemote ? label.name : (info?.upstream ?? null);
+    const branchUrl = isTag
+      ? gitHubUrl && gitHubBranchUrl(gitHubUrl, label.name)
+      : remoteRef
+        ? gitHubRemoteBranchUrl(remotes ?? [], remoteRef)
+        : null;
     const isCurrent = !isRemote && !isTag && label.name === currentBranch;
     const sections: ContextMenuSection[] = [];
     if (!isTag) {
@@ -112,10 +120,10 @@ export function useRefLabelMenu(): {
           label: t("menu.viewOnGitHub"),
           icon: <Globe className={ICON} />,
           onClick: () => {
-            if (gitHubUrl) actions.openInBrowser(gitHubBranchUrl(gitHubUrl, label.name, isRemote));
+            if (branchUrl) actions.openInBrowser(branchUrl);
           },
           // 로컬에만 있는 브랜치는 GitHub에 없다.
-          disabled: gitHubUrl === null || (!isRemote && !isTag && !info?.upstream),
+          disabled: branchUrl === null,
         },
       ],
     });
