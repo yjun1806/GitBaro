@@ -213,4 +213,12 @@ describe("targetsFor", () => {
       { path: "/repos/gone", name: "gone", accountId: null, lastFetchedAt: null },
     ]);
   });
+
+  it("uses the owner repository's account for a linked worktree path", () => {
+    const repos = [makeRepo("xames", "mos", { accountId: "mos-bot" })];
+    const worktree = "/worktrees/xames-feat";
+    expect(targetsFor([worktree], repos, {}, { "/repos/xames": worktree })).toEqual([
+      { path: worktree, name: "xames", accountId: "mos-bot", lastFetchedAt: null },
+    ]);
+  });
 });

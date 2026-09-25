@@ -19,7 +19,7 @@ export interface RepoPermission {
 export function findOwnerRepo(
   repos: RepoInfo[],
   activeRepoPath: string | null,
-  activeWorktrees: Record<string, string>,
+  activeWorktrees: Readonly<Record<string, string>>,
 ): RepoInfo | null {
   if (!activeRepoPath) return null;
   const ownerPath =

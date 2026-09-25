@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { gitFetch, gitPull, gitPush, planRemoteOp } from "@/api/commands";
 import { invalidateAfterSync } from "@/api/queries";
-import { useRepositoryStore } from "@/stores/repository";
+import { findOwnerRepo, useRepositoryStore } from "@/stores/repository";
 import { useSyncStore } from "@/stores/sync";
 import { getErrorMessage, isMergeConflictError } from "@/lib/utils";
 import type { RemoteOp, RepoInfo, RepoRemotePlan } from "@/types";
@@ -180,14 +180,17 @@ function latest(a: number | null, b: number | null): number | null {
 /**
  * 워크스페이스 경로를 등록된 저장소 정보(이름·지정 계정)로 바꾼다.
  * `lastFetched`는 이 앱에서 성공한 fetch 시각(`useSyncStore.lastFetchedByRepo`)이다.
+ * 워크트리 경로면 소유 저장소(`activeWorktrees`로 역추적)의 계정을 쓴다.
  */
 export function targetsFor(
   paths: string[],
   repos: RepoInfo[],
   lastFetched: Readonly<Record<string, number>> = {},
+  activeWorktrees: Readonly<Record<string, string>> = {},
 ): RemoteRepoTarget[] {
   return paths.map((path) => {
-    const repo = repos.find((r) => r.path === path);
+    const repo =
+      repos.find((r) => r.path === path) ?? findOwnerRepo(repos, path, activeWorktrees);
     return {
       path,
       name: repo?.name ?? path.split("/").filter(Boolean).pop() ?? path,
@@ -219,7 +222,12 @@ export function useMultiRepoRemote(paths: string[], op: RemoteOp) {
 
   // 창을 연 순간의 저장소 목록으로 계획을 만든다. 열려 있는 동안 목록이 바뀌어도 다시 만들지 않는다.
   const [targets] = useState(() =>
-    targetsFor(paths, repos, useSyncStore.getState().lastFetchedByRepo),
+    targetsFor(
+      paths,
+      repos,
+      useSyncStore.getState().lastFetchedByRepo,
+      useRepositoryStore.getState().activeWorktrees,
+    ),
   );
 
   useEffect(() => {
