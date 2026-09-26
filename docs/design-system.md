@@ -33,6 +33,7 @@
 | 지금 바뀌는 중·커밋 안 함 | `--live` | `text-(--live)` `bg-(--live)` | 점, 커밋 안 한 파일 수, 「따라가는 중」, 방금 바뀐 diff 줄의 줄 번호 |
 | 방금 바뀜(한 번 비춤) | `--live-soft` | `bg-(--live-soft)` | `FocusFlash`의 막, 점의 테 |
 | 방금 바뀐 줄(남는 틴트) | `--live-faint` | `bg-(--live-faint)` | 따라가는 중 diff의 새 줄 바탕 |
+| 올리지 않은 커밋(거양 표시) | `--unpushed-tint` | `bg-(--unpushed-tint)` | 커밋 그래프 행 배경(light #f2f2f0, dark #272727) |
 | CI 성공·추가 | `--success` / `--diff-add-fg` | `text-success` / `text-diff-add-fg` | 상태 칩, `+N` |
 | CI 실패·오류·삭제 | `--danger` / `--diff-del-fg` | `text-danger` / `text-diff-del-fg` | 상태 칩, 오류 글, `−N` |
 | 주의 | `--warning` | `text-warning` | 진행 중 작업, 충돌 예고, 오래된 fetch |
@@ -70,12 +71,12 @@ Pretendard(UI)와 D2Coding(코드·브랜치·해시·경로)이다. 크기는 �
 
 | 값 | 토큰 | 쓰는 곳 |
 |---|---|---|
-| 8px | `--g` | 카드 사이, 카드 안쪽 바탕 여백 |
+| 8px | `--g` | 사이드바 양쪽 패딩, resize handle overlays 1px `--line`, 본문 여백, 카드 사이 간격, 카드 안쪽 바탕 여백 |
 | 28px | `--row` | 한 줄 행(사이드바, 파일 목록, 메뉴 항목), 보통 버튼·입력칸 |
 | 24px | | 작은 버튼, 행 안 아이콘 버튼, 작은 입력칸 |
 | 18px | | 행 안 표시(칩, 이름표, 저장소 타일)의 높이 |
 | 44px | | 두 줄 행(PR 목록, 스태시·Actions 목록, 설정 줄 `min-h-[52px]`은 예외) |
-| 12px | | 행 좌우 여백(`px-3`); 사이드바 카드 안 행은 8px(`ROW_PAD_X`) |
+| 12px | | 행 좌우 여백(`px-3`); 사이드바 카드 안 행은 8px(`ROW_PAD_X`); 사이드바 계정 사이 12px |
 | 8px | | 행 안 요소 사이(`gap-2`); 칩 안은 4px(`gap-1`) |
 
 ### 2.4 모서리
@@ -163,11 +164,13 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 ## 3. 컴포넌트
 
-각 항목은 「무엇 → 언제 → 쓰지 말 것 → 모양 → 글 → 접근성 → 지금 쓰는 곳」 순이다. 「새로 만든다」는 아직 `src/components/ui/`에 없는 것이다.
+각 항목은 「무엇 → 언제 → 쓰지 말 것 → 모양 → 글 → 접근성 → 지금 쓰는 곳」 순이다.
 
-### 3.1 버튼 `Button` (새로 만든다)
+### 3.1 버튼 `Button` (`src/components/ui/Button.tsx`)
 
 **무엇.** 누르면 무언가 하는 것. 앱의 모든 버튼은 이 한 컴포넌트(또는 층 0 전용 `toolbarButtonClass`)다.
+
+**API.** `variant?: "primary" | "secondary" | "ghost" | "danger"`(기본 secondary), `size?: "sm" | "md" | "lg"`, `tone?: "danger"`(secondary·ghost만), `icon?: ReactNode`, `busy?: boolean`, `iconOnly?: boolean`(aria-label 필수).
 
 **변형.** 넷뿐이다.
 

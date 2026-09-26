@@ -1,5 +1,7 @@
 # 디자인 시스템 적용 목록
 
+완료 (2026-09-26) — 모든 항목 적용됨. 남은 예외: SplitHandle grip, diff viewer internals text sizes, avatar initials 9px, toolbar/tab count pills per D35, WorkSwitcher는 Segmented 사용, CommitGraph ViewingNote는 손그림으로 중복 역할 회피.
+
 `docs/design-system.md`의 규칙대로 코드를 맞추는 작업 목록이다. 줄 번호는 2026-09-26 작업 트리 기준이다(다른 작업이 겹치면 줄이 밀릴 수 있으니 내용으로 찾는다). 규칙 번호(`D1` …)는 `design-system.md` 4장, 절 번호(`3.1` …)는 3장을 가리킨다.
 
 세 사람이 파일을 겹치지 않게 나눈다. 1번이 먼저 `src/components/ui/`에 공용 부품을 만들고, 2·3번은 그동안 부품이 필요 없는 항목(글자 크기, 토큰, 채움)부터 하다가 부품이 들어오면 갈아 끼운다.
