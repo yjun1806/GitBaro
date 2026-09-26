@@ -113,6 +113,9 @@ const FAILURE_KEYS: Record<SyncAction, string> = {
 /** 저장소 모드: 지금 연 저장소(또는 워크트리)에서 바로 실행한다. */
 function RepoSyncGroup() {
   const zoneRef = useRef<HTMLDivElement>(null);
+  const fetchMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const pullMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const pushMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const [openMenu, setOpenMenu] = useState<"fetch" | "pull" | "push" | null>(null);
   const closeMenu = () => setOpenMenu(null);
   useClickOutside(zoneRef, closeMenu, openMenu !== null);
@@ -327,6 +330,7 @@ function RepoSyncGroup() {
             isOpen: openMenu === "fetch",
             onToggle: () => toggleMenu("fetch"),
           }}
+          menuTriggerRef={fetchMenuTriggerRef}
         />
         <ActionButton
           action="pull"
@@ -344,6 +348,7 @@ function RepoSyncGroup() {
             onToggle: () => toggleMenu("pull"),
             disabled: pullDisabled,
           }}
+          menuTriggerRef={pullMenuTriggerRef}
         />
         <ActionButton
           action="push"
@@ -366,11 +371,13 @@ function RepoSyncGroup() {
             // 올릴 커밋이 없어도(ahead 0) force push는 필요할 수 있다. 이미 올린 커밋을 되돌린 뒤가 그렇다.
             disabled: branchOpsDisabled,
           }}
+          menuTriggerRef={pushMenuTriggerRef}
         />
       </ActionGroup>
 
       {openMenu === "fetch" && (
         <ActionMenu
+          anchorRef={fetchMenuTriggerRef}
           onClose={closeMenu}
           items={[
             {
@@ -386,6 +393,7 @@ function RepoSyncGroup() {
 
       {openMenu === "pull" && (
         <ActionMenu
+          anchorRef={pullMenuTriggerRef}
           onClose={closeMenu}
           items={[
             {
@@ -408,6 +416,7 @@ function RepoSyncGroup() {
 
       {openMenu === "push" && (
         <ActionMenu
+          anchorRef={pushMenuTriggerRef}
           onClose={closeMenu}
           items={[
             needsPublish

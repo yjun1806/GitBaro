@@ -47,7 +47,7 @@ export function SettingsNav<T extends string>({ items, active, onSelect, ariaLab
               }
             }}
             className={cn(
-              "flex items-center gap-2.5 h-8 pl-3 pr-2 rounded-(--radius-item) text-left text-[13px] outline-none",
+              "flex items-center gap-2.5 h-7 pl-3 pr-2 rounded-(--radius-item) text-left text-[12.5px] outline-none",
               "transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring/40",
               selected
                 ? "bg-(--frame-sel) text-foreground font-semibold"

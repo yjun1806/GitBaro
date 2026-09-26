@@ -64,7 +64,7 @@ export function AutoSyncHint() {
       title={tooltip}
       className="flex flex-col items-end justify-center gap-px h-7 px-2 rounded-md leading-[12px] text-(--fg2) hover:bg-(--frame-hover) transition-colors"
     >
-      <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">
+      <span className="text-[10.5px] font-medium text-muted-foreground whitespace-nowrap">
         {modeLabel}
       </span>
       {lastResult && <LastResultLine result={lastResult} />}
@@ -83,8 +83,8 @@ function LastResultLine({ result }: { result: AutoSyncResult }) {
   return (
     <span
       className={cn(
-        "text-[10px] whitespace-nowrap",
-        result.ok ? "text-muted-foreground/70" : "text-warning",
+        "text-[10.5px] whitespace-nowrap",
+        result.ok ? "text-muted-foreground" : "text-warning",
       )}
     >
       {text}

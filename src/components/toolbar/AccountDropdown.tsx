@@ -1,83 +1,64 @@
-import { Check } from "lucide-react";
+import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useAccountStore } from "@/stores/account";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
+import { ContextMenu, type ContextMenuSection } from "@/components/ui/ContextMenu";
+import { Button } from "@/components/ui/Button";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
 import { cn } from "@/lib/utils";
 import { useRepoAccountId, useAssignRepoAccount } from "@/hooks/useRepoAccountId";
+
 interface AccountDropdownProps {
+  /** 여는 버튼(`AccountZone`의 트리거). 그 아래(오른쪽 정렬)에 띄운다. */
+  anchorRef: RefObject<HTMLElement | null>;
   onClose: () => void;
   onSignIn: () => void;
   onManageAccounts: () => void;
 }
 
-export function AccountDropdown({
-  onClose,
-  onSignIn,
-  onManageAccounts,
-}: AccountDropdownProps) {
+export function AccountDropdown({ anchorRef, onClose, onSignIn, onManageAccounts }: AccountDropdownProps) {
   const { t } = useTranslation();
   const accounts = useAccountStore((s) => s.accounts);
   // 열린 저장소의 계정을 보여주고, 고르면 그 저장소에 지정한다.
   const repoAccountId = useRepoAccountId();
   const assignAccount = useAssignRepoAccount();
-  return (
-    <div
-      className={cn("absolute right-0 top-full mt-2 w-56 rounded-lg z-50 py-1 animate-pop-in", FLOATING_SURFACE)}
-    >
-      {accounts.length === 0 ? (
-        <div className="px-3 py-2">
-          <p className="text-sm text-muted-foreground">{t("account.noAccountsLinked")}</p>
-          <button
-            onClick={() => {
-              onClose();
-              onSignIn();
-            }}
-            className="mt-2 w-full py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
-          >
-            {t("account.signInToGitHub")}
-          </button>
-        </div>
-      ) : (
-        <>
-          {accounts.map((account) => (
-            <button
-              key={account.id}
-              onClick={() => {
-                assignAccount(account.id);
-                onClose();
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent transition-colors text-left"
-            >
-              <AccountAvatar account={account} size="sm" />
-              <span className="text-sm truncate flex-1">{account.username}</span>
-              {account.id === repoAccountId && (
-                <Check className="w-4 h-4 text-foreground shrink-0" />
-              )}
-            </button>
-          ))}
-          <div className="border-t border-border mt-1 pt-1">
-            <button
-              onClick={() => {
-                onClose();
-                onSignIn();
-              }}
-              className="w-full px-3 py-2 text-sm text-muted-foreground hover:bg-accent transition-colors text-left"
-            >
-              {t("account.addAnother")}
-            </button>
-            <button
-              onClick={() => {
-                onClose();
-                onManageAccounts();
-              }}
-              className="w-full px-3 py-2 text-sm text-muted-foreground hover:bg-accent transition-colors text-left"
-            >
-              {t("account.manageAccounts")}
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  );
+
+  // 계정이 없으면 메뉴 항목이 아니라 안내 + 로그인 버튼이라 목록 메뉴(`ContextMenu`) 모양이 아니다.
+  if (accounts.length === 0) {
+    return (
+      <div className={cn("absolute right-0 top-full mt-2 w-56 rounded-(--radius-item) p-3 z-50 animate-pop-in", FLOATING_SURFACE)}>
+        <p className="text-[12.5px] text-muted-foreground">{t("account.noAccountsLinked")}</p>
+        <Button
+          variant="primary"
+          size="sm"
+          className="w-full mt-2"
+          onClick={() => {
+            onClose();
+            onSignIn();
+          }}
+        >
+          {t("account.signInToGitHub")}
+        </Button>
+      </div>
+    );
+  }
+
+  const sections: ContextMenuSection[] = [
+    {
+      items: accounts.map((account) => ({
+        label: account.username,
+        icon: <AccountAvatar account={account} size="sm" />,
+        checked: account.id === repoAccountId,
+        onClick: () => assignAccount(account.id),
+      })),
+    },
+    {
+      items: [
+        { label: t("account.addAnother"), onClick: onSignIn },
+        { label: t("account.manageAccounts"), onClick: onManageAccounts },
+      ],
+    },
+  ];
+
+  return <ContextMenu anchored={{ anchorRef, align: "end" }} onClose={onClose} sections={sections} />;
 }

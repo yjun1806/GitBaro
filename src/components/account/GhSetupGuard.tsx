@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Terminal, AlertTriangle } from "lucide-react";
 import { checkGhStatus } from "@/api/commands";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Button } from "@/components/ui/Button";
+import { Code } from "@/components/ui/marks";
 
 interface GhSetupGuardProps {
   children: ReactNode;
@@ -49,9 +51,7 @@ export function GhSetupGuard({ children }: GhSetupGuardProps) {
             )}
           </p>
         </div>
-        <code className="px-4 py-2 bg-muted rounded-lg text-sm font-mono">
-          brew install gh
-        </code>
+        <Code block>brew install gh</Code>
         <a
           href="https://cli.github.com"
           target="_blank"
@@ -60,12 +60,9 @@ export function GhSetupGuard({ children }: GhSetupGuardProps) {
         >
           cli.github.com
         </a>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary-hover transition-colors"
-        >
+        <Button variant="primary" size="lg" onClick={() => window.location.reload()}>
           {t("gh.checkAgain", "Check again")}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -85,15 +82,10 @@ export function GhSetupGuard({ children }: GhSetupGuardProps) {
             )}
           </p>
         </div>
-        <code className="px-4 py-2 bg-muted rounded-lg text-sm font-mono">
-          brew upgrade gh
-        </code>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary-hover transition-colors"
-        >
+        <Code block>brew upgrade gh</Code>
+        <Button variant="primary" size="lg" onClick={() => window.location.reload()}>
           {t("gh.checkAgain", "Check again")}
-        </button>
+        </Button>
       </div>
     );
   }

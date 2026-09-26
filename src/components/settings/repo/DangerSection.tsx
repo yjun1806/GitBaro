@@ -6,7 +6,7 @@ import { useRepoName } from "@/hooks/useRepoDisplay";
 import type { RepoInfo } from "@/types";
 import { SettingsSection } from "../ui/SettingsSection";
 import { SettingsRow } from "../ui/SettingsRow";
-import { SETTINGS_BUTTON_DANGER } from "../ui/styles";
+import { Button } from "@/components/ui/Button";
 
 /**
  * 「목록에서 제거」 칸. 사이드바 메뉴와 같은 확인을 거쳐 GitBaro 목록에서만 뺀다.
@@ -30,10 +30,9 @@ export function DangerSection({ repo, onRemoved }: { repo: RepoInfo; onRemoved: 
   return (
     <SettingsSection>
       <SettingsRow label={t("repo.contextMenu.remove")} description={t("repoSettings.danger.removeDescription")}>
-        <button type="button" onClick={() => void handleRemove()} className={SETTINGS_BUTTON_DANGER}>
-          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+        <Button variant="secondary" tone="danger" size="md" onClick={() => void handleRemove()} icon={<Trash2 className="w-3.5 h-3.5" aria-hidden="true" />}>
           {t("repoSettings.danger.removeButton")}
-        </button>
+        </Button>
       </SettingsRow>
     </SettingsSection>
   );

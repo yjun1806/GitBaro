@@ -9,7 +9,7 @@ import type { RepoInfo } from "@/types";
 import { SettingsSection } from "../ui/SettingsSection";
 import { SettingsRow } from "../ui/SettingsRow";
 import { SettingsTextInput } from "../ui/controls";
-import { SETTINGS_BUTTON } from "../ui/styles";
+import { Button } from "@/components/ui/Button";
 
 /**
  * 「이름」 칸: 앱에서만 쓰는 표시 이름과 아바타 색. 폴더·원격·GitHub의 이름은 바꾸지 않는다.
@@ -59,17 +59,16 @@ export function NameSection({ repo }: { repo: RepoInfo }) {
             }}
           />
           {prefs?.alias && (
-            <button
-              type="button"
-              className={SETTINGS_BUTTON}
+            <Button
+              size="md"
               onClick={() => {
                 setDraft("");
                 save("");
               }}
+              icon={<RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />}
             >
-              <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
               {t("repoSettings.name.useFolderName")}
-            </button>
+            </Button>
           )}
         </div>
       </SettingsRow>
@@ -122,7 +121,7 @@ function ColorSwatch({
       title={label}
       onClick={onSelect}
       className={cn(
-        "relative flex items-center justify-center w-7 h-7 rounded-[7px] text-[12px] font-extrabold outline-none",
+        "relative flex items-center justify-center w-7 h-7 rounded-(--radius-item) text-[12px] font-extrabold outline-none",
         "transition-shadow motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2",
         selected && "ring-2 ring-foreground/70 ring-offset-2 ring-offset-(--panel)",
       )}

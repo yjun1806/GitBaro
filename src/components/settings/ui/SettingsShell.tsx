@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Dialog } from "@/components/ui/Dialog";
+import { Button } from "@/components/ui/Button";
 import { SettingsNav, type SettingsNavItem } from "./SettingsNav";
 
 interface SettingsShellProps<T extends string> {
@@ -53,7 +54,7 @@ export function SettingsShell<T extends string>({
         <div className="flex items-center gap-2.5 px-4 pt-4 pb-3 min-w-0">
           {leading}
           <div className="min-w-0">
-            <h2 id={titleId} className="text-[14px] font-bold text-foreground truncate">
+            <h2 id={titleId} className="text-[14px] font-semibold text-foreground truncate">
               {title}
             </h2>
             {subtitle && <p className="text-[11.5px] text-muted-foreground truncate">{subtitle}</p>}
@@ -67,15 +68,9 @@ export function SettingsShell<T extends string>({
       <div className="flex flex-col flex-1 min-w-0">
         <header className="flex items-center justify-between gap-3 h-12 shrink-0 pl-6 pr-3 border-b border-(--line)">
           <h3 className="text-[14px] font-semibold text-foreground truncate">{activeItem?.label}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("common.close")}
-            title={t("common.close")}
-            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground outline-none transition-colors motion-reduce:transition-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
-          >
+          <Button iconOnly size="md" variant="ghost" onClick={onClose} aria-label={t("common.close")} title={t("common.close")}>
             <X className="w-4 h-4" />
-          </button>
+          </Button>
         </header>
         <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
           {/* 칸을 바꾸면 새 칸이 흐린 데서 선명해진다(key로 새로 그려 움직임을 다시 시작한다). */}

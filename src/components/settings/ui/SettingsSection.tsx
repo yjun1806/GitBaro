@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from "react";
 import { PANEL_SURFACE } from "@/components/ui/layers";
+import { SectionLabel } from "@/components/ui/PanelHeader";
 import { cn } from "@/lib/utils";
 
 interface SettingsSectionProps {
@@ -19,14 +20,10 @@ export function SettingsSection({ title, description, action, children, classNam
   return (
     <section aria-labelledby={title ? titleId : undefined} className={cn("flex flex-col gap-2", className)}>
       {(title || action) && (
-        <div className="flex items-end justify-between gap-3 px-1">
+        <div className="flex items-end justify-between gap-3">
           <div className="min-w-0 flex flex-col gap-0.5">
-            {title && (
-              <h3 id={titleId} className="text-[12px] font-semibold text-(--fg2)">
-                {title}
-              </h3>
-            )}
-            {description && <p className="text-[12px] leading-[17px] text-muted-foreground">{description}</p>}
+            {title && <SectionLabel id={titleId} title={title} className="px-1 pt-0 pb-0" />}
+            {description && <p className="px-1 text-[11.5px] leading-[17px] text-muted-foreground">{description}</p>}
           </div>
           {action}
         </div>

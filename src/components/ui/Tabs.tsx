@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-type TabColor = "primary" | "info" | "success";
 type TabSize = "sm" | "md";
 /**
  * "fill": tabs share the bar width equally (side panels).
@@ -10,31 +9,17 @@ type TabSize = "sm" | "md";
  */
 type TabVariant = "fill" | "inline";
 
-const colorClasses: Record<
-  TabColor,
-  { activeText: string; indicator: string; badge: string }
-> = {
-  primary: {
-    activeText: "text-foreground",
-    indicator: "bg-primary",
-    // 탭 개수 배지는 강조가 아니라 회색이다(브랜드 색은 활성 탭 밑줄에만).
-    badge: "bg-foreground/10 text-foreground",
-  },
-  info: {
-    activeText: "text-info",
-    indicator: "bg-info",
-    badge: "bg-info/10 text-info",
-  },
-  success: {
-    activeText: "text-success",
-    indicator: "bg-success",
-    badge: "bg-success/10 text-success",
-  },
+// 색 변형은 하나다(D26) — 탭 이름은 언제나 상태를 말로 적고, 색은 활성 밑줄에만 쓴다(원칙 2).
+const TAB_COLORS = {
+  activeText: "text-foreground",
+  indicator: "bg-primary",
+  // 탭 개수 배지는 버튼·탭 안의 예외로 채운 알약을 유지한다(D35) — 강조가 아니라 회색이다.
+  badge: "bg-foreground/10 text-foreground",
 };
 
 const sizeClasses: Record<TabSize, { text: string; badge: string }> = {
-  md: { text: "text-sm", badge: "text-xs" },
-  sm: { text: "text-xs", badge: "text-[10px]" },
+  md: { text: "text-[12.5px]", badge: "text-[10.5px]" },
+  sm: { text: "text-[11.5px]", badge: "text-[10px]" },
 };
 
 interface TabGroupProps {
@@ -61,7 +46,6 @@ interface TabProps {
   children: ReactNode;
   icon?: ReactNode;
   count?: number;
-  color?: TabColor;
   size?: TabSize;
   disabled?: boolean;
   variant?: TabVariant;
@@ -74,13 +58,12 @@ export function Tab({
   children,
   icon,
   count,
-  color = "primary",
   size = "md",
   disabled = false,
   variant = "fill",
   className,
 }: TabProps) {
-  const colors = colorClasses[color];
+  const colors = TAB_COLORS;
   const sizes = sizeClasses[size];
 
   return (

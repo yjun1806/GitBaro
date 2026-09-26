@@ -3,7 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import { CheckCircle, XCircle, Copy, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cancelGhLogin, startGhLogin } from "@/api/commands";
-import { Dialog } from "@/components/ui/Dialog";
+import { DialogFrame } from "@/components/ui/DialogFrame";
+import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 
 type FlowState = "idle" | "code" | "waiting" | "success" | "error";
@@ -118,17 +119,18 @@ export function GhLoginDialog({ onClose, onSuccess, expectedUsername }: GhLoginD
   };
 
   return (
-    <Dialog
+    <DialogFrame
+      title={t("account.signInToGitHub")}
       onClose={handleDismiss}
       dismissible={flowState !== "idle"}
-      ariaLabel={t("account.signInToGitHub")}
-      className="bg-card rounded-xl shadow-2xl w-full max-w-sm p-8 flex flex-col items-center gap-5"
+      size="sm"
     >
+      <div className="flex flex-col items-center gap-5 py-2">
         {/* Requesting code */}
         {flowState === "idle" && (
           <>
             <Spinner size="lg" className="text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[12.5px] text-muted-foreground">
               {t("account.connecting", "Connecting to GitHub...")}
             </p>
           </>
@@ -138,12 +140,12 @@ export function GhLoginDialog({ onClose, onSuccess, expectedUsername }: GhLoginD
         {flowState === "code" && (
           <>
             <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">
+              <p className="text-[12.5px] text-muted-foreground mb-1">
                 {t("account.enterCode", "Enter this code on GitHub")}
               </p>
               <button
                 onClick={handleCopyCode}
-                className="flex items-center gap-2 mx-auto px-4 py-3 bg-muted rounded-lg hover:bg-accent transition-colors"
+                className="flex items-center gap-2 mx-auto px-4 py-3 bg-muted rounded-(--radius-item) hover:bg-accent transition-colors"
               >
                 <span className="text-2xl font-mono font-bold tracking-widest">
                   {userCode}
@@ -155,38 +157,31 @@ export function GhLoginDialog({ onClose, onSuccess, expectedUsername }: GhLoginD
                 )}
               </button>
               {copied && (
-                <p className="text-xs text-success mt-1">
+                <p className="text-[11.5px] text-success mt-1">
                   {t("account.copied", "Copied!")}
                 </p>
               )}
             </div>
 
-            <button
-              onClick={handleOpenGitHub}
-              className="flex items-center gap-2 px-5 py-2.5 bg-foreground text-background text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
-            >
-              <ExternalLink className="w-4 h-4" />
+            <Button variant="primary" size="lg" onClick={handleOpenGitHub} icon={<ExternalLink className="w-4 h-4" />}>
               {t("account.openGitHub", "Open github.com/login/device")}
-            </button>
+            </Button>
 
-            <p className="text-xs text-muted-foreground text-center">
+            <p className="text-[11.5px] text-muted-foreground text-center">
               {t(
                 "account.waitingAuth",
                 "Waiting for authorization... Complete the sign-in on GitHub.",
               )}
             </p>
             {expectedUsername && (
-              <p className="text-xs text-muted-foreground text-center">
+              <p className="text-[11.5px] text-muted-foreground text-center">
                 {t("account.signInAs", { username: expectedUsername })}
               </p>
             )}
 
-            <button
-              onClick={onClose}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
+            <Button variant="ghost" size="md" onClick={onClose}>
               {t("common.cancel")}
-            </button>
+            </Button>
           </>
         )}
 
@@ -195,22 +190,19 @@ export function GhLoginDialog({ onClose, onSuccess, expectedUsername }: GhLoginD
           <>
             <Spinner size="lg" className="text-muted-foreground" />
             <div className="text-center">
-              <p className="text-sm font-medium">
+              <p className="text-[12.5px] font-medium">
                 {t("account.waitingAuth", "Waiting for authorization...")}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-[11.5px] text-muted-foreground mt-1">
                 {t(
                   "account.completeSignIn",
                   "Complete the sign-in on GitHub",
                 )}
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
+            <Button variant="ghost" size="md" onClick={onClose}>
               {t("common.cancel")}
-            </button>
+            </Button>
           </>
         )}
 
@@ -223,12 +215,9 @@ export function GhLoginDialog({ onClose, onSuccess, expectedUsername }: GhLoginD
                 {t("account.signedInAs", "Signed in as")} {successUsername}
               </p>
             </div>
-            <button
-              onClick={handleDismiss}
-              className="px-5 py-2.5 bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-medium rounded-lg transition-colors"
-            >
+            <Button variant="primary" size="lg" onClick={handleDismiss}>
               {t("account.continue", "Continue")}
-            </button>
+            </Button>
           </>
         )}
 
@@ -241,23 +230,18 @@ export function GhLoginDialog({ onClose, onSuccess, expectedUsername }: GhLoginD
                 {t("error.auth", "Authentication failed")}
               </p>
               {errorMessage && (
-                <p className="text-sm text-muted-foreground mt-1">{errorMessage}</p>
+                <p className="text-[12.5px] text-muted-foreground mt-1">{errorMessage}</p>
               )}
             </div>
-            <button
-              onClick={startLogin}
-              className="w-full px-5 py-2.5 bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-medium rounded-lg transition-colors"
-            >
+            <Button variant="primary" size="lg" className="w-full" onClick={startLogin}>
               {t("error.retry", "Retry")}
-            </button>
-            <button
-              onClick={onClose}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
+            </Button>
+            <Button variant="ghost" size="md" onClick={onClose}>
               {t("common.cancel")}
-            </button>
+            </Button>
           </>
         )}
-    </Dialog>
+      </div>
+    </DialogFrame>
   );
 }

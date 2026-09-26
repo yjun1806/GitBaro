@@ -59,11 +59,11 @@ export function Select({
         onClick={() => !disabled && setOpen(!open)}
         disabled={disabled}
         className={cn(
-          "w-full flex items-center justify-between gap-2 px-3 py-2 text-sm",
-          "border border-border rounded-lg bg-card text-foreground",
-          "outline-none transition-colors",
+          "w-full h-7 flex items-center justify-between gap-2 px-2.5 text-[12.5px]",
+          "border border-border rounded-(--radius-item) bg-card text-foreground",
+          "outline-none transition-colors motion-reduce:transition-none",
           open && "ring-2 ring-ring",
-          disabled && "opacity-50 cursor-not-allowed",
+          disabled && "opacity-45 cursor-not-allowed",
           !disabled && !open && "hover:border-muted-foreground/40",
         )}
       >
@@ -79,7 +79,7 @@ export function Select({
       </button>
 
       {open && (
-        <div className={cn("absolute left-0 right-0 top-full mt-1 rounded-lg z-50 py-1 max-h-48 overflow-y-auto animate-pop-in", FLOATING_SURFACE)}>
+        <div className={cn("absolute left-0 right-0 top-full mt-1 rounded-(--radius-item) p-1 z-50 max-h-48 overflow-y-auto animate-pop-in", FLOATING_SURFACE)}>
           {options.map((option) => (
             <button
               key={option.value}
@@ -88,7 +88,7 @@ export function Select({
                 setOpen(false);
               }}
               className={cn(
-                "w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors",
+                "w-full h-7 flex items-center justify-between gap-2 px-2.5 rounded-(--radius-chip) text-[12.5px] text-left transition-colors motion-reduce:transition-none",
                 option.value === value
                   ? "bg-accent text-foreground font-medium"
                   : "text-foreground hover:bg-accent",

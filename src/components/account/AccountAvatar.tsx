@@ -43,7 +43,7 @@ export function AccountAvatar({
           onError={() => setImgError(true)}
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-medium">
+        <div className="w-full h-full flex items-center justify-center bg-(--chip) text-(--fg2) font-medium">
           {fallbackLetter}
         </div>
       )}

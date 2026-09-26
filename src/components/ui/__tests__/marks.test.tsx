@@ -1,0 +1,88 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { Code, Count, Dot, FileStatusLetter, RefLabel, RepoTile, StatusChip } from "@/components/ui/marks";
+
+afterEach(cleanup);
+
+describe("Count", () => {
+  it("renders the prefix and value as plain text (no pill)", () => {
+    render(<Count value={2} prefix="↑" tone="sync" />);
+    expect(screen.getByText("↑2")).toBeTruthy();
+  });
+
+  it("exposes an accessible label only when given one", () => {
+    const { rerender } = render(<Count value={3} tone="live" label="uncommitted files: 3" />);
+    expect(screen.getByRole("img", { name: "uncommitted files: 3" })).toBeTruthy();
+    rerender(<Count value={3} tone="live" />);
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+});
+
+describe("StatusChip", () => {
+  it("renders its tone and children", () => {
+    render(<StatusChip tone="success">Merged</StatusChip>);
+    expect(screen.getByText("Merged")).toBeTruthy();
+  });
+});
+
+describe("RefLabel", () => {
+  it("shows the ref name and uses it as the title", () => {
+    render(<RefLabel name="feat/x" kind="local" />);
+    const label = screen.getByTitle("feat/x");
+    expect(label.textContent).toBe("feat/x");
+  });
+
+  it("colors a worktree label from the lane color when given, and falls back to a plain chip otherwise", () => {
+    const { getByTitle, rerender } = render(<RefLabel name="wt-1" kind="worktree" laneColor="hsl(200, 50%, 50%)" />);
+    expect(getByTitle("wt-1").getAttribute("style")).toContain("--lane-bg");
+    expect(getByTitle("wt-1").className).toContain("bg-(--lane-bg)");
+
+    rerender(<RefLabel name="wt-1" kind="worktree" laneColor={null} />);
+    expect(getByTitle("wt-1").getAttribute("style")).toBeFalsy();
+    expect(getByTitle("wt-1").className).toContain("bg-card");
+  });
+});
+
+describe("RepoTile", () => {
+  it("renders the repo's initial and is hidden from assistive tech (the name is read by sibling text)", () => {
+    const { container } = render(<RepoTile name="gitbaro" color={{ background: "red", foreground: "white" }} size="md" />);
+    const tile = container.querySelector("[aria-hidden='true']");
+    expect(tile?.textContent).toBe("G");
+  });
+});
+
+describe("Dot", () => {
+  it("uses the live color when on and muted when off", () => {
+    const { container, rerender } = render(<Dot on />);
+    expect(container.querySelector("span")?.className).toContain("bg-(--live)");
+    rerender(<Dot on={false} />);
+    expect(container.querySelector("span")?.className).toContain("bg-muted-foreground");
+  });
+});
+
+describe("Code", () => {
+  it("renders inline by default and as a block when asked", () => {
+    const { rerender, container } = render(<Code>git status</Code>);
+    expect(screen.getByText("git status").tagName).toBe("CODE");
+    rerender(<Code block>git status</Code>);
+    expect(container.querySelector("code")?.className).toContain("block");
+  });
+});
+
+describe("FileStatusLetter", () => {
+  it("shows the one-letter status with a matching accessible name", () => {
+    render(<FileStatusLetter status="modified" />);
+    expect(screen.getByText("M")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Modified" })).toBeTruthy();
+  });
+
+  it("gives conflicted and ignored the same glyph but different colors", () => {
+    const { container: c1 } = render(<FileStatusLetter status="conflicted" />);
+    const { container: c2 } = render(<FileStatusLetter status="ignored" />);
+    expect(c1.textContent).toBe("!");
+    expect(c2.textContent).toBe("!");
+    expect(c1.querySelector("span")?.className).toContain("text-danger");
+    expect(c2.querySelector("span")?.className).toContain("text-muted-foreground");
+  });
+});

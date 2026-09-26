@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useUIStore } from "@/stores/ui";
 import { DEFAULT_FILE_LIST_WIDTH } from "@/lib/split-size";
 import { cn } from "@/lib/utils";
+import { PANEL_SURFACE } from "@/components/ui/layers";
 import { SplitHandle } from "./SplitHandle";
 import { useMaximizeFlip, usePaneExit } from "./maximize-motion";
 import { MaximizedFilesContext, type MaximizedFiles } from "./maximized-files";
@@ -32,7 +33,9 @@ export interface ListDiffSplitProps {
   "data-testid"?: string;
 }
 
-const CARD = "flex flex-col min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden";
+// `Card`(ui/Card.tsx)와 같은 카드 겉모습(D27). `ListPane`은 `section`/`div`를 골라 쓰고 ref·aria
+// 속성을 그대로 넘겨야 해서 `Card` 컴포넌트 대신 그 겉모습의 근원인 `PANEL_SURFACE`를 쓴다.
+const CARD = cn("flex flex-col min-h-0 overflow-hidden", PANEL_SURFACE);
 /** 카드 모서리(`--radius-panel`). 커지는 움직임의 잘라내기 모서리에 쓴다. */
 const CARD_RADIUS = 14;
 /** 크게 보기로 숨을 때 목록이 밀려 나가는 쪽. */

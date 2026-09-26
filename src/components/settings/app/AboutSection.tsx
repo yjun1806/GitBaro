@@ -6,7 +6,8 @@ import { useMenuActions } from "@/hooks/useMenuActions";
 import type { EnvironmentInfo } from "@/types";
 import { SettingsSection } from "../ui/SettingsSection";
 import { SettingsRow } from "../ui/SettingsRow";
-import { SETTINGS_BUTTON, SETTINGS_ICON_BUTTON } from "../ui/styles";
+import { Button } from "@/components/ui/Button";
+import { Code } from "@/components/ui/marks";
 
 /** 버전과 경로 한 줄. 경로가 있으면 복사 버튼을 단다. */
 function ToolLine({ version, path, missing }: { version: string | null; path: string | null; missing: string }) {
@@ -18,18 +19,19 @@ function ToolLine({ version, path, missing }: { version: string | null; path: st
       {version && <span className="font-semibold">{version}</span>}
       {path && (
         <>
-          <code className="truncate font-mono text-[11.5px] text-muted-foreground" title={path}>
+          <Code className="truncate" title={path}>
             {path}
-          </code>
-          <button
-            type="button"
+          </Code>
+          <Button
+            iconOnly
+            size="sm"
+            variant="ghost"
             onClick={() => actions.copy(path)}
             aria-label={t("settingsPanel.copyPath")}
             title={t("settingsPanel.copyPath")}
-            className={SETTINGS_ICON_BUTTON}
           >
             <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
+          </Button>
         </>
       )}
     </span>
@@ -79,18 +81,15 @@ export function AboutSection() {
         description={t("settingsPanel.about.settingsFileDescription")}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <code className="flex-1 min-w-0 truncate rounded-(--radius-chip) bg-(--chip) px-2 py-1 font-mono text-[11.5px] text-(--fg2)">
-            {env?.settingsPath ?? "—"}
-          </code>
-          <button
-            type="button"
+          <Code className="flex-1 min-w-0 truncate">{env?.settingsPath ?? "—"}</Code>
+          <Button
+            size="md"
             disabled={!env}
             onClick={() => env && actions.reveal(env.settingsPath)}
-            className={SETTINGS_BUTTON}
+            icon={<FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />}
           >
-            <FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />
             {t("settingsPanel.revealInFinder")}
-          </button>
+          </Button>
         </div>
       </SettingsRow>
     </SettingsSection>

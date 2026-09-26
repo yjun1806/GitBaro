@@ -1,10 +1,11 @@
-import { useState, useId } from "react";
+import { useId, useState } from "react";
 import { UserCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import type { GitHubAccount } from "@/types";
 import { AccountAvatar } from "./AccountAvatar";
-import { Dialog } from "@/components/ui/Dialog";
+import { DialogFrame } from "@/components/ui/DialogFrame";
+import { Button } from "@/components/ui/Button";
 
 interface GhAccountDetectedDialogProps {
   accounts: GitHubAccount[];
@@ -18,7 +19,7 @@ export function GhAccountDetectedDialog({
   onSignInNew,
 }: GhAccountDetectedDialogProps) {
   const { t } = useTranslation();
-  const titleId = useId();
+  const groupId = useId();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     () => new Set(accounts.map((a) => a.id)),
   );
@@ -41,98 +42,57 @@ export function GhAccountDetectedDialog({
   };
 
   return (
-    <Dialog
-      labelledBy={titleId}
+    <DialogFrame
+      title={t("ghSync.detected.title")}
+      size="md"
+      dismissible={false}
       overlayClassName="z-[60] bg-(--overlay)"
-      className="bg-card rounded-xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-5"
     >
-        {/* Header */}
-        <div className="flex flex-col items-center gap-3">
-          <div className="p-3 rounded-xl bg-primary/10">
-            <UserCheck className="w-8 h-8 text-primary" />
-          </div>
-          <div className="text-center">
-            <h2 id={titleId} className="text-lg font-semibold text-foreground">
-              {t("ghSync.detected.title")}
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t("ghSync.detected.description")}
-            </p>
-          </div>
-        </div>
+      <div className="flex flex-col items-center gap-3 text-center mb-4">
+        <UserCheck className="w-6 h-6 text-muted-foreground" aria-hidden="true" />
+        <p className="text-[11.5px] text-muted-foreground">{t("ghSync.detected.description")}</p>
+      </div>
 
-        {/* Account list with checkboxes */}
-        <div className="flex flex-col gap-2">
-          {accounts.map((account) => {
-            const checked = selectedIds.has(account.id);
-            return (
-              <button
-                key={account.id}
-                type="button"
-                onClick={() => toggleAccount(account.id)}
-                className={clsx(
-                  "flex items-center gap-3 p-3 rounded-lg border text-left transition-colors",
-                  checked
-                    ? "bg-primary/5 border-primary/30"
-                    : "bg-card border-border opacity-60",
-                )}
-              >
-                {/* Checkbox */}
-                <div
-                  className={clsx(
-                    "w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors",
-                    checked
-                      ? "bg-primary border-primary"
-                      : "border-muted-foreground/30",
-                  )}
-                >
-                  {checked && (
-                    <svg
-                      className="w-3 h-3 text-primary-foreground"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={3}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  )}
-                </div>
+      {/* Account list with checkboxes */}
+      <div role="group" aria-label={t("ghSync.detected.title")} id={groupId} className="flex flex-col gap-2 mb-5">
+        {accounts.map((account) => {
+          const checked = selectedIds.has(account.id);
+          return (
+            <label
+              key={account.id}
+              className={clsx(
+                "flex items-center gap-3 p-3 rounded-(--radius-item) border text-left transition-colors motion-reduce:transition-none cursor-pointer",
+                checked ? "bg-primary/5 border-primary/30" : "bg-card border-border opacity-60",
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggleAccount(account.id)}
+                className="accent-primary w-4 h-4 shrink-0"
+              />
+              <AccountAvatar account={account} size="md" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12.5px] font-semibold text-foreground">
+                  {account.username}
+                </p>
+                <p className="text-[11.5px] text-muted-foreground truncate">
+                  {account.email}
+                </p>
+              </div>
+            </label>
+          );
+        })}
+      </div>
 
-                <AccountAvatar account={account} size="md" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground">
-                    {account.username}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {account.email}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={handleConfirm}
-            disabled={selectedIds.size === 0}
-            className="w-full py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {t("ghSync.detected.confirm", { count: selectedIds.size })}
-          </button>
-          <button
-            onClick={onSignInNew}
-            className="w-full py-2.5 rounded-lg text-sm font-medium border border-border text-muted-foreground hover:bg-accent transition-colors"
-          >
-            {t("ghSync.detected.signInNew")}
-          </button>
-        </div>
-    </Dialog>
+      <div className="flex flex-col gap-2">
+        <Button variant="primary" size="md" className="w-full" onClick={handleConfirm} disabled={selectedIds.size === 0}>
+          {t("ghSync.detected.confirm", { count: selectedIds.size })}
+        </Button>
+        <Button variant="secondary" size="md" className="w-full" onClick={onSignInNew}>
+          {t("ghSync.detected.signInNew")}
+        </Button>
+      </div>
+    </DialogFrame>
   );
 }

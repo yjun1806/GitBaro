@@ -7,7 +7,7 @@ import { useRepoAvatarColor, useRepoName } from "@/hooks/useRepoDisplay";
 import type { RepoInfo } from "@/types";
 import { SettingsShell } from "../ui/SettingsShell";
 import type { SettingsNavItem } from "../ui/SettingsNav";
-import { RepoAvatarBadge } from "./RepoAvatarBadge";
+import { RepoTile } from "@/components/ui/marks";
 import { NameSection } from "./NameSection";
 import { AccountSection } from "./AccountSection";
 import { SyncSection } from "./SyncSection";
@@ -46,7 +46,7 @@ export function RepoSettingsDialog({ repo, initialSection = "name", onClose }: R
     <SettingsShell
       title={name}
       subtitle={name === repo.name ? t("repoSettings.subtitle") : repo.name}
-      leading={<RepoAvatarBadge name={name} color={color} className="w-8 h-8 text-[14px]" />}
+      leading={<RepoTile name={name} color={color} size="xl" />}
       items={items}
       active={active}
       onSelect={setActive}

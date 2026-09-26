@@ -12,7 +12,8 @@
     "settings": "Settings",
     "proceed": "Proceed",
     "commandPreview": "Command to execute:",
-    "close": "Close"
+    "close": "Close",
+    "clearSearch": "Clear search"
   },
   "welcome": {
     "title": "Welcome to GitBaro",

@@ -56,7 +56,7 @@ export function Tooltip({ label, children, side = "top", offset = 6, delayMs = 0
             role="tooltip"
             style={{ left: coords.x, top: coords.y }}
             className={cn(
-              "fixed z-[100] -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-1 text-xs pointer-events-none animate-fade-in",
+              "fixed z-[100] -translate-x-1/2 whitespace-nowrap rounded-(--radius-chip) px-2 py-1 text-[11.5px] pointer-events-none animate-fade-in",
               side === "top" && "-translate-y-full",
               FLOATING_SURFACE,
             )}

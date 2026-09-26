@@ -7,8 +7,7 @@ import { deliverNotification } from "@/lib/notify/deliver";
 import { SettingsSection } from "./ui/SettingsSection";
 import { SettingsRow } from "./ui/SettingsRow";
 import { Switch } from "./ui/Switch";
-import { SETTINGS_BUTTON } from "./ui/styles";
-import { BusyIcon } from "@/components/ui/Spinner";
+import { Button } from "@/components/ui/Button";
 
 interface NotificationSettingsProps {
   value: NotificationSettingsValue;
@@ -72,10 +71,9 @@ export function NotificationSettings({ value, onChange }: NotificationSettingsPr
             )
           }
         >
-          <button type="button" onClick={handleTest} disabled={testing} aria-busy={testing} className={SETTINGS_BUTTON}>
-            <BusyIcon busy={testing} icon={<Bell className="w-3.5 h-3.5" aria-hidden="true" />} />
+          <Button size="md" onClick={handleTest} busy={testing} icon={<Bell className="w-3.5 h-3.5" aria-hidden="true" />}>
             {t("notify.test.send")}
-          </button>
+          </Button>
         </SettingsRow>
       </SettingsSection>
     </>

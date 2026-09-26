@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Search, FolderOpen, GitFork, GitBranch, Circle, EllipsisVertical, Globe, Star, Trash2, HardDrive, Plus, Lock, CloudOff, Archive, Building2, User, ShieldAlert, ShieldX, RefreshCw } from "lucide-react";
+import { ChevronDown, FolderOpen, GitFork, GitBranch, Circle, EllipsisVertical, Globe, Star, Trash2, HardDrive, Plus, Lock, CloudOff, Archive, Building2, User, ShieldAlert, ShieldX, RefreshCw, Search } from "lucide-react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useRepositoryStore, useRepoViewPath } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
@@ -12,16 +12,22 @@ import { extractOwnerFromRemoteUrl, groupReposByOwner, type GroupedRepos } from 
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useToastStore } from "@/stores/toast";
 import { useRepoSettingsStore } from "@/stores/repo-settings";
-import { useRepoName } from "@/hooks/useRepoDisplay";
+import { useRepoAvatarColor, useRepoName } from "@/hooks/useRepoDisplay";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import { RepoSyncIndicator } from "@/components/repository/RepoSyncIndicator";
 import { useRepoSyncStatuses } from "@/api/queries";
 import type { GitHubAccount, RepoInfo } from "@/types";
 import { Spinner } from "@/components/ui/Spinner";
+import { Button } from "@/components/ui/Button";
+import { SearchInput } from "@/components/ui/TextInput";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Count, RepoTile } from "@/components/ui/marks";
+import { ContextMenu, type ContextMenuSection } from "@/components/ui/ContextMenu";
 
 /* ─── RepoContextMenu ─── */
 
 function RepoContextMenu({
+  anchorRef,
   accounts,
   currentAccountId,
   isFavorite,
@@ -32,6 +38,7 @@ function RepoContextMenu({
   onRemoveRepo,
   onClose,
 }: {
+  anchorRef: React.RefObject<HTMLElement | null>;
   accounts: GitHubAccount[];
   currentAccountId: string | null;
   isFavorite: boolean;
@@ -42,95 +49,47 @@ function RepoContextMenu({
   onRemoveRepo: () => void;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
+  const sections: ContextMenuSection[] = [
+    {
+      items: [
+        ...accounts.map((account) => ({
+          label: account.username,
+          icon: <AccountAvatar account={account} size="xs" />,
+          checked: account.id === currentAccountId,
+          onClick: () => onSelect(account.id),
+        })),
+        ...(currentAccountId
+          ? [{ label: t("repo.unlinkAccount"), icon: <CloudOff className="w-3.5 h-3.5" />, onClick: () => onSelect(null) }]
+          : []),
+      ],
+    },
+    {
+      items: [
+        {
+          label: isFavorite ? t("repo.unfavorite") : t("repo.favorite"),
+          icon: <Star className={cn("w-3.5 h-3.5", isFavorite ? "fill-warning text-warning" : "text-muted-foreground")} />,
+          onClick: onToggleFavorite,
+        },
+        {
+          label: t("autoSync.menuItem"),
+          icon: <RefreshCw className="w-3.5 h-3.5 text-muted-foreground" />,
+          disabled: !hasRemote,
+          onClick: onOpenAutoSync,
+        },
+        {
+          label: t("repo.removeFromList"),
+          icon: <Trash2 className="w-3.5 h-3.5" />,
+          variant: "danger" as const,
+          onClick: onRemoveRepo,
+        },
+      ],
+    },
+  ];
 
   return (
-    <div
-      ref={ref}
-      className="absolute right-1 top-full mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50 py-1 animate-pop-in"
-    >
-      <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-        {t("repo.linkAccount")}
-      </p>
-      {accounts.map((account) => (
-        <button
-          key={account.id}
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(account.id);
-          }}
-          className={cn(
-            "w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors text-left",
-            account.id === currentAccountId
-              ? "bg-primary/10 text-primary"
-              : "hover:bg-accent",
-          )}
-        >
-          <AccountAvatar account={account} size="xs" />
-          <span className="truncate flex-1">{account.username}</span>
-          {account.id === currentAccountId && (
-            <span className="text-xs font-medium text-primary shrink-0">{t("repo.default")}</span>
-          )}
-        </button>
-      ))}
-      {currentAccountId && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(null);
-          }}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent transition-colors text-left"
-        >
-          <CloudOff className="w-3.5 h-3.5 shrink-0" />
-          {t("repo.unlinkAccount")}
-        </button>
-      )}
-      <div className="border-t border-border my-1" />
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleFavorite();
-          onClose();
-        }}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors text-left"
-      >
-        <Star className={cn("w-3.5 h-3.5 shrink-0", isFavorite ? "fill-warning text-warning" : "text-muted-foreground")} />
-        {isFavorite ? t("repo.unfavorite") : t("repo.favorite")}
-      </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpenAutoSync();
-          onClose();
-        }}
-        disabled={!hasRemote}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors text-left disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        <RefreshCw className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-        {t("autoSync.menuItem")}
-      </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemoveRepo();
-        }}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-danger hover:bg-accent transition-colors text-left"
-      >
-        <Trash2 className="w-3.5 h-3.5 shrink-0" />
-        {t("repo.removeFromList")}
-      </button>
-    </div>
+    <ContextMenu anchored={{ anchorRef, align: "end" }} onClose={onClose} sections={sections} ariaLabel={t("repo.linkAccount")} />
   );
 }
 
@@ -144,7 +103,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
   const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const addRef = useRef<HTMLDivElement>(null);
+  const addTriggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const repos = useRepositoryStore((s) => s.repos);
   const repoViewPath = useRepoViewPath();
@@ -162,7 +121,9 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
   const accounts = useAccountStore((s) => s.accounts);
   const openRepoSettings = useRepoSettingsStore((s) => s.open);
   const repoName = useRepoName();
+  const avatarColorOf = useRepoAvatarColor();
   const [accountPickerRepo, setAccountPickerRepo] = useState<string | null>(null);
+  const accountPickerTriggerRef = useRef<HTMLDivElement>(null);
 
   const repoPermissions = useRepositoryStore((s) => s.repoPermissions);
   const setRepoPermission = useRepositoryStore((s) => s.setRepoPermission);
@@ -237,16 +198,6 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
     inputRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (addRef.current && !addRef.current.contains(e.target as Node)) {
-        setAddMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
   // 아래 owner 타입 조회 effect가 groups에 의존하므로, 렌더마다 새 배열이 되면 매 렌더 조회가 다시 나간다.
   const groups = useMemo((): GroupedRepos[] => {
     const needle = filter.toLowerCase();
@@ -319,43 +270,41 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
     <div className="flex flex-col h-full min-w-0 overflow-hidden">
       {/* Filter + Add */}
       <div className="flex items-center gap-2 p-2 min-w-0">
-        <div className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-card border border-border">
-          <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder={t("common.filter")}
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="flex-1 min-w-0 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
-          />
-        </div>
-        <div className="relative shrink-0" ref={addRef}>
-          <button
+        <SearchInput
+          ref={inputRef}
+          size="md"
+          surface="frame"
+          className="flex-1 min-w-0"
+          placeholder={t("common.filter")}
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+        <div className="relative shrink-0">
+          <Button
+            ref={addTriggerRef}
+            iconOnly
+            size="md"
+            variant="ghost"
             onClick={() => setAddMenuOpen((v) => !v)}
-            className="flex items-center justify-center w-8 h-8 rounded-md hover:bg-accent transition-colors"
+            aria-label={t("repo.addRepository")}
             title={t("repo.addRepository")}
           >
             <Plus className="w-4 h-4" />
-          </button>
+          </Button>
           {addMenuOpen && (
-            <div className="absolute right-0 top-full mt-1 min-w-48 bg-popover border border-border rounded-lg shadow-lg z-50 py-1 animate-pop-in">
-              <button
-                onClick={handleAddLocal}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
-              >
-                <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" />
-                {t("repo.addLocal")}
-              </button>
-              <button
-                onClick={() => { setAddMenuOpen(false); setShowCloneDialog(true); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
-              >
-                <GitFork className="w-4 h-4 text-muted-foreground shrink-0" />
-                {t("repo.cloneRepo")}
-              </button>
-              {/* "Create new repository" (git init) is hidden until it is implemented. */}
-            </div>
+            <ContextMenu
+              anchored={{ anchorRef: addTriggerRef, align: "end" }}
+              onClose={() => setAddMenuOpen(false)}
+              sections={[
+                {
+                  items: [
+                    { label: t("repo.addLocal"), icon: <FolderOpen className="w-4 h-4 text-muted-foreground" />, onClick: handleAddLocal },
+                    { label: t("repo.cloneRepo"), icon: <GitFork className="w-4 h-4 text-muted-foreground" />, onClick: () => setShowCloneDialog(true) },
+                    // "Create new repository" (git init) is hidden until it is implemented.
+                  ],
+                },
+              ]}
+            />
           )}
         </div>
       </div>
@@ -363,22 +312,20 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
       {/* Grouped repo list */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-1" {...containerProps}>
         {groups.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-            <Search className="w-6 h-6 opacity-40" />
-            <p className="text-sm">
-              {repos.length === 0 ? t("repo.noRepos") : t("repo.noMatches")}
-            </p>
-          </div>
+          <EmptyState
+            icon={Search}
+            title={repos.length === 0 ? t("repo.noRepos") : t("repo.noMatches")}
+          />
         ) : (
           groups.map((group, groupIndex) => (
             <div key={group.label} className={cn(groupIndex > 0 && "mt-3")}>
               {/* Group header */}
               <button
                 onClick={() => toggleGroupCollapsed(group.label)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-md transition-colors"
+                className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-(--radius-item) transition-colors motion-reduce:transition-none"
               >
                 <ChevronDown className={cn(
-                  "w-3 h-3 text-muted-foreground shrink-0 transition-transform",
+                  "w-3 h-3 text-muted-foreground shrink-0 transition-transform motion-reduce:transition-none",
                   collapsedGroups.includes(group.label) && "-rotate-90",
                 )} />
                 {(() => {
@@ -397,16 +344,14 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                   }
                   return <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
                 })()}
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-1 truncate text-left">
+                <span className="text-[11.5px] font-semibold text-muted-foreground flex-1 truncate text-left">
                   {group.label}
                 </span>
-                <span className="text-xs text-muted-foreground/60 tabular-nums">
-                  {group.repos.length}
-                </span>
+                <Count value={group.repos.length} tone="muted" />
               </button>
-              {/* Repo items — indented under group header */}
+              {/* Repo items — indented under group header (no left rule; indent only, D33) */}
               {!collapsedGroups.includes(group.label) && (
-                <div className="flex flex-col gap-0.5 ml-3 pl-3 border-l border-border/50">
+                <div className="flex flex-col gap-0.5 pl-3">
                   {group.repos.map((repo) => {
                     const navIdx = flatItems.indexOf(repo);
                     const isActive = repo.path === activeRepo?.path;
@@ -427,13 +372,11 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                           return origin ? extractOwnerFromRemoteUrl(origin.url) : null;
                         })()
                       : null;
-                    const RepoIcon = !hasRemote
-                      ? HardDrive
-                      : visibility?.isPrivate
-                        ? Lock
-                        : visibility?.isFork
-                          ? GitFork
-                          : Globe;
+                    const displayName = repoName(repo) !== repo.name
+                      ? repoName(repo)
+                      : repoOwner
+                        ? `${repoOwner}/${repo.name}`
+                        : repo.name;
                     return (
                       <div key={repo.path} className="relative">
                         <button
@@ -445,115 +388,60 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                             setAccountPickerRepo(repo.path);
                           }}
                           className={cn(
-                            "w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-colors min-w-0 rounded-md",
+                            "w-full flex items-center gap-2.5 px-2.5 min-h-11 text-left transition-colors motion-reduce:transition-none min-w-0 rounded-(--radius-item)",
                             isActive
-                              ? "bg-primary/10 text-primary font-semibold"
+                              ? "bg-(--acc-sel) font-semibold"
                               : !isActive && activeIndex === navIdx && navIdx >= 0
-                                ? "bg-accent ring-1 ring-primary/30"
+                                ? "bg-accent ring-1 ring-inset ring-primary/30"
                                 : "hover:bg-accent",
                           )}
                         >
-                          <div className={cn(
-                            "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
-                            isActive
-                              ? "bg-primary/15"
-                              : !hasRemote
-                                ? "bg-muted"
-                                : visibility?.isPrivate
-                                  ? "bg-warning/10"
-                                  : visibility?.isFork
-                                    ? "bg-info/10"
-                                    : "bg-success/10",
-                          )}>
-                            <RepoIcon
-                              className={cn(
-                                "w-3.5 h-3.5",
-                                isActive
-                                  ? "text-primary/70"
-                                  : !hasRemote
-                                    ? "text-muted-foreground"
-                                    : visibility?.isPrivate
-                                      ? "text-warning"
-                                      : visibility?.isFork
-                                        ? "text-info"
-                                        : "text-success",
-                              )}
-                            />
-                          </div>
+                          <RepoTile name={displayName} color={avatarColorOf(repo.path)} size="xl" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate leading-tight">
+                            <p className="flex items-center gap-1 text-[12.5px] font-medium truncate leading-tight">
                               {/* 표시 이름이 있으면 그것만, 없으면 owner/폴더 이름 */}
-                              {repoName(repo) !== repo.name
-                                ? repoName(repo)
-                                : repoOwner
-                                  ? `${repoOwner}/${repo.name}`
-                                  : repo.name}
+                              <span className="truncate">{displayName}</span>
+                              {visibility?.isPrivate && <Lock className="w-3 h-3 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                              {visibility?.isFork && <GitFork className="w-3 h-3 shrink-0 text-muted-foreground" aria-hidden="true" />}
                             </p>
                             {repo.currentBranch && (
                               <div className="flex items-center gap-1 mt-0.5">
-                                <GitBranch className={cn(
-                                  "w-3 h-3 shrink-0",
-                                  isActive ? "text-primary/50" : "text-muted-foreground/70",
-                                )} />
-                                <span className={cn(
-                                  "text-xs truncate leading-tight",
-                                  isActive ? "text-primary/50" : "text-muted-foreground/70",
-                                )}>
+                                <GitBranch className="w-3 h-3 shrink-0 text-muted-foreground" />
+                                <span className="text-[11.5px] text-muted-foreground truncate leading-tight">
                                   {repo.currentBranch}
                                 </span>
                               </div>
                             )}
                             {/* Permission warning */}
                             {isValidating && (
-                              <div role="status" className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
+                              <div role="status" className="flex items-center gap-1 mt-0.5 text-[11.5px] text-muted-foreground">
                                 <Spinner size="sm" />
                                 {t("common.loading")}
                               </div>
                             )}
                             {!isValidating && permission && !permission.valid && (
                               <div className="flex items-center gap-1 mt-0.5">
-                                <ShieldX className={cn("w-3 h-3 shrink-0", "text-danger")} />
-                                <span className={cn("text-xs font-medium", "text-danger")}>
+                                <ShieldX className="w-3 h-3 shrink-0 text-danger" />
+                                <span className="text-[11.5px] font-medium text-danger">
                                   {t("repo.accountNoAccess")}
                                 </span>
                               </div>
                             )}
                             {!isValidating && permission && permission.valid && permission.canPush === false && (
                               <div className="flex items-center gap-1 mt-0.5">
-                                <ShieldAlert className={cn("w-3 h-3 shrink-0", "text-warning")} />
-                                <span className={cn("text-xs font-medium", "text-warning")}>
+                                <ShieldAlert className="w-3 h-3 shrink-0 text-warning" />
+                                <span className="text-[11.5px] font-medium text-warning">
                                   {t("repo.accountReadOnly")}
                                 </span>
                               </div>
                             )}
                           </div>
                           {/* State indicators + actions */}
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <RepoSyncIndicator status={syncMap?.[repoViewPath(repo.path)]} variant="badge" />
-                            {isDirty && (
-                              <Circle
-                                className={cn(
-                                  "w-2 h-2 fill-current shrink-0",
-                                  isActive ? "text-warning/70" : "text-warning",
-                                )}
-                              />
-                            )}
-                            {visibility?.isArchived && (
-                              <Archive
-                                className={cn(
-                                  "w-3.5 h-3.5 shrink-0",
-                                  isActive ? "text-primary/50" : "text-muted-foreground/60",
-                                )}
-                              />
-                            )}
-                            {hasRemote && !repo.accountId && (
-                              <CloudOff
-                                className={cn(
-                                  "w-3.5 h-3.5 shrink-0",
-                                  isActive ? "text-primary/40" : "text-muted-foreground/50",
-                                )}
-                              />
-                            )}
+                            {isDirty && <Circle className="w-2 h-2 fill-current text-warning shrink-0" />}
+                            {visibility?.isArchived && <Archive className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
+                            {hasRemote && !repo.accountId && <CloudOff className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
                             {/* Account avatar (passive) */}
                             {linkedAccount && (
                               <div className="shrink-0 flex items-center" title={linkedAccount.username}>
@@ -562,6 +450,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                             )}
                             {/* Context menu trigger */}
                             <div
+                              ref={isPickerOpen ? accountPickerTriggerRef : undefined}
                               role="button"
                               tabIndex={0}
                               onClick={(e) => {
@@ -574,12 +463,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                                   setAccountPickerRepo(isPickerOpen ? null : repo.path);
                                 }
                               }}
-                              className={cn(
-                                "shrink-0 w-5 h-5 flex items-center justify-center rounded cursor-pointer transition-colors",
-                                isActive
-                                  ? "text-primary/60 hover:text-primary"
-                                  : "text-muted-foreground/50 hover:text-foreground hover:bg-accent",
-                              )}
+                              className="shrink-0 w-5 h-5 flex items-center justify-center rounded-(--radius-chip) cursor-pointer transition-colors motion-reduce:transition-none text-muted-foreground hover:text-foreground hover:bg-accent"
                             >
                               <EllipsisVertical className="w-3.5 h-3.5" />
                             </div>
@@ -588,6 +472,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                         {/* Context menu dropdown */}
                         {isPickerOpen && (
                           <RepoContextMenu
+                            anchorRef={accountPickerTriggerRef}
                             accounts={accounts}
                             currentAccountId={repo.accountId}
                             isFavorite={favoriteRepos.includes(repo.path)}

@@ -2,6 +2,7 @@ import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import i18n from "@/i18n/config";
+import { Button } from "@/components/ui/Button";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -44,9 +45,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
       return (
         <div className={containerClass}>
-          <div className="p-3 rounded-full bg-destructive/10">
-            <AlertTriangle className="w-6 h-6 text-destructive" />
-          </div>
+          <AlertTriangle className="w-6 h-6 text-danger" />
           <div>
             <p className="text-sm font-semibold text-foreground">
               {i18n.t("error.somethingWentWrong")}
@@ -57,13 +56,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               </p>
             )}
           </div>
-          <button
-            onClick={this.handleReload}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
+          <Button variant="primary" size="md" onClick={this.handleReload} icon={<RefreshCw className="w-3.5 h-3.5" />}>
             {i18n.t("error.tryAgain")}
-          </button>
+          </Button>
         </div>
       );
     }

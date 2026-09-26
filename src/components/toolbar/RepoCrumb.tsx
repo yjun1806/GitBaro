@@ -1,11 +1,11 @@
 import { ChevronRight, Settings2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { avatarInitial } from "@/lib/avatar-color";
 import { cn } from "@/lib/utils";
 import { useRepositoryStore } from "@/stores/repository";
 import { useRepoSettingsStore } from "@/stores/repo-settings";
 import { useRepoAvatarColor, useRepoName } from "@/hooks/useRepoDisplay";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { RepoTile } from "@/components/ui/marks";
 import { toolbarButtonClass } from "./toolbar-button";
 
 /**
@@ -32,17 +32,11 @@ export function RepoCrumb() {
         data-testid="repo-crumb"
         className={cn(toolbarButtonClass(), "group gap-1.5 pl-1 pr-1.5 min-w-0")}
       >
-        <span
-          aria-hidden="true"
-          className="w-5 h-5 rounded-[5px] shrink-0 flex items-center justify-center text-[10.5px] font-extrabold"
-          style={{ backgroundColor: avatar.background, color: avatar.foreground }}
-        >
-          {avatarInitial(name)}
-        </span>
+        <RepoTile name={name} color={avatar} size="lg" />
         <span className="text-[13px] font-bold text-(--fg) truncate max-w-[160px]">{name}</span>
         <Settings2
           aria-hidden="true"
-          className="w-3 h-3 shrink-0 text-(--faint) opacity-70 group-hover:opacity-100 transition-opacity motion-reduce:transition-none"
+          className="w-3 h-3 shrink-0 text-muted-foreground opacity-70 group-hover:opacity-100 transition-opacity motion-reduce:transition-none"
         />
       </button>
     </Tooltip>
@@ -51,5 +45,5 @@ export function RepoCrumb() {
 
 /** 경로 칸 사이의 구분 표시(›). 저장소 › 폴더 › 브랜치 순서를 보인다. */
 export function CrumbSeparator() {
-  return <ChevronRight aria-hidden="true" className="w-3.5 h-3.5 shrink-0 text-(--faint)" />;
+  return <ChevronRight aria-hidden="true" className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />;
 }

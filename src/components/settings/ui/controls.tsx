@@ -1,9 +1,7 @@
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { textInputClass } from "@/components/ui/TextInput";
 import { useSettingsRowIds } from "./row-context";
-
-const FIELD =
-  "h-7 rounded-(--radius-item) border border-border bg-card px-2 text-[12.5px] text-foreground outline-none transition-colors motion-reduce:transition-none hover:border-muted-foreground/40 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-45 disabled:cursor-not-allowed";
 
 export interface SettingsSelectOption {
   value: string;
@@ -32,7 +30,7 @@ export function SettingsSelect({ value, options, onChange, disabled, ariaLabel, 
       aria-labelledby={ariaLabel ? undefined : ids?.labelId}
       aria-describedby={ids?.descriptionId}
       onChange={(e) => onChange(e.target.value)}
-      className={cn(FIELD, "pr-6 max-w-[240px]", className)}
+      className={cn(textInputClass("md"), "pr-6 max-w-[240px]", className)}
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>
@@ -55,7 +53,7 @@ export const SettingsTextInput = forwardRef<HTMLInputElement, InputHTMLAttribute
         aria-labelledby={props["aria-label"] ? undefined : ids?.labelId}
         aria-describedby={ids?.descriptionId}
         {...props}
-        className={cn(FIELD, "w-full", className)}
+        className={cn(textInputClass("md"), className)}
       />
     );
   },

@@ -30,11 +30,11 @@ export function SettingsRow({ label, description, children, stacked = false, cla
         )}
       >
         <div className="min-w-0 flex flex-col gap-0.5">
-          <span id={labelId} className="text-[13px] font-medium text-foreground">
+          <span id={labelId} className="text-[12.5px] font-medium text-foreground">
             {label}
           </span>
           {description && (
-            <span id={descriptionId} className="text-[12px] leading-[17px] text-muted-foreground">
+            <span id={descriptionId} className="text-[11.5px] leading-[17px] text-muted-foreground">
               {description}
             </span>
           )}

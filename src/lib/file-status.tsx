@@ -26,14 +26,14 @@ export const statusTextColors: Record<FileStatus, string> = {
   modified: "text-warning",
   added: "text-success",
   deleted: "text-danger",
-  renamed: "text-primary",
-  copied: "text-primary",
+  renamed: "text-info",
+  copied: "text-info",
   untracked: "text-success",
   conflicted: "text-danger",
   ignored: "text-muted-foreground",
 };
 
-const statusTooltips: Record<FileStatus, string> = {
+export const statusTooltips: Record<FileStatus, string> = {
   modified: "Modified",
   added: "Added",
   deleted: "Deleted",
@@ -61,6 +61,11 @@ interface FileStatusBadgeProps {
   className?: string;
 }
 
+/**
+ * @deprecated 디자인 시스템은 색 칸 아이콘 대신 글자 하나(`FileStatusLetter`, `ui/marks.tsx`)를
+ * 쓴다(D5). 아직 이것을 쓰는 화면(`graph/UnpushedRangeView`, `diff/DiffHeader`, `history/CommitDetail`,
+ * `live/FollowPanel`, `pr/PrDetailPane` 등)이 `FileStatusLetter`로 옮겨가면 지운다.
+ */
 export function FileStatusBadge({ status, size = "sm", className }: FileStatusBadgeProps) {
   const Icon = statusIcons[status];
   const sizeClass = size === "md" ? "w-5 h-5" : "w-4 h-4";

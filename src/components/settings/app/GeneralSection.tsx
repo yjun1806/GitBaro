@@ -8,7 +8,8 @@ import { SettingsSection } from "../ui/SettingsSection";
 import { SettingsRow } from "../ui/SettingsRow";
 import { Switch } from "../ui/Switch";
 import { SettingsSelect } from "../ui/controls";
-import { SETTINGS_BUTTON } from "../ui/styles";
+import { Button } from "@/components/ui/Button";
+import { Code } from "@/components/ui/marks";
 
 interface GeneralSectionProps {
   settings: AppSettings;
@@ -81,21 +82,16 @@ export function GeneralSection({ settings, onUpdateSettings }: GeneralSectionPro
           description={t("settingsPanel.general.worktreeDirDescription")}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <code
-              className="flex-1 min-w-0 truncate rounded-(--radius-chip) bg-(--chip) px-2 py-1 font-mono text-[11.5px] text-(--fg2)"
-              title={worktreeParentDir ?? undefined}
-            >
+            <Code className="flex-1 min-w-0 truncate" title={worktreeParentDir ?? undefined}>
               {worktreeParentDir ?? t("settingsPanel.general.worktreeDirDefault")}
-            </code>
-            <button type="button" onClick={handlePickWorktreeDir} className={SETTINGS_BUTTON}>
-              <FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />
+            </Code>
+            <Button size="md" onClick={handlePickWorktreeDir} icon={<FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />}>
               {t("settingsPanel.general.chooseFolder")}
-            </button>
+            </Button>
             {worktreeParentDir && (
-              <button type="button" onClick={() => setPreferences({ worktreeParentDir: null })} className={SETTINGS_BUTTON}>
-                <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+              <Button size="md" onClick={() => setPreferences({ worktreeParentDir: null })} icon={<RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />}>
                 {t("settingsPanel.useDefault")}
-              </button>
+              </Button>
             )}
           </div>
         </SettingsRow>

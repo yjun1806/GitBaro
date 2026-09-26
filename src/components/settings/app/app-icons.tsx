@@ -56,13 +56,13 @@ export function AiCliIcon({ cliId }: { cliId: string }) {
   const item = AI_CLI_ICONS[cliId];
   if (item) {
     return (
-      <div aria-hidden="true" className={clsx("w-7 h-7 rounded-md flex items-center justify-center shrink-0", item.bg)}>
+      <div aria-hidden="true" className={clsx("w-7 h-7 rounded-(--radius-item) flex items-center justify-center shrink-0", item.bg)}>
         {item.svg}
       </div>
     );
   }
   return (
-    <div aria-hidden="true" className="w-7 h-7 rounded-md flex items-center justify-center bg-muted text-muted-foreground shrink-0">
+    <div aria-hidden="true" className="w-7 h-7 rounded-(--radius-item) flex items-center justify-center bg-muted text-muted-foreground shrink-0">
       <Bot className="w-4 h-4" />
     </div>
   );
@@ -74,12 +74,12 @@ export function AppIcon({ icon, name }: { icon: string | null; name: string }) {
       <img
         src={icon}
         alt=""
-        className="w-7 h-7 rounded-md shrink-0"
+        className="w-7 h-7 rounded-(--radius-item) shrink-0"
       />
     );
   }
   return (
-    <div aria-hidden="true" className="w-7 h-7 rounded-md flex items-center justify-center bg-muted text-muted-foreground text-xs font-bold shrink-0">
+    <div aria-hidden="true" className="w-7 h-7 rounded-(--radius-item) flex items-center justify-center bg-muted text-muted-foreground text-xs font-bold shrink-0">
       {name.charAt(0)}
     </div>
   );

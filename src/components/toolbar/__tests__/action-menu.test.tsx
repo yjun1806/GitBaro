@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useUIStore } from "@/stores/ui";
@@ -9,14 +10,19 @@ afterEach(cleanup);
 
 function Host({ onClose }: { onClose: () => void }) {
   useDiffMaximizeEscape();
+  const anchorRef = useRef<HTMLButtonElement>(null);
   return (
-    <ActionMenu
-      onClose={onClose}
-      items={[
-        { key: "a", label: "Pull", onSelect: vi.fn() },
-        { key: "b", label: "Pull with rebase", onSelect: vi.fn() },
-      ]}
-    />
+    <>
+      <button ref={anchorRef}>trigger</button>
+      <ActionMenu
+        anchorRef={anchorRef}
+        onClose={onClose}
+        items={[
+          { key: "a", label: "Pull", onSelect: vi.fn() },
+          { key: "b", label: "Pull with rebase", onSelect: vi.fn() },
+        ]}
+      />
+    </>
   );
 }
 

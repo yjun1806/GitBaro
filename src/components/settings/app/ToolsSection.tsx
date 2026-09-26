@@ -59,14 +59,14 @@ function ToolList({ title, description, choices, selected, loadingLabel, emptyLa
                 aria-checked={checked}
                 onClick={() => onSelect(choice.id)}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-2 min-h-[44px] text-left text-[13px] outline-none",
+                  "flex items-center gap-3 px-4 py-2 min-h-[44px] text-left text-[12.5px] outline-none",
                   "transition-colors motion-reduce:transition-none hover:bg-(--panel-hover) focus-visible:bg-(--panel-hover)",
                   checked ? "text-foreground font-semibold" : "text-(--fg2)",
                 )}
               >
                 {choice.icon}
                 <span className="flex-1 truncate">{choice.name}</span>
-                {checked && <Check className="w-4 h-4 shrink-0 text-primary" aria-hidden="true" />}
+                {checked && <Check className="w-4 h-4 shrink-0 text-foreground" aria-hidden="true" />}
               </button>
             );
           })}

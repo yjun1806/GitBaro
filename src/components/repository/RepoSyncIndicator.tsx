@@ -1,5 +1,5 @@
-import { ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Count, Dot } from "@/components/ui/marks";
 import type { RepoSyncStatus } from "@/types";
 
 interface RepoSyncIndicatorProps {
@@ -11,7 +11,6 @@ interface RepoSyncIndicatorProps {
 
 /**
  * 레포의 push(ahead ↑) / pull(behind ↓) 필요 상태를 표시한다.
- * 색 규칙은 BranchStatusDot과 동일 — ahead=primary, behind=danger.
  * upstream이 없거나 완전히 동기화된 레포는 아무것도 렌더링하지 않는다.
  */
 export function RepoSyncIndicator({ status, variant = "badge", className }: RepoSyncIndicatorProps) {
@@ -21,8 +20,6 @@ export function RepoSyncIndicator({ status, variant = "badge", className }: Repo
   if (ahead === 0 && behind === 0) return null;
 
   if (variant === "dot") {
-    const dotColor =
-      ahead > 0 && behind > 0 ? "bg-warning" : behind > 0 ? "bg-danger" : "bg-primary";
     const title =
       ahead > 0 && behind > 0
         ? `↑${ahead} ↓${behind}`
@@ -30,29 +27,16 @@ export function RepoSyncIndicator({ status, variant = "badge", className }: Repo
           ? `↓${behind}`
           : `↑${ahead}`;
     return (
-      <span className={cn("w-2 h-2 rounded-full shrink-0", dotColor, className)} title={title} />
+      <span className={className} title={title}>
+        <Dot on />
+      </span>
     );
   }
 
   return (
-    <span
-      className={cn(
-        "flex items-center gap-1 shrink-0 text-[11px] font-medium tabular-nums leading-none",
-        className,
-      )}
-    >
-      {behind > 0 && (
-        <span className="flex items-center gap-px text-danger" title={`↓${behind}`}>
-          <ArrowDown className="w-3 h-3" />
-          {behind}
-        </span>
-      )}
-      {ahead > 0 && (
-        <span className="flex items-center gap-px text-primary" title={`↑${ahead}`}>
-          <ArrowUp className="w-3 h-3" />
-          {ahead}
-        </span>
-      )}
+    <span className={cn("flex items-center gap-1.5 shrink-0", className)}>
+      {behind > 0 && <Count value={behind} prefix="↓" tone="sync" label={`↓${behind}`} />}
+      {ahead > 0 && <Count value={ahead} prefix="↑" tone="sync" label={`↑${ahead}`} />}
     </span>
   );
 }

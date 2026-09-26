@@ -11,7 +11,7 @@ import {
   useCommitAvatars,
   useMergeState,
 } from "@/api/queries";
-import { cn, trimTrailingSlash } from "@/lib/utils";
+import { trimTrailingSlash } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { CommitDetail } from "@/components/history/CommitDetail";
 import { StashDetailView } from "@/components/stash/StashDetailView";
@@ -23,34 +23,16 @@ import { useFollowStore } from "@/stores/follow";
 import { parseWorkingFileKey, workingFileItems, workingFileKey } from "@/components/commit/working-files";
 import { useWorkingFileMenu } from "@/components/commit/useWorkingFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Notice } from "@/components/ui/Notice";
 import { ListDiffSplit } from "./ListDiffSplit";
 import type { MaximizedFiles } from "./maximized-files";
 import type { FileStatus } from "@/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 
-/* --- Empty / Placeholder States --- */
-
-export function EmptyState({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 animate-content-in">
-      <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center">
-        <Icon className="w-8 h-8" />
-      </div>
-      <div className="text-center">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs mt-1">{description}</p>
-      </div>
-    </div>
-  );
-}
+// `Card`·`EmptyState`는 `ui/`로 옮겼다. 옛 경로를 쓰는 곳이 있어 재수출로 남겨 둔다.
+export { Card, EmptyState };
 
 function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }) {
   const { t } = useTranslation();
@@ -68,8 +50,8 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
 
   if (isError) {
     return (
-      <div className="flex-1 flex items-center justify-center text-sm text-danger">
-        {t("diff.failedToLoad")}
+      <div className="flex-1 flex items-center justify-center p-3">
+        <Notice tone="danger">{t("diff.failedToLoad")}</Notice>
       </div>
     );
   }
@@ -142,22 +124,6 @@ function useWorkingMaximizedFiles(): { files: MaximizedFiles; menu: ReactNode } 
     },
     menu: fileMenu.element,
   };
-}
-
-/* --- Card --- */
-
-/** A panel card from the design: panel colour, 14px corners, panel shadow. */
-export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <section
-      className={cn(
-        "relative flex flex-col min-w-0 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden",
-        className,
-      )}
-    >
-      {children}
-    </section>
-  );
 }
 
 /* --- ContentArea (main export) --- */

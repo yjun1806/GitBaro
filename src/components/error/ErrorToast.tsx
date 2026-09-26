@@ -1,42 +1,23 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { X, AlertCircle, AlertTriangle, Info, CheckCircle } from "lucide-react";
-import clsx from "clsx";
+import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 import { useToastStore, type Toast, type ToastType } from "@/stores/toast";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
+import { Button } from "@/components/ui/Button";
 
-const toastConfig: Record<
-  ToastType,
-  { icon: ReactNode; bg: string; border: string; text: string }
-> = {
-  error: {
-    icon: <AlertCircle className="w-4 h-4 shrink-0" />,
-    bg: "bg-destructive/90",
-    border: "border-destructive/50",
-    text: "text-destructive-foreground",
-  },
-  warning: {
-    icon: <AlertTriangle className="w-4 h-4 shrink-0" />,
-    bg: "bg-warning/90",
-    border: "border-warning/50",
-    text: "text-warning-foreground",
-  },
-  info: {
-    icon: <Info className="w-4 h-4 shrink-0" />,
-    bg: "bg-info/90",
-    border: "border-info/50",
-    text: "text-info-foreground",
-  },
-  success: {
-    icon: <CheckCircle className="w-4 h-4 shrink-0" />,
-    bg: "bg-success/90",
-    border: "border-success/50",
-    text: "text-success-foreground",
-  },
+const toastConfig: Record<ToastType, { icon: ReactNode; iconClass: string }> = {
+  error: { icon: <AlertCircle className="w-4 h-4 shrink-0" />, iconClass: "text-danger" },
+  warning: { icon: <AlertTriangle className="w-4 h-4 shrink-0" />, iconClass: "text-warning" },
+  info: { icon: <Info className="w-4 h-4 shrink-0" />, iconClass: "text-info" },
+  success: { icon: <CheckCircle className="w-4 h-4 shrink-0" />, iconClass: "text-success" },
 };
 
 /** 알림이 흐려지며 사라지는 시간(ms). globals.css의 --motion-fast와 같다. 끝나면 목록에서 뺀다. */
 const TOAST_EXIT_MS = 120;
 
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) => void }) {
+  const { t } = useTranslation();
   const config = toastConfig[toast.type];
   const [leaving, setLeaving] = useState(false);
   const dismiss = useCallback(() => setLeaving(true), []);
@@ -54,25 +35,18 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
 
   return (
     <div
-      className={clsx(
-        "flex items-start gap-3 px-4 py-3 rounded-xl border shadow-lg max-w-sm w-full",
+      role="status"
+      className={cn(
+        "flex items-start gap-3 px-3 py-2.5 rounded-(--radius-item) max-w-sm w-full",
+        FLOATING_SURFACE,
         leaving ? "animate-toast-out pointer-events-none" : "animate-toast-in",
-        config.bg,
-        config.border
       )}
     >
-      <span className={clsx("mt-0.5", config.text)}>{config.icon}</span>
-      <p className={clsx("flex-1 text-sm", config.text)}>{toast.message}</p>
-      <button
-        onClick={dismiss}
-        className={clsx(
-          "p-0.5 rounded transition-colors shrink-0",
-          config.text,
-          "hover:opacity-70"
-        )}
-      >
+      <span className={cn("mt-0.5", config.iconClass)}>{config.icon}</span>
+      <p className="flex-1 text-[12.5px] text-foreground">{toast.message}</p>
+      <Button iconOnly size="sm" variant="ghost" onClick={dismiss} aria-label={t("common.close")}>
         <X className="w-3.5 h-3.5" />
-      </button>
+      </Button>
     </div>
   );
 }

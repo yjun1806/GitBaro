@@ -12,7 +12,10 @@ import { PrDetailPane } from "@/components/pr/PrDetailPane";
 import { usePrViewStore } from "@/components/pr/pr-view";
 import { UnpushedRangeDetailPane } from "@/components/graph/UnpushedRangeView";
 import { useRangeOpenForCurrentScope } from "@/components/graph/unpushed-range-view";
-import { Card, ContentArea, EmptyState } from "./ContentArea";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
+import { ContentArea } from "./ContentArea";
 import { GraphSplit } from "./GraphSplit";
 import { useDiffMaximizeReset } from "./useDiffMaximize";
 
@@ -23,17 +26,18 @@ function RepoListCard() {
   const { selectRepo } = useSelectRepo();
   return (
     <Card className="flex-1 w-full max-w-[560px]">
-      <div className="flex items-center gap-2 h-10 px-3 shrink-0 border-b border-(--line)">
+      <div className="flex items-center gap-2 h-8 px-3 shrink-0 border-b border-(--line)">
         <span className="flex-1 text-[12.5px] font-bold text-foreground">{t("shell.openRepoList")}</span>
-        <button
-          type="button"
+        <Button
+          iconOnly
+          size="md"
+          variant="ghost"
           onClick={() => setRepoListOpen(false)}
           aria-label={t("shell.closeRepoList")}
           title={t("shell.closeRepoList")}
-          className="flex items-center justify-center w-7 h-7 rounded-(--radius-item) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
         >
           <X className="w-4 h-4" />
-        </button>
+        </Button>
       </div>
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <RepoListView onSelectRepo={selectRepo} />

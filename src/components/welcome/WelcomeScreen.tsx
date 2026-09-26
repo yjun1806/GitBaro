@@ -32,11 +32,11 @@ function ActionCard({
       onClick={onClick}
       disabled={disabled}
       className={clsx(
-        "flex items-start gap-4 w-full p-5 rounded-xl border text-left transition-all duration-150",
+        "flex items-start gap-4 w-full p-5 rounded-xl border text-left transition-colors motion-reduce:transition-none",
         primary
           ? "bg-primary hover:bg-primary-hover border-primary text-primary-foreground"
-          : "bg-card border-border text-foreground hover:border-primary hover:shadow-sm",
-        disabled && "opacity-40 cursor-not-allowed hover:border-border hover:shadow-none"
+          : "bg-(--chip) hover:bg-accent border-transparent text-foreground",
+        disabled && "opacity-45 pointer-events-none",
       )}
     >
       <span
@@ -70,11 +70,11 @@ export function WelcomeScreen({
   const { t } = useTranslation();
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-surface px-8 transition-opacity duration-300 opacity-100">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-surface px-8 transition-colors motion-reduce:transition-none">
       <div className="w-full max-w-md flex flex-col items-center gap-10">
         {/* Logo */}
         <div className="flex flex-col items-center gap-4">
-          <div className="p-4 rounded-2xl bg-primary shadow-lg shadow-primary/20">
+          <div className="p-4 rounded-2xl bg-primary shadow-(--shadow)">
             <GitBranch className="w-10 h-10 text-primary-foreground" />
           </div>
           <div className="text-center">
@@ -116,7 +116,7 @@ export function WelcomeScreen({
         </div>
 
         {/* Footer */}
-        <p className="text-xs text-muted-foreground/50">
+        <p className="text-xs text-muted-foreground">
           {t("welcome.footer", { name: t("app.name") })}
         </p>
       </div>

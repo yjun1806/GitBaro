@@ -1,10 +1,9 @@
-import { useRef, type ReactNode } from "react";
-import { useMenuKeyboard } from "@/hooks/useMenuKeyboard";
+import type { ReactNode, RefObject } from "react";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FLOATING_SURFACE } from "@/components/ui/layers";
 import { TOOLBAR_BADGE, TOOLBAR_GROUP, TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
 import { BusyIcon } from "@/components/ui/Spinner";
+import { ContextMenu, type ContextMenuSection } from "@/components/ui/ContextMenu";
 
 /**
  * 툴바 폭이 이보다 좁으면 버튼 이름을 숨기고 아이콘·배지만 둔다. 툴바 줄(`@container`)의 폭 기준이다.
@@ -48,7 +47,17 @@ interface ActionButtonProps {
    * 오른쪽에 붙는 ▾ 메뉴 버튼. `disabled`를 주지 않으면 본 버튼과 같이 꺼진다.
    * 본 버튼이 꺼져도 메뉴 안의 다른 작업(force push 등)은 쓸 수 있어야 할 때 따로 준다.
    */
-  menu?: { label: string; isOpen: boolean; onToggle: () => void; disabled?: boolean };
+  menu?: {
+    label: string;
+    isOpen: boolean;
+    onToggle: () => void;
+    disabled?: boolean;
+  };
+  /**
+   * ▾ 버튼 자리(`menu`가 있을 때만 쓴다). `ActionMenu`를 그 아래 띄우는 데 쓴다. `menu` 안에 두지
+   * 않는다 — ref가 섞인 객체는 다른 필드를 읽는 곳마다 "렌더 중 ref 접근" 경고가 뜬다.
+   */
+  menuTriggerRef?: RefObject<HTMLButtonElement | null>;
   /** 버튼이 목록·패널을 연다는 표시(▾)를 버튼 안에 붙인다. 시안 `gbtn(caret=True)`. */
   caret?: boolean;
 }
@@ -66,6 +75,7 @@ export function ActionButton({
   busy = false,
   highlighted = false,
   menu,
+  menuTriggerRef,
   caret = false,
 }: ActionButtonProps) {
   const showBadge = badge !== undefined && badge > 0;
@@ -103,6 +113,7 @@ export function ActionButton({
       </button>
       {menu && (
         <button
+          ref={menuTriggerRef}
           type="button"
           onClick={menu.onToggle}
           disabled={menuDisabled}
@@ -128,40 +139,28 @@ interface ActionMenuItem {
 }
 
 /**
- * ▾ 버튼이 여는 작은 메뉴. 고르면 닫는다. 다른 메뉴와 같이 ↑/↓/Home/End로 옮겨 다니고,
- * Escape는 이 메뉴만 닫는다(뒤의 diff 크게 보기 등은 그대로 둔다).
+ * ▾ 버튼이 여는 작은 메뉴(`ContextMenu anchored`). `anchorRef`는 그 ▾ 버튼
+ * (`ActionButton`의 `menu.triggerRef`)을 가리킨다.
  */
-export function ActionMenu({ items, onClose }: { items: ActionMenuItem[]; onClose: () => void }) {
-  const menuRef = useRef<HTMLDivElement>(null);
-  const { onKeyDown } = useMenuKeyboard(menuRef, onClose);
-  return (
-    <div
-      ref={menuRef}
-      role="menu"
-      tabIndex={-1}
-      onKeyDown={onKeyDown}
-      className={cn("absolute right-0 top-full mt-2 w-64 py-1 rounded-xl z-50 overflow-hidden animate-pop-in", FLOATING_SURFACE)}
-    >
-      {items.map((item) => (
-        <button
-          key={item.key}
-          type="button"
-          role="menuitem"
-          disabled={item.disabled}
-          onClick={() => {
-            item.onSelect();
-            onClose();
-          }}
-          className="w-full flex flex-col items-start px-3 py-2 text-left hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
-        >
-          <span className={cn("text-sm font-medium leading-tight", item.danger && "text-danger")}>
-            {item.label}
-          </span>
-          {item.description && (
-            <span className="text-xs text-muted-foreground leading-tight mt-0.5">{item.description}</span>
-          )}
-        </button>
-      ))}
-    </div>
-  );
+export function ActionMenu({
+  items,
+  anchorRef,
+  onClose,
+}: {
+  items: ActionMenuItem[];
+  anchorRef: RefObject<HTMLElement | null>;
+  onClose: () => void;
+}) {
+  const sections: ContextMenuSection[] = [
+    {
+      items: items.map((item) => ({
+        label: item.label,
+        description: item.description,
+        variant: item.danger ? "danger" : "default",
+        disabled: item.disabled,
+        onClick: item.onSelect,
+      })),
+    },
+  ];
+  return <ContextMenu anchored={{ anchorRef, align: "end" }} sections={sections} onClose={onClose} />;
 }

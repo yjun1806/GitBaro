@@ -22,6 +22,7 @@ export function AccountZone({
   onManageAccounts,
 }: AccountZoneProps) {
   const zoneRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   useClickOutside(zoneRef, onClose, isOpen);
   const accounts = useAccountStore((s) => s.accounts);
   // 동기화·커밋에 실제로 쓰이는 계정(열린 저장소의 계정)을 보여준다.
@@ -33,6 +34,7 @@ export function AccountZone({
     // 이 카드만 다른 카드보다 높아진다.
     <div ref={zoneRef} className="relative flex shrink-0">
       <button
+        ref={triggerRef}
         onClick={onToggle}
         aria-haspopup="menu"
         aria-expanded={isOpen}
@@ -54,6 +56,7 @@ export function AccountZone({
 
       {isOpen && (
         <AccountDropdown
+          anchorRef={triggerRef}
           onClose={onClose}
           onSignIn={onSignIn}
           onManageAccounts={onManageAccounts}

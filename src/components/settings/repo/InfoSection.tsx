@@ -7,19 +7,19 @@ import { gitHubRepoUrl } from "@/lib/utils";
 import type { RepoInfo } from "@/types";
 import { SettingsSection } from "../ui/SettingsSection";
 import { SettingsRow } from "../ui/SettingsRow";
-import { SETTINGS_BUTTON, SETTINGS_ICON_BUTTON } from "../ui/styles";
+import { Button } from "@/components/ui/Button";
+import { Code } from "@/components/ui/marks";
 
 function CopyButton({ text, label }: { text: string; label: string }) {
   const actions = useMenuActions();
   return (
-    <button type="button" onClick={() => actions.copy(text)} aria-label={label} title={label} className={SETTINGS_ICON_BUTTON}>
+    <Button iconOnly size="sm" variant="ghost" onClick={() => actions.copy(text)} aria-label={label} title={label}>
       <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-    </button>
+    </Button>
   );
 }
 
 const VALUE = "text-[12.5px] text-foreground";
-const MONO = "font-mono text-[11.5px] text-(--fg2) truncate";
 
 /** 「정보」 칸(읽기 전용): 폴더 위치, 원격, 기본 브랜치, 워크트리 수, 계정과 여는 버튼. */
 export function InfoSection({ repo }: { repo: RepoInfo }) {
@@ -38,19 +38,20 @@ export function InfoSection({ repo }: { repo: RepoInfo }) {
       <SettingsSection>
         <SettingsRow label={t("repoSettings.info.folder")} stacked>
           <div className="flex items-center gap-1.5 min-w-0">
-            <code className={`flex-1 min-w-0 ${MONO}`} title={repo.path}>
+            <Code className="flex-1 min-w-0 truncate" title={repo.path}>
               {repo.path}
-            </code>
+            </Code>
             <CopyButton text={repo.path} label={t("settingsPanel.copyPath")} />
-            <button
-              type="button"
+            <Button
+              iconOnly
+              size="sm"
+              variant="ghost"
               onClick={() => actions.reveal(repo.path)}
               aria-label={t("settingsPanel.revealInFinder")}
               title={t("settingsPanel.revealInFinder")}
-              className={SETTINGS_ICON_BUTTON}
             >
               <FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />
-            </button>
+            </Button>
           </div>
         </SettingsRow>
         <SettingsRow label={t("repoSettings.info.remotes")} stacked={repo.remotes.length > 0}>
@@ -60,10 +61,10 @@ export function InfoSection({ repo }: { repo: RepoInfo }) {
             <ul className="flex flex-col gap-1">
               {repo.remotes.map((remote) => (
                 <li key={remote.name} className="flex items-center gap-2 min-w-0">
-                  <span className="shrink-0 text-[12px] font-semibold text-foreground">{remote.name}</span>
-                  <code className={`flex-1 min-w-0 ${MONO}`} title={remote.url}>
+                  <span className="shrink-0 text-[11.5px] font-semibold text-foreground">{remote.name}</span>
+                  <Code className="flex-1 min-w-0 truncate" title={remote.url}>
                     {remote.url}
-                  </code>
+                  </Code>
                   <CopyButton text={remote.url} label={t("repoSettings.info.copyUrl")} />
                 </li>
               ))}
@@ -85,27 +86,23 @@ export function InfoSection({ repo }: { repo: RepoInfo }) {
 
       <SettingsSection title={t("repoSettings.info.open")}>
         <div className="flex flex-wrap gap-1.5 px-4 py-3">
-          <button type="button" className={SETTINGS_BUTTON} onClick={() => actions.openFolderInEditor(repo.path)}>
-            <Code2 className="w-3.5 h-3.5" aria-hidden="true" />
+          <Button size="md" onClick={() => actions.openFolderInEditor(repo.path)} icon={<Code2 className="w-3.5 h-3.5" aria-hidden="true" />}>
             {t("repoSettings.info.openEditor")}
-          </button>
-          <button type="button" className={SETTINGS_BUTTON} onClick={() => actions.openTerminal(repo.path)}>
-            <Terminal className="w-3.5 h-3.5" aria-hidden="true" />
+          </Button>
+          <Button size="md" onClick={() => actions.openTerminal(repo.path)} icon={<Terminal className="w-3.5 h-3.5" aria-hidden="true" />}>
             {t("repoSettings.info.openTerminal")}
-          </button>
-          <button type="button" className={SETTINGS_BUTTON} onClick={() => actions.reveal(repo.path)}>
-            <FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />
+          </Button>
+          <Button size="md" onClick={() => actions.reveal(repo.path)} icon={<FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />}>
             {t("settingsPanel.revealInFinder")}
-          </button>
-          <button
-            type="button"
-            className={SETTINGS_BUTTON}
+          </Button>
+          <Button
+            size="md"
             disabled={!githubUrl}
             onClick={() => githubUrl && actions.openInBrowser(githubUrl)}
+            icon={<Globe className="w-3.5 h-3.5" aria-hidden="true" />}
           >
-            <Globe className="w-3.5 h-3.5" aria-hidden="true" />
             {t("repo.contextMenu.viewOnGitHub")}
-          </button>
+          </Button>
         </div>
       </SettingsSection>
     </>

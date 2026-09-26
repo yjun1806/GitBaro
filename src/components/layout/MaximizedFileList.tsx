@@ -1,7 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { FileStatusBadge } from "@/lib/file-status";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { cn } from "@/lib/utils";
+import { FileStatusLetter } from "@/components/ui/marks";
+import { SectionLabel } from "@/components/ui/PanelHeader";
 import { splitFilePath, type MaximizedFiles } from "./maximized-files";
 
 /**
@@ -23,9 +24,7 @@ export function MaximizedFileList({ items, selectedKey, onSelect, onContextMenu 
       data-testid="maximized-file-list"
       className="flex flex-col w-[220px] shrink-0 min-h-0 border-r border-(--line) bg-card"
     >
-      <div className="flex items-center gap-1.5 h-[36px] px-3 shrink-0 border-b border-(--line) text-[11px] font-semibold text-(--faint)">
-        {t("diff.fileListCount", { count: items.length })}
-      </div>
+      <SectionLabel title={t("diff.fileListCount", { count: items.length })} className="border-b border-(--line)" />
       <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
         {items.map((f, index) => {
           const { dir, name } = splitFilePath(f.path);
@@ -33,9 +32,7 @@ export function MaximizedFileList({ items, selectedKey, onSelect, onContextMenu 
           const groupStart = f.group !== undefined && f.group !== items[index - 1]?.group;
           return (
             <div key={f.key}>
-              {groupStart && (
-                <div className="px-3 pt-2 pb-0.5 text-[10.5px] font-semibold text-(--faint) truncate">{f.group}</div>
-              )}
+              {groupStart && <SectionLabel title={f.group ?? ""} />}
               <button
                 ref={itemRef(index)}
                 type="button"
@@ -51,7 +48,7 @@ export function MaximizedFileList({ items, selectedKey, onSelect, onContextMenu 
                     : undefined
                 }
                 className={cn(
-                  "w-full flex items-center gap-1.5 h-7 px-3 text-left transition-colors",
+                  "w-full flex items-center gap-1.5 h-7 px-3 text-left transition-colors motion-reduce:transition-none",
                   selected
                     ? "bg-(--acc-sel)"
                     : activeIndex === index
@@ -60,16 +57,16 @@ export function MaximizedFileList({ items, selectedKey, onSelect, onContextMenu 
                 )}
               >
                 <span className="flex flex-1 min-w-0 items-center gap-1.5">
-                  <FileStatusBadge status={f.status} />
-                  <span className="flex-1 min-w-0 truncate text-[12px] text-foreground">
+                  <FileStatusLetter status={f.status} />
+                  <span className="flex-1 min-w-0 truncate text-[12.5px] text-foreground">
                     {name}
-                    {dir && <span className="ml-1 text-[10.5px] text-(--faint)">{dir}</span>}
+                    {dir && <span className="ml-1 text-[11.5px] text-muted-foreground">{dir}</span>}
                   </span>
                   {f.additions != null && f.additions > 0 && (
-                    <span className="shrink-0 font-mono text-[10.5px] text-diff-add-fg">+{f.additions}</span>
+                    <span className="shrink-0 font-mono text-[11.5px] text-diff-add-fg">+{f.additions}</span>
                   )}
                   {f.deletions != null && f.deletions > 0 && (
-                    <span className="shrink-0 font-mono text-[10.5px] text-diff-del-fg">−{f.deletions}</span>
+                    <span className="shrink-0 font-mono text-[11.5px] text-diff-del-fg">−{f.deletions}</span>
                   )}
                 </span>
               </button>

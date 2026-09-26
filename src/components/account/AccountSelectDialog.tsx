@@ -1,10 +1,11 @@
-import { useState, useId } from "react";
-import { Check, X } from "lucide-react";
+import { useState } from "react";
+import { Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { GitHubAccount } from "@/types";
 import { AccountAvatar } from "@/components/account/AccountAvatar";
 import { cn } from "@/lib/utils";
-import { Dialog } from "@/components/ui/Dialog";
+import { DialogFrame } from "@/components/ui/DialogFrame";
+import { Button } from "@/components/ui/Button";
 
 interface AccountSelectDialogProps {
   accounts: GitHubAccount[];
@@ -20,85 +21,53 @@ export function AccountSelectDialog({
   onClose,
 }: AccountSelectDialogProps) {
   const { t } = useTranslation();
-  const titleId = useId();
   const [selectedId, setSelectedId] = useState<string | null>(activeAccountId);
 
   return (
-    <Dialog
+    <DialogFrame
+      title={t("repo.selectDefaultAccount")}
       onClose={onClose}
-      labelledBy={titleId}
-      className="bg-card rounded-xl shadow-2xl w-full max-w-sm"
-    >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 id={titleId} className="text-base font-semibold text-foreground">
-            {t("repo.selectDefaultAccount")}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Description */}
-        <div className="px-6 pt-4 pb-2">
-          <p className="text-xs text-muted-foreground">
-            {t("repo.selectDefaultAccountDesc")}
-          </p>
-        </div>
-
-        {/* Account list */}
-        <div className="px-6 py-3 flex flex-col gap-1">
-          {accounts.map((account) => (
-            <button
-              key={account.id}
-              onClick={() => setSelectedId(account.id)}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors",
-                selectedId === account.id
-                  ? "bg-primary/10 border border-primary/30"
-                  : "hover:bg-accent border border-transparent",
-              )}
-            >
-              <AccountAvatar account={account} size="sm" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">
-                  {account.username}
-                </p>
-                {account.email && (
-                  <p className="text-xs text-muted-foreground truncate">
-                    {account.email}
-                  </p>
-                )}
-              </div>
-              {selectedId === account.id && (
-                <Check className="w-4 h-4 text-primary shrink-0" />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
-          <button
-            onClick={() => onSelect(null)}
-            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
+      size="sm"
+      footer={
+        <>
+          <Button variant="ghost" size="md" onClick={() => onSelect(null)}>
             {t("repo.skipAccountSelect")}
-          </button>
+          </Button>
+          <Button variant="primary" size="md" onClick={() => onSelect(selectedId)} disabled={!selectedId}>
+            {t("common.confirm")}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-[11.5px] text-muted-foreground mb-3">{t("repo.selectDefaultAccountDesc")}</p>
+
+      <div className="flex flex-col gap-1">
+        {accounts.map((account) => (
           <button
-            onClick={() => onSelect(selectedId)}
-            disabled={!selectedId}
+            key={account.id}
+            onClick={() => setSelectedId(account.id)}
             className={cn(
-              "px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg transition-colors",
-              !selectedId && "opacity-50 cursor-not-allowed",
+              "w-full flex items-center gap-3 min-h-11 px-3 rounded-(--radius-item) text-left transition-colors motion-reduce:transition-none",
+              selectedId === account.id ? "bg-(--acc-sel)" : "hover:bg-accent",
             )}
           >
-            {t("common.confirm")}
+            <AccountAvatar account={account} size="sm" />
+            <div className="flex-1 min-w-0">
+              <p className={cn("text-[12.5px] text-foreground truncate", selectedId === account.id ? "font-semibold" : "font-medium")}>
+                {account.username}
+              </p>
+              {account.email && (
+                <p className="text-[11.5px] text-muted-foreground truncate">
+                  {account.email}
+                </p>
+              )}
+            </div>
+            {selectedId === account.id && (
+              <Check className="w-4 h-4 text-foreground shrink-0" />
+            )}
           </button>
-        </div>
-    </Dialog>
+        ))}
+      </div>
+    </DialogFrame>
   );
 }
