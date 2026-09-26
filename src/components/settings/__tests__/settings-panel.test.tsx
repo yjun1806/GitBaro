@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@testing-library/jest-dom/vitest";
 import i18n from "@/i18n/config";
 import type { AppSettings } from "@/types";
@@ -24,6 +25,15 @@ vi.mock("@/api/commands", () => ({
   openInTerminal: vi.fn(async () => {}),
   openRepoInEditor: vi.fn(async () => {}),
   openInEditor: vi.fn(async () => {}),
+  checkGhStatus: vi.fn(async () => ({
+    installed: true,
+    version: "2.95.0",
+    loggedIn: true,
+    accounts: [
+      { username: "octo", active: true, state: "loggedIn", scopes: ["repo", "read:org"] },
+      { username: "work", active: false, state: "invalid", scopes: [] },
+    ],
+  })),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => "/Users/me/wt") }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(async () => {}) }));
@@ -45,19 +55,26 @@ const settings: AppSettings = {
 function renderPanel(initialSection?: Parameters<typeof SettingsPanel>[0]["initialSection"]) {
   const onUpdateSettings = vi.fn();
   const onClose = vi.fn();
+  const onSignInAgain = vi.fn();
   render(
-    <SettingsPanel
-      settings={settings}
-      accounts={[{ id: "a1", username: "octo", email: "octo@example.com", avatarUrl: "" }]}
-      onUpdateSettings={onUpdateSettings}
-      onRemoveAccount={vi.fn()}
-      onAddAccount={vi.fn()}
-      onSyncAccounts={vi.fn(async () => {})}
-      onClose={onClose}
-      initialSection={initialSection}
-    />,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <SettingsPanel
+        settings={settings}
+        accounts={[
+          { id: "octo", username: "octo", email: "octo@example.com", avatarUrl: "" },
+          { id: "work", username: "work", email: "work@example.com", avatarUrl: "" },
+        ]}
+        onUpdateSettings={onUpdateSettings}
+        onRemoveAccount={vi.fn()}
+        onAddAccount={vi.fn()}
+        onSignInAgain={onSignInAgain}
+        onSyncAccounts={vi.fn(async () => {})}
+        onClose={onClose}
+        initialSection={initialSection}
+      />
+    </QueryClientProvider>,
   );
-  return { onUpdateSettings, onClose };
+  return { onUpdateSettings, onClose, onSignInAgain };
 }
 
 const nav = () => screen.getByRole("navigation", { name: "Settings" });
@@ -184,6 +201,18 @@ describe("SettingsPanel", () => {
   it("opens on the section it was asked for", () => {
     renderPanel("accounts");
     expect(screen.getByText("octo")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Log Out" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Log Out" })).toHaveLength(2);
+  });
+
+  it("shows each account's gh sign-in state and offers to sign in again only when it expired", async () => {
+    const { onSignInAgain } = renderPanel("accounts");
+    expect(await screen.findByText("Sign-in expired")).toBeInTheDocument();
+    expect(screen.getByText("Signed in")).toBeInTheDocument();
+    expect(screen.getByText(/Scopes: repo, read:org/)).toBeInTheDocument();
+
+    const again = screen.getAllByRole("button", { name: "Sign in again" });
+    expect(again).toHaveLength(1);
+    fireEvent.click(again[0]);
+    expect(onSignInAgain).toHaveBeenCalledWith("work");
   });
 });

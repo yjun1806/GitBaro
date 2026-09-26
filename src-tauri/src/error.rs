@@ -18,7 +18,9 @@ pub enum AppError {
     #[error("Authentication error: {0}")]
     Auth(String),
 
-    #[error("Token expired for account {account_id}")]
+    /// The account's GitHub sign-in cannot be used: gh has no token for it, or
+    /// GitHub/git rejected the token even after re-reading it from gh.
+    #[error("GitHub sign-in for {account_id} is missing or expired. Sign in again in Settings > Accounts.")]
     TokenExpired { account_id: String },
 
     #[error("GitHub API error ({status}): {message}")]
@@ -76,9 +78,7 @@ impl serde::Serialize for AppError {
             AppError::GitCli { message, .. } => ("GitCli", message.clone()),
             AppError::MergeConflict(msg) => ("MergeConflict", msg.clone()),
             AppError::Auth(msg) => ("Auth", msg.clone()),
-            AppError::TokenExpired { account_id } => {
-                ("TokenExpired", format!("Token expired for {}", account_id))
-            }
+            AppError::TokenExpired { .. } => ("TokenExpired", self.to_string()),
             AppError::GithubApi { status, message } => {
                 ("GithubApi", format!("HTTP {}: {}", status, message))
             }
@@ -97,9 +97,37 @@ impl serde::Serialize for AppError {
             AppError::BareRepository(_) => ("BareRepository", self.to_string()),
         };
 
-        let mut s = serializer.serialize_struct("AppError", 2)?;
+        // The frontend names the account and offers to sign in again.
+        let account_id = match self {
+            AppError::TokenExpired { account_id } => Some(account_id),
+            _ => None,
+        };
+
+        let mut s = serializer.serialize_struct("AppError", 2 + usize::from(account_id.is_some()))?;
         s.serialize_field("type", error_type)?;
         s.serialize_field("message", &message)?;
+        if let Some(account_id) = account_id {
+            s.serialize_field("accountId", account_id)?;
+        }
         s.end()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_expired_carries_the_account_to_the_frontend() {
+        let value = serde_json::to_value(AppError::TokenExpired {
+            account_id: "octocat".into(),
+        })
+        .unwrap();
+        assert_eq!(value["type"], "TokenExpired");
+        assert_eq!(value["accountId"], "octocat");
+        assert!(value["message"].as_str().unwrap().contains("octocat"));
+
+        let other = serde_json::to_value(AppError::Network("down".into())).unwrap();
+        assert!(other.get("accountId").is_none());
     }
 }

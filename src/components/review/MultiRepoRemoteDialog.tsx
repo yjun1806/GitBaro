@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Check, Loader2, X } from "lucide-react";
+import { AlertTriangle, Check, X } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
 import { useRepoAvatarColor } from "@/hooks/useRepoDisplay";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -15,6 +15,8 @@ import {
 } from "@/hooks/useMultiRepoRemote";
 import { useUnpushedCommitList } from "@/api/queries";
 import type { RemoteOp } from "@/types";
+import { Spinner } from "@/components/ui/Spinner";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 export interface MultiRepoRemoteDialogProps {
   /** 워크스페이스 저장소 경로. */
@@ -74,11 +76,11 @@ export function MultiRepoRemoteDialog({ paths, op, onClose }: MultiRepoRemoteDia
       </div>
 
       {phase === "preparing" && (
-        <div className="flex items-center gap-2 px-4 py-6 border-t border-(--line) text-[12.5px] text-muted-foreground">
-          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-          {/* Fetch는 창을 열 때 미리 fetch하지 않는다(실행 자체가 fetch). */}
-          {t(op === "fetch" ? "multiRepoRemote.preparingFetch" : "multiRepoRemote.preparing")}
-        </div>
+        // Fetch는 창을 열 때 미리 fetch하지 않는다(실행 자체가 fetch).
+        <LoadingState
+          label={t(op === "fetch" ? "multiRepoRemote.preparingFetch" : "multiRepoRemote.preparing")}
+          className="border-t border-(--line)"
+        />
       )}
 
       {phase === "failed" && (
@@ -172,9 +174,10 @@ export function MultiRepoRemoteDialog({ paths, op, onClose }: MultiRepoRemoteDia
               type="button"
               onClick={() => void run()}
               disabled={phase !== "ready" || chosen.length === 0}
+              aria-busy={running}
               className="flex items-center gap-1.5 h-8 px-4 rounded-lg bg-primary text-primary-foreground text-[13px] font-bold hover:bg-primary-hover disabled:opacity-50"
             >
-              {running && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
+              {running && <Spinner />}
               {t(`multiRepoRemote.confirm.${op}`, { count: chosen.length })}
             </button>
           </>
@@ -242,7 +245,7 @@ function PlanRow({ row, op, checked, locked, result, onToggle }: PlanRowProps) {
       {op === "push" && isRunnable(row) && !result && <UnpushedList path={plan.path} />}
       {result?.status === "failed" && (
         <p role="alert" className="mt-1 pl-[30px] text-[11.5px] text-danger break-words">
-          {failureText(result.message, t)}
+          {failureText(result, t)}
         </p>
       )}
     </div>
@@ -281,7 +284,7 @@ function ResultLabel({ result }: { result: RemoteRowResult }) {
     case "running":
       return (
         <span className="inline-flex items-center gap-1 text-muted-foreground">
-          <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+          <Spinner size="sm" />
           {t("multiRepoRemote.result.running")}
         </span>
       );
@@ -303,10 +306,14 @@ function ResultLabel({ result }: { result: RemoteRowResult }) {
 
 type Translate = ReturnType<typeof useTranslation>["t"];
 
-/** 실행 실패 문구. 원격 선택 오류 코드(`detached_head` 등)는 단일 저장소 툴바와 같은 문구로 바꾼다. */
-function failureText(message: string, t: Translate): string {
-  const key = remoteErrorKey(message);
-  return key ? t(key) : message;
+/**
+ * 실행 실패 문구. 계정 로그인 만료와 원격 선택 오류 코드(`detached_head` 등)는
+ * 단일 저장소 툴바와 같은 문구로 바꾼다.
+ */
+function failureText(result: { message: string; signInAccount?: string }, t: Translate): string {
+  if (result.signInAccount) return t("sync.signInExpired", { account: result.signInAccount });
+  const key = remoteErrorKey(result.message);
+  return key ? t(key) : result.message;
 }
 
 /** 오른쪽 칸: 건너뛰는 이유, 또는 ↑/↓ 커밋 수. Fetch는 커밋 수를 미리 알 수 없어 비운다. */

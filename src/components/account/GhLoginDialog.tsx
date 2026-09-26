@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Loader2, CheckCircle, XCircle, Copy, ExternalLink } from "lucide-react";
+import { CheckCircle, XCircle, Copy, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cancelGhLogin, startGhLogin } from "@/api/commands";
 import { Dialog } from "@/components/ui/Dialog";
+import { Spinner } from "@/components/ui/Spinner";
 
 type FlowState = "idle" | "code" | "waiting" | "success" | "error";
 
@@ -11,9 +12,14 @@ interface GhLoginDialogProps {
   onClose: () => void;
   /** Called when login completes successfully, after user clicks Continue. */
   onSuccess?: (username: string) => void;
+  /**
+   * Account being signed in again. gh signs in whichever account the browser
+   * authorizes, so the code step tells the user which one to pick.
+   */
+  expectedUsername?: string;
 }
 
-export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
+export function GhLoginDialog({ onClose, onSuccess, expectedUsername }: GhLoginDialogProps) {
   const { t } = useTranslation();
   const [flowState, setFlowState] = useState<FlowState>("idle");
   const [userCode, setUserCode] = useState("");
@@ -121,7 +127,7 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
         {/* Requesting code */}
         {flowState === "idle" && (
           <>
-            <Loader2 className="w-10 h-10 text-primary animate-spin" />
+            <Spinner size="lg" className="text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
               {t("account.connecting", "Connecting to GitHub...")}
             </p>
@@ -169,6 +175,11 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
                 "Waiting for authorization... Complete the sign-in on GitHub.",
               )}
             </p>
+            {expectedUsername && (
+              <p className="text-xs text-muted-foreground text-center">
+                {t("account.signInAs", { username: expectedUsername })}
+              </p>
+            )}
 
             <button
               onClick={onClose}
@@ -182,7 +193,7 @@ export function GhLoginDialog({ onClose, onSuccess }: GhLoginDialogProps) {
         {/* Waiting (after code shown, browser opened) */}
         {flowState === "waiting" && (
           <>
-            <Loader2 className="w-10 h-10 text-primary animate-spin" />
+            <Spinner size="lg" className="text-muted-foreground" />
             <div className="text-center">
               <p className="text-sm font-medium">
                 {t("account.waitingAuth", "Waiting for authorization...")}

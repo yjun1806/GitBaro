@@ -4,7 +4,7 @@
 // 쓰기 (stage, unstage, discard, commit, stash): GitCliEngine — git과 같은 동작·hooks 보장
 // 리모트 (fetch, push, pull): GitCliEngine + AskpassScript — 인증
 
-use crate::commands::auth::resolve_token;
+use crate::commands::auth::retry_with_fresh_token;
 use crate::error::AppError;
 use crate::git::cli::GitCliEngine;
 use crate::git::engine::{GitEngine, GitRemoteEngine};
@@ -391,6 +391,54 @@ pub(crate) fn is_auth_error(err: &AppError) -> bool {
     }
 }
 
+/// 인증 실패 중 자격 증명 자체가 없거나 거절된 경우. 토큰은 통했지만 저장소 권한이 없는
+/// 경우(`Permission to o/r denied to user`, HTTP 403)는 다시 로그인해도 풀리지 않으므로 뺀다.
+fn is_credential_rejected(err: &AppError) -> bool {
+    match err {
+        AppError::GitCli { message, .. } => {
+            let lower = message.to_lowercase();
+            is_auth_error(err) && !lower.contains("denied to") && !lower.contains("error: 403")
+        }
+        _ => false,
+    }
+}
+
+/// 원격 작업 하나를 저장소 계정의 토큰으로 실행한다. git이 인증에 실패하면 gh에서 토큰을
+/// 한 번 새로 받아 다시 실행하고(`retry_with_fresh_token`), 그래도 자격 증명이 거절되면
+/// git 원문 대신 계정 이름을 담은 `TokenExpired`로 돌려준다.
+async fn run_with_account_token<T, F, Fut>(
+    token_store: &TokenStore,
+    account_id: &str,
+    call: F,
+) -> Result<T, AppError>
+where
+    F: Fn(String) -> Fut,
+    Fut: std::future::Future<Output = Result<T, AppError>>,
+{
+    retry_with_fresh_token(token_store, account_id, is_auth_error, call)
+        .await
+        .map_err(|e| sign_in_error(e, account_id))
+}
+
+/// 원격 작업의 자격 증명 실패를 사용자가 할 일이 드러나는 오류로 바꾼다.
+/// - git이 자격 증명을 물어보지 못함 → `credential_prompt_blocked` 코드. 로그인 문제가 아니다.
+/// - 재시도 뒤에도 자격 증명이 거절됨 → 계정 이름을 담은 `TokenExpired`.
+fn sign_in_error(err: AppError, account_id: &str) -> AppError {
+    if let AppError::GitCli { message, .. } = &err {
+        if crate::git::cli::is_credential_prompt_blocked_text(message) {
+            tracing::warn!("[git] git could not ask for credentials: {}", message);
+            return remote_error("credential_prompt_blocked");
+        }
+    }
+    if !is_credential_rejected(&err) {
+        return err;
+    }
+    tracing::warn!("[git] credentials for {} rejected after refresh: {}", account_id, err);
+    AppError::TokenExpired {
+        account_id: account_id.to_string(),
+    }
+}
+
 // ── Remote resolution ───────────────────────────────────────────────────────
 // 원격 이름을 "origin"으로 고정하지 않는다. 브랜치 설정(branch.<name>.remote /
 // branch.<name>.merge)을 따르고, 없으면 기본 원격을 고른다.
@@ -561,27 +609,17 @@ pub async fn git_fetch(
     app_handle: tauri::AppHandle,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
-    let token = resolve_token(&token_store, &account_id).await?;
     let remotes = resolve_sync_target(&repo_path).await?.fetch_remotes()?;
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
         .with_automatic(automatic.unwrap_or(false));
 
-    let mut token = token;
-    let mut refreshed = false;
     for remote in &remotes {
-        match engine.fetch(remote, &token).await {
-            Ok(()) => {
-                tracing::info!("Fetched {} for {}", remote, repo_path);
-            }
-            Err(e) if is_auth_error(&e) && !refreshed => {
-                tracing::warn!("Fetch auth failed, refreshing token for {}", account_id);
-                token = token_store.refresh_token(&account_id).await?;
-                refreshed = true;
-                engine.fetch(remote, &token).await?;
-                tracing::info!("Fetched {} for {} (after token refresh)", remote, repo_path);
-            }
-            Err(e) => return Err(e),
-        }
+        run_with_account_token(&token_store, &account_id, |token| {
+            let (engine, remote) = (&engine, remote);
+            async move { engine.fetch(remote, &token).await }
+        })
+        .await?;
+        tracing::info!("Fetched {} for {}", remote, repo_path);
     }
 
     // GitHub Desktop parity: advance eligible non-current local branches so a
@@ -679,26 +717,18 @@ pub async fn git_push(
     app_handle: tauri::AppHandle,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
-    let token = resolve_token(&token_store, &account_id).await?;
     let (remote, refspec) = resolve_sync_target(&repo_path).await?.push_target()?;
 
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     let force_flag = force.unwrap_or(false);
 
-    match engine.push(&remote, &refspec, &token, force_flag).await {
-        Ok(()) => {
-            tracing::info!("Pushed {} to {} for {}", refspec, remote, repo_path);
-            Ok(())
-        }
-        Err(e) if is_auth_error(&e) => {
-            tracing::warn!("Push auth failed, refreshing token for {}", account_id);
-            let new_token = token_store.refresh_token(&account_id).await?;
-            engine.push(&remote, &refspec, &new_token, force_flag).await?;
-            tracing::info!("Pushed {} to {} for {} (after token refresh)", refspec, remote, repo_path);
-            Ok(())
-        }
-        Err(e) => Err(e),
-    }
+    run_with_account_token(&token_store, &account_id, |token| {
+        let (engine, remote, refspec) = (&engine, &remote, &refspec);
+        async move { engine.push(remote, refspec, &token, force_flag).await }
+    })
+    .await?;
+    tracing::info!("Pushed {} to {} for {}", refspec, remote, repo_path);
+    Ok(())
 }
 
 /// push가 실제로 올릴 곳. force push 확인 창이 실행될 명령을 그대로 보여주는 데 쓴다.
@@ -724,19 +754,14 @@ pub async fn list_remote_tags(
     app_handle: tauri::AppHandle,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<Vec<String>, AppError> {
-    let token = resolve_token(&token_store, &account_id).await?;
     let remote = resolve_sync_target(&repo_path).await?.fetch_remote()?;
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
 
-    match engine.list_remote_tags(&remote, &token).await {
-        Ok(tags) => Ok(tags),
-        Err(e) if is_auth_error(&e) => {
-            tracing::warn!("ls-remote auth failed, refreshing token for {}", account_id);
-            let new_token = token_store.refresh_token(&account_id).await?;
-            engine.list_remote_tags(&remote, &new_token).await
-        }
-        Err(e) => Err(e),
-    }
+    run_with_account_token(&token_store, &account_id, |token| {
+        let (engine, remote) = (&engine, &remote);
+        async move { engine.list_remote_tags(remote, &token).await }
+    })
+    .await
 }
 
 #[tauri::command]
@@ -747,7 +772,6 @@ pub async fn git_pull(
     app_handle: tauri::AppHandle,
     token_store: tauri::State<'_, TokenStore>,
 ) -> Result<(), AppError> {
-    let token = resolve_token(&token_store, &account_id).await?;
     let target = resolve_sync_target(&repo_path).await?;
     let (remote, merge_ref) = target.pull_target()?;
     let rebase_flag = target.pull_rebase(rebase);
@@ -756,20 +780,13 @@ pub async fn git_pull(
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
         .with_identity(identity);
 
-    match engine.pull(&remote, &merge_ref, &token, rebase_flag).await {
-        Ok(()) => {
-            tracing::info!("Pulled {} from {} for {}", merge_ref, remote, repo_path);
-            Ok(())
-        }
-        Err(e) if is_auth_error(&e) => {
-            tracing::warn!("Pull auth failed, refreshing token for {}", account_id);
-            let new_token = token_store.refresh_token(&account_id).await?;
-            engine.pull(&remote, &merge_ref, &new_token, rebase_flag).await?;
-            tracing::info!("Pulled {} from {} for {} (after token refresh)", merge_ref, remote, repo_path);
-            Ok(())
-        }
-        Err(e) => Err(e),
-    }
+    run_with_account_token(&token_store, &account_id, |token| {
+        let (engine, remote, merge_ref) = (&engine, &remote, &merge_ref);
+        async move { engine.pull(remote, merge_ref, &token, rebase_flag).await }
+    })
+    .await?;
+    tracing::info!("Pulled {} from {} for {}", merge_ref, remote, repo_path);
+    Ok(())
 }
 
 #[tauri::command]
@@ -1358,5 +1375,59 @@ mod tests {
             exit_code: Some(128),
         };
         assert!(!is_auth_error(&not_auth));
+    }
+
+    #[test]
+    fn blocked_prompts_and_missing_access_are_not_sign_in_problems() {
+        // git never asked GIT_ASKPASS: a fresh token or a new login would not help.
+        let no_prompt = AppError::GitCli {
+            message: crate::git::cli::parse_git_error("fatal: unable to get password from user\n"),
+            exit_code: Some(128),
+        };
+        assert!(!is_auth_error(&no_prompt));
+        match sign_in_error(no_prompt, "octocat") {
+            AppError::GitCli { message, .. } => assert_eq!(message, "credential_prompt_blocked"),
+            other => panic!("expected credential_prompt_blocked, got {:?}", other),
+        }
+
+        let denied = AppError::GitCli {
+            message: crate::git::cli::parse_git_error(
+                "remote: Permission to o/r.git denied to someone.\nfatal: unable to access 'https://github.com/o/r.git/': The requested URL returned error: 403\n",
+            ),
+            exit_code: Some(128),
+        };
+        assert!(is_auth_error(&denied));
+        assert!(!is_credential_rejected(&denied));
+    }
+
+    #[test]
+    fn rejected_credentials_name_the_account() {
+        let rejected = AppError::GitCli {
+            message: "Authentication failed for 'https://github.com/o/r.git/'".into(),
+            exit_code: Some(128),
+        };
+        match sign_in_error(rejected, "octocat") {
+            AppError::TokenExpired { account_id } => assert_eq!(account_id, "octocat"),
+            other => panic!("expected TokenExpired, got {:?}", other),
+        }
+        let offline = AppError::GitCli {
+            message: "Could not resolve host: github.com".into(),
+            exit_code: Some(128),
+        };
+        assert!(matches!(sign_in_error(offline, "octocat"), AppError::GitCli { .. }));
+    }
+
+    #[tokio::test]
+    async fn other_git_failures_pass_through_unchanged() {
+        let store = TokenStore::new();
+        store.set_token("octocat", "fake-token".into()).await;
+        let result: Result<(), AppError> = run_with_account_token(&store, "octocat", |_token| async {
+            Err(AppError::GitCli {
+                message: "Need to specify how to reconcile divergent branches.".into(),
+                exit_code: Some(128),
+            })
+        })
+        .await;
+        assert!(matches!(result, Err(AppError::GitCli { .. })));
     }
 }

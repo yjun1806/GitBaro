@@ -33,6 +33,8 @@ export function ToolbarRoot() {
   const scope = useActiveScope();
 
   const [showLoginDialog, setShowLoginDialog] = useState(false);
+  /** 다시 로그인할 계정. 로그인 창이 GitHub에서 이 계정으로 승인하라고 안내한다. */
+  const [loginHint, setLoginHint] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsSection, setSettingsSection] = useState<AppSettingsSection>("general");
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
@@ -128,7 +130,7 @@ export function ToolbarRoot() {
           자리가 맨 앞에 온다. */}
       <div
         className={cn(
-          "@container flex items-center gap-1.5 border-b border-(--line2) bg-(--frame) select-none",
+          "@container flex items-center gap-1.5 border-b border-(--line) bg-(--frame) select-none",
           sidebarHidden ? "pr-2" : "px-2",
           HEADER_HEIGHT_CLASS,
         )}
@@ -181,7 +183,10 @@ export function ToolbarRoot() {
             isOpen={activeDropdown === "account"}
             onToggle={() => toggle("account")}
             onClose={close}
-            onSignIn={() => setShowLoginDialog(true)}
+            onSignIn={() => {
+              setLoginHint(null);
+              setShowLoginDialog(true);
+            }}
             onManageAccounts={() => void handleOpenSettings("accounts")}
           />
           <button
@@ -197,6 +202,7 @@ export function ToolbarRoot() {
 
       {showLoginDialog && (
         <GhLoginDialog
+          expectedUsername={loginHint ?? undefined}
           onClose={() => setShowLoginDialog(false)}
           onSuccess={handleLoginSuccess}
         />
@@ -210,6 +216,12 @@ export function ToolbarRoot() {
           onRemoveAccount={handleRemoveAccount}
           onAddAccount={() => {
             setShowSettings(false);
+            setLoginHint(null);
+            setShowLoginDialog(true);
+          }}
+          onSignInAgain={(username) => {
+            setShowSettings(false);
+            setLoginHint(username);
             setShowLoginDialog(true);
           }}
           onSyncAccounts={handleSyncAccounts}

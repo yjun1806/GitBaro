@@ -23,6 +23,8 @@ interface SettingsPanelProps {
   onUpdateSettings: (patch: Partial<AppSettings>) => void;
   onRemoveAccount: (accountId: string) => void;
   onAddAccount: () => void;
+  /** 로그인이 만료된 계정으로 다시 로그인한다. */
+  onSignInAgain: (username: string) => void;
   onSyncAccounts: () => Promise<void>;
   onClose: () => void;
   /** 처음 보일 칸. 계정 메뉴의 「계정 관리」는 계정 칸으로 연다. */
@@ -39,6 +41,7 @@ export function SettingsPanel({
   onUpdateSettings,
   onRemoveAccount,
   onAddAccount,
+  onSignInAgain,
   onSyncAccounts,
   onClose,
   initialSection = "general",
@@ -74,6 +77,7 @@ export function SettingsPanel({
           accounts={accounts}
           onRemove={onRemoveAccount}
           onAddAccount={onAddAccount}
+          onSignInAgain={onSignInAgain}
           onSyncAccounts={onSyncAccounts}
         />
       )}

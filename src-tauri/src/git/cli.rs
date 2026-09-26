@@ -88,11 +88,39 @@ impl GitCliEngine {
 
     /// 새 git 프로세스를 만든다. 저장소 경로·프롬프트 차단·계정 신원을 공통으로 건다.
     fn git_command(&self) -> Command {
-        let mut cmd = Command::new("git");
+        let mut cmd = git_process();
         cmd.current_dir(&self.repo_path)
             .env("GIT_TERMINAL_PROMPT", "0")
             .envs(self.identity_envs());
         cmd
+    }
+}
+
+/// 설정을 환경변수로 넘기는 git 변수. 앱을 띄운 셸(에이전트 터미널 등)이 내보낸 값이
+/// 그대로 상속되면 사용자 설정보다 앞선다. 예: `credential.interactive=false`면 git이
+/// GIT_ASKPASS를 부르지 않아 "unable to get password from user"로 실패한다.
+fn is_injected_git_config_var(name: &str) -> bool {
+    name == "GIT_CONFIG_PARAMETERS"
+        || name == "GIT_CONFIG_COUNT"
+        || name.starts_with("GIT_CONFIG_KEY_")
+        || name.starts_with("GIT_CONFIG_VALUE_")
+}
+
+/// 앱이 실행하는 git 프로세스. 부모 환경에서 상속된 설정 주입 변수(`GIT_CONFIG_PARAMETERS`,
+/// `GIT_CONFIG_COUNT`/`KEY_n`/`VALUE_n`)를 지워, git이 사용자의 gitconfig와 앱이 `-c`로 넘긴
+/// 값만 읽게 한다. `GIT_CONFIG_GLOBAL`·`GIT_CONFIG_SYSTEM`(설정 파일 위치)은 건드리지 않는다.
+pub(crate) fn git_process() -> Command {
+    let mut cmd = Command::new("git");
+    strip_injected_git_config(&mut cmd, std::env::vars_os().map(|(name, _)| name));
+    cmd
+}
+
+/// `names` 중 설정 주입 변수를 `cmd`의 환경에서 지운다.
+fn strip_injected_git_config(cmd: &mut Command, names: impl IntoIterator<Item = std::ffi::OsString>) {
+    for name in names {
+        if name.to_str().is_some_and(is_injected_git_config_var) {
+            cmd.env_remove(&name);
+        }
     }
 }
 
@@ -304,7 +332,7 @@ impl GitCliEngine {
             args.join(" "),
             self.repo_path.display()
         );
-        Command::new("git")
+        git_process()
             .args(args)
             .current_dir(&self.repo_path)
             .env("GIT_TERMINAL_PROMPT", "0")
@@ -1387,7 +1415,7 @@ impl GitCliEngine {
         }
         args.extend(["--", remote]);
         tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
-        let output = Command::new("git")
+        let output = git_process()
             .args(&args)
             .current_dir(&self.repo_path)
             .output()
@@ -1429,11 +1457,11 @@ impl GitCliEngine {
         ]);
         tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
 
-        let mut cmd = Command::new("git");
+        let mut cmd = git_process();
         cmd.args(args)
             .current_dir(&self.repo_path)
             .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_ASKPASS", askpass.path())
+            .envs(askpass.envs())
             // Force stable, non-localized porcelain summaries (e.g. "[new tag]").
             .env("LC_ALL", "C");
 
@@ -1473,11 +1501,11 @@ impl GitCliEngine {
         args.extend(["ls-remote", "--tags", remote]);
         tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
 
-        let mut cmd = Command::new("git");
+        let mut cmd = git_process();
         cmd.args(args)
             .current_dir(&self.repo_path)
             .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_ASKPASS", askpass.path());
+            .envs(askpass.envs());
         let output = cmd.output().await.map_err(map_io_err)?;
 
         log_output(&output);
@@ -1502,10 +1530,10 @@ impl GitRemoteEngine for GitCliEngine {
         tracing::info!("[git] git {}", args.join(" "));
         self.emit_command_start(&id, &display_args, "clone", started_at);
 
-        let mut cmd = Command::new("git");
+        let mut cmd = git_process();
         cmd.args(args)
             .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_ASKPASS", askpass.path());
+            .envs(askpass.envs());
         let output = self.run_remote_with_progress(&mut cmd, &id, "clone").await?;
 
         log_output(&output);
@@ -1527,11 +1555,11 @@ impl GitRemoteEngine for GitCliEngine {
         tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
         self.emit_command_start(&id, &display_args, "fetch", started_at);
 
-        let mut cmd = Command::new("git");
+        let mut cmd = git_process();
         cmd.args(args)
             .current_dir(&self.repo_path)
             .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_ASKPASS", askpass.path());
+            .envs(askpass.envs());
         // `?`로 곧장 반환하면 완료 이벤트가 발행되지 않아 진행 중 표시가 멈추지 않는다.
         // 자동 fetch는 성공 시 로그에 남지 않으므로 이 경우 추적할 단서도 사라진다.
         let output = match self.run_remote_with_progress(&mut cmd, &id, "fetch").await {
@@ -1591,11 +1619,11 @@ impl GitRemoteEngine for GitCliEngine {
         tracing::info!("[git] git {} (cwd: {})", args.join(" "), self.repo_path.display());
         self.emit_command_start(&id, &display_args, "push", started_at);
 
-        let mut cmd = Command::new("git");
+        let mut cmd = git_process();
         cmd.args(&args)
             .current_dir(&self.repo_path)
             .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GIT_ASKPASS", askpass.path());
+            .envs(askpass.envs());
         let output = self.run_remote_with_progress(&mut cmd, &id, "push").await?;
 
         log_output(&output);
@@ -1640,7 +1668,7 @@ impl GitRemoteEngine for GitCliEngine {
 
         // pull은 merge 커밋을 만들 수 있으므로 저장소 계정 신원을 건다(git_command).
         let mut cmd = self.git_command();
-        cmd.args(args).env("GIT_ASKPASS", askpass.path());
+        cmd.args(args).envs(askpass.envs());
         let output = self.run_remote_with_progress(&mut cmd, &id, "pull").await?;
 
         log_output(&output);
@@ -1803,12 +1831,24 @@ impl AskpassScript {
         &self.path
     }
 
+    /// 원격 명령에 거는 askpass 변수. 상속된 GIT_ASKPASS·SSH_ASKPASS(에이전트 터미널이나
+    /// IDE가 내보낸 것)가 아니라 항상 이 스크립트가 답하게 한다.
+    fn envs(&self) -> [(&'static str, &Path); 2] {
+        [("GIT_ASKPASS", self.path()), ("SSH_ASKPASS", self.path())]
+    }
+
 }
 
-/// `-c credential.helper=` for github.com URLs, nothing for other hosts.
+/// Config overrides for github.com URLs, nothing for other hosts:
+/// - `credential.helper=` clears helpers so the account's token wins.
+/// - `credential.interactive=true` keeps git asking GIT_ASKPASS. Since git 2.46
+///   `credential.interactive=false` skips every prompt, askpass included, and
+///   git fails with "unable to get password from user". Agent terminals export
+///   that setting through `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`, so an app
+///   launched from one inherits it. A `-c` value wins over those variables.
 fn credential_helper_override_for_url(url: &str) -> &'static [&'static str] {
     if crate::git::remote::is_github_com_url(url) {
-        &["-c", "credential.helper="]
+        &["-c", "credential.helper=", "-c", "credential.interactive=true"]
     } else {
         &[]
     }
@@ -1978,6 +2018,13 @@ pub(crate) fn is_auth_failure_text(text: &str) -> bool {
         || (lower.contains("permission to") && lower.contains("denied to"))
 }
 
+/// git이 자격 증명을 물어보지 못하고 멈췄는지(git 2.46+, `credential.interactive=false`).
+/// 토큰이 틀린 것이 아니라 GIT_ASKPASS가 불리지 않은 경우라, 토큰을 새로 받거나 다시
+/// 로그인해도 풀리지 않는다.
+pub(crate) fn is_credential_prompt_blocked_text(text: &str) -> bool {
+    text.to_lowercase().contains("unable to get password from user")
+}
+
 /// 사람이 읽을 오류 한 줄을 고른다. 우선순위:
 /// 1. merge 충돌 (`CONFLICT (...)`)
 /// 2. push 거부 (`! [rejected]`) — 거부 이유를 설명하는 첫 hint 문장과 함께
@@ -2101,11 +2148,86 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn injected_git_config_from_the_parent_is_not_inherited() {
+        // What an agent terminal exports. The test sets them on the command, as
+        // a parent environment would, and strips them the way git_process does.
+        let injected = [
+            ("GIT_CONFIG_COUNT", "2"),
+            ("GIT_CONFIG_KEY_0", "credential.interactive"),
+            ("GIT_CONFIG_VALUE_0", "false"),
+            ("GIT_CONFIG_KEY_1", "credential.guiPrompt"),
+            ("GIT_CONFIG_VALUE_1", "false"),
+            ("GIT_CONFIG_PARAMETERS", "'credential.interactive'='never'"),
+        ];
+        let mut cmd = git_process();
+        cmd.envs(injected)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .args(["config", "--get", "credential.interactive"]);
+        strip_injected_git_config(&mut cmd, injected.iter().map(|(name, _)| name.into()));
+        let output = cmd.output().await.expect("git 실행 실패");
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "");
+
+        assert!(!is_injected_git_config_var("GIT_CONFIG_GLOBAL"));
+        assert!(!is_injected_git_config_var("GIT_CONFIG_SYSTEM"));
+    }
+
+    #[tokio::test]
+    async fn askpass_answers_even_when_the_parent_disabled_credential_prompts() {
+        // `git credential fill` asks for credentials the way fetch/pull do, but
+        // offline. With the parent's credential.interactive=false still in
+        // place, git fails with "unable to get password from user".
+        use tokio::io::AsyncWriteExt;
+        let injected = [
+            ("GIT_CONFIG_COUNT", "1"),
+            ("GIT_CONFIG_KEY_0", "credential.interactive"),
+            ("GIT_CONFIG_VALUE_0", "false"),
+            ("GIT_ASKPASS", "/nonexistent/other-askpass"),
+            ("SSH_ASKPASS", "/nonexistent/other-askpass"),
+        ];
+        let askpass = AskpassScript::create("fake-token-123").await.unwrap();
+        let mut cmd = git_process();
+        cmd.envs(injected);
+        strip_injected_git_config(&mut cmd, injected.iter().map(|(name, _)| name.into()));
+        cmd.args(credential_helper_override_for_url("https://github.com/o/r.git"))
+            .args(["credential", "fill"])
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .envs(askpass.envs())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        let mut child = cmd.spawn().expect("git 실행 실패");
+        let mut stdin = child.stdin.take().unwrap();
+        stdin.write_all(b"protocol=https\nhost=github.com\n\n").await.unwrap();
+        drop(stdin);
+        let output = child.wait_with_output().await.unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(stdout.contains("username=x-access-token"), "{stdout}");
+        assert!(stdout.contains("password=fake-token-123"), "{stdout}");
+    }
+
+    #[test]
+    fn github_override_beats_inherited_credential_interactive_false() {
+        // What an agent terminal exports; with it git never runs GIT_ASKPASS.
+        let mut args = credential_helper_override_for_url("https://github.com/o/r.git").to_vec();
+        args.extend(["config", "--get", "credential.interactive"]);
+        let output = std::process::Command::new("git")
+            .args(&args)
+            .env("GIT_CONFIG_COUNT", "1")
+            .env("GIT_CONFIG_KEY_0", "credential.interactive")
+            .env("GIT_CONFIG_VALUE_0", "false")
+            .output()
+            .expect("git 실행 실패");
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "true");
+    }
+
     #[test]
     fn credential_helper_is_cleared_only_for_github_com() {
         assert_eq!(
             credential_helper_override_for_url("https://github.com/o/r.git"),
-            &["-c", "credential.helper="]
+            &["-c", "credential.helper=", "-c", "credential.interactive=true"]
         );
         assert!(credential_helper_override_for_url("https://gitlab.com/o/r.git").is_empty());
         assert!(credential_helper_override_for_url("https://ghe.corp.com/o/r.git").is_empty());

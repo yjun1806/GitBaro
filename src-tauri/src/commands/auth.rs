@@ -436,11 +436,26 @@ where
     F: Fn(String) -> Fut,
     Fut: Future<Output = Result<T, AppError>>,
 {
+    retry_with_fresh_token(token_store, account_id, is_unauthorized, call).await
+}
+
+/// Run `call` with the account's token. When the error matches `is_rejected`,
+/// the token is re-read from `gh` and the call is retried exactly once.
+pub(crate) async fn retry_with_fresh_token<T, F, Fut>(
+    token_store: &TokenStore,
+    account_id: &str,
+    is_rejected: fn(&AppError) -> bool,
+    call: F,
+) -> Result<T, AppError>
+where
+    F: Fn(String) -> Fut,
+    Fut: Future<Output = Result<T, AppError>>,
+{
     let token = resolve_token(token_store, account_id).await?;
     match call(token).await {
-        Err(e) if is_unauthorized(&e) => {
+        Err(e) if is_rejected(&e) => {
             tracing::warn!(
-                "GitHub API returned 401 for {}; refreshing token and retrying once",
+                "Credentials for {} were rejected; refreshing token and retrying once",
                 account_id
             );
             let fresh = token_store.refresh_token(account_id).await?;

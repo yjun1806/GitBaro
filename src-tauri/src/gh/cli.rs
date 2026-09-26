@@ -23,6 +23,23 @@ const MIN_GH_MINOR: u32 = 40;
 pub struct GhAccount {
     pub username: String,
     pub active: bool,
+    /// What `gh auth status` found when it checked the account's token online.
+    pub state: GhAuthState,
+    /// OAuth scopes of the token (`- Token scopes: 'repo', ...`). Empty when
+    /// gh could not check the token or reported none.
+    pub scopes: Vec<String>,
+}
+
+/// Result of gh's online token check for one account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GhAuthState {
+    /// `✓ Logged in to github.com account ...`
+    LoggedIn,
+    /// `X Failed to log in ...`: the stored token was rejected (expired or revoked).
+    Invalid,
+    /// `X Timeout trying to log in ...`: GitHub could not be reached, state unknown.
+    Unreachable,
 }
 
 pub struct GhLoginResult {
@@ -164,7 +181,11 @@ pub async fn gh_auth_status() -> Result<Vec<GhAccount>, AppError> {
 }
 
 fn parse_auth_status(text: &str) -> Vec<GhAccount> {
-    let mut accounts = Vec::new();
+    let mut accounts: Vec<GhAccount> = Vec::new();
+    // Detail lines ("- Token scopes", "- Active account") belong to the account
+    // header above them; a header for another host (GHE) must not pass its
+    // details to the previous github.com account.
+    let mut in_github_account = false;
 
     for line in text.lines() {
         let trimmed = line.trim();
@@ -173,32 +194,55 @@ fn parse_auth_status(text: &str) -> Vec<GhAccount> {
         // revoked-token forms "X Failed to log in to github.com account USERNAME (source)"
         // and "X Timeout trying to log in to github.com account USERNAME (source)".
         // The account is still configured in gh in every case.
-        if let Some(username) = extract_logged_in_account(trimmed) {
+        if let Some((username, state)) = extract_logged_in_account(trimmed) {
             accounts.push(GhAccount {
                 username,
                 active: false,
+                state,
+                scopes: Vec::new(),
             });
+            in_github_account = true;
+            continue;
+        }
+        if is_account_header(trimmed) {
+            in_github_account = false;
+            continue;
+        }
+        if !in_github_account {
+            continue;
+        }
+        let Some(last) = accounts.last_mut() else {
+            continue;
+        };
+
+        // "- Token scopes: 'gist', 'read:org', 'repo'" (or "none")
+        if let Some(list) = trimmed.strip_prefix("- Token scopes:") {
+            last.scopes = parse_scopes(list);
         }
 
         // "- Active account: true"
         if trimmed.contains("Active account: true") {
-            if let Some(last) = accounts.last_mut() {
-                last.active = true;
-            }
+            last.active = true;
         }
     }
 
     accounts
 }
 
-fn extract_logged_in_account(line: &str) -> Option<String> {
-    const NEEDLES: [&str; 2] = [
-        "Logged in to github.com account ",
-        "log in to github.com account ",
+/// An account header line for any host (`... to <host> account <name> (...)`).
+fn is_account_header(line: &str) -> bool {
+    (line.contains("Logged in to ") || line.contains("log in to ")) && line.contains(" account ")
+}
+
+fn extract_logged_in_account(line: &str) -> Option<(String, GhAuthState)> {
+    const NEEDLES: [(&str, GhAuthState); 3] = [
+        ("Logged in to github.com account ", GhAuthState::LoggedIn),
+        ("Timeout trying to log in to github.com account ", GhAuthState::Unreachable),
+        ("log in to github.com account ", GhAuthState::Invalid),
     ];
-    let after = NEEDLES
-        .iter()
-        .find_map(|needle| line.find(needle).map(|pos| &line[pos + needle.len()..]))?;
+    let (after, state) = NEEDLES.iter().find_map(|(needle, state)| {
+        line.find(needle).map(|pos| (&line[pos + needle.len()..], *state))
+    })?;
     let username = if let Some(paren) = after.rfind('(') {
         after[..paren].trim()
     } else {
@@ -208,13 +252,25 @@ fn extract_logged_in_account(line: &str) -> Option<String> {
     if username.is_empty() {
         None
     } else {
-        Some(username.to_string())
+        Some((username.to_string(), state))
     }
+}
+
+fn parse_scopes(list: &str) -> Vec<String> {
+    list.split(',')
+        .map(|s| s.trim().trim_matches('\'').trim())
+        .filter(|s| !s.is_empty() && *s != "none")
+        .map(str::to_string)
+        .collect()
 }
 
 // ─── Token ───
 
 /// Get the OAuth token for a specific account via `gh auth token --user`.
+///
+/// When gh has no usable token for the account (never logged in, logged out,
+/// keyring entry gone) this is `TokenExpired`, so callers can tell the user to
+/// sign in again instead of showing gh's stderr.
 pub async fn gh_auth_token(username: &str) -> Result<String, AppError> {
     let gh = locate_gh().await?;
 
@@ -225,20 +281,23 @@ pub async fn gh_auth_token(username: &str) -> Result<String, AppError> {
         .map_err(|e| AppError::GhCli(e.to_string()))?;
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(AppError::GhCli(format!(
-            "Failed to get token for {}: {}",
+        // stderr is gh's message ("no oauth token found ..."), never the token.
+        tracing::warn!(
+            "gh auth token failed for {}: {}",
             username,
-            stderr.trim()
-        )));
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        return Err(AppError::TokenExpired {
+            account_id: username.to_string(),
+        });
     }
 
     let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if token.is_empty() {
-        return Err(AppError::GhCli(format!(
-            "Empty token returned for {}",
-            username
-        )));
+        tracing::warn!("gh auth token returned nothing for {}", username);
+        return Err(AppError::TokenExpired {
+            account_id: username.to_string(),
+        });
     }
 
     Ok(token)
@@ -460,6 +519,17 @@ mod tests {
     }
 
     #[test]
+    fn parse_full_web_login_transcript() {
+        // stdout and stderr interleaved as gh 2.9x prints them for --web.
+        let text = "! First copy your one-time code: 1A2B-3C4D\nPress Enter to open https://github.com/login/device in your browser... \n✓ Authentication complete.\n- gh config set -h github.com git_protocol https\n✓ Configured git protocol\n✓ Logged in as company-user\n";
+        assert_eq!(extract_device_code(text), Some("1A2B-3C4D".to_string()));
+        assert_eq!(extract_logged_in_username(text), Some("company-user".to_string()));
+        // Before the browser step finishes there is a code but no user yet.
+        let partial = "! First copy your one-time code: 1A2B-3C4D\nPress Enter to open";
+        assert_eq!(extract_logged_in_username(partial), None);
+    }
+
+    #[test]
     fn parse_device_code_missing() {
         assert_eq!(extract_device_code("no code here"), None);
     }
@@ -490,6 +560,29 @@ mod tests {
         assert_eq!(names, ["user1", "user2", "user3"]);
         assert!(accounts[0].active);
         assert!(!accounts[1].active);
+    }
+
+    #[test]
+    fn parse_auth_status_reads_token_state_and_scopes() {
+        let text = "github.com\n  ✓ Logged in to github.com account work (keyring)\n  - Active account: true\n  - Git operations protocol: https\n  - Token: gho_************************************\n  - Token scopes: 'gist', 'read:org', 'repo'\n\n  X Failed to log in to github.com account home (keyring)\n  - Active account: false\n  - The token in keyring is invalid.\n  X Timeout trying to log in to github.com account away (keyring)\n  - Active account: false\n  ✓ Logged in to github.com account bare (keyring)\n  - Token scopes: none\n";
+        let accounts = parse_auth_status(text);
+        assert_eq!(accounts.len(), 4);
+        assert_eq!(accounts[0].state, GhAuthState::LoggedIn);
+        assert_eq!(accounts[0].scopes, ["gist", "read:org", "repo"]);
+        assert_eq!(accounts[1].state, GhAuthState::Invalid);
+        assert!(accounts[1].scopes.is_empty());
+        assert_eq!(accounts[2].state, GhAuthState::Unreachable);
+        assert_eq!(accounts[3].state, GhAuthState::LoggedIn);
+        assert!(accounts[3].scopes.is_empty());
+    }
+
+    #[test]
+    fn parse_auth_status_keeps_other_hosts_details_apart() {
+        let text = "github.com\n  ✓ Logged in to github.com account me (keyring)\n  - Active account: false\n  - Token scopes: 'repo'\nghe.example.com\n  ✓ Logged in to ghe.example.com account corp (keyring)\n  - Active account: true\n  - Token scopes: 'admin:org'\n";
+        let accounts = parse_auth_status(text);
+        assert_eq!(accounts.len(), 1);
+        assert!(!accounts[0].active);
+        assert_eq!(accounts[0].scopes, ["repo"]);
     }
 
     #[test]

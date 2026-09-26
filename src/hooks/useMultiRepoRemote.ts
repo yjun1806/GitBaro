@@ -6,6 +6,7 @@ import { repoDisplayName, type RepoPrefs } from "@/lib/repo-prefs";
 import { findOwnerRepo, useRepositoryStore } from "@/stores/repository";
 import { useSyncStore } from "@/stores/sync";
 import { getErrorMessage, isMergeConflictError } from "@/lib/utils";
+import { signInErrorAccount } from "@/lib/remote-error";
 import type { RemoteOp, RepoInfo, RepoRemotePlan } from "@/types";
 
 /** 확인 창에 올릴 저장소. 계정은 저장소마다 지정된 것만 쓴다. */
@@ -40,7 +41,8 @@ export type RemoteRowResult =
   | { status: "conflict" }
   /** 툴바 등 다른 곳에서 그 저장소의 동기화가 이미 돌고 있어 건너뛰었다. */
   | { status: "busy" }
-  | { status: "failed"; message: string };
+  /** `signInAccount`: 그 계정의 GitHub 로그인이 없거나 만료되어 실패했다. */
+  | { status: "failed"; message: string; signInAccount?: string };
 
 /** 실제 git 호출. 테스트에서 바꿔 끼운다. 토큰은 넘기지 않고 계정 ID만 넘긴다. */
 export interface RemoteDeps {
@@ -169,7 +171,7 @@ export async function runRemotePlan(
     } catch (err) {
       result = isMergeConflictError(err)
         ? { status: "conflict" }
-        : { status: "failed", message: getErrorMessage(err) };
+        : { status: "failed", message: getErrorMessage(err), signInAccount: signInErrorAccount(err) ?? undefined };
     }
     results = { ...results, [path]: result };
     onResult(path, result);

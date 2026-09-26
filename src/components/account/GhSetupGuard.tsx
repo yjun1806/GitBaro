@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Terminal, AlertTriangle } from "lucide-react";
 import { checkGhStatus } from "@/api/commands";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 interface GhSetupGuardProps {
   children: ReactNode;
@@ -30,11 +31,7 @@ export function GhSetupGuard({ children }: GhSetupGuardProps) {
   }, []);
 
   if (status === "loading") {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-pulse text-muted-foreground text-sm">{t("common.loading")}</div>
-      </div>
-    );
+    return <LoadingState className="h-screen" />;
   }
 
   if (status === "not-installed") {

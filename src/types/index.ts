@@ -19,6 +19,8 @@ export interface AppError {
     | "RepoNotFound"
     | "BareRepository";
   message: string;
+  /** `TokenExpired` only: the account whose GitHub sign-in is missing or expired. */
+  accountId?: string;
 }
 
 /** push가 실제로 올릴 곳 (`git push <remote> <refspec>`). */
@@ -38,8 +40,19 @@ export interface GhStatus {
   installed: boolean;
   version: string | null;
   loggedIn: boolean;
-  accounts: { username: string; active: boolean }[];
+  accounts: GhAccountStatus[];
   versionError?: boolean;
+}
+
+/** gh's online token check for one account (`gh auth status`). */
+export type GhAuthState = "loggedIn" | "invalid" | "unreachable";
+
+export interface GhAccountStatus {
+  username: string;
+  active: boolean;
+  state: GhAuthState;
+  /** OAuth scopes of the token; empty when gh could not check it. */
+  scopes: string[];
 }
 
 export interface RepoAccountMapping {

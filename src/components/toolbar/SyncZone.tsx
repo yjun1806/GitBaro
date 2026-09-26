@@ -19,7 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { cn, formatRelativeTime, getErrorMessage, isMergeConflictError } from "@/lib/utils";
-import { remoteErrorKey } from "@/lib/remote-error";
+import { remoteErrorKey, signInErrorAccount } from "@/lib/remote-error";
 import { useClickOutside } from "./useToolbarDropdown";
 import { AutoSyncHint } from "./AutoSyncHint";
 import { ActionButton, ActionGroup, ActionMenu, TOOLBAR_WIDE_LABEL_CLASS } from "./ActionButton";
@@ -221,6 +221,11 @@ function RepoSyncGroup() {
       if (isMergeConflictError(err)) {
         addToast(t("sync.pullConflict"), "warning");
         setActiveTab("changes");
+        return;
+      }
+      const signInAccount = signInErrorAccount(err);
+      if (signInAccount) {
+        addToast(t("sync.signInExpired", { account: signInAccount }), "error");
         return;
       }
       const msg = getErrorMessage(err);

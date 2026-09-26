@@ -5,7 +5,7 @@ import { gitFetch } from "@/api/commands";
 import { invalidateAfterSync } from "@/api/queries";
 import { useSyncStore } from "@/stores/sync";
 import { useToastStore } from "@/stores/toast";
-import { remoteErrorKey } from "@/lib/remote-error";
+import { remoteErrorKey, signInErrorAccount } from "@/lib/remote-error";
 import { getErrorMessage } from "@/lib/utils";
 import type { RepoInfo } from "@/types";
 
@@ -32,9 +32,11 @@ export function useFetchRepo(): (repo: RepoInfo) => Promise<void> {
         await invalidateAfterSync(queryClient);
         addToast(t("sync.fetchCompleted"), "success");
       } catch (err) {
+        const signInAccount = signInErrorAccount(err);
         const msg = getErrorMessage(err);
         const key = remoteErrorKey(msg);
-        addToast(key ? t(key) : t("sync.fetchFailed", { error: msg }), "error");
+        if (signInAccount) addToast(t("sync.signInExpired", { account: signInAccount }), "error");
+        else addToast(key ? t(key) : t("sync.fetchFailed", { error: msg }), "error");
       } finally {
         useSyncStore.getState().finishSync(repo.path);
       }
