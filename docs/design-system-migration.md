@@ -77,7 +77,7 @@ export function DialogFrame({ title, titleId, onClose, size = "md", dismissible,
 | `ui/PanelHeader.tsx:97-131` | `PanelSectionHeader` → `SectionLabel`로 이름을 바꾸고(옛 이름 재수출) 글자 `text-[11px] font-bold` → `text-[11.5px] font-semibold`; 접은 수는 `<Count tone="muted">` | D16, D1 |
 | `ui/PanelHeader.tsx:138` | `PanelEmptyState` → `EmptyState layout="row"` 재수출 | D15 |
 | `ui/ContextMenu.tsx:102-116` | 메뉴 `rounded-lg py-1` → `rounded-(--radius-item) p-1`; 항목 `px-3 py-1.5 text-sm` → `h-7 px-2.5 rounded-(--radius-chip) text-[12.5px]`; `anchored?: { anchorRef; align }` prop을 더해 드롭다운도 이걸로 | D14 |
-| `ui/Tabs.tsx:13-34` | `TabColor` `info`·`success`와 `badge` 클래스 삭제; `:96-108` 수 알약 → `<Count tone="muted">`(활성이면 `--fg2`) | D26, D1 |
+| `ui/Tabs.tsx:13-34` | `TabColor` `info`·`success`와 `badge` 클래스 삭제 | D26 |
 | `ui/Tabs.tsx:36-39` | `md` `text-sm` → `text-[12.5px]`, `sm` `text-xs` → `text-[11.5px]` | 2.2 |
 | `ui/Tooltip.tsx:56` | `rounded-md px-2 py-1 text-xs` → `rounded-(--radius-chip) px-2 py-1 text-[11.5px]` | 3.10 |
 | `ui/Select.tsx:59-66,87-96` | 트리거 `px-3 py-2 text-sm rounded-lg` → `h-7 px-2.5 text-[12.5px] rounded-(--radius-item)`; 옵션 `py-2 text-sm` → `h-7 text-[12.5px]`; 목록 `rounded-lg` → `rounded-(--radius-item) p-1` | D25, D14 |
@@ -102,8 +102,6 @@ export function DialogFrame({ title, titleId, onClose, size = "md", dismissible,
 | `layout/MaximizedFileList.tsx:27,39` | 머리 `h-[36px] text-[11px] … text-(--faint)`와 그룹 `text-[10.5px]` → `SectionLabel` | D16 |
 | `layout/MaximizedFileList.tsx:68-76` | 이름 `text-[12px]` → `text-[12.5px]`; 폴더·줄 수 `text-[10.5px]` → `text-[11.5px]`; `text-(--faint)` → `text-muted-foreground` | 2.2, D20 |
 | `layout/ListDiffSplit.tsx:35` | `CARD` 상수 → `Card` | D27 |
-| `toolbar/toolbar-button.ts:53-54` | `TOOLBAR_BADGE` 알약 삭제 | D29 |
-| `toolbar/ActionButton.tsx:96-104` | 배지 → `<Count prefix={badgePrefix} tone="sync">` | D1 |
 | `toolbar/ActionButton.tsx:134-167` | `ActionMenu` → `ContextMenu anchored`(설명 줄은 항목의 `description`) | D14 |
 | `toolbar/WorktreeZone.tsx:90` | 워크트리 수 알약 → `<Count tone="muted">` | D29 |
 | `toolbar/AccountDropdown.tsx:26-78` | → `ContextMenu anchored`; `:36` 버튼 → `Button sm primary` | D14 |
