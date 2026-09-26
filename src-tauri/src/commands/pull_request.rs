@@ -144,7 +144,10 @@ mod tests {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
-            let dir = std::env::temp_dir().join(format!("gitbaro-pr-{}-{}", std::process::id(), nanos));
+            // 시계만으로는 같은 순간에 도는 테스트끼리 이름이 겹칠 수 있어 번호를 붙인다.
+            static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let dir = std::env::temp_dir().join(format!("gitbaro-pr-{}-{}-{}", std::process::id(), nanos, seq));
             std::fs::create_dir_all(&dir).unwrap();
             TempDir(dir)
         }
