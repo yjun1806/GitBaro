@@ -115,7 +115,7 @@ export const FileTouchesDetail = forwardRef<HTMLDivElement, FileTouchesDetailPro
             >
               <RepoTile name={repoLabel(row.repoPath)} color={avatarColorOf(row.repoPath)} size="sm" />
               <span className="shrink-0 font-mono text-[11.5px] text-muted-foreground">{c.shortOid}</span>
-              <span className="flex-1 min-w-0 truncate text-[12px] text-foreground">{c.subject}</span>
+              <span className="flex-1 min-w-0 truncate text-[12.5px] text-foreground">{c.subject}</span>
               <span className="shrink-0 text-[11.5px] text-muted-foreground tabular-nums">{formatRelativeTime(c.authorTime)}</span>
             </button>
           );

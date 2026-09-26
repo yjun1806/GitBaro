@@ -31,7 +31,7 @@ export function QuietReposRow({ names, expanded, onToggle }: QuietReposRowProps)
       onToggle={onToggle}
       className="gap-1.5"
     >
-      <span className="flex-1 min-w-0 truncate text-[11.5px] text-[var(--faint)]">{label}</span>
+      <span className="flex-1 min-w-0 truncate text-[11.5px] text-muted-foreground">{label}</span>
     </TreeRowFrame>
   );
 }

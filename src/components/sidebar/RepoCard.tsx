@@ -1,7 +1,6 @@
 import type { MouseEvent } from "react";
 import { Eye, GitBranch, Star } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { avatarInitial } from "@/lib/avatar-color";
 import { useRepoAvatarColor, useRepoName } from "@/hooks/useRepoDisplay";
 import { middleEllipsis } from "@/lib/middle-ellipsis";
 import type { RepoNode } from "@/lib/repo-tree";
@@ -11,7 +10,6 @@ import type { DefaultBranch, RepoInfo } from "@/types";
 import { RowSignals, type RowSignalValues } from "./RowSignals";
 import {
   BRANCH_MAX_CHARS,
-  LEADING_TILE,
   ROW_BRANCH,
   ROW_ICON_SLOT,
   ROW_TITLE,
@@ -24,6 +22,7 @@ import { isLivePath, isWatchedPath, repoPaths, sumDedupedByRepo } from "./tree-m
 import type { SidebarTreeData } from "./useSidebarTreeData";
 import { Spinner } from "@/components/ui/Spinner";
 import { useSteadyFlag } from "@/hooks/useSteadyValue";
+import { RepoTile } from "@/components/ui/marks";
 
 /** 행 선택과 브랜치 보기에 쓰는 지금 상태. */
 export interface RepoSelection {
@@ -83,15 +82,7 @@ export function viewOnlyDefaultBranch(
 export function RepoAvatar({ repo }: { repo: RepoInfo }) {
   const color = useRepoAvatarColor()(repo.path);
   const name = useRepoName()(repo);
-  return (
-    <span
-      aria-hidden="true"
-      className={`${LEADING_TILE} text-[9.5px] font-extrabold`}
-      style={{ backgroundColor: color.background, color: color.foreground }}
-    >
-      {avatarInitial(name)}
-    </span>
-  );
+  return <RepoTile name={name} color={color} size="md" />;
 }
 
 interface FolderRowsProps {
@@ -302,7 +293,7 @@ export function RepoHeaderRow({
         {name}
         {favorite && (
           <Star
-            className="inline-block ml-1 w-2.5 h-2.5 align-[-1px] fill-current text-[var(--faint)]"
+            className="inline-block ml-1 w-2.5 h-2.5 align-[-1px] fill-current text-muted-foreground"
             role="img"
             aria-label={t("sidebarTree.favorite")}
           />

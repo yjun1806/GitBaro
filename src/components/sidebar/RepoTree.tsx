@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { ChevronsDownUp, ChevronsUpDown, Search } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { SearchInput } from "@/components/ui/TextInput";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { repoNodeKey, workspaceNodeKey, type AccountNode, type RepoNode } from "@/lib/repo-tree";
 import { useRepositoryStore } from "@/stores/repository";
 import { useRepoName } from "@/hooks/useRepoDisplay";
@@ -237,17 +239,14 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
       <div className="flex flex-col h-full min-h-0">
         {/* 검색 + 모두 접기 */}
         <div className="flex items-center gap-1 mb-2 shrink-0">
-          <label className="flex-1 min-w-0 flex items-center gap-1.5 h-7 px-2 rounded-[var(--radius-item)] bg-card border border-(--line2) focus-within:border-ring">
-            <Search className="w-3 h-3 shrink-0 text-[var(--faint)]" aria-hidden="true" />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("sidebarTree.search")}
-              aria-label={t("sidebarTree.search")}
-              className="flex-1 min-w-0 bg-transparent outline-none text-xs placeholder:text-[var(--faint)]"
-            />
-          </label>
+          <SearchInput
+            size="md"
+            surface="frame"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("sidebarTree.search")}
+            aria-label={t("sidebarTree.search")}
+          />
           <button
             type="button"
             onClick={handleToggleAll}
@@ -332,11 +331,9 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
             </div>
           </TreeDndProvider>
 
-          {repos.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">{t("sidebarTree.empty")}</p>}
+          {repos.length === 0 && <EmptyState layout="row" title={t("sidebarTree.empty")} />}
           {repos.length > 0 && searching && visibleTree.length === 0 && (
-            <p className="px-2 py-3 text-xs text-muted-foreground break-words">
-              {t("sidebarTree.noMatch", { query: query.trim() })}
-            </p>
+            <EmptyState layout="row" title={t("sidebarTree.noMatch", { query: query.trim() })} className="break-words" />
           )}
         </div>
 

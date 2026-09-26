@@ -1,34 +1,26 @@
-import type { ElementType, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, type LucideIcon } from "lucide-react";
 import { getErrorMessage } from "@/lib/utils";
 import { prErrorKind } from "./pr-model";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Notice } from "@/components/ui/Notice";
+import { Button } from "@/components/ui/Button";
 
 /** 가운데 아이콘 + 한두 줄. PR 목록·상세의 빈 상태와 안내. */
 export function PrPlaceholder({
-  icon: Icon,
+  icon,
   title,
   description,
   children,
 }: {
-  icon: ElementType;
+  icon: LucideIcon;
   title: string;
   description?: string;
   children?: ReactNode;
 }) {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-3 py-10 px-4 text-muted-foreground">
-      <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
-        <Icon className="w-6 h-6" />
-      </div>
-      <div className="text-center">
-        <p className="text-sm font-medium">{title}</p>
-        {description && <p className="text-xs mt-1">{description}</p>}
-      </div>
-      {children}
-    </div>
-  );
+  return <EmptyState icon={icon} title={title} description={description} action={children} />;
 }
 
 export function PrLoading() {
@@ -42,16 +34,21 @@ export function PrError({ error, onRetry }: { error: unknown; onRetry?: () => vo
   const description =
     kind === "other" ? t("pr.error.other", { error: getErrorMessage(error) }) : t(`pr.error.${kind}`);
   return (
-    <PrPlaceholder icon={AlertTriangle} title={t("pr.error.title")} description={description}>
-      {onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
-        >
-          {t("pr.retry")}
-        </button>
-      )}
-    </PrPlaceholder>
+    <div className="flex-1 flex items-center justify-center p-4">
+      <Notice
+        tone="danger"
+        icon={AlertTriangle}
+        title={t("pr.error.title")}
+        actions={
+          onRetry && (
+            <Button size="sm" variant="secondary" onClick={onRetry}>
+              {t("pr.retry")}
+            </Button>
+          )
+        }
+      >
+        {description}
+      </Notice>
+    </div>
   );
 }

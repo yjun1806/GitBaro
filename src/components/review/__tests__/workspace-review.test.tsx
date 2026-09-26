@@ -279,17 +279,17 @@ describe("WorkspaceReview", () => {
     fireEvent.click(container.querySelector('[data-commit-id="api1"]') as HTMLElement);
     const switcher = screen.getByTestId("work-switcher");
     expect(switcher.dataset.mode).toBe("commit");
-    const commitSegment = within(switcher).getByRole("button", { name: /^Commit api1/ });
-    expect(commitSegment.getAttribute("aria-pressed")).toBe("true");
+    const commitSegment = within(switcher).getByRole("radio", { name: /^Commit api1/ });
+    expect(commitSegment.getAttribute("aria-checked")).toBe("true");
 
     // 첫 칸: 그 저장소의 WIP 행(여기서는 워크트리 하나)으로 간다.
-    fireEvent.click(within(switcher).getByRole("button", { name: "Working changes 1" }));
+    fireEvent.click(within(switcher).getByRole("radio", { name: "Working changes 1" }));
     expect(useFollowStore.getState().target).toBe(API_WT);
     expect(screen.getByTestId("work-switcher").dataset.mode).toBe("working");
     expect(screen.queryByText(`commit-detail ${API} api1`)).toBeNull();
 
     // 둘째 칸: 그 저장소에서 마지막으로 고른 커밋으로 돌아온다.
-    fireEvent.click(within(screen.getByTestId("work-switcher")).getByRole("button", { name: /^Commit api1/ }));
+    fireEvent.click(within(screen.getByTestId("work-switcher")).getByRole("radio", { name: /^Commit api1/ }));
     expect(screen.getByText(`commit-detail ${API} api1`)).toBeTruthy();
   });
 

@@ -3,6 +3,7 @@ import { FileQuestion } from "lucide-react";
 import type { BinaryPreview } from "@/types";
 import { ImageDiff } from "./ImageDiff";
 import { SvgPreview } from "./SvgPreview";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface BinaryDiffViewerProps {
   filePath: string;
@@ -20,15 +21,11 @@ export function BinaryDiffViewer({ filePath, preview }: BinaryDiffViewerProps) {
 
   if (preview.meta.tooLarge) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-2 text-muted-foreground">
-        <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
-          <FileQuestion className="w-6 h-6" />
-        </div>
-        <p className="text-sm font-medium">{t("diff.tooLarge")}</p>
-        <p className="text-xs image-meta-label">
-          {preview.meta.newSize != null && formatFileSize(preview.meta.newSize)}
-        </p>
-      </div>
+      <EmptyState
+        icon={FileQuestion}
+        title={t("diff.tooLarge")}
+        description={preview.meta.newSize != null ? formatFileSize(preview.meta.newSize) : undefined}
+      />
     );
   }
 
@@ -39,16 +36,14 @@ export function BinaryDiffViewer({ filePath, preview }: BinaryDiffViewerProps) {
       return <SvgPreview preview={preview} />;
     default:
       return (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-muted-foreground">
-          <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
-            <FileQuestion className="w-6 h-6" />
-          </div>
-          <p className="text-sm font-medium">{t("diff.binary")}</p>
-          <p className="text-xs">
-            {filePath.split(".").pop()?.toUpperCase()}
-            {preview.meta.newSize != null && ` · ${formatFileSize(preview.meta.newSize)}`}
-          </p>
-        </div>
+        <EmptyState
+          icon={FileQuestion}
+          title={t("diff.binary")}
+          description={
+            filePath.split(".").pop()?.toUpperCase() +
+            (preview.meta.newSize != null ? ` · ${formatFileSize(preview.meta.newSize)}` : "")
+          }
+        />
       );
   }
 }

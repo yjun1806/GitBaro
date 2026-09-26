@@ -5,7 +5,9 @@ import { useCommitDetail, useCommitFileDiff } from "@/api/queries";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { CommitDetail } from "@/components/history/CommitDetail";
-import { EmptyState } from "@/components/layout/ContentArea";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Notice } from "@/components/ui/Notice";
+import { Button } from "@/components/ui/Button";
 import { RepoLaneTag } from "@/components/graph/CommitGraph";
 import { FollowPanel } from "@/components/live/FollowPanel";
 import { baseName } from "./review-model";
@@ -62,7 +64,9 @@ function ReviewCommitFiles({ repoPath, oid, switcher }: { repoPath: string; oid:
 
   if (isError) {
     return (
-      <div className="flex-1 flex items-center justify-center text-sm text-danger">{t("diff.failedToLoad")}</div>
+      <div className="flex-1 flex items-center justify-center p-3">
+        <Notice tone="danger">{t("diff.failedToLoad")}</Notice>
+      </div>
     );
   }
   if (isLoading || !data) {
@@ -115,14 +119,15 @@ function ReviewWipFiles({ repoPath, path, branch, isMain, label, switcher }: Rev
           </span>
         )}
       </span>
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={handleOpen}
-        className="self-start flex items-center gap-1.5 h-6 mt-0.5 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
+        icon={<GitPullRequestDraft className="w-3 h-3" />}
+        className="self-start mt-0.5"
       >
-        <GitPullRequestDraft className="w-3 h-3" aria-hidden="true" />
         {t("review.openToCommit")}
-      </button>
+      </Button>
     </div>
   );
 

@@ -170,7 +170,7 @@ describe("RepoTree — 끌어서 놓기", () => {
     expect(within(soloRow).getByTitle(handle)).toBeInTheDocument();
     expect(within(item("product").parentElement!).getByTitle(handle)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "so" } });
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "so" } });
     expect(screen.queryAllByTitle(handle)).toHaveLength(0);
   });
 

@@ -225,8 +225,8 @@ export interface FileStatusLetterProps {
 }
 
 /**
- * 파일 한 줄 맨 앞의 상태 글자(3.3). 색 칸 아이콘(`FileStatusBadge`)을 대신한다 — 행 앞에 색 칸이
- * 줄마다 서면 목록이 시끄럽다(D5).
+ * 파일 한 줄 맨 앞의 상태 글자(3.3). 색 칸 아이콘(옛 `FileStatusBadge`, 지웠다)을 대신한다 — 행
+ * 앞에 색 칸이 줄마다 서면 목록이 시끄럽다(D5).
  */
 export function FileStatusLetter({ status }: FileStatusLetterProps) {
   return (

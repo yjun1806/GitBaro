@@ -9,6 +9,7 @@ import { SortMenu } from "./SortMenu";
 import { SIDEBAR_ICON_BUTTON, TILE_ICON } from "./row-style";
 import { TreeRowFrame } from "./TreeRowFrame";
 import { WorkspaceNameDialog } from "./WorkspaceDialogs";
+import { Count } from "@/components/ui/marks";
 
 interface AccountHeaderProps {
   label: string;
@@ -130,11 +131,11 @@ export function AccountHeader({
               나타나 이름을 밀어내지 않는다(W-Top-T4: 「MONDAY…」로 잘리던 문제). */}
           <span
             title={ownerType === "Organization" ? t("sidebarTree.card.organization", { name: label }) : label}
-            className="text-[11.5px] font-bold text-muted-foreground truncate min-w-0"
+            className="text-[11.5px] font-semibold text-muted-foreground truncate min-w-0"
           >
             {label}
           </span>
-          <span className="text-[10.5px] text-[var(--faint)] tabular-nums shrink-0">{repoCount}</span>
+          <Count value={repoCount} tone="muted" />
           <span className="flex-1" />
         </TreeRowFrame>
         {showActions && (

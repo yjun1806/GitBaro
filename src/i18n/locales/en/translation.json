@@ -420,6 +420,7 @@
     "unified": "Unified",
     "split": "Side by Side",
     "document": "Document",
+    "viewModeLabel": "How to view this diff",
     "noSelection": "Select a file to view changes",
     "binary": "Binary file changed",
     "noFileSelected": "No file selected",
@@ -435,7 +436,8 @@
       "twoUp": "2-up",
       "swipe": "Swipe",
       "onionSkin": "Onion Skin",
-      "difference": "Difference"
+      "difference": "Difference",
+      "modeLabel": "How to compare the images"
     },
     "added": "Added",
     "deleted": "Deleted",
@@ -1155,6 +1157,7 @@
     "partlyStaged": "partly staged",
     "showUnstaged": "Not staged",
     "showStaged": "Staged",
+    "stagedSideToggle": "Which side of a partly staged file to view",
     "modifiedSecondsAgo_one": "Modified {{count}} second ago",
     "modifiedSecondsAgo_other": "Modified {{count}} seconds ago",
     "modifiedAt": "Modified {{when}}",

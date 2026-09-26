@@ -6,13 +6,15 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useMenuActions } from "@/hooks/useMenuActions";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
-import { FileStatusBadge } from "@/lib/file-status";
 import { cn } from "@/lib/utils";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
-import { Card } from "@/components/layout/ContentArea";
+import { Card } from "@/components/ui/Card";
 import { checkedOutBranch } from "@/components/graph/useHistoryView";
 import { ContextMenu, contextMenuPoint } from "@/components/ui/ContextMenu";
 import { copyMenuItem } from "@/components/ui/menu-items";
+import { Button } from "@/components/ui/Button";
+import { SectionLabel } from "@/components/ui/PanelHeader";
+import { Count, FileStatusLetter, StatusChip } from "@/components/ui/marks";
 import type { PrFile, PrFiles, PrReviewThread, PullRequestDetail } from "@/types";
 import { fileStatusOf, openThreadCount, revealLineOf, threadsByFile } from "./pr-model";
 import { selectedPrNumber, usePrViewStore } from "./pr-view";
@@ -201,29 +203,31 @@ function PrSideList({
       >
         <div className="flex items-center gap-1.5">
           <PrStateBadge pr={pr} />
-          <span className="text-[11px] text-(--faint)">#{pr.number}</span>
+          <span className="text-[11.5px] text-muted-foreground">#{pr.number}</span>
           <span className="flex-1" />
-          <button
-            type="button"
+          <Button
+            iconOnly
+            size="sm"
+            variant="ghost"
             onClick={() => actions.openInBrowser(pr.url)}
             title={t("pr.openOnGitHub")}
             aria-label={t("pr.openOnGitHub")}
-            className="flex items-center justify-center w-6 h-6 rounded-(--radius-item) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <Globe className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            iconOnly
+            size="sm"
+            variant="ghost"
             onClick={(e) => menu.open(pr, contextMenuPoint(e))}
             title={t("pr.menu.more")}
             aria-label={t("pr.menu.more")}
-            className="flex items-center justify-center w-6 h-6 rounded-(--radius-item) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <MoreHorizontal className="w-3.5 h-3.5" />
-          </button>
+          </Button>
         </div>
         <h2 className="text-[13px] font-bold text-foreground leading-[18px] break-words">{pr.title}</h2>
-        <div className="flex items-center gap-1.5 min-w-0 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-1.5 min-w-0 text-[11.5px] text-muted-foreground">
           <PrAvatar login={pr.author.login} url={pr.author.avatarUrl} size={14} />
           <span className="font-medium text-(--fg2) truncate">{pr.author.login}</span>
           <TimeAgo iso={pr.updatedAt} className="shrink-0" />
@@ -233,10 +237,9 @@ function PrSideList({
           {pr.reviewDecision && <ReviewDecisionChip decision={pr.reviewDecision} />}
           {pr.ciState && <CiChip state={pr.ciState} />}
           {pr.state === "open" && pr.mergeable === "conflicting" && (
-            <span className="inline-flex items-center gap-1 h-[18px] px-1.5 rounded-(--radius-chip) bg-danger/15 text-danger text-[10.5px] font-semibold">
-              <AlertTriangle className="w-3 h-3" />
+            <StatusChip tone="danger" icon={<AlertTriangle className="w-3 h-3" aria-hidden="true" />}>
               {t("pr.conflicting")}
-            </span>
+            </StatusChip>
           )}
         </div>
         {menu.element}
@@ -252,20 +255,23 @@ function PrSideList({
         )}
       >
         <FileText className="w-4 h-4 shrink-0 text-(--fg2)" />
-        <span className="flex-1 min-w-0 text-xs font-medium">{t("pr.overview")}</span>
+        <span className="flex-1 min-w-0 text-[12.5px] font-medium">{t("pr.overview")}</span>
         {talk > 0 && (
-          <span className="inline-flex items-center gap-0.5 text-[10.5px] text-muted-foreground">
-            <MessageSquare className="w-3 h-3" />
-            {talk}
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            <MessageSquare className="w-3 h-3" aria-hidden="true" />
+            <Count value={talk} tone="muted" />
           </span>
         )}
       </button>
 
-      <div className="px-3 pt-2 pb-1 flex items-center gap-1.5 text-[11px] font-semibold text-(--faint) shrink-0">
-        <span>{t("pr.changedFiles", { count: pr.changedFiles })}</span>
-        <span className="text-diff-add-fg font-mono">+{pr.additions}</span>
-        <span className="text-diff-del-fg font-mono">−{pr.deletions}</span>
-      </div>
+      <SectionLabel
+        title={t("pr.changedFiles", { count: pr.changedFiles })}
+        trailing={
+          <span className="font-mono text-[11.5px]">
+            <span className="text-diff-add-fg">+{pr.additions}</span> <span className="text-diff-del-fg">−{pr.deletions}</span>
+          </span>
+        }
+      />
       {filesLoading ? (
         <PrLoading />
       ) : filesError ? (
@@ -286,29 +292,29 @@ function PrSideList({
                 onClick={() => onSelectFile(f.path)}
                 onContextMenu={(e) => onFileContextMenu(f.path, e)}
                 className={cn(
-                  "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors",
+                  "w-full h-7 flex items-center gap-2 px-3 text-left transition-colors",
                   selectedFile === f.path
                     ? "bg-(--acc-sel)"
                     : activeIndex === index
-                      ? "bg-accent ring-1 ring-primary/30"
+                      ? "bg-accent ring-1 ring-inset ring-primary/30"
                       : "hover:bg-accent",
                 )}
               >
-                <FileStatusBadge status={fileStatusOf(f.status)} />
-                <span className="flex-1 min-w-0 flex flex-col">
-                  <span className="text-xs font-medium truncate text-foreground">{name}</span>
-                  {dir && <span className="text-[10px] leading-tight text-muted-foreground/50 truncate">{dir}</span>}
+                <FileStatusLetter status={fileStatusOf(f.status)} />
+                <span className="flex-1 min-w-0 truncate text-[12.5px] font-medium text-foreground">
+                  {name}
+                  {dir && <span className="ml-1 text-[11.5px] font-normal text-muted-foreground">{dir}</span>}
                 </span>
                 {open > 0 && (
                   <span
-                    className="inline-flex items-center gap-0.5 text-[10.5px] text-warning shrink-0"
+                    className="inline-flex items-center gap-1 text-warning shrink-0"
                     title={t("pr.thread.openCount", { count: open })}
                   >
-                    <MessageSquare className="w-3 h-3" />
+                    <MessageSquare className="w-3 h-3" aria-hidden="true" />
                     {open}
                   </span>
                 )}
-                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                <span className="shrink-0 font-mono text-[11.5px] text-muted-foreground">
                   <span className="text-diff-add-fg">+{f.additions}</span>{" "}
                   <span className="text-diff-del-fg">−{f.deletions}</span>
                 </span>
@@ -316,13 +322,9 @@ function PrSideList({
             );
           })}
           {files?.truncated && (
-            <button
-              type="button"
-              onClick={() => actions.openInBrowser(`${pr.url}/files`)}
-              className="px-3 py-2 text-[11px] text-primary hover:underline underline-offset-2"
-            >
+            <Button variant="ghost" size="sm" onClick={() => actions.openInBrowser(`${pr.url}/files`)} className="mx-3 my-1.5">
               {t("pr.filesTruncated")}
-            </button>
+            </Button>
           )}
         </div>
       )}

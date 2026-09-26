@@ -37,20 +37,20 @@ afterEach(cleanup);
 describe("RepoWorkSwitcher", () => {
   it("shows the working changes count and no commit when nothing is picked", () => {
     const switcher = renderSwitcher("working");
-    const working = within(switcher).getByRole("button", { name: "Working changes 2" });
-    expect(working.getAttribute("aria-pressed")).toBe("true");
-    const commit = within(switcher).getByRole("button", { name: "No commit selected" });
+    const working = within(switcher).getByRole("radio", { name: "Working changes 2" });
+    expect(working.getAttribute("aria-checked")).toBe("true");
+    const commit = within(switcher).getByRole("radio", { name: "No commit selected" });
     expect(commit).toHaveProperty("disabled", true);
   });
 
   it("names the picked commit and goes back to working changes, clearing the pick and focusing the list", () => {
     useSelectionStore.getState().selectCommit("abcdef1234567");
     const switcher = renderSwitcher("commit");
-    const commit = within(switcher).getByRole("button", { name: "Commit abcdef1" });
-    expect(commit.getAttribute("aria-pressed")).toBe("true");
+    const commit = within(switcher).getByRole("radio", { name: "Commit abcdef1" });
+    expect(commit.getAttribute("aria-checked")).toBe("true");
 
     useFollowStore.getState().start("/work/app-feat");
-    fireEvent.click(within(switcher).getByRole("button", { name: "Working changes 2" }));
+    fireEvent.click(within(switcher).getByRole("radio", { name: "Working changes 2" }));
     expect(useUIStore.getState().activeTab).toBe("changes");
     expect(useSelectionStore.getState().selectedCommitId).toBeNull();
     expect(useFollowStore.getState().target).toBeNull();
@@ -61,7 +61,7 @@ describe("RepoWorkSwitcher", () => {
     useUIStore.setState({ activeTab: "changes" });
     useSelectionStore.getState().selectCommit("abcdef1234567");
     const switcher = renderSwitcher("working");
-    act(() => within(switcher).getByRole("button", { name: "Commit abcdef1" }).click());
+    act(() => within(switcher).getByRole("radio", { name: "Commit abcdef1" }).click());
     expect(useUIStore.getState().activeTab).toBe("history");
   });
 
@@ -69,8 +69,8 @@ describe("RepoWorkSwitcher", () => {
     await i18n.changeLanguage("ko");
     useHistoryViewStore.getState().view(REPO, { kind: "ref", name: "feat/x", isRemote: false });
     const switcher = renderSwitcher("commit");
-    const working = within(switcher).getByRole("button", { name: "작업 중인 변경 · 체크아웃한 브랜치에서만" });
+    const working = within(switcher).getByRole("radio", { name: "작업 중인 변경 · 체크아웃한 브랜치에서만" });
     expect(working).toHaveProperty("disabled", true);
-    expect(within(switcher).getByRole("button", { name: "커밋 선택 안 됨" })).toBeTruthy();
+    expect(within(switcher).getByRole("radio", { name: "커밋 선택 안 됨" })).toBeTruthy();
   });
 });

@@ -116,9 +116,9 @@ describe("MultiRepoRemoteDialog", () => {
     const row = await screen.findByTestId("plan-row-Mobile");
     const tile = row.querySelector<HTMLElement>('span[aria-hidden="true"]')!;
     const expected = document.createElement("span");
-    expected.style.background = avatarColorFromHue(150).background;
+    expected.style.backgroundColor = avatarColorFromHue(150).background;
     expect(tile.textContent).toBe("M");
-    expect(tile.style.background).toBe(expected.style.background);
+    expect(tile.style.backgroundColor).toBe(expected.style.backgroundColor);
   });
 
   it("unchecks and dims a repository with nothing to push", async () => {

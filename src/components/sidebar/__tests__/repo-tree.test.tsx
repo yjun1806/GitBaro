@@ -401,7 +401,7 @@ describe("RepoTree — search and selection", () => {
 
   it("filters by repository or branch name", () => {
     renderTree(makeData(baseSignals));
-    fireEvent.change(screen.getByRole("searchbox", { name: "Find repository or branch" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Find repository or branch" }), {
       target: { value: "nav" },
     });
     expect(item("web")).toBeInTheDocument();
@@ -422,7 +422,7 @@ describe("RepoTree — search and selection", () => {
     expect(card).toHaveTextContent("Folder name: solo");
     fireEvent.mouseLeave(item("Solo App"));
 
-    const search = screen.getByRole("searchbox", { name: "Find repository or branch" });
+    const search = screen.getByRole("textbox", { name: "Find repository or branch" });
     fireEvent.change(search, { target: { value: "solo app" } });
     expect(item("Solo App")).toBeInTheDocument();
     fireEvent.change(search, { target: { value: "solo" } });
@@ -493,7 +493,7 @@ describe("RepoTree — watch targets", () => {
   it("adds worktrees of repositories that a search forces open", () => {
     renderTree(makeData(baseSignals));
     expect(sidebarPaths()).toEqual([]);
-    fireEvent.change(screen.getByRole("searchbox", { name: "Find repository or branch" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Find repository or branch" }), {
       target: { value: "login" },
     });
     expect(sidebarPaths()).toEqual([WT]);

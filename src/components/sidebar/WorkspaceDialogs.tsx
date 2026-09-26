@@ -1,36 +1,9 @@
-import { useId, useState, type FormEvent } from "react";
-import { X } from "lucide-react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Dialog } from "@/components/ui/Dialog";
-import { FLOATING_SURFACE } from "@/components/ui/layers";
+import { DialogFrame } from "@/components/ui/DialogFrame";
+import { Button } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/TextInput";
 import type { WorkspaceError, WorkspaceResult } from "@/stores/workspace";
-
-const PANEL = `rounded-xl w-full max-w-sm ${FLOATING_SURFACE}`;
-
-interface DialogHeaderProps {
-  titleId: string;
-  title: string;
-  onClose: () => void;
-}
-
-function DialogHeader({ titleId, title, onClose }: DialogHeaderProps) {
-  const { t } = useTranslation();
-  return (
-    <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-      <h2 id={titleId} className="text-base font-semibold text-foreground truncate">
-        {title}
-      </h2>
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label={t("common.cancel")}
-        className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
-      >
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  );
-}
 
 interface WorkspaceNameDialogProps {
   mode: "create" | "rename";
@@ -52,13 +25,12 @@ export function WorkspaceNameDialog({
 }: WorkspaceNameDialogProps) {
   const { t } = useTranslation();
   const titleId = useId();
-  const inputId = useId();
-  const errorId = useId();
+  const inputId = `${titleId}-name`;
+  const errorId = `${titleId}-error`;
   const [name, setName] = useState(initialName);
   const [error, setError] = useState<WorkspaceError | null>(null);
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     const result = onSubmit(name);
     if (result.ok) onClose();
     else setError(result.reason);
@@ -68,14 +40,32 @@ export function WorkspaceNameDialog({
     mode === "create" ? t("workspace.createTitle", { account: subject }) : t("workspace.renameTitle");
 
   return (
-    <Dialog onClose={onClose} labelledBy={titleId} className={PANEL}>
-      <form onSubmit={handleSubmit}>
-        <DialogHeader titleId={titleId} title={title} onClose={onClose} />
-        <div className="px-5 py-5 flex flex-col gap-2">
-          <label htmlFor={inputId} className="text-xs font-medium text-muted-foreground">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleSubmit();
+      }}
+    >
+      <DialogFrame
+        title={title}
+        onClose={onClose}
+        size="sm"
+        footer={
+          <>
+            <Button type="button" variant="ghost" size="md" onClick={onClose}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" variant="primary" size="md">
+              {mode === "create" ? t("workspace.createButton") : t("workspace.renameButton")}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={inputId} className="text-[11.5px] font-semibold text-(--fg2)">
             {t("workspace.nameLabel")}
           </label>
-          <input
+          <TextInput
             id={inputId}
             autoFocus
             value={name}
@@ -86,31 +76,15 @@ export function WorkspaceNameDialog({
             placeholder={t("workspace.namePlaceholder")}
             aria-invalid={error !== null}
             aria-describedby={error ? errorId : undefined}
-            className="h-8 px-2.5 rounded-[var(--radius-item)] bg-card border border-border text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
           />
           {error && (
-            <p id={errorId} role="alert" className="text-xs text-danger">
+            <p id={errorId} role="alert" className="text-[11.5px] text-danger">
               {t(`workspace.error.${error}`)}
             </p>
           )}
         </div>
-        <div className="flex justify-end gap-3 px-5 py-4 border-t border-border">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {t("common.cancel")}
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg transition-colors"
-          >
-            {mode === "create" ? t("workspace.createButton") : t("workspace.renameButton")}
-          </button>
-        </div>
-      </form>
-    </Dialog>
+      </DialogFrame>
+    </form>
   );
 }
 
@@ -132,32 +106,28 @@ export function DeleteWorkspaceDialog({
   onClose,
 }: DeleteWorkspaceDialogProps) {
   const { t } = useTranslation();
-  const titleId = useId();
   return (
-    <Dialog onClose={onClose} labelledBy={titleId} className={PANEL}>
-      <DialogHeader titleId={titleId} title={t("workspace.deleteTitle")} onClose={onClose} />
-      <div className="px-5 py-5 flex flex-col gap-2">
-        <p className="text-sm text-foreground break-words">{t("workspace.deleteConfirm", { name })}</p>
-        <p className="text-xs text-muted-foreground leading-relaxed">
+    <DialogFrame
+      title={t("workspace.deleteTitle")}
+      onClose={onClose}
+      size="sm"
+      footer={
+        <>
+          <Button variant="ghost" size="md" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button variant="danger" size="md" onClick={onConfirm}>
+            {t("workspace.deleteButton")}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-2">
+        <p className="text-[12.5px] text-foreground break-words">{t("workspace.deleteConfirm", { name })}</p>
+        <p className="text-[11.5px] text-muted-foreground leading-relaxed">
           {t("workspace.deleteKeepsRepos", { count: repoCount, account: accountLabel })}
         </p>
       </div>
-      <div className="flex justify-end gap-3 px-5 py-4 border-t border-border">
-        <button
-          type="button"
-          onClick={onClose}
-          className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {t("common.cancel")}
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          className="px-4 py-2 text-sm font-medium bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg transition-colors"
-        >
-          {t("workspace.deleteButton")}
-        </button>
-      </div>
-    </Dialog>
+    </DialogFrame>
   );
 }

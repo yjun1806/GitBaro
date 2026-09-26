@@ -9,6 +9,8 @@ import { cn, formatRelativeTime } from "@/lib/utils";
 import type { WorkflowJob, JobStep } from "@/types";
 import { Spinner } from "@/components/ui/Spinner";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
 
 interface ActionsDetailViewProps {
   runId: number;
@@ -55,7 +57,7 @@ function JobSection({ job }: { job: WorkflowJob }) {
     <div className="border-b border-border">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-accent transition-colors text-left"
+        className="w-full h-7 flex items-center gap-2 px-4 hover:bg-accent transition-colors text-left"
       >
         {expanded ? (
           <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
@@ -63,9 +65,9 @@ function JobSection({ job }: { job: WorkflowJob }) {
           <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
         )}
         <StepStatusIcon status={job.status} conclusion={job.conclusion} />
-        <span className="text-xs font-medium flex-1 truncate">{job.name}</span>
+        <span className="text-[12.5px] font-medium flex-1 truncate">{job.name}</span>
         {duration && (
-          <span className="text-[10px] text-muted-foreground shrink-0">{duration}</span>
+          <span className="text-[11.5px] text-muted-foreground shrink-0">{duration}</span>
         )}
       </button>
       {expanded && job.steps.length > 0 && (
@@ -83,7 +85,7 @@ function StepRow({ step }: { step: JobStep }) {
   return (
     <div className="flex items-center gap-2 py-1">
       <StepStatusIcon status={step.status} conclusion={step.conclusion} />
-      <span className="text-[11px] text-muted-foreground truncate">{step.name}</span>
+      <span className="text-[11.5px] text-muted-foreground truncate">{step.name}</span>
     </div>
   );
 }
@@ -114,21 +116,17 @@ export function ActionsDetailView({ runId }: ActionsDetailViewProps) {
       <div className="px-4 py-3 border-b border-border space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{run.name}</p>
-            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+            <p className="text-[13px] font-bold truncate">{run.name}</p>
+            <div className="flex items-center gap-2 mt-1 text-[11.5px] text-muted-foreground">
               <span>{run.headBranch}</span>
               <span className="font-mono">{run.headSha.slice(0, 7)}</span>
               <span>{formatRelativeTime(createdTimestamp)}</span>
               <span>#{run.runNumber}</span>
             </div>
           </div>
-          <button
-            onClick={() => open(run.htmlUrl)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent transition-colors shrink-0"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
+          <Button variant="secondary" size="sm" onClick={() => open(run.htmlUrl)} icon={<ExternalLink className="w-3.5 h-3.5" />}>
             {t("actions.viewOnGithub")}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -137,9 +135,7 @@ export function ActionsDetailView({ runId }: ActionsDetailViewProps) {
         {isLoading ? (
           <LoadingState />
         ) : jobs.length === 0 ? (
-          <div className="flex items-center justify-center py-12 text-xs text-muted-foreground">
-            {t("actions.noRuns")}
-          </div>
+          <EmptyState layout="row" title={t("actions.noRuns")} />
         ) : (
           jobs.map((job) => <JobSection key={job.id} job={job} />)
         )}

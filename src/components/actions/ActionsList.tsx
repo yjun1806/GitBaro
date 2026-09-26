@@ -7,6 +7,7 @@ import { ActionsRunContextMenu } from "./ActionsRunContextMenu";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import type { WorkflowRun } from "@/types";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface ActionsListProps {
   runs: WorkflowRun[];
@@ -37,17 +38,7 @@ export function ActionsList({
   }
 
   if (runs.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-12">
-        <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
-          <Play className="w-6 h-6" />
-        </div>
-        <div className="text-center">
-          <p className="text-sm font-medium">{t("actions.noRuns")}</p>
-          <p className="text-xs mt-1">{t("actions.noRunsDescription")}</p>
-        </div>
-      </div>
-    );
+    return <EmptyState icon={Play} title={t("actions.noRuns")} description={t("actions.noRunsDescription")} />;
   }
 
   return (

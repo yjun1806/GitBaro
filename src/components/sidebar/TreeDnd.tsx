@@ -23,14 +23,14 @@ import {
 import { Ban, GripVertical, Layers } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AccountNode } from "@/lib/repo-tree";
-import { avatarInitial } from "@/lib/avatar-color";
 import { useRepoAvatarColor } from "@/hooks/useRepoDisplay";
 import { cn } from "@/lib/utils";
 import { useToastStore } from "@/stores/toast";
 import type { WorkspaceError } from "@/stores/workspace";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
+import { RepoTile } from "@/components/ui/marks";
 import { INDENT_PX } from "./TreeRowFrame";
-import { LEADING_TILE, NEUTRAL_TILE, ROW_TITLE, TILE_ICON } from "./row-style";
+import { NEUTRAL_TILE, ROW_TITLE, TILE_ICON } from "./row-style";
 import {
   applyDrop,
   planDrop,
@@ -220,16 +220,7 @@ export function DragPreview({ data, blockedReason }: { data: RowDragData; blocke
     >
       <span className="flex items-center gap-[var(--item)] min-w-0 w-full">
         {color ? (
-          <span
-            aria-hidden="true"
-            className={`${LEADING_TILE} text-[9.5px] font-extrabold`}
-            style={{
-              backgroundColor: color.background,
-              color: color.foreground,
-            }}
-          >
-            {avatarInitial(data.label)}
-          </span>
+          <RepoTile name={data.label} color={color} size="md" />
         ) : (
           <span className={NEUTRAL_TILE}>
             <Layers className={TILE_ICON} aria-hidden="true" />
@@ -237,7 +228,7 @@ export function DragPreview({ data, blockedReason }: { data: RowDragData; blocke
         )}
         <span className={cn(ROW_TITLE, "font-semibold")}>{data.label}</span>
         {data.branch && (
-          <span className="font-mono text-[11px] text-muted-foreground truncate max-w-[45%]">{data.branch}</span>
+          <span className="font-mono text-[11.5px] text-muted-foreground truncate max-w-[45%]">{data.branch}</span>
         )}
         {data.badges}
       </span>
@@ -315,7 +306,7 @@ export function DraggableRow({
         <span
           title={t("sidebarDnd.handle")}
           className={cn(
-            "absolute top-1/2 -translate-y-1/2 z-10 flex text-[var(--faint)] cursor-grab",
+            "absolute top-1/2 -translate-y-1/2 z-10 flex text-muted-foreground cursor-grab",
             "opacity-0 group-hover/drag:opacity-100",
             activeKey !== null && "hidden",
           )}

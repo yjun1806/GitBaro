@@ -9,6 +9,7 @@ import type { DiffOutput, PrFile, PullRequestDetail } from "@/types";
 import { fileStatusOf, revealLineOf, type FileThreads } from "./pr-model";
 import { PrThreadCard } from "./PrThread";
 import { PrLoading, PrPlaceholder } from "./PrStates";
+import { Button } from "@/components/ui/Button";
 
 interface PrFileViewProps {
   pr: PullRequestDetail;
@@ -60,13 +61,9 @@ export function PrFileView({ pr, file, threads, repoPath, editorRepoPath, reveal
   } else if (!diff) {
     diffArea = (
       <PrPlaceholder icon={FileQuestion} title={t("pr.file.noPatch")} description={t("pr.file.noPatchHint")}>
-        <button
-          type="button"
-          onClick={() => actions.openInBrowser(`${pr.url}/files`)}
-          className="h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
-        >
+        <Button size="sm" variant="secondary" onClick={() => actions.openInBrowser(`${pr.url}/files`)}>
           {t("pr.openOnGitHub")}
-        </button>
+        </Button>
       </PrPlaceholder>
     );
   } else {
@@ -80,7 +77,7 @@ export function PrFileView({ pr, file, threads, repoPath, editorRepoPath, reveal
         revealNonce={revealNonce}
         headerExtra={
           !useLocal ? (
-            <span className="text-[10.5px] text-(--faint)" title={t("pr.file.patchSourceHint")}>
+            <span className="text-[11.5px] text-muted-foreground" title={t("pr.file.patchSourceHint")}>
               {t("pr.file.patchSource")}
             </span>
           ) : undefined
@@ -101,7 +98,7 @@ export function PrFileView({ pr, file, threads, repoPath, editorRepoPath, reveal
             type="button"
             onClick={() => setThreadsOpen((v) => !v)}
             aria-expanded={threadsOpen}
-            className="flex items-center gap-1.5 h-8 px-3 shrink-0 text-[11.5px] font-semibold text-(--fg2) hover:text-foreground"
+            className="flex items-center gap-1.5 h-7 px-3 shrink-0 text-[11.5px] font-semibold text-(--fg2) hover:text-foreground"
           >
             <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", !threadsOpen && "-rotate-90")} />
             <MessageSquare className="w-3.5 h-3.5" />
@@ -121,15 +118,16 @@ export function PrFileView({ pr, file, threads, repoPath, editorRepoPath, reveal
               })}
               {outdated.length > 0 && (
                 <>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setOutdatedOpen((v) => !v)}
                     aria-expanded={outdatedOpen}
-                    className="self-start flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                    icon={<ChevronDown className={cn("w-3 h-3 transition-transform", !outdatedOpen && "-rotate-90")} />}
+                    className="self-start"
                   >
-                    <ChevronDown className={cn("w-3 h-3 transition-transform", !outdatedOpen && "-rotate-90")} />
                     {t("pr.thread.outdatedGroup", { count: outdated.length })}
-                  </button>
+                  </Button>
                   {outdatedOpen && outdated.map((thread) => <PrThreadCard key={thread.id} thread={thread} />)}
                 </>
               )}

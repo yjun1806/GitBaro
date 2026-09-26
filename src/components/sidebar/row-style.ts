@@ -10,11 +10,12 @@ import { PANEL_SURFACE } from "@/components/ui/layers";
  */
 export const SIDEBAR_CARD = `flex flex-col p-1 ${PANEL_SURFACE}`;
 
-/** 앞 아이콘 자리: 18px 둥근 타일(저장소 아바타, 워크스페이스 아이콘). */
-export const LEADING_TILE = "w-[18px] h-[18px] shrink-0 rounded-[5px] flex items-center justify-center";
-
-/** 저장소가 아닌 머리 줄(워크스페이스)의 타일: 회색 채움 + 가운데 12px 아이콘. */
-export const NEUTRAL_TILE = `${LEADING_TILE} bg-foreground/[0.07] text-(--fg2)`;
+/**
+ * 저장소가 아닌 머리 줄(워크스페이스)의 타일: 회색 채움 + 가운데 12px 아이콘. 저장소 타일은
+ * `RepoTile`(`ui/marks.tsx`)을 쓴다 — 이 타일은 그와 같은 크기표(`md` 18px/5px)를 그대로 쓴다(D6).
+ */
+export const NEUTRAL_TILE =
+  "w-[18px] h-[18px] shrink-0 rounded-[5px] flex items-center justify-center bg-foreground/[0.07] text-(--fg2)";
 
 /** 작업 폴더·브랜치 줄의 앞 아이콘 칸. 타일과 같은 폭이라 아이콘이 아바타와 한 세로줄에 선다. */
 export const ROW_ICON_SLOT = "w-[18px] shrink-0 flex items-center justify-center text-muted-foreground";

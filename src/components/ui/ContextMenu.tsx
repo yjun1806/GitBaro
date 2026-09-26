@@ -156,6 +156,7 @@ export function ContextMenu({ sections, position, anchored, onClose, ariaLabel }
             <button
               key={item.label}
               role="menuitem"
+              aria-current={item.checked || undefined}
               onClick={(e) => {
                 e.stopPropagation();
                 if (!item.disabled) {

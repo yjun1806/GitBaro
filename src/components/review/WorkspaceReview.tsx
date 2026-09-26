@@ -8,10 +8,11 @@ import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useUIStore, type ReviewFileView } from "@/stores/ui";
 import { repoAccountsByPath } from "@/lib/repo-tree";
-import { Card, EmptyState } from "@/components/layout/ContentArea";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { GraphSplit } from "@/components/layout/GraphSplit";
-import { RepoLaneCommitGraph } from "@/components/graph/CommitGraph";
-import { repoLaneColor } from "@/components/graph/repo-lanes";
+import { RepoLaneCommitGraph, RepoLaneTag } from "@/components/graph/CommitGraph";
+import { Button } from "@/components/ui/Button";
 import { Segmented, type SegmentedOption } from "@/components/ui/Segmented";
 import type { WorkspaceRepoHistory } from "@/types";
 import { WorkspaceTitle } from "./WorkspaceTitle";
@@ -105,14 +106,9 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
               <span className="flex-1" />
               <RepoLegend repos={data.visible} />
               {data.hiddenCount > 0 || showAll ? (
-                <button
-                  type="button"
-                  onClick={() => setShowAll((v) => !v)}
-                  title={t("review.hiddenHint")}
-                  className="shrink-0 h-6 px-2 rounded-(--radius-chip) text-[11.5px] font-semibold text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                >
+                <Button variant="ghost" size="sm" onClick={() => setShowAll((v) => !v)} title={t("review.hiddenHint")}>
                   {showAll ? t("review.hideQuiet") : t("review.showAll", { count: data.hiddenCount })}
-                </button>
+                </Button>
               ) : null}
               {/* 저장소 화면의 git 상태 줄과 같은 자리: 오프라인 표시, 도는 git 명령, 작업 기록 열기. */}
               <StatusActivity />
@@ -189,13 +185,15 @@ function historyNote(t: TFunction, h: WorkspaceRepoHistory | undefined): string 
   return null;
 }
 
-/** 그래프 머리의 저장소 표시: 레인 색, 저장소 이름, 지금 브랜치. 읽지 못한 저장소는 경고로 표시한다. */
+/**
+ * 그래프 머리의 저장소 표시: 레인 색, 저장소 이름, 지금 브랜치. 읽지 못한 저장소는 경고로 표시한다.
+ * 저장소 이름표는 그래프 행·WIP 행과 같은 `RepoLaneTag`(레인 색을 입힌 `RefLabel`, D4)를 쓴다.
+ */
 function RepoLegend({ repos }: { repos: ReviewRepo[] }) {
   const { t } = useTranslation();
   return (
-    <span className="flex items-center gap-1.5 min-w-0 overflow-x-auto" data-testid="repo-legend">
+    <span className="flex items-center gap-2 min-w-0 overflow-x-auto" data-testid="repo-legend">
       {repos.map((r) => {
-        const color = repoLaneColor(r.path);
         const note = historyNote(t, r.history);
         const title = r.error
           ? t("review.repoError", { repo: r.name, error: r.error })
@@ -205,17 +203,17 @@ function RepoLegend({ repos }: { repos: ReviewRepo[] }) {
             key={r.path}
             title={title}
             data-repo={r.path}
-            className="flex items-center gap-1.5 shrink-0 h-[22px] px-2 rounded-[6px] text-[11px] font-bold"
-            style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}
+            className="flex items-center gap-1 shrink-0 text-[11.5px] text-muted-foreground"
           >
-            {r.error ? (
-              <AlertTriangle className="w-3 h-3 text-danger" aria-label={t("review.repoError", { repo: r.name, error: r.error })} />
-            ) : (
-              <span className="w-2 h-0.5" style={{ background: color }} aria-hidden="true" />
+            <RepoLaneTag repoPath={r.path} label={r.name} />
+            {r.error && (
+              <AlertTriangle
+                className="w-3 h-3 text-danger"
+                aria-label={t("review.repoError", { repo: r.name, error: r.error })}
+              />
             )}
-            {r.name}
-            {r.branch && <span className="font-mono font-medium opacity-80">{r.branch}</span>}
-            {note && <span className="opacity-70" aria-hidden="true">*</span>}
+            {r.branch && <span className="font-mono">{r.branch}</span>}
+            {note && <span aria-hidden="true">*</span>}
           </span>
         );
       })}

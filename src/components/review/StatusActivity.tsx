@@ -5,6 +5,7 @@ import { useUIStore } from "@/stores/ui";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useSteadyValue } from "@/hooks/useSteadyValue";
 import { Spinner } from "@/components/ui/Spinner";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
 /** 이보다 짧게 끝나는 명령은 표시하지 않는다. 사이드바 fetch 표시의 박자(`BUSY_TIMING`)와 같다. */
@@ -39,34 +40,27 @@ export function StatusActivity() {
           {t("status.offline")}
         </span>
       )}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => setLogOpen(!isLogOpen)}
         aria-pressed={isLogOpen}
         aria-busy={running !== null}
         aria-label={label}
         title={label}
-        className={cn(
-          "inline-flex items-center gap-1.5 shrink-0 min-w-0 h-6 px-1.5 rounded-(--radius-chip) text-muted-foreground",
-          "hover:bg-accent hover:text-foreground transition-colors",
-          isLogOpen && "bg-accent text-foreground",
-        )}
+        icon={running ? <Spinner size="sm" /> : <History className="w-3.5 h-3.5" />}
+        className={cn("min-w-0", isLogOpen && "bg-accent text-foreground")}
       >
-        {running ? (
-          <>
-            <Spinner />
-            {/* 폭을 고정해 명령이 바뀌어도(fetch → pull) 옆 요소가 밀리지 않는다. */}
-            <span className="w-[7.5rem] truncate text-left" data-testid="running-op">
-              {t(`activity.op.${running.operation}`)}
-              {running.progress?.percent !== undefined && (
-                <span className="tabular-nums"> {t("activity.progress", { percent: running.progress.percent })}</span>
-              )}
-            </span>
-          </>
-        ) : (
-          <History className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        {running && (
+          // 폭을 고정해 명령이 바뀌어도(fetch → pull) 옆 요소가 밀리지 않는다.
+          <span className="w-[7.5rem] truncate text-left" data-testid="running-op">
+            {t(`activity.op.${running.operation}`)}
+            {running.progress?.percent !== undefined && (
+              <span className="tabular-nums"> {t("activity.progress", { percent: running.progress.percent })}</span>
+            )}
+          </span>
         )}
-      </button>
+      </Button>
     </>
   );
 }

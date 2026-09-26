@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { clsx } from "clsx";
 import { Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { useHasMaximizedFiles } from "@/components/layout/maximized-files";
-import { FileStatusBadge } from "@/lib/file-status";
+import { Button } from "@/components/ui/Button";
+import { FileStatusLetter } from "@/components/ui/marks";
+import { Segmented } from "@/components/ui/Segmented";
 import type { FileStatus } from "@/types";
 import type { DiffViewMode } from "./view-mode";
 
@@ -58,13 +59,13 @@ export function DiffHeader({
     // 이 표(data-diff-header)로 그 구분을 준다.
     <div
       data-diff-header=""
-      className="flex items-center gap-3 px-4 h-[36px] bg-card border-b border-(--line) min-w-0"
+      className="flex items-center gap-3 px-4 h-8 bg-card border-b border-(--line) min-w-0"
     >
-      <FileStatusBadge status={status} size="md" />
+      <FileStatusLetter status={status} />
 
       <div className="flex-1 min-w-0 flex items-center gap-0.5">
-        <span className="text-xs text-muted-foreground truncate">{dir}</span>
-        <span className="text-sm font-medium text-foreground truncate">
+        <span className="text-[11.5px] text-muted-foreground truncate">{dir}</span>
+        <span className="text-[12.5px] font-semibold text-foreground truncate">
           {filename}
         </span>
       </div>
@@ -72,44 +73,29 @@ export function DiffHeader({
       <div className="flex items-center gap-2 shrink-0">
         {extra}
         {addedLines > 0 && (
-          <span className="text-xs font-medium text-diff-add-fg">
+          <span className="font-mono text-[11.5px] text-diff-add-fg">
             +{addedLines}
           </span>
         )}
         {removedLines > 0 && (
-          <span className="text-xs font-medium text-diff-del-fg">
-            -{removedLines}
+          <span className="font-mono text-[11.5px] text-diff-del-fg">
+            {"−"}{removedLines}
           </span>
         )}
 
-        <div className="flex items-center rounded border border-border overflow-hidden">
-          {modes.map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => onSelectMode(mode)}
-              aria-pressed={mode === viewMode}
-              className={clsx(
-                "px-2 py-1 text-xs transition-colors",
-                mode === viewMode
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
-              )}
-            >
-              {t(MODE_LABEL[mode])}
-            </button>
-          ))}
-        </div>
+        {modes.length > 1 && (
+          <Segmented
+            size="sm"
+            ariaLabel={t("diff.viewModeLabel")}
+            value={viewMode}
+            onChange={onSelectMode}
+            options={modes.map((mode) => ({ value: mode, label: t(MODE_LABEL[mode]) }))}
+          />
+        )}
         {onFind && (
-          <button
-            type="button"
-            onClick={onFind}
-            aria-label={t("diffFind.open")}
-            title={t("diffFind.open")}
-            className={ICON_BUTTON}
-          >
+          <Button iconOnly size="sm" variant="ghost" onClick={onFind} aria-label={t("diffFind.open")} title={t("diffFind.open")}>
             <Search className="w-3.5 h-3.5" />
-          </button>
+          </Button>
         )}
         {maximizable && <FileListButton />}
         {maximizable && <MaximizeButton />}
@@ -117,9 +103,6 @@ export function DiffHeader({
     </div>
   );
 }
-
-const ICON_BUTTON =
-  "flex items-center justify-center w-6 h-6 rounded-(--radius-chip) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors";
 
 /** 크게 보는 동안 diff 왼쪽 파일 목록을 접고 편다. diff를 연 목록이 있을 때만 나타난다. */
 function FileListButton() {
@@ -131,16 +114,17 @@ function FileListButton() {
   if (!maximized || !hasFiles) return null;
   const label = open ? t("diff.hideFileList") : t("diff.showFileList");
   return (
-    <button
-      type="button"
+    <Button
+      iconOnly
+      size="sm"
+      variant="ghost"
       onClick={() => setOpen(!open)}
       aria-label={label}
       aria-pressed={open}
       title={label}
-      className={ICON_BUTTON}
     >
       {open ? <PanelLeftClose className="w-3.5 h-3.5" /> : <PanelLeftOpen className="w-3.5 h-3.5" />}
-    </button>
+    </Button>
   );
 }
 
@@ -151,15 +135,16 @@ function MaximizeButton() {
   const setMaximized = useUIStore((s) => s.setDiffMaximized);
   const label = maximized ? t("diff.restoreSize") : t("diff.maximize");
   return (
-    <button
-      type="button"
+    <Button
+      iconOnly
+      size="sm"
+      variant="ghost"
       onClick={() => setMaximized(!maximized)}
       aria-label={label}
       aria-pressed={maximized}
       title={label}
-      className={ICON_BUTTON}
     >
       {maximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-    </button>
+    </Button>
   );
 }

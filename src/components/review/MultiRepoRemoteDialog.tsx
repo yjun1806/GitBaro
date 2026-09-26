@@ -1,7 +1,9 @@
-import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Check, X } from "lucide-react";
-import { Dialog } from "@/components/ui/Dialog";
+import { AlertTriangle, Check } from "lucide-react";
+import { DialogFrame } from "@/components/ui/DialogFrame";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { Code, RepoTile } from "@/components/ui/marks";
 import { useRepoAvatarColor } from "@/hooks/useRepoDisplay";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { remoteErrorKey } from "@/lib/remote-error";
@@ -34,7 +36,6 @@ const GRID = "grid grid-cols-[20px_150px_minmax(0,1fr)_96px] gap-2.5 items-cente
  */
 export function MultiRepoRemoteDialog({ paths, op, onClose }: MultiRepoRemoteDialogProps) {
   const { t } = useTranslation();
-  const titleId = useId();
   const { phase, rows, selected, pullFirst, results, error, chosen, toggle, togglePullFirst, run } =
     useMultiRepoRemote(paths, op);
 
@@ -49,95 +50,22 @@ export function MultiRepoRemoteDialog({ paths, op, onClose }: MultiRepoRemoteDia
   ).length;
 
   return (
-    <Dialog
+    <DialogFrame
+      title={t(`multiRepoRemote.title.${op}`, { count })}
       onClose={onClose}
-      labelledBy={titleId}
       dismissible={!running}
-      className="bg-card rounded-[14px] shadow-2xl w-full max-w-[620px] mx-4 overflow-hidden ring-1 ring-(--line)"
-    >
-      <div className="flex flex-col gap-1.5 p-4">
-        <div className="flex items-start gap-2">
-          <h3 id={titleId} className="flex-1 text-[15px] font-bold text-foreground">
-            {t(`multiRepoRemote.title.${op}`, { count })}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={running}
-            aria-label={t("multiRepoRemote.close")}
-            className="text-muted-foreground hover:text-foreground disabled:opacity-40"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <p className="text-[12.5px] leading-[19px] text-muted-foreground">
-          {t(`multiRepoRemote.description.${op}`)}
-        </p>
-      </div>
-
-      {phase === "preparing" && (
-        // Fetch는 창을 열 때 미리 fetch하지 않는다(실행 자체가 fetch).
-        <LoadingState
-          label={t(op === "fetch" ? "multiRepoRemote.preparingFetch" : "multiRepoRemote.preparing")}
-          className="border-t border-(--line)"
-        />
-      )}
-
-      {phase === "failed" && (
-        <div role="alert" className="px-4 py-4 border-t border-(--line) text-[12.5px] text-danger">
-          {t("multiRepoRemote.prepareFailed", { error })}
-        </div>
-      )}
-
-      {rows.length > 0 && (
-        <div>
-          <div
-            className={cn(GRID, "px-4 py-1.5 text-[11px] font-semibold text-(--faint) bg-(--chip)")}
-          >
-            <span />
-            <span>{t("multiRepoRemote.colRepo")}</span>
-            <span>{t("multiRepoRemote.colCommand")}</span>
-            <span className="text-right">
-              {t("multiRepoRemote.colCommits")}
-            </span>
-          </div>
-          <div className="max-h-[320px] overflow-y-auto">
-            {rows.map((row) => (
-              <PlanRow
-                key={row.plan.path}
-                row={row}
-                op={op}
-                checked={selected.has(row.plan.path)}
-                locked={phase !== "ready"}
-                result={results[row.plan.path]}
-                onToggle={() => toggle(row.plan.path)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {notes.length > 0 && (
-        <ul className="flex flex-col gap-1.5 px-4 py-3 border-t border-(--line) bg-(--acc-faint)">
-          {notes.map((note) => (
-            <li key={note} className="text-[12px] text-foreground/80">
-              • {note}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="flex items-center gap-2 px-4 py-3 border-t border-(--line)">
+      size="lg"
+      footerStart={
         <div className="flex flex-col gap-1 min-w-0">
           {!done &&
             needsPullRows.map((row) => (
               <label
                 key={row.plan.path}
-                className="flex items-center gap-1.5 text-[12px] text-muted-foreground"
+                className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground"
               >
                 <input
                   type="checkbox"
-                  className="m-0 accent-(--acc)"
+                  className="m-0 accent-primary"
                   checked={pullFirst.has(row.plan.path)}
                   disabled={phase !== "ready" || !selected.has(row.plan.path)}
                   onChange={() => togglePullFirst(row.plan.path)}
@@ -146,44 +74,91 @@ export function MultiRepoRemoteDialog({ paths, op, onClose }: MultiRepoRemoteDia
               </label>
             ))}
           {done && (
-            <span role="status" className="text-[12px] text-muted-foreground">
+            <span role="status" className="text-[11.5px] text-muted-foreground">
               {t("multiRepoRemote.summary", { ok: okCount, failed: failedCount })}
             </span>
           )}
         </div>
-        <span className="grow" />
-        {done ? (
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-8 px-4 rounded-lg bg-primary text-primary-foreground text-[13px] font-bold hover:bg-primary-hover"
-          >
+      }
+      footer={
+        done ? (
+          <Button variant="primary" size="md" onClick={onClose}>
             {t("multiRepoRemote.close")}
-          </button>
+          </Button>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={running}
-              className="h-8 px-3.5 rounded-lg bg-(--chip) text-[13px] font-semibold text-foreground/80 hover:bg-muted disabled:opacity-50"
-            >
+            <Button variant="ghost" size="md" onClick={onClose} disabled={running}>
               {t("common.cancel")}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
               onClick={() => void run()}
               disabled={phase !== "ready" || chosen.length === 0}
-              aria-busy={running}
-              className="flex items-center gap-1.5 h-8 px-4 rounded-lg bg-primary text-primary-foreground text-[13px] font-bold hover:bg-primary-hover disabled:opacity-50"
+              busy={running}
             >
-              {running && <Spinner />}
               {t(`multiRepoRemote.confirm.${op}`, { count: chosen.length })}
-            </button>
+            </Button>
           </>
+        )
+      }
+    >
+      <div className="-m-4 flex flex-col">
+        <p className="px-4 pt-4 pb-3 text-[12.5px] text-muted-foreground">
+          {t(`multiRepoRemote.description.${op}`)}
+        </p>
+
+        {phase === "preparing" && (
+          // Fetch는 창을 열 때 미리 fetch하지 않는다(실행 자체가 fetch).
+          <LoadingState
+            label={t(op === "fetch" ? "multiRepoRemote.preparingFetch" : "multiRepoRemote.preparing")}
+            className="border-t border-(--line)"
+          />
+        )}
+
+        {phase === "failed" && (
+          <div className="px-4 pb-4 pt-3 border-t border-(--line)">
+            <Notice tone="danger">{t("multiRepoRemote.prepareFailed", { error })}</Notice>
+          </div>
+        )}
+
+        {rows.length > 0 && (
+          <div className="border-t border-(--line)">
+            <div className={cn(GRID, "px-4 py-1.5 text-[11.5px] font-semibold text-muted-foreground bg-(--acc-faint)")}>
+              <span />
+              <span>{t("multiRepoRemote.colRepo")}</span>
+              <span>{t("multiRepoRemote.colCommand")}</span>
+              <span className="text-right">
+                {t("multiRepoRemote.colCommits")}
+              </span>
+            </div>
+            <div className="max-h-[320px] overflow-y-auto">
+              {rows.map((row) => (
+                <PlanRow
+                  key={row.plan.path}
+                  row={row}
+                  op={op}
+                  checked={selected.has(row.plan.path)}
+                  locked={phase !== "ready"}
+                  result={results[row.plan.path]}
+                  onToggle={() => toggle(row.plan.path)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {notes.length > 0 && (
+          <ul className="flex flex-col gap-1.5 px-4 py-3 border-t border-(--line) bg-(--acc-faint)">
+            {notes.map((note) => (
+              <li key={note} className="text-[11.5px] text-muted-foreground">
+                • {note}
+              </li>
+            ))}
+          </ul>
         )}
       </div>
-    </Dialog>
+    </DialogFrame>
   );
 }
 
@@ -212,25 +187,19 @@ function PlanRow({ row, op, checked, locked, result, onToggle }: PlanRowProps) {
         <input
           type="checkbox"
           aria-label={row.name}
-          className="m-0 accent-(--acc)"
+          className="m-0 accent-primary"
           checked={selectable && checked}
           disabled={!selectable || locked}
           onChange={onToggle}
         />
         <span className="flex items-center gap-2 min-w-0">
-          <span
-            aria-hidden="true"
-            className="flex items-center justify-center w-[18px] h-[18px] shrink-0 rounded-[5px] text-[10px] font-bold"
-            style={{ background: color.background, color: color.foreground }}
-          >
-            {row.name.charAt(0).toUpperCase()}
-          </span>
-          <strong className="truncate text-[12.5px] text-foreground">{row.name}</strong>
+          <RepoTile name={row.name} color={color} size="md" />
+          <strong className="truncate text-[12.5px] font-semibold text-foreground">{row.name}</strong>
         </span>
         <span className="min-w-0 flex flex-col">
-          <code className="font-mono text-[11.5px] text-foreground/80 break-all">{plan.command ?? "—"}</code>
+          <Code className="w-fit break-all self-start">{plan.command ?? "—"}</Code>
           {row.fetchFailed && (!plan.skip || isStaleUpToDate(row)) && (
-            <span className="flex items-center gap-1 text-[11px] text-warning" data-testid="stale-fetch">
+            <span className="flex items-center gap-1 mt-1 text-[11.5px] text-warning" data-testid="stale-fetch">
               <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />
               {row.lastFetchedAt
                 ? t("multiRepoRemote.stale", { time: formatRelativeTime(row.lastFetchedAt) })
@@ -238,7 +207,7 @@ function PlanRow({ row, op, checked, locked, result, onToggle }: PlanRowProps) {
             </span>
           )}
         </span>
-        <span className="text-right text-[12px] font-bold text-foreground">
+        <span className="text-right text-[11.5px] font-semibold text-foreground">
           {result ? <ResultLabel result={result} /> : commitsLabel(row, op, t)}
         </span>
       </div>
@@ -269,8 +238,8 @@ function UnpushedList({ path }: { path: string }) {
     >
       {shown.map((c) => (
         <li key={c.id} className="flex items-baseline gap-2 min-w-0">
-          <code className="shrink-0 font-mono text-(--faint)">{c.shortId.slice(0, 7)}</code>
-          <span className="truncate text-foreground/80">{c.summary}</span>
+          <code className="shrink-0 font-mono text-muted-foreground">{c.shortId.slice(0, 7)}</code>
+          <span className="truncate text-(--fg2)">{c.summary}</span>
         </li>
       ))}
       {rest > 0 && <li className="text-muted-foreground">{t("multiRepoRemote.unpushedMore", { count: rest })}</li>}

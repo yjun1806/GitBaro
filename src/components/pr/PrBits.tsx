@@ -5,8 +5,7 @@ import { cn, formatDate, formatRelativeTime } from "@/lib/utils";
 import type { PrCheck, PrCiState, PrReviewDecision, PrReviewer, PullRequestSummary } from "@/types";
 import { isoToSeconds } from "./pr-model";
 import { Spinner } from "@/components/ui/Spinner";
-
-const CHIP = "inline-flex items-center gap-1 h-[18px] px-1.5 rounded-(--radius-chip) text-[10.5px] font-semibold shrink-0";
+import { StatusChip, type StatusTone } from "@/components/ui/marks";
 
 /** GitHub 아바타. 못 불러오면 첫 글자로 둔다. */
 export function PrAvatar({ login, url, size = 16 }: { login: string; url: string | null; size?: number }) {
@@ -53,36 +52,28 @@ export function PrStateIcon({ pr, className }: { pr: Pick<PullRequestSummary, "s
 export function PrStateBadge({ pr }: { pr: Pick<PullRequestSummary, "state" | "isDraft"> }) {
   const { t } = useTranslation();
   const key = pr.state === "open" && pr.isDraft ? "draft" : pr.state;
-  const tone =
-    key === "merged"
-      ? "bg-info/15 text-info"
-      : key === "closed"
-        ? "bg-danger/15 text-danger"
-        : key === "draft"
-          ? "bg-(--chip) text-(--fg2)"
-          : "bg-success/15 text-success";
+  const tone: StatusTone = key === "merged" ? "info" : key === "closed" ? "danger" : key === "draft" ? "neutral" : "success";
   return (
-    <span className={cn(CHIP, tone)}>
-      <PrStateIcon pr={pr} className="w-3 h-3 text-current" />
+    <StatusChip tone={tone} icon={<PrStateIcon pr={pr} className="w-3 h-3 text-current" />}>
       {t(`pr.state.${key}`)}
-    </span>
+    </StatusChip>
   );
 }
 
 export function DraftChip() {
   const { t } = useTranslation();
-  return <span className={cn(CHIP, "bg-(--chip) text-(--fg2)")}>{t("pr.state.draft")}</span>;
+  return <StatusChip tone="neutral">{t("pr.state.draft")}</StatusChip>;
 }
 
-const REVIEW_TONE: Record<PrReviewDecision, string> = {
-  approved: "bg-success/15 text-success",
-  changes_requested: "bg-danger/15 text-danger",
-  review_required: "bg-warning/15 text-warning",
+const REVIEW_TONE: Record<PrReviewDecision, StatusTone> = {
+  approved: "success",
+  changes_requested: "danger",
+  review_required: "warning",
 };
 
 export function ReviewDecisionChip({ decision }: { decision: PrReviewDecision }) {
   const { t } = useTranslation();
-  return <span className={cn(CHIP, REVIEW_TONE[decision])}>{t(`pr.review.${decision}`)}</span>;
+  return <StatusChip tone={REVIEW_TONE[decision]}>{t(`pr.review.${decision}`)}</StatusChip>;
 }
 
 /** CI 종합 상태. 목록과 상세 머리에 둔다. */
@@ -90,23 +81,22 @@ export function CiChip({ state }: { state: PrCiState }) {
   const { t } = useTranslation();
   const failed = state === "failure" || state === "error";
   const passed = state === "success";
+  const tone: StatusTone = passed ? "success" : failed ? "danger" : "warning";
   return (
-    <span
-      className={cn(
-        CHIP,
-        passed ? "bg-success/15 text-success" : failed ? "bg-danger/15 text-danger" : "bg-warning/15 text-warning",
-      )}
-      title={t(`pr.ci.${state}`)}
+    <StatusChip
+      tone={tone}
+      icon={
+        passed ? (
+          <CircleCheck className="w-3 h-3" aria-hidden />
+        ) : failed ? (
+          <XCircle className="w-3 h-3" aria-hidden />
+        ) : (
+          <CircleDashed className="w-3 h-3" aria-hidden />
+        )
+      }
     >
-      {passed ? (
-        <CircleCheck className="w-3 h-3" />
-      ) : failed ? (
-        <XCircle className="w-3 h-3" />
-      ) : (
-        <CircleDashed className="w-3 h-3" />
-      )}
       {t(`pr.ci.${state}`)}
-    </span>
+    </StatusChip>
   );
 }
 
@@ -158,11 +148,11 @@ export function ReviewerRow({ reviewer }: { reviewer: PrReviewer }) {
 export function BranchPair({ pr, className }: { pr: PullRequestSummary; className?: string }) {
   const head = pr.isCrossRepository && pr.headRepo ? `${pr.headRepo.split("/")[0]}:${pr.headRef}` : pr.headRef;
   return (
-    <span className={cn("inline-flex items-center gap-1 min-w-0 font-mono text-[10.5px] text-(--fg2)", className)}>
+    <span className={cn("inline-flex items-center gap-1 min-w-0 font-mono text-[11.5px] text-(--fg2)", className)}>
       <span className="truncate" title={head}>
         {head}
       </span>
-      <span aria-hidden className="text-(--faint) shrink-0">
+      <span aria-hidden className="text-muted-foreground shrink-0">
         →
       </span>
       <span className="truncate shrink-0 max-w-[40%]" title={pr.baseRef}>

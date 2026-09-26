@@ -18,7 +18,6 @@ import { useLiveChangesStore } from "@/stores/live-changes";
 import { diffDelta, type DiffDelta } from "@/lib/diff-delta";
 import { useJustChanged, type JustChanged } from "./useJustChanged";
 import { FocusFlash } from "@/components/ui/FocusFlash";
-import { FileStatusBadge } from "@/lib/file-status";
 import { cn, formatRelativeTime, getErrorMessage, trimTrailingSlash } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
@@ -37,6 +36,13 @@ import { useFileMenu } from "@/components/commit/useFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useNow } from "@/hooks/useNow";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SectionLabel } from "@/components/ui/PanelHeader";
+import { Segmented } from "@/components/ui/Segmented";
+import { Dot, FileStatusLetter, StatusChip } from "@/components/ui/marks";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
 
 /** `registerWatchPaths`에 쓰는 이 화면의 key. 감시 대상 목록에서 맨 앞에 온다. */
 export const FOLLOW_WATCH_KEY = FOLLOW_KEY;
@@ -54,23 +60,15 @@ function samePath(a: string, b: string): boolean {
   return trimTrailingSlash(a) === trimTrailingSlash(b);
 }
 
-/** 「따라가는 중」·「따라가기 멈춤」 알약. WIP 행과 파일 목록 머리에 붙는다. */
+/** 「따라가는 중」·「따라가기 멈춤」 상태 칩(D2). WIP 행과 파일 목록 머리에 붙는다. */
 export function FollowBadge({ mode }: { mode: FollowMode }) {
   const { t } = useTranslation();
   const following = mode === "following";
   return (
-    <span
-      data-testid="follow-badge"
-      className={cn(
-        "inline-flex items-center gap-[5px] shrink-0 h-5 px-2 rounded-full text-[11px] font-bold",
-        following ? "bg-(--live-soft) text-(--live)" : "bg-(--chip) text-muted-foreground",
-      )}
-    >
-      <span
-        className={cn("w-1.5 h-1.5 rounded-full", following ? "bg-(--live) animate-live-breathe" : "bg-(--faint)")}
-        aria-hidden="true"
-      />
-      {following ? t("live.following") : t("live.paused")}
+    <span data-testid="follow-badge">
+      <StatusChip tone={following ? "live" : "neutral"} icon={<Dot on={following} breathe={following} />}>
+        {following ? t("live.following") : t("live.paused")}
+      </StatusChip>
     </span>
   );
 }
@@ -226,27 +224,17 @@ function ModifiedAgo({ at }: { at: number }) {
 /** 일부만 스테이징한 파일에서 스테이지 안 된 쪽과 스테이지된 쪽 중 무엇을 볼지 고른다. */
 function StagedSideToggle({ staged, onChange }: { staged: boolean; onChange: (staged: boolean) => void }) {
   const { t } = useTranslation();
-  const options = [
-    { value: false, label: t("live.showUnstaged") },
-    { value: true, label: t("live.showStaged") },
-  ];
   return (
-    <div role="group" className="flex p-0.5 rounded-[7px] bg-(--chip)">
-      {options.map((o) => (
-        <button
-          key={String(o.value)}
-          type="button"
-          aria-pressed={staged === o.value}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "h-[20px] px-2 rounded-[5px] text-[11px] transition-colors",
-            staged === o.value ? "bg-card font-semibold text-foreground shadow-(--shadow-sm)" : "text-muted-foreground",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      size="sm"
+      ariaLabel={t("live.stagedSideToggle")}
+      value={staged ? "staged" : "unstaged"}
+      onChange={(v) => onChange(v === "staged")}
+      options={[
+        { value: "unstaged", label: t("live.showUnstaged") },
+        { value: "staged", label: t("live.showStaged") },
+      ]}
+    />
   );
 }
 
@@ -304,14 +292,14 @@ function FollowFileList({
             )}
           >
             {justChanged?.paths.has(f.path) && <FocusFlash key={justChanged.at} testId="file-flash" />}
-            <FileStatusBadge status={f.status} />
+            <FileStatusLetter status={f.status} />
             <span className="flex-1 min-w-0 truncate text-[12.5px] text-foreground">
               <span>{name}</span>
-              {dir && <span className="ml-1.5 text-[11px] text-(--faint)">{dir}</span>}
+              {dir && <span className="ml-1.5 text-[11.5px] text-muted-foreground">{dir}</span>}
             </span>
             <OverlapMark siblings={overlap.of(f)} />
             {f.staged && (
-              <span className="shrink-0 text-[10.5px] text-(--faint)">
+              <span className="shrink-0 text-[10.5px] text-muted-foreground">
                 {f.unstaged ? t("live.partlyStaged") : t("live.staged")}
               </span>
             )}
@@ -319,16 +307,16 @@ function FollowFileList({
               <span
                 className={cn(
                   "shrink-0 text-[10.5px]",
-                  recent && index === 0 ? "font-bold text-(--live)" : "text-(--faint)",
+                  recent && index === 0 ? "font-bold text-(--live)" : "text-muted-foreground",
                 )}
               >
                 {recent ? t("live.secondsAgo", { count: seconds }) : formatRelativeTime(f.modifiedAt!)}
               </span>
             )}
             {f.insertions !== null && (
-              <span className="shrink-0 font-mono text-[11px] text-success">+{f.insertions}</span>
+              <span className="shrink-0 font-mono text-[11.5px] text-diff-add-fg">+{f.insertions}</span>
             )}
-            {f.deletions ? <span className="shrink-0 font-mono text-[11px] text-danger">−{f.deletions}</span> : null}
+            {f.deletions ? <span className="shrink-0 font-mono text-[11.5px] text-diff-del-fg">−{f.deletions}</span> : null}
           </button>
         );
       })}
@@ -487,32 +475,28 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
         <FollowBadge mode={following ? "following" : "paused"} />
       </div>
       {header}
-      <div className="flex items-center gap-2 px-3 py-1 shrink-0 text-[11px] font-semibold text-(--faint)">
-        <span className="flex-1">{t("live.sortedByTime")}</span>
-        {following ? (
-          <button
-            type="button"
-            onClick={handlePause}
-            className="h-5 px-1.5 rounded-(--radius-chip) text-(--fg2) hover:bg-accent transition-colors"
-          >
-            {t("live.pause")}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleResume}
-            className="h-5 px-1.5 rounded-(--radius-chip) text-(--live) hover:bg-accent transition-colors"
-          >
-            {t("live.resume")}
-          </button>
-        )}
-      </div>
+      <SectionLabel
+        title={t("live.sortedByTime")}
+        trailing={
+          following ? (
+            <Button variant="ghost" size="sm" onClick={handlePause}>
+              {t("live.pause")}
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={handleResume}>
+              {t("live.resume")}
+            </Button>
+          )
+        }
+      />
       {isError ? (
-        <p className="px-3 py-2 text-xs text-danger">{t("live.loadFailed")}</p>
+        <div className="px-3 py-2">
+          <Notice tone="danger">{t("live.loadFailed")}</Notice>
+        </div>
       ) : isLoading ? (
         <LoadingState layout="row" label={t("diff.loadingDiff")} />
       ) : list.length === 0 ? (
-        <p className="px-3 py-2 text-xs text-muted-foreground">{t("live.noChanges")}</p>
+        <EmptyState layout="row" title={t("live.noChanges")} />
       ) : (
         <FollowFileList
           files={list}
@@ -538,25 +522,23 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
       onKeyDownCapture={handleIntervention}
     >
       {shown === null ? (
-        <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
-          <FileText className="w-8 h-8" aria-hidden="true" />
-          {pausedGone ? (
-            <>
-              <p className="text-sm">{t("live.pickedGone", { file: pausedOn })}</p>
-              <button
-                type="button"
-                onClick={handleResume}
-                className="h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--live) hover:bg-accent transition-colors"
-              >
+        pausedGone ? (
+          <EmptyState
+            icon={FileText}
+            title={t("live.pickedGone", { file: pausedOn })}
+            action={
+              <Button size="sm" variant="secondary" onClick={handleResume}>
                 {t("live.resume")}
-              </button>
-            </>
-          ) : (
-            <p className="text-sm">{t("live.waiting")}</p>
-          )}
-        </div>
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState icon={FileText} title={t("live.waiting")} />
+        )
       ) : diffError ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-danger">{t("diff.failedToLoad")}</div>
+        <div className="flex-1 flex items-center justify-center p-3">
+          <Notice tone="danger">{t("diff.failedToLoad")}</Notice>
+        </div>
       ) : diffLoading && !diff ? (
         <LoadingState label={t("diff.loadingDiff")} />
       ) : (
@@ -605,17 +587,16 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
         <div
           data-follow-toast
           role="status"
-          className="absolute right-4 top-12 z-10 flex items-center gap-2.5 py-2 pl-3 pr-2 rounded-(--radius-item) bg-foreground text-background text-[12px] shadow-(--shadow) animate-pop-in"
+          className={cn(
+            FLOATING_SURFACE,
+            "absolute right-4 top-12 z-10 flex items-center gap-2.5 py-2 pl-3 pr-2 rounded-(--radius-item) text-[12.5px] text-foreground animate-pop-in",
+          )}
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-(--live)" aria-hidden="true" />
+          <Dot on live />
           {freshMessage(t, fresh.delta)}
-          <button
-            type="button"
-            onClick={following ? handlePause : handleResume}
-            className="h-[22px] px-2 rounded-[6px] bg-background/15 text-[11.5px] hover:bg-background/25 transition-colors"
-          >
+          <Button size="sm" variant="secondary" onClick={following ? handlePause : handleResume}>
             {following ? t("live.pause") : t("live.resume")}
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -655,9 +636,6 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
     </ListDiffSplit>
   );
 }
-
-const FOOTER_BUTTON =
-  "h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors disabled:opacity-50 disabled:pointer-events-none";
 
 /** 「모두 스테이지」가 넘길 경로: 스테이지 안 된 변경이 있는 파일(충돌 파일은 하나씩 해결하므로 뺀다). */
 export function stageAllPaths(files: WipFile[]): string[] {
@@ -732,30 +710,32 @@ export function FollowRepoFooter({ path }: { path: string }) {
       <div className="flex flex-wrap gap-1.5">
         {isCurrent ? (
           <>
-            <button
-              type="button"
-              disabled={busy || toStage.length === 0}
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={toStage.length === 0}
+              busy={busy}
               onClick={() => void handleStageAll()}
-              className={FOOTER_BUTTON}
             >
               {t("live.stageAll")}
-            </button>
-            <button type="button" onClick={stop} className={FOOTER_BUTTON}>
+            </Button>
+            <Button variant="secondary" size="sm" onClick={stop}>
               {t("live.commit")}
-            </button>
-            <button
-              type="button"
-              disabled={busy || files.length === 0}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={files.length === 0}
+              busy={busy}
               onClick={() => void handleStash()}
-              className={FOOTER_BUTTON}
             >
               {t("live.stash")}
-            </button>
+            </Button>
           </>
         ) : (
-          <button type="button" onClick={() => void openWorktree(path)} className={FOOTER_BUTTON}>
+          <Button variant="secondary" size="sm" onClick={() => void openWorktree(path)}>
             {t("live.openWorktree")}
-          </button>
+          </Button>
         )}
       </div>
     </>

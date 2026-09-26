@@ -156,7 +156,7 @@ describe("workspace suggestion", () => {
 
   it("is hidden while searching", () => {
     renderTree();
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "solo" } });
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "solo" } });
     expect(screen.queryByRole("region", { name: suggestionTitle() })).not.toBeInTheDocument();
   });
 });
@@ -233,7 +233,7 @@ describe("workspace create / rename / delete", () => {
     if (!created.ok) throw new Error(created.reason);
     renderTree();
 
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "solo" } });
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "solo" } });
     expect(screen.queryByRole("treeitem", { name: "xames-admin" })).not.toBeInTheDocument();
 
     fireEvent.contextMenu(item("product"), { clientX: 30, clientY: 40 });

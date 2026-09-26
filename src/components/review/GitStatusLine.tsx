@@ -13,6 +13,7 @@ import {
 } from "@/api/queries";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
 import type { BranchInfo, RemoteOp } from "@/types";
 import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { useHistoryView, useSetHistoryView } from "@/components/graph/useHistoryView";
@@ -41,12 +42,9 @@ const TONE_CLASS: Record<GitStatusTone, string> = {
   detached: "bg-warning/10 text-foreground",
 };
 
-const CHIP =
-  "inline-flex items-center gap-1 shrink-0 h-6 px-2.5 rounded-(--radius-chip) text-[11.5px] font-semibold transition-colors";
-
 function Dot() {
   return (
-    <span aria-hidden="true" className="shrink-0 text-(--faint)">
+    <span aria-hidden="true" className="shrink-0 text-muted-foreground">
       ·
     </span>
   );
@@ -86,7 +84,7 @@ export function GitStatusLineView({
       role="status"
       data-tone={model.tone}
       className={cn(
-        "flex items-center gap-2 h-8 px-3 shrink-0 border-b border-(--line) text-[12px] min-w-0 overflow-hidden",
+        "flex items-center gap-2 h-8 px-3 shrink-0 border-b border-(--line) text-[11.5px] min-w-0 overflow-hidden",
         TONE_CLASS[model.tone],
       )}
     >
@@ -102,19 +100,13 @@ export function GitStatusLineView({
       {viewing && (
         <>
           {checkoutName && (
-            <button
-              type="button"
-              onClick={onCheckout}
-              className={cn(CHIP, "bg-primary text-primary-foreground hover:bg-primary-hover")}
-            >
-              <GitBranch className="w-3 h-3" aria-hidden="true" />
+            <Button variant="primary" size="sm" onClick={onCheckout} icon={<GitBranch className="w-3 h-3" />}>
               {t("historyView.checkoutThis")}
-            </button>
+            </Button>
           )}
-          <button type="button" onClick={onBack} className={cn(CHIP, "bg-(--chip) text-(--fg2) hover:bg-accent")}>
-            <Undo2 className="w-3 h-3" aria-hidden="true" />
+          <Button variant="secondary" size="sm" onClick={onBack} icon={<Undo2 className="w-3 h-3" />}>
             {t("historyView.backToCurrent")}
-          </button>
+          </Button>
         </>
       )}
       {model.headline && <Dot />}
@@ -132,14 +124,15 @@ export function GitStatusLineView({
           <>
             <Dot />
             {onRemote ? (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={onRemote}
                 title={model.upstream.title}
-                className="shrink-0 px-1.5 -mx-1.5 h-6 rounded-(--radius-chip) tabular-nums hover:bg-accent hover:text-foreground transition-colors"
+                className="tabular-nums -mx-1.5"
               >
                 {model.upstream.text}
-              </button>
+              </Button>
             ) : (
               <span className="shrink-0 tabular-nums" title={model.upstream.title}>
                 {model.upstream.text}

@@ -472,7 +472,7 @@ describe("FollowPanel — review fixes", () => {
     expect(screen.getByText("partly staged")).toBeTruthy();
     expect(screen.getByTestId("diff-viewer").getAttribute("data-staged")).toBe("false");
 
-    fireEvent.click(screen.getByRole("button", { name: "Staged" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Staged" }));
     await waitFor(() => expect(screen.getByTestId("diff-viewer").getAttribute("data-staged")).toBe("true"));
     expect(getFileDiff).toHaveBeenCalledWith(WT, "src/b.ts", true);
     // Picking a side is the user taking over.

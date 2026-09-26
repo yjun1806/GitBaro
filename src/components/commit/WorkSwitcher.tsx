@@ -4,9 +4,10 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useUIStore } from "@/stores/ui";
 import { useStatus } from "@/api/queries";
-import { cn, countChangedFiles } from "@/lib/utils";
+import { countChangedFiles } from "@/lib/utils";
 import { useHistoryViewStore, viewTargetFor } from "@/stores/history-view";
 import { useOpenWorkingChanges } from "./useOpenWorkingChanges";
+import { Segmented, type SegmentedOption } from "@/components/ui/Segmented";
 
 /** 아래 칸이 지금 보여 주는 것: 작업 중인 변경(스테이징·커밋 입력) 또는 고른 커밋. */
 export type WorkMode = "working" | "commit";
@@ -25,17 +26,11 @@ export interface WorkSwitcherProps {
   onCommit: () => void;
 }
 
-const SEGMENT =
-  "inline-flex items-center gap-1.5 min-w-0 h-6 px-2.5 rounded-(--radius-chip) text-[12.5px] font-semibold transition-colors disabled:cursor-not-allowed";
-
 /**
  * 아래 왼쪽 칸 맨 위의 두 칸 전환: [작업 중인 변경 N] [커밋 <sha>]. 지금 무엇을 보는지 늘 보이고,
  * 누르면 그쪽으로 간다. 커밋을 고르면 둘째 칸으로 옮겨지고, 첫 칸을 누르면 스테이징 목록과 커밋
- * 입력으로 돌아간다(커밋 선택은 풀린다).
- *
- * `Segmented`(공용 부품)는 그룹 전체를 한 번에 껐다 켰다 할 뿐 조각별 비활성·이유 풍선말은 지원하지
- * 않는다. 이 칸은 두 조각을 서로 다른 이유로 독립적으로 끄므로(다른 브랜치를 보는 중이라 첫 칸만,
- * 고른 커밋이 없어 둘째 칸만) 손으로 만든 채로 둔다 — 동작을 지키기 위한 의도적 예외.
+ * 입력으로 돌아간다(커밋 선택은 풀린다). 두 조각을 서로 다른 이유로 독립적으로 끈다(다른 브랜치를
+ * 보는 중이라 첫 칸만, 고른 커밋이 없어 둘째 칸만) — `Segmented`의 조각별 `disabled`·`title`로 그린다.
  */
 export function WorkSwitcher({
   mode,
@@ -48,51 +43,41 @@ export function WorkSwitcher({
 }: WorkSwitcherProps) {
   const { t } = useTranslation();
   const workingDisabled = workingDisabledReason !== null;
-  const segmentClass = (active: boolean) =>
-    active
-      ? "bg-card text-foreground shadow-(--shadow-sm)"
-      : "text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground disabled:opacity-60";
+  const commitDisabled = commitShortId === null;
+
+  const options: SegmentedOption<WorkMode>[] = [
+    {
+      value: "working",
+      icon: <FileDiff className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />,
+      label: workingDisabled
+        ? (workingDisabledLabel ?? t("workSwitcher.workingDisabled"))
+        : t("workSwitcher.working", { count: workingCount ?? 0 }),
+      disabled: workingDisabled,
+      title: workingDisabledReason ?? undefined,
+    },
+    {
+      value: "commit",
+      icon: <GitCommitHorizontal className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />,
+      label: commitDisabled ? (
+        t("workSwitcher.noCommit")
+      ) : (
+        <>
+          {t("workSwitcher.commit")} <span className="font-mono">{commitShortId}</span>
+        </>
+      ),
+      disabled: commitDisabled,
+    },
+  ];
+
   return (
-    <div
-      role="group"
-      aria-label={t("workSwitcher.label")}
-      data-testid="work-switcher"
-      data-mode={mode}
-      className="flex items-center gap-0.5 mx-2.5 my-2 p-0.5 rounded-(--radius-item) bg-(--chip) shrink-0"
-    >
-      <button
-        type="button"
-        aria-pressed={mode === "working"}
-        disabled={workingDisabled}
-        title={workingDisabledReason ?? undefined}
-        onClick={onWorking}
-        className={cn(SEGMENT, "flex-1", segmentClass(mode === "working"))}
-      >
-        <FileDiff className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-        <span className="truncate">
-          {workingDisabled
-            ? (workingDisabledLabel ?? t("workSwitcher.workingDisabled"))
-            : t("workSwitcher.working", { count: workingCount ?? 0 })}
-        </span>
-      </button>
-      <button
-        type="button"
-        aria-pressed={mode === "commit"}
-        disabled={commitShortId === null}
-        onClick={onCommit}
-        className={cn(SEGMENT, "flex-1", segmentClass(mode === "commit"))}
-      >
-        <GitCommitHorizontal className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-        <span className="truncate">
-          {commitShortId === null ? (
-            t("workSwitcher.noCommit")
-          ) : (
-            <>
-              {t("workSwitcher.commit")} <span className="font-mono">{commitShortId}</span>
-            </>
-          )}
-        </span>
-      </button>
+    <div data-testid="work-switcher" data-mode={mode} className="mx-2.5 my-2 shrink-0">
+      <Segmented
+        value={mode}
+        onChange={(next) => (next === "working" ? onWorking() : onCommit())}
+        options={options}
+        ariaLabel={t("workSwitcher.label")}
+        fill
+      />
     </div>
   );
 }

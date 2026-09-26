@@ -7,13 +7,17 @@ import { threadsByFile } from "./pr-model";
 import { CheckIcon, PrAvatar, ReviewerRow, TimeAgo } from "./PrBits";
 import { PrMarkdown } from "./PrMarkdown";
 import { ConversationEntry, ThreadLineLabel, ThreadStateChips } from "./PrThread";
+import { Count, StatusChip } from "@/components/ui/marks";
+import { EmptyState } from "@/components/ui/EmptyState";
 
+// 접히지 않는 구역 제목이라 `SectionLabel`(접었을 때만 수를 보인다)이 아니라 늘 수를 보이는
+// 이 화면 전용 제목을 쓴다. 글자·색은 SectionLabel과 같은 토큰(D16).
 function Section({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-1.5">
-      <h3 className="text-[11px] font-semibold text-(--faint)">
+      <h3 className="flex items-center gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
         {title}
-        {count !== undefined && <span className="ml-1 font-normal">{count}</span>}
+        {count !== undefined && <Count value={count} tone="muted" />}
       </h3>
       {children}
     </section>
@@ -27,7 +31,7 @@ function MoreOnGitHub({ url }: { url: string }) {
     <button
       type="button"
       onClick={() => actions.openInBrowser(url)}
-      className="self-start text-[11px] text-primary hover:underline underline-offset-2"
+      className="self-start text-[11.5px] text-primary hover:underline underline-offset-2"
     >
       {t("pr.moreOnGitHub")}
     </button>
@@ -54,7 +58,7 @@ export function PrOverview({ pr, onOpenThread }: PrOverviewProps) {
     <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="flex flex-col gap-5 px-5 py-4 max-w-[860px]">
         <Section title={t("pr.section.description")}>
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
             <PrAvatar login={pr.author.login} url={pr.author.avatarUrl} />
             <span className="font-semibold text-(--fg2)">{pr.author.login}</span>
             <TimeAgo iso={pr.createdAt} />
@@ -77,13 +81,16 @@ export function PrOverview({ pr, onOpenThread }: PrOverviewProps) {
               <Section title={t("pr.section.labels")}>
                 <ul className="flex flex-wrap gap-1">
                   {pr.labels.map((l) => (
-                    <li
-                      key={l.name}
-                      className="inline-flex items-center gap-1 h-[18px] px-1.5 rounded-(--radius-pill) border border-(--line) text-[10.5px] text-(--fg2)"
-                    >
-                      {/* 라벨 색은 GitHub이 정한 값이라 점으로만 쓴다(글자색은 테마 토큰). */}
-                      <span aria-hidden className="w-2 h-2 rounded-full" style={{ backgroundColor: `#${l.color}` }} />
-                      {l.name}
+                    <li key={l.name}>
+                      <StatusChip
+                        tone="neutral"
+                        icon={
+                          // 라벨 색은 GitHub이 정한 값이라 점으로만 쓴다(글자색은 테마 토큰).
+                          <span aria-hidden className="w-2 h-2 rounded-full" style={{ backgroundColor: `#${l.color}` }} />
+                        }
+                      >
+                        {l.name}
+                      </StatusChip>
                     </li>
                   ))}
                 </ul>
@@ -94,7 +101,7 @@ export function PrOverview({ pr, onOpenThread }: PrOverviewProps) {
 
         <Section title={t("pr.section.checks")} count={pr.checks.length}>
           {pr.checks.length === 0 ? (
-            <p className="text-xs text-muted-foreground">{t("pr.noChecks")}</p>
+            <EmptyState layout="row" title={t("pr.noChecks")} />
           ) : (
             <ul className="flex flex-col">
               {pr.checks.map((c, i) => (
@@ -104,11 +111,11 @@ export function PrOverview({ pr, onOpenThread }: PrOverviewProps) {
                     disabled={!c.url}
                     onClick={() => c.url && actions.openInBrowser(c.url)}
                     title={c.url ? t("pr.openOnGitHub") : undefined}
-                    className="w-full flex items-center gap-2 px-1.5 py-1 rounded text-left text-[12px] enabled:hover:bg-accent transition-colors"
+                    className="w-full h-7 flex items-center gap-2 px-1.5 rounded-(--radius-chip) text-left text-[12.5px] enabled:hover:bg-accent transition-colors"
                   >
                     <CheckIcon check={c} />
                     <span className="truncate font-medium">{c.name}</span>
-                    {c.description && <span className="truncate text-[11px] text-muted-foreground">{c.description}</span>}
+                    {c.description && <span className="truncate text-[11.5px] text-muted-foreground">{c.description}</span>}
                   </button>
                 </li>
               ))}
@@ -125,12 +132,12 @@ export function PrOverview({ pr, onOpenThread }: PrOverviewProps) {
                   type="button"
                   onClick={() => actions.openInBrowser(`${pr.url}/commits/${c.oid}`)}
                   title={t("pr.openOnGitHub")}
-                  className="w-full flex items-center gap-2 px-1.5 py-1 rounded text-left text-[12px] hover:bg-accent transition-colors"
+                  className="w-full h-7 flex items-center gap-2 px-1.5 rounded-(--radius-chip) text-left text-[12.5px] hover:bg-accent transition-colors"
                 >
-                  <span className="font-mono text-[11px] text-(--faint) shrink-0">{c.oid.slice(0, 7)}</span>
+                  <span className="font-mono text-[11.5px] text-muted-foreground shrink-0">{c.oid.slice(0, 7)}</span>
                   <span className="truncate flex-1 min-w-0">{c.headline}</span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">{c.author?.login ?? c.authorName}</span>
-                  <TimeAgo iso={c.authoredAt} className="shrink-0 text-[11px] text-muted-foreground" />
+                  <span className="shrink-0 text-[11.5px] text-muted-foreground">{c.author?.login ?? c.authorName}</span>
+                  <TimeAgo iso={c.authoredAt} className="shrink-0 text-[11.5px] text-muted-foreground" />
                 </button>
               </li>
             ))}
@@ -140,12 +147,12 @@ export function PrOverview({ pr, onOpenThread }: PrOverviewProps) {
 
         <Section title={t("pr.section.codeComments")} count={threadCount}>
           {threadCount === 0 ? (
-            <p className="text-xs text-muted-foreground">{t("pr.noCodeComments")}</p>
+            <EmptyState layout="row" title={t("pr.noCodeComments")} />
           ) : (
             <ul className="flex flex-col gap-2">
               {byFile.map(([path, entry]) => (
                 <li key={path} className="flex flex-col">
-                  <span className="font-mono text-[11px] text-(--fg2) truncate" title={path}>
+                  <span className="font-mono text-[11.5px] text-(--fg2) truncate" title={path}>
                     {path}
                   </span>
                   {[...entry.current, ...entry.outdated].map((thread) => (
@@ -175,7 +182,7 @@ export function PrOverview({ pr, onOpenThread }: PrOverviewProps) {
 
         <Section title={t("pr.section.conversation")} count={pr.conversation.length}>
           {pr.conversation.length === 0 ? (
-            <p className="text-xs text-muted-foreground">{t("pr.noConversation")}</p>
+            <EmptyState layout="row" title={t("pr.noConversation")} />
           ) : (
             <ol className="flex flex-col">
               {pr.conversation.map((item) => (

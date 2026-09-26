@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { clsx } from "clsx";
 import { CaseSensitive, ChevronDown, ChevronUp, X } from "lucide-react";
+import { buttonClass } from "@/components/ui/Button";
+import { SearchInput } from "@/components/ui/TextInput";
 
 interface DiffFindBarProps {
   query: string;
@@ -21,8 +23,7 @@ interface DiffFindBarProps {
   onClose: () => void;
 }
 
-const ICON_BUTTON =
-  "flex items-center justify-center w-6 h-6 rounded-(--radius-chip) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-40 disabled:pointer-events-none";
+const ICON_BUTTON = buttonClass({ iconOnly: true, size: "sm", variant: "ghost" });
 
 /** diff 위에 뜨는 찾기 칸. 찾기 자체는 부모가 하고, 여기는 입력과 버튼만 둔다. */
 export function DiffFindBar({
@@ -69,16 +70,16 @@ export function DiffFindBar({
       role="search"
       className="flex items-center gap-1 px-3 h-[32px] bg-card border-b border-(--line) shrink-0"
     >
-      <input
+      <SearchInput
         ref={inputRef}
-        type="text"
+        size="sm"
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={t("diffFind.placeholder")}
         aria-label={t("diffFind.placeholder")}
         spellCheck={false}
-        className="flex-1 min-w-0 h-6 px-2 rounded-(--radius-chip) bg-(--chip) text-xs font-mono text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+        className="font-mono"
       />
       <span className="shrink-0 min-w-[64px] text-right text-[11.5px] tabular-nums text-muted-foreground" aria-live="polite">
         {status}
@@ -91,7 +92,7 @@ export function DiffFindBar({
         title={t("diffFind.caseSensitive")}
         className={clsx(ICON_BUTTON, caseSensitive && "bg-accent text-foreground")}
       >
-        <CaseSensitive className="w-4 h-4" />
+        <CaseSensitive className="w-3.5 h-3.5" />
       </button>
       <button
         type="button"

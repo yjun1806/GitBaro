@@ -6,6 +6,8 @@ import { AddRepoDialog } from "@/components/repository/AddRepoDialog";
 import { CloneDialog } from "@/components/repository/CloneDialog";
 import { useAddRepository, type CloneParams } from "@/hooks/useAddRepository";
 import { useAccountStore } from "@/stores/account";
+import { toolbarButtonClass, TOOLBAR_ICON } from "@/components/toolbar/toolbar-button";
+import { cn } from "@/lib/utils";
 
 interface AddRepoButtonProps {
   /** 더한 저장소를 연다(`useSelectRepo`). */
@@ -36,9 +38,9 @@ export function AddRepoButton({ onAdded }: AddRepoButtonProps) {
       <button
         type="button"
         onClick={() => setStep("choose")}
-        className="mt-1 shrink-0 flex items-center gap-2 h-[30px] px-2.5 rounded-[var(--radius-item)] text-xs text-muted-foreground hover:bg-(--frame-hover) hover:text-foreground"
+        className={cn("mt-1 w-full justify-start", toolbarButtonClass())}
       >
-        <Plus className="w-[13px] h-[13px]" aria-hidden="true" />
+        <Plus className={TOOLBAR_ICON} aria-hidden="true" />
         {t("sidebarTree.addRepo")}
       </button>
       {step === "choose" && (

@@ -5,6 +5,7 @@ import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useSelectionStore } from "@/stores/selection";
 import { useWorkflowRuns } from "@/api/queries";
 import { ActionsList } from "./ActionsList";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export function ActionsView() {
   const { t } = useTranslation();
@@ -26,30 +27,16 @@ export function ActionsView() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="text-xs font-medium">{t("actions.title")}</span>
+      <div className="flex items-center h-8 px-3 border-b border-border">
+        <span className="text-[12.5px] font-bold">{t("actions.title")}</span>
       </div>
 
       {/* Guard: no account */}
       {!accountId ? (
-        <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-12">
-          <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
-            <UserX className="w-6 h-6" />
-          </div>
-          <div className="text-center px-4">
-            <p className="text-sm font-medium">{t("actions.noAccount")}</p>
-          </div>
-        </div>
+        <EmptyState icon={UserX} title={t("actions.noAccount")} />
       ) : !hasRemote ? (
         /* Guard: no remote */
-        <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-12">
-          <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
-            <WifiOff className="w-6 h-6" />
-          </div>
-          <div className="text-center px-4">
-            <p className="text-sm font-medium">{t("actions.noRemote")}</p>
-          </div>
-        </div>
+        <EmptyState icon={WifiOff} title={t("actions.noRemote")} />
       ) : (
         /* Normal: show runs */
         <ActionsList

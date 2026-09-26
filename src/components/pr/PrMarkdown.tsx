@@ -36,7 +36,7 @@ export function PrMarkdown({ source, placeholder, className, sourceUrl }: PrMark
   };
 
   if (source.trim() === "") {
-    return placeholder ? <p className={cn("text-xs italic text-muted-foreground", className)}>{placeholder}</p> : null;
+    return placeholder ? <p className={cn("text-[11.5px] italic text-muted-foreground", className)}>{placeholder}</p> : null;
   }
   return (
     // 살균한 HTML이다(`pr-markdown.ts`). 링크 누름만 가로챈다.

@@ -1,11 +1,11 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import clsx from "clsx";
 import type { BinaryPreview } from "@/types";
 import { ImageDiffTwoUp } from "./ImageDiffTwoUp";
 import { ImageDiffSwipe } from "./ImageDiffSwipe";
 import { ImageDiffOnionSkin } from "./ImageDiffOnionSkin";
 import { ImageDiffDifference } from "./ImageDiffDifference";
+import { Segmented } from "@/components/ui/Segmented";
 
 type DiffMode = "two-up" | "swipe" | "onion-skin" | "difference";
 
@@ -34,11 +34,11 @@ export function ImageDiff({ filePath: _filePath, preview }: ImageDiffProps) {
     [preview.newBase64, preview.meta.mimeType],
   );
 
-  const modes: { key: DiffMode; label: string }[] = [
-    { key: "two-up", label: t("diff.imageDiff.twoUp") },
-    { key: "swipe", label: t("diff.imageDiff.swipe") },
-    { key: "onion-skin", label: t("diff.imageDiff.onionSkin") },
-    { key: "difference", label: t("diff.imageDiff.difference") },
+  const modes: { value: DiffMode; label: string }[] = [
+    { value: "two-up", label: t("diff.imageDiff.twoUp") },
+    { value: "swipe", label: t("diff.imageDiff.swipe") },
+    { value: "onion-skin", label: t("diff.imageDiff.onionSkin") },
+    { value: "difference", label: t("diff.imageDiff.difference") },
   ];
 
   const hasBoth = oldSrc != null && newSrc != null;
@@ -47,17 +47,7 @@ export function ImageDiff({ filePath: _filePath, preview }: ImageDiffProps) {
     <div className="flex-1 flex flex-col gap-3 p-4 overflow-auto">
       {hasBoth && (
         <div className="flex justify-center">
-          <div className="image-diff-mode-bar">
-            {modes.map((m) => (
-              <button
-                key={m.key}
-                className={clsx("image-diff-mode-btn", mode === m.key && "active")}
-                onClick={() => setMode(m.key)}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
+          <Segmented size="sm" ariaLabel={t("diff.imageDiff.modeLabel")} value={mode} onChange={setMode} options={modes} />
         </div>
       )}
 

@@ -105,7 +105,7 @@ export function SidebarHoverCardProvider({ data, children }: { data: SidebarTree
             role="tooltip"
             data-testid="sidebar-hover-card"
             className={cn(
-              "fixed z-[90] pointer-events-none rounded-[10px] px-3 py-2.5 flex flex-col gap-1 text-[12px] animate-fade-in",
+              "fixed z-[90] pointer-events-none rounded-(--radius-item) px-3 py-2.5 flex flex-col gap-1 text-[12.5px] animate-fade-in",
               FLOATING_SURFACE,
             )}
             style={{ top: placement.top, left: placement.left, width: CARD_WIDTH_PX }}
@@ -132,7 +132,7 @@ function Line({ children, muted = false, mono = false }: { children: ReactNode; 
       className={cn(
         "leading-[17px] break-words",
         muted ? "text-muted-foreground" : "text-(--fg2)",
-        mono && "font-mono text-[11px] break-all",
+        mono && "font-mono text-[11.5px] break-all",
       )}
     >
       {children}
@@ -176,7 +176,7 @@ function WorktreeDetails({
 
   return (
     <>
-      <p className="font-mono text-[12px] font-semibold text-foreground break-all">
+      <p className="font-mono text-[12.5px] font-semibold text-foreground break-all">
         {branch ?? (head ? `${t("sidebarTree.card.detached")} · ${head.slice(0, 7)}` : t("sidebarTree.card.detached"))}
       </p>
       {isPrimary && (
@@ -212,7 +212,7 @@ function BranchDetails({ subject }: { subject: Extract<HoverSubject, { kind: "br
   const { t } = useTranslation();
   return (
     <>
-      <p className="font-mono text-[12px] font-semibold text-foreground break-all">{subject.branch}</p>
+      <p className="font-mono text-[12.5px] font-semibold text-foreground break-all">{subject.branch}</p>
       <Line>{t("sidebarTree.card.viewOnly")}</Line>
     </>
   );
@@ -230,7 +230,7 @@ function RepoDetails({ subject, data }: { subject: Extract<HoverSubject, { kind:
   return (
     <>
       {repo && (
-        <p className="text-[12px] font-semibold text-foreground break-words">{alias ?? repo.name}</p>
+        <p className="text-[12.5px] font-semibold text-foreground break-words">{alias ?? repo.name}</p>
       )}
       {repo && alias && <Line muted>{t("sidebarTree.card.folderName", { name: repo.name })}</Line>}
       <Line muted mono>

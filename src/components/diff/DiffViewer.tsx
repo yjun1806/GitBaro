@@ -19,6 +19,9 @@ import { availableModes, defaultMode, diffResetKey, type DiffViewMode } from "./
 import { useUIStore } from "@/stores/ui";
 import { usePreferencesStore } from "@/stores/preferences";
 import { useToastStore } from "@/stores/toast";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Notice } from "@/components/ui/Notice";
 
 const EXT_LANG_MAP: Record<string, string> = {
   ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
@@ -239,19 +242,17 @@ export function DiffViewer({
 
   if (!diff) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-        {t("diff.noSelection")}
-        {/* 크게 보는 중에 diff가 비면 머리의 버튼이 없으므로 여기서 되돌린다. */}
-        {maximizable && isMaximized && (
-          <button
-            type="button"
-            onClick={() => setMaximized(false)}
-            className="h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
-          >
-            {t("diff.restoreSize")}
-          </button>
-        )}
-      </div>
+      <EmptyState
+        title={t("diff.noSelection")}
+        // 크게 보는 중에 diff가 비면 머리의 버튼이 없으므로 여기서 되돌린다.
+        action={
+          maximizable && isMaximized ? (
+            <Button size="sm" variant="secondary" onClick={() => setMaximized(false)}>
+              {t("diff.restoreSize")}
+            </Button>
+          ) : undefined
+        }
+      />
     );
   }
 
@@ -273,13 +274,11 @@ export function DiffViewer({
           {diff.binaryPreview ? (
             <BinaryDiffViewer filePath={diff.filePath} preview={diff.binaryPreview} />
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-muted-foreground">
-              <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
-                <FileQuestion className="w-6 h-6" />
-              </div>
-              <p className="text-sm font-medium">{t("diff.binary")}</p>
-              <p className="text-xs">{diff.filePath.split(".").pop()?.toUpperCase()}</p>
-            </div>
+            <EmptyState
+              icon={FileQuestion}
+              title={t("diff.binary")}
+              description={diff.filePath.split(".").pop()?.toUpperCase()}
+            />
           )}
         </div>
       </div>
@@ -308,16 +307,17 @@ export function DiffViewer({
       {find.open && <DiffFindBar {...find.bar} />}
 
       {viewMode !== "document" && !wantHighlight && (
-        <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs bg-surface border-b border-border text-muted-foreground">
-          <span>{t("diff.highlightDisabled", { lines: stats.total })}</span>
-          <button
-            type="button"
-            onClick={() => setForceHighlight(true)}
-            className="shrink-0 px-2 py-0.5 rounded font-medium text-foreground underline underline-offset-2 hover:bg-accent"
-          >
-            {t("diff.enableHighlight")}
-          </button>
-        </div>
+        <Notice
+          tone="neutral"
+          banner
+          actions={
+            <Button size="sm" variant="ghost" onClick={() => setForceHighlight(true)}>
+              {t("diff.enableHighlight")}
+            </Button>
+          }
+        >
+          {t("diff.highlightDisabled", { lines: stats.total })}
+        </Notice>
       )}
 
       {viewMode === "document" ? (
@@ -354,12 +354,7 @@ export function DiffViewer({
           onFindResult={find.onFindResult}
         />
       ) : (
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
-          <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
-            <FileQuestion className="w-6 h-6" />
-          </div>
-          <p className="text-sm font-medium">{t("diff.noSelection")}</p>
-        </div>
+        <EmptyState icon={FileQuestion} title={t("diff.noSelection")} />
       )}
       {menu && (
         <DiffContextMenu

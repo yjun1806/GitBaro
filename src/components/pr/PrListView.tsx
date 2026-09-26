@@ -15,7 +15,9 @@ import { selectedPrNumber, usePrViewStore } from "./pr-view";
 import { usePrMenu } from "./usePrMenu";
 import { BranchPair, CiChip, DraftChip, PrAvatar, PrStateIcon, ReviewDecisionChip, TimeAgo } from "./PrBits";
 import { PrError, PrLoading, PrPlaceholder } from "./PrStates";
-import { BusyIcon } from "@/components/ui/Spinner";
+import { Button } from "@/components/ui/Button";
+import { Segmented } from "@/components/ui/Segmented";
+import { Count, StatusChip } from "@/components/ui/marks";
 
 const FILTERS: PrStateFilter[] = ["open", "closed", "all"];
 
@@ -78,45 +80,37 @@ export function PrListView() {
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-(--line) shrink-0">
-        <div role="radiogroup" aria-label={t("pr.filterLabel")} className="flex items-center gap-0.5 p-0.5 rounded-(--radius-chip) bg-(--chip)">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              type="button"
-              role="radio"
-              aria-checked={filter === f}
-              onClick={() => setFilter(f)}
-              className={cn(
-                "h-5 px-2 rounded-[5px] text-[11px] font-semibold transition-colors",
-                filter === f ? "bg-card text-foreground shadow-(--shadow-sm)" : "text-(--fg2) hover:text-foreground",
-              )}
-            >
-              {t(`pr.filter.${f}`)}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          size="sm"
+          ariaLabel={t("pr.filterLabel")}
+          value={filter}
+          onChange={setFilter}
+          options={FILTERS.map((f) => ({ value: f, label: t(`pr.filter.${f}`) }))}
+        />
         <span className="flex-1" />
-        <button
-          type="button"
+        <Button
+          iconOnly
+          size="sm"
+          variant="ghost"
           onClick={() => void handleRefresh()}
           disabled={!repoPath || !accountId || refreshing}
-          aria-busy={refreshing}
+          busy={refreshing}
           title={t("pr.refresh")}
           aria-label={t("pr.refresh")}
-          className="flex items-center justify-center w-6 h-6 rounded-(--radius-item) text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40 transition-colors"
         >
-          <BusyIcon busy={refreshing} icon={<RefreshCw className="w-3.5 h-3.5" />} />
-        </button>
+          <RefreshCw className="w-3.5 h-3.5" />
+        </Button>
         {repoUrl && (
-          <button
-            type="button"
+          <Button
+            iconOnly
+            size="sm"
+            variant="ghost"
             onClick={() => actions.openInBrowser(`${repoUrl}/pulls`)}
             title={t("pr.openListOnGitHub")}
             aria-label={t("pr.openListOnGitHub")}
-            className="flex items-center justify-center w-6 h-6 rounded-(--radius-item) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <Globe className="w-3.5 h-3.5" />
-          </button>
+          </Button>
         )}
       </div>
       {body}
@@ -185,22 +179,18 @@ export function PrListItem({ pr, isCurrent, isSelected, isHighlighted, onClick, 
       onClick={onClick}
       onContextMenu={onContextMenu}
       className={cn(
-        "w-full flex items-start gap-2.5 px-3 py-2 text-left border-b border-(--line) select-none transition-colors",
-        isSelected ? "bg-(--acc-sel)" : isHighlighted ? "bg-accent ring-1 ring-primary/30" : "hover:bg-accent",
+        "w-full min-h-11 flex items-start gap-2.5 px-3 py-2 text-left border-b border-(--line) select-none transition-colors",
+        isSelected ? "bg-(--acc-sel)" : isHighlighted ? "bg-accent ring-1 ring-inset ring-primary/30" : "hover:bg-accent",
       )}
     >
       <PrStateIcon pr={pr} className="mt-0.5" />
       <span className="flex-1 min-w-0 flex flex-col gap-1">
         <span className="flex items-baseline gap-1.5 min-w-0">
           <span className="text-[12.5px] font-semibold text-foreground truncate">{pr.title}</span>
-          <span className="text-[11px] text-(--faint) shrink-0">#{pr.number}</span>
-          {isCurrent && (
-            <span className="shrink-0 h-[16px] px-1.5 rounded-(--radius-chip) bg-primary/15 text-primary text-[10px] font-bold leading-[16px]">
-              {t("pr.currentBranch")}
-            </span>
-          )}
+          <span className="text-[11.5px] text-muted-foreground shrink-0">#{pr.number}</span>
+          {isCurrent && <StatusChip tone="info">{t("pr.currentBranch")}</StatusChip>}
         </span>
-        <span className="flex items-center gap-1.5 min-w-0 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5 min-w-0 text-[11.5px] text-muted-foreground">
           <PrAvatar login={pr.author.login} url={pr.author.avatarUrl} size={14} />
           <span className="shrink-0 font-medium text-(--fg2)">{pr.author.login}</span>
           <BranchPair pr={pr} className="min-w-0" />
@@ -214,11 +204,11 @@ export function PrListItem({ pr, isCurrent, isSelected, isHighlighted, onClick, 
             {pr.ciState && <CiChip state={pr.ciState} />}
             {talk > 0 && (
               <span
-                className="inline-flex items-center gap-0.5 text-[10.5px] text-muted-foreground"
+                className="inline-flex items-center gap-1 text-muted-foreground"
                 title={t("pr.commentCount", { count: talk })}
               >
-                <MessageSquare className="w-3 h-3" />
-                {talk}
+                <MessageSquare className="w-3 h-3" aria-hidden="true" />
+                <Count value={talk} tone="muted" />
               </span>
             )}
           </span>

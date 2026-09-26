@@ -95,7 +95,7 @@ export function TreeRowFrame({
       }
     >
       <ChevronDown
-        className={cn("w-2.5 h-2.5 text-[var(--faint)] transition-transform", !expanded && "-rotate-90")}
+        className={cn("w-2.5 h-2.5 text-muted-foreground transition-transform", !expanded && "-rotate-90")}
         strokeWidth={2.6}
       />
     </span>

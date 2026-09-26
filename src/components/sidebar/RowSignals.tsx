@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { liveDotLabel } from "./row-meta";
+import { Count, Dot } from "@/components/ui/marks";
 
 export interface RowSignalValues {
   /** 커밋 안 한 파일 수 */
@@ -47,14 +48,8 @@ export function RowSignals({ values, now }: { values: RowSignalValues; now: numb
             live && !watched && "opacity-40",
           )}
         >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "w-[7px] h-[7px] rounded-full bg-[var(--live)] shrink-0",
-              live && "shadow-[0_0_0_3px_var(--live-soft)] animate-live-ring",
-            )}
-          />
-          {dirty > 0 && dirty}
+          <Dot on live={live} />
+          {dirty > 0 && <Count value={dirty} tone="live" />}
         </span>
       )}
       {behind > 0 && (
@@ -63,7 +58,7 @@ export function RowSignals({ values, now }: { values: RowSignalValues; now: numb
           title={t("sidebarTree.badge.behind", { count: behind })}
           className="text-(--fg2) animate-fade-in"
         >
-          ↓{behind}
+          <Count value={behind} prefix="↓" tone="sync" />
         </span>
       )}
       {ahead > 0 && (
@@ -72,7 +67,7 @@ export function RowSignals({ values, now }: { values: RowSignalValues; now: numb
           title={t("sidebarTree.card.toPush", { count: ahead })}
           className="text-(--fg2) animate-fade-in"
         >
-          ↑{ahead}
+          <Count value={ahead} prefix="↑" tone="sync" />
         </span>
       )}
     </span>
