@@ -67,8 +67,10 @@ export function repoLaneColor(repoPath: string): string {
  * 저장소마다 최신 순인 목록 여러 개를 시각순 하나로 합친다. 같은 저장소 안의 순서는 그대로
  * 둔다(시각이 뒤섞인 rebase 커밋도 부모가 자식보다 위로 올라가지 않는다). 시각이 같으면 앞
  * 저장소가 먼저다.
+ *
+ * `src/components/scope`의 영역별 레인 합치기(`buildRegionRows`)도 이 함수를 그대로 쓴다.
  */
-function mergeByTime<T>(lists: readonly (readonly T[])[], timeOf: (item: T) => number): T[] {
+export function mergeByTime<T>(lists: readonly (readonly T[])[], timeOf: (item: T) => number): T[] {
   const idx = lists.map(() => 0);
   const out: T[] = [];
   for (;;) {
