@@ -22,6 +22,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), ask: vi.fn() }));
 import { getBranches, getWorktrees } from "@/api/commands";
 import { useHistoryViewStore } from "@/stores/history-view";
 import { RepoTree } from "../RepoTree";
+import type { WorkingBranchRow } from "../tree-model";
 import { SIDEBAR_WATCH_KEY, type SidebarTreeData } from "../useSidebarTreeData";
 
 const NOW = 2_000_000_000_000;
@@ -57,6 +58,8 @@ function makeData(
     watched?: string[];
     overflow?: string[];
     quietWorktree?: boolean;
+    /** 저장소 경로별 작업 중인 브랜치 줄(`workingBranchRowsOf`가 그대로 돌려준다). */
+    workingBranches?: Record<string, WorkingBranchRow[]>;
   } = {},
 ): SidebarTreeData {
   const worktreesByRepo = {
@@ -86,7 +89,26 @@ function makeData(
     overflow: opts.overflow ?? [],
     now: NOW,
     branchOf: (p) => branches[p] ?? null,
-    defaultBranchOf: (p) => ({ path: p, name: "main", hasLocal: true, remoteRef: "origin/main" }),
+    workingBranchRowsOf: (p) => opts.workingBranches?.[p] ?? [],
+  };
+}
+
+/** 사이드바 작업 중인 브랜치 줄 하나(테스트 재료). 기본은 「원격에 없는 커밋」 이유다. */
+function wbRow(name: string, over: Partial<WorkingBranchRow> = {}): WorkingBranchRow {
+  return {
+    branch: {
+      name,
+      isDefault: false,
+      worktreePath: null,
+      upstream: null,
+      behind: 0,
+      unpushed: 1,
+      lastCommitTime: 0,
+      mergedIntoDefault: false,
+    },
+    reasons: ["unpushed"],
+    prNumber: null,
+    ...over,
   };
 }
 
@@ -122,7 +144,7 @@ function renderTree(data: SidebarTreeData, onSelectRepo = vi.fn()) {
 
 const item = (name: string | RegExp) => screen.getByRole("treeitem", { name });
 const PRIMARY_MAIN = "main · Primary folder";
-const signal = (row: HTMLElement, kind: "dirty" | "ahead") => row.querySelector(`[data-signal="${kind}"]`);
+const signal = (row: HTMLElement, kind: "dirty" | "ahead" | "behind") => row.querySelector(`[data-signal="${kind}"]`);
 const hoverCard = () => screen.queryByTestId("sidebar-hover-card");
 
 function branch(name: string, over: Partial<BranchInfo> = {}): BranchInfo {
@@ -185,15 +207,20 @@ describe("RepoTree — cards and levels", () => {
     expect(item("solo").closest(".bg-card")).not.toBe(item("product").closest(".bg-card"));
   });
 
-  it("lists one line per working folder by branch name, then the default branch as view only", async () => {
+  it("lists one line per working folder by branch name, with no row for the default branch", () => {
     renderTree(makeData(baseSignals));
     // 저장소 카드는 기본으로 펼쳐져 기본 폴더 줄이 보인다(폴더 이름이 아니라 브랜치 이름).
     expect(item("dev · Primary folder")).toHaveAttribute("aria-level", "3");
-    // 어느 폴더도 main을 체크아웃하지 않았으므로 보기만 하는 main 줄이 뒤에 붙는다.
-    const viewRow = await screen.findByRole("treeitem", { name: "View main (no checkout)" });
-    expect(viewRow.querySelector(".font-mono")).toHaveTextContent("main");
+    // 어느 폴더도 main을 체크아웃하지 않아도, main(기본 브랜치)은 줄을 따로 갖지 않는다(저장소 줄이 대신한다).
+    expect(screen.queryByRole("treeitem", { name: "main" })).toBeNull();
+  });
+
+  it("lists a working-branch row after the folder rows for a branch nothing has checked out", async () => {
+    renderTree(makeData(baseSignals, { workingBranches: { [SOLO]: [wbRow("feat/spike")] } }));
+    const row = await screen.findByRole("treeitem", { name: "feat/spike" });
+    expect(row.querySelector(".font-mono")).toHaveTextContent("feat/spike");
     expect(
-      item("dev · Primary folder").compareDocumentPosition(viewRow) & Node.DOCUMENT_POSITION_FOLLOWING,
+      item("dev · Primary folder").compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
@@ -208,9 +235,6 @@ describe("RepoTree — cards and levels", () => {
     expect(item("feat/login").style.paddingLeft).toBe("32px");
     expect(item("api").style.paddingLeft).toBe("20px");
     expect(item("product").style.paddingLeft).toBe("8px");
-    // main은 기본 폴더가 체크아웃하고 있어 워크스페이스 카드 안에는 보기 줄이 따로 없다.
-    const productCard = item("product").closest(".bg-card") as HTMLElement;
-    expect(within(productCard).queryByRole("treeitem", { name: "View main (no checkout)" })).toBeNull();
     expect(item("feat/login").closest(".bg-card")).toBe(item("product").closest(".bg-card"));
   });
 
@@ -293,6 +317,55 @@ describe("RepoTree — signals", () => {
   it("does not mark changes older than 10 minutes as live", () => {
     renderTree(makeData(baseSignals, { lastChangedAt: { [WEB]: NOW - 11 * 60_000 } }));
     expect(within(item("web")).queryAllByRole("img")).toHaveLength(0);
+  });
+});
+
+describe("RepoTree — working branches", () => {
+  it("mutes the name and shows its own ↓↑ counts, regardless of the reason", async () => {
+    renderTree(
+      makeData(baseSignals, {
+        workingBranches: {
+          [SOLO]: [
+            wbRow("feat/spike", {
+              branch: {
+                name: "feat/spike",
+                isDefault: false,
+                worktreePath: null,
+                upstream: null,
+                behind: 3,
+                unpushed: 2,
+                lastCommitTime: 0,
+                mergedIntoDefault: false,
+              },
+            }),
+          ],
+        },
+      }),
+    );
+    const row = await screen.findByRole("treeitem", { name: "feat/spike" });
+    expect(row.querySelector(".font-mono")).toHaveClass("text-muted-foreground");
+    expect(row.querySelector("svg.lucide-git-branch")).toBeTruthy();
+    expect(row.querySelector("svg.lucide-git-pull-request")).toBeFalsy();
+    expect(signal(row, "behind")).toHaveTextContent("↓3");
+    expect(signal(row, "ahead")).toHaveTextContent("↑2");
+    // 이 줄에는 워크트리가 없어 커밋 안 한 파일 점은 없다.
+    expect(signal(row, "dirty")).toBeNull();
+  });
+
+  it("swaps the branch icon for the PR icon when the row has an open PR", async () => {
+    renderTree(makeData(baseSignals, { workingBranches: { [SOLO]: [wbRow("feat/pr", { reasons: ["openPr"], prNumber: 58 })] } }));
+    const row = await screen.findByRole("treeitem", { name: "feat/pr" });
+    expect(row.querySelector("svg.lucide-git-pull-request")).toBeTruthy();
+    expect(row.querySelector("svg.lucide-git-branch")).toBeFalsy();
+  });
+
+  it("shows a working-branch row for one repository while another with no data shows none", async () => {
+    renderTree(makeData(baseSignals, { workingBranches: { [SOLO]: [wbRow("feat/spike")] } }));
+    expect(await screen.findByRole("treeitem", { name: "feat/spike" })).toBeInTheDocument();
+    // API에는 자료를 주지 않았다 — 그 저장소 카드를 펴도 작업 폴더 줄(feat/login)만 있고 다른 줄은 없다.
+    fireEvent.click(item("api"));
+    expect(item("feat/login")).toBeInTheDocument();
+    expect(screen.getAllByRole("treeitem", { name: "feat/spike" })).toHaveLength(1);
   });
 });
 
@@ -383,19 +456,19 @@ describe("RepoTree — search and selection", () => {
     expect(onSelectRepo).toHaveBeenLastCalledWith(API);
   });
 
-  it("views the default branch without checking it out from its view-only line", async () => {
+  it("views a working branch without checking it out from its row", async () => {
     useRepositoryStore.setState({ activeRepoPath: SOLO, activeRepo: repos[2] });
-    renderTree(makeData(baseSignals));
+    renderTree(makeData(baseSignals, { workingBranches: { [SOLO]: [wbRow("feat/spike")] } }));
     expect(item("dev · Primary folder")).toHaveAttribute("aria-selected", "true");
-    fireEvent.click(await screen.findByRole("treeitem", { name: "View main (no checkout)" }));
+    fireEvent.click(await screen.findByRole("treeitem", { name: "feat/spike" }));
     await waitFor(() =>
       expect(useHistoryViewStore.getState()).toMatchObject({
         repoPath: SOLO,
-        target: { kind: "ref", name: "main", isRemote: false },
+        target: { kind: "ref", name: "feat/spike", isRemote: false },
       }),
     );
-    // 보는 동안 선택 표시는 보기 줄로 옮겨 간다.
-    expect(item("View main (no checkout)")).toHaveAttribute("aria-selected", "true");
+    // 보는 동안 선택 표시는 그 줄로 옮겨 간다.
+    expect(item("feat/spike")).toHaveAttribute("aria-selected", "true");
     expect(item("dev · Primary folder")).toHaveAttribute("aria-selected", "false");
   });
 
@@ -560,20 +633,20 @@ describe("RepoTree — right-click menus", () => {
     expect((menuItem("Open primary folder") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("checks out the view-only default branch only when that repository is open", async () => {
-    renderTree(makeData(baseSignals));
-    fireEvent.contextMenu(await screen.findByRole("treeitem", { name: "View main (no checkout)" }));
+  it("checks out a working branch only when that repository is open", async () => {
+    renderTree(makeData(baseSignals, { workingBranches: { [SOLO]: [wbRow("feat/spike")] } }));
+    fireEvent.contextMenu(await screen.findByRole("treeitem", { name: "feat/spike" }));
     expect(menuLabels()).toEqual(["View without checkout", "Check out here", "Copy branch name"]);
     expect((menuItem("Check out here") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("checks out the view-only default branch in the open repository once its lists are loaded", async () => {
+  it("checks out a working branch in the open repository once its lists are loaded", async () => {
     const { switchBranch } = await import("@/api/commands");
     useRepositoryStore.setState({ activeRepoPath: SOLO, activeRepo: repos[2] });
-    renderTree(makeData(baseSignals));
-    fireEvent.contextMenu(await screen.findByRole("treeitem", { name: "View main (no checkout)" }));
+    renderTree(makeData(baseSignals, { workingBranches: { [SOLO]: [wbRow("feat/spike")] } }));
+    fireEvent.contextMenu(await screen.findByRole("treeitem", { name: "feat/spike" }));
     fireEvent.click(menuItem("Check out here"));
-    await waitFor(() => expect(switchBranch).toHaveBeenCalledWith(SOLO, "main"));
+    await waitFor(() => expect(switchBranch).toHaveBeenCalledWith(SOLO, "feat/spike"));
   });
 
   it("sorts, creates a workspace and folds everything from the account line", () => {

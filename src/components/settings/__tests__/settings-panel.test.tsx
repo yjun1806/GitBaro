@@ -124,6 +124,25 @@ describe("SettingsPanel", () => {
     expect(screen.getByRole("combobox", { name: "Quiet after" })).toBeDisabled();
   });
 
+  it("clamps the working branch window to 1–365 days on blur or Enter", () => {
+    const { onUpdateSettings } = renderPanel();
+    const input = screen.getByRole("spinbutton", { name: "Working branch window" });
+    expect(input).toHaveValue(7);
+
+    fireEvent.change(input, { target: { value: "9999" } });
+    fireEvent.blur(input);
+    expect(onUpdateSettings).toHaveBeenCalledWith({ workingBranchRecentDays: 365 });
+    expect(input).toHaveValue(365);
+
+    fireEvent.change(input, { target: { value: "0" } });
+    fireEvent.blur(input);
+    expect(onUpdateSettings).toHaveBeenCalledWith({ workingBranchRecentDays: 1 });
+
+    fireEvent.change(input, { target: { value: "30" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onUpdateSettings).toHaveBeenCalledWith({ workingBranchRecentDays: 30 });
+  });
+
   it("hides and shows the sidebar from the General section", async () => {
     const { useUIStore } = await import("@/stores/ui");
     renderPanel();
