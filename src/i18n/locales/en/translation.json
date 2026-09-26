@@ -32,7 +32,12 @@
     "pull": "Pull",
     "accountGroup": "Account and settings",
     "placePath": "Where you are",
-    "branchCrumb": "Branch {{branch}}"
+    "branchCrumb": "Branch {{branch}}",
+    "branchStep": {
+      "viewingCrumb": "Viewing {{target}}",
+      "backToRepo": "Back to the repository",
+      "backToRepoShort": "Repository"
+    }
   },
   "changes": {
     "title": "Changes",

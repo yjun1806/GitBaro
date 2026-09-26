@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { GitBranch, ChevronDown, ChevronUp } from "lucide-react";
+import { GitBranch, ChevronDown, ChevronUp, Eye, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
@@ -18,7 +18,8 @@ import { useSelectionStore } from "@/stores/selection";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { middleEllipsis } from "@/lib/middle-ellipsis";
 import { useClickOutside } from "./useToolbarDropdown";
-import { toolbarButtonClass } from "./toolbar-button";
+import { TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
+import { TOOLBAR_LABEL_CLASS } from "./ActionButton";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { HEADER_HEIGHT_PX } from "@/lib/layout-tokens";
 import { BranchPanel } from "@/components/branch/BranchPanel";
@@ -38,6 +39,8 @@ import { useCurrentPlaceMenu } from "./useCurrentPlaceMenu";
 import { useMenuActions } from "@/hooks/useMenuActions";
 import { useActiveRepoName } from "@/hooks/useRepoDisplay";
 import { Spinner } from "@/components/ui/Spinner";
+import { useHistoryView, useSetHistoryView } from "@/components/graph/useHistoryView";
+import { viewTargetLabel } from "@/components/review/git-status-line";
 
 /** 제목 툴팁을 머리 줄 아래 경계보다 6px 아래에 띄운다(28px 버튼은 줄 안에서 가운데 정렬). */
 const TITLE_TOOLTIP_OFFSET_PX = (HEADER_HEIGHT_PX - 28) / 2 + 6;
@@ -253,17 +256,27 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const placeMenu = useCurrentPlaceMenu(currentBranch);
   const originAhead = !isInWorktree ? ahead : 0;
   const branchText = currentBranch ?? (isDetached ? t("branch.detachedHead") : t("branch.noBranch"));
-  const worktreeBase = isInWorktree ? (currentWorktree?.base ?? null) : null;
+  // 체크아웃하지 않고 다른 브랜치(또는 모든 브랜치)의 이력을 보는 중이면, 이 칸은 체크아웃 대신
+  // 그 대상을 보인다(예전 그래프 머리의 「보는 브랜치」 고르기, 이제 경로의 이 칸으로 옮김).
+  const { target: viewTarget } = useHistoryView();
+  const setHistoryView = useSetHistoryView();
+  const viewingLabel = viewTarget ? viewTargetLabel(viewTarget, t) : null;
+  const viewing = viewingLabel !== null;
+  const crumbText = viewingLabel ?? branchText;
+  // 기반 브랜치 라벨은 지금 체크아웃한 브랜치의 것이라, 보는 중에는 다른 브랜치와 섞여 헷갈리므로 감춘다.
+  const worktreeBase = !viewing && isInWorktree ? (currentWorktree?.base ?? null) : null;
   // 폭이 좁아 라벨(BASE_LABEL_VISIBLE_CLASS)이 숨어도 뜻은 여기 남는다.
   const baseText = worktreeBase ? worktreeBaseSummary(worktreeBase, t) : null;
-  const titleTooltip = [
-    `${repoTitle} · ${branchText}`,
-    baseText,
-    originAhead > 0 ? t("branch.originAhead", { count: originAhead }) : null,
-    behind > 0 ? t("sidebarTree.badge.behind", { count: behind }) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const titleTooltip = viewing
+    ? `${repoTitle} · ${viewingLabel} · ${t("historyView.pickerHint")}`
+    : [
+        `${repoTitle} · ${branchText}`,
+        baseText,
+        originAhead > 0 ? t("branch.originAhead", { count: originAhead }) : null,
+        behind > 0 ? t("sidebarTree.badge.behind", { count: behind }) : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
   return (
     <div
@@ -281,7 +294,12 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           onContextMenu={placeMenu.onContextMenu}
           aria-haspopup="dialog"
           aria-expanded={isOpen}
-          aria-label={t("toolbar.branchCrumb", { branch: branchText })}
+          data-testid="branch-crumb"
+          aria-label={
+            viewing
+              ? t("toolbar.branchStep.viewingCrumb", { target: viewingLabel })
+              : t("toolbar.branchCrumb", { branch: branchText })
+          }
           className={cn(
             toolbarButtonClass({ open: isOpen }),
             "min-w-0 shrink overflow-hidden text-left",
@@ -289,12 +307,14 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           )}
         >
           <span className="flex items-center gap-1 font-mono text-[11.5px] text-(--fg) min-w-0 shrink">
-            {isSwitchingBranch ? (
+            {viewing ? (
+              <Eye className="w-3.5 h-3.5 shrink-0 text-info" aria-hidden="true" />
+            ) : isSwitchingBranch ? (
               <Spinner />
             ) : (
               <GitBranch className="w-3.5 h-3.5 shrink-0 text-(--fg2)" />
             )}
-            <span className="truncate min-w-0">{middleEllipsis(branchText, BRANCH_NAME_MAX_CHARS)}</span>
+            <span className="truncate min-w-0">{middleEllipsis(crumbText, BRANCH_NAME_MAX_CHARS)}</span>
           </span>
           {worktreeBase && (
             <span className={BASE_LABEL_VISIBLE_CLASS} data-testid="worktree-base-chip">
@@ -313,6 +333,21 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
           )}
         </button>
       </Tooltip>
+
+      {/* 보는 중일 때만 보이는 빠른 되돌리기 — 패널을 열지 않고 바로 체크아웃한 브랜치로 돌아간다
+          (WorktreeZone의 「돌아가기」와 같은 자리·모양). 패널 안 「현재 체크아웃」 행으로도 갈 수 있다. */}
+      {viewing && (
+        <button
+          type="button"
+          onClick={() => setHistoryView(null)}
+          className={cn(toolbarButtonClass(), "ml-0.5")}
+          title={t("toolbar.branchStep.backToRepo")}
+          aria-label={t("toolbar.branchStep.backToRepo")}
+        >
+          <Undo2 className={TOOLBAR_ICON} />
+          <span className={TOOLBAR_LABEL_CLASS}>{t("toolbar.branchStep.backToRepoShort")}</span>
+        </button>
+      )}
 
       {isOpen && (
         <BranchPanel
