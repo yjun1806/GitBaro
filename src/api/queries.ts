@@ -116,6 +116,8 @@ export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> 
       "defaultBranches",
       // 그래프에 함께 그린 다른 워크트리의 이력. HEAD가 그대로여도 push·fetch 뒤 원격 라벨이 바뀐다.
       "worktreeHeadHistory",
+      // push하면 원격에 없는 커밋이 줄고, pull은 HEAD를 옮긴다.
+      "unpushedFileTouches",
     ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
   );
 }
@@ -878,6 +880,31 @@ export function useRangeFileDiff(
     queryFn: () => getRangeFileDiff(path!, baseOid, headOid!, file!.path, file!.oldPath),
     enabled: !!path && !!headOid && !!file,
     staleTime: Infinity,
+  });
+}
+
+// 원격에 없는 커밋을 파일별로 묶은 것(워크스페이스 리뷰의 「파일별 보기」)
+import { getUnpushedFileTouches } from "@/api/commands";
+import type { RepoFileTouches } from "@/types";
+
+/**
+ * 저장소(워크트리)마다 원격에 없는 커밋이 건드린 파일. 키 앞부분이 `["unpushedFileTouches", path]`라 저장소
+ * 하나만 무효화할 수 있다. 커밋·체크아웃은 git 폴더 감시(`useRepoWatcher`)와 리뷰 화면의 활동 신호가, push·fetch는
+ * `invalidateAfterSync`가 무효화한다. 다른 곳에서 한 push처럼 원격 추적 브랜치만 옮겨 가는 변화는 신호가
+ * 없어 `REVIEW_POLL_MS`마다 다시 읽는다. 다시 읽는 동안 앞 결과를 둔다. 결과는 `paths` 순서이고, 아직 못 읽은
+ * 저장소는 undefined다.
+ */
+export function useUnpushedFileTouches(paths: readonly string[]): (RepoFileTouches | undefined)[] {
+  return useQueries({
+    queries: paths.map((path) => ({
+      queryKey: ["unpushedFileTouches", path],
+      queryFn: async () => (await getUnpushedFileTouches([path]))[0],
+      staleTime: 15_000,
+      refetchInterval: REVIEW_POLL_MS,
+      refetchIntervalInBackground: false,
+      placeholderData: keepPreviousData,
+    })),
+    combine: (results) => results.map((r) => r.data),
   });
 }
 

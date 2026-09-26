@@ -4,6 +4,7 @@ pub mod cli;
 pub mod commit;
 pub mod diff;
 pub mod file_diff;
+pub mod file_touches;
 pub mod engine;
 pub mod libgit;
 pub mod merge;

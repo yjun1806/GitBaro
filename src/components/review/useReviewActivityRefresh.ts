@@ -19,6 +19,7 @@ export function useReviewActivityRefresh(repos: readonly ReviewRepoPaths[]): voi
     }
     if (activity.kind === "git") {
       for (const key of ["reviewStatus", "repoSyncStatus", "commitHistory"]) void queryClient.invalidateQueries({ queryKey: [key] });
+      void queryClient.invalidateQueries({ queryKey: ["unpushedFileTouches", target.root] });
     }
   });
 }

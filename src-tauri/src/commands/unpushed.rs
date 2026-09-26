@@ -1,7 +1,9 @@
 //! 원격에 올리지 않은 커밋 목록. push 확인 창이 무엇이 올라가는지 보여 주는 데 쓴다.
+//! `get_unpushed_file_touches`는 같은 커밋을 파일별로 묶는다(워크스페이스 리뷰의 「파일별 보기」).
 
 use crate::error::AppError;
 use crate::git::commit::commit_to_info;
+use crate::git::file_touches::{repo_file_touches, RepoFileTouches, FILE_TOUCHES_LIMIT};
 use crate::git::unpushed::{head_unpushed, UNPUSHED_LIMIT};
 use crate::git::CommitInfo;
 use serde::Serialize;
@@ -40,4 +42,14 @@ pub async fn get_unpushed_commits(repo_path: String, limit: Option<usize>) -> Re
     })
     .await
     .map_err(|e| AppError::Channel(e.to_string()))?
+}
+
+/// 저장소(워크트리)마다 원격에 없는 커밋이 건드린 파일과, 파일마다 그 커밋들. 결과는 `paths` 순서다.
+/// 저장소마다 따로 읽는다: 한 곳이 실패하면 그 결과의 `error`만 채운다. 파일 diff 는
+/// `get_range_file_diff`로 본다(합친 변경은 `rangeBase` → `head`, 커밋 하나는 `parentOid` → `oid`).
+#[tauri::command]
+pub async fn get_unpushed_file_touches(paths: Vec<String>) -> Result<Vec<RepoFileTouches>, AppError> {
+    tokio::task::spawn_blocking(move || paths.iter().map(|p| repo_file_touches(p, FILE_TOUCHES_LIMIT)).collect())
+        .await
+        .map_err(|e| AppError::Channel(e.to_string()))
 }

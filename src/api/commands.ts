@@ -1018,6 +1018,17 @@ export async function getRangeFileDiff(
   return treeFileDiffFromRaw(raw);
 }
 
+// 원격에 없는 커밋을 파일별로 묶은 것(워크스페이스 리뷰의 「파일별 보기」)
+import type { RepoFileTouches } from "@/types";
+
+/**
+ * 저장소(워크트리)마다 원격에 없는 커밋이 건드린 파일과, 파일마다 그 커밋들. 결과는 `paths` 순서이고
+ * 저장소마다 따로 읽는다(실패한 곳은 `error`만 채운다). 파일 diff는 `getRangeFileDiff`로 본다.
+ */
+export async function getUnpushedFileTouches(paths: string[]): Promise<RepoFileTouches[]> {
+  return invoke("get_unpushed_file_touches", { paths });
+}
+
 // W5-T2 — 여러 저장소 원격 작업 확인 창(D3)
 import type { RemoteOp, RepoRemotePlan } from "@/types";
 

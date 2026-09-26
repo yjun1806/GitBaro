@@ -65,6 +65,7 @@ pub fn run() {
             commands::branch::get_branch_divergence,
             commands::branch::repo_sync_status,
             commands::unpushed::get_unpushed_commits,
+            commands::unpushed::get_unpushed_file_touches,
             commands::branch::create_branch,
             commands::branch::switch_branch,
             commands::branch::delete_branch,

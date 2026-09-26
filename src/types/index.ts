@@ -722,6 +722,66 @@ export interface TreeFileDiff extends DiffOutput {
   baseIsMergeBase: boolean;
 }
 
+// 원격에 없는 커밋을 파일별로 묶은 것(워크스페이스 리뷰의 「파일별 보기」)
+
+/** 파일 하나를 건드린 커밋 하나. 이 커밋만의 diff는 `getRangeFileDiff(repo, parentOid, oid, path, oldPath)`. */
+export interface CommitTouch {
+  oid: string;
+  shortOid: string;
+  /** 커밋 메시지 첫 줄. */
+  subject: string;
+  /** 작성 시각(유닉스 초). */
+  authorTime: number;
+  /** 첫 부모(병합 커밋도 첫 부모와만 비교한다). 첫 커밋이면 null(빈 트리). */
+  parentOid: string | null;
+  /** 이 커밋에서의 경로. 뒤에서 이름을 바꿨으면 `FileTouches.path`와 다르다. */
+  path: string;
+  /** 이 커밋에서 이름을 바꿨으면 이전 경로. */
+  oldPath: string | null;
+  status: FileStatus;
+  additions: number;
+  deletions: number;
+  isBinary: boolean;
+  /** 한쪽이 8 MiB를 넘어 줄 단위로 비교하지 않았다. 줄 수는 0이다. */
+  tooLarge: boolean;
+}
+
+/** 원격에 없는 커밋이 건드린 파일 하나. 합친 diff는 `getRangeFileDiff(repo, rangeBase, head, path, oldPath)`. */
+export interface FileTouches {
+  /** HEAD 기준 경로. 지운 파일은 지우기 전 경로. 이름을 바꾼 파일은 지금 이름으로 묶인다. */
+  path: string;
+  /** `rangeBase` → HEAD에서 이름이 바뀌었으면 base 쪽 경로. 내용도 많이 바뀌어 git이 이름 바꾸기로 보지 않으면 null이고 `status`는 `added`다. */
+  oldPath: string | null;
+  /** `rangeBase` → HEAD의 합친 변경. null이면 커밋들이 건드렸지만 결과가 base와 같다(넣었다 되돌림). */
+  status: FileStatus | null;
+  /** `rangeBase` → HEAD의 줄 수. `status`가 null이면 0. */
+  additions: number;
+  deletions: number;
+  isBinary: boolean;
+  tooLarge: boolean;
+  /** 최신 순. */
+  commits: CommitTouch[];
+}
+
+/** `get_unpushed_file_touches`의 저장소(워크트리) 하나. 기준은 원격에 없는 커밋(`git rev-list HEAD --not --remotes`)이다. */
+export interface RepoFileTouches {
+  /** 요청에 넘긴 경로 그대로. */
+  path: string;
+  /** 이 저장소를 읽지 못한 이유. 있으면 나머지는 비어 있다. */
+  error: string | null;
+  /** 원격에 없는 커밋이 500개를 넘어 최신 500개만 읽었다. */
+  truncated: boolean;
+  /**
+   * 범위 바로 아래 커밋: HEAD에서 첫 부모를 따라 내려가 처음 만나는 원격에 있는 커밋. 범위가 처음 커밋까지
+   * 닿으면 null(빈 트리와 비교). 원격에 없는 커밋이 없으면 `head`와 같다. `truncated`면 읽은 범위의 끝이다.
+   */
+  rangeBase: string | null;
+  /** HEAD 커밋. 커밋이 없는 저장소면 null. */
+  head: string | null;
+  /** 커밋 2개 이상이 건드린 파일 먼저, 그다음 가장 최근 커밋 시각 순. */
+  files: FileTouches[];
+}
+
 // W5-T2 — 여러 저장소 원격 작업 확인 창(D3)
 
 /** 저장소를 이번 원격 작업에서 뺀 이유. */
