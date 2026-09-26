@@ -295,8 +295,11 @@ describe("FollowPanel — focus cues while following", () => {
     await waitFor(() => expect(diffText()).toContain("src/b.ts"));
     expect(screen.queryByTestId("file-flash")).toBeNull();
 
-    // b.ts is saved again (a newer modification time); a.ts is untouched.
-    backend.files = [wipFile("src/b.ts", nowSecs() + 1), wipFile("src/a.ts", nowSecs() - 40)];
+    // b.ts is saved again (a newer modification time); a.ts is untouched — reuse its exact
+    // entry instead of recomputing `nowSecs() - 40`, which can drift a second under load and
+    // make a.ts look "just changed" too (flakiness, not a product bug).
+    const aFile = backend.files.find((f) => f.path === "src/a.ts")!;
+    backend.files = [wipFile("src/b.ts", nowSecs() + 1), aFile];
     backend.contents["src/b.ts"] = lines(31);
     await emit(WT);
 
