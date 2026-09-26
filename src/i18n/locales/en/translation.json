@@ -1571,5 +1571,8 @@
       "removeDescription": "Removes it from GitBaro's list only. The folder, files and remotes stay. Add it again to bring it back.",
       "removeButton": "Remove…"
     }
+  },
+  "filters": {
+    "removeChip": "Remove filter"
   }
 }

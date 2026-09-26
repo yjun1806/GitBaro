@@ -1553,5 +1553,8 @@
       "removeDescription": "GitBaro 목록에서만 뺍니다. 폴더와 파일, 원격은 그대로 둡니다. 다시 추가하면 돌아옵니다.",
       "removeButton": "제거…"
     }
+  },
+  "filters": {
+    "removeChip": "필터 빼기"
   }
 }

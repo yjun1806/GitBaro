@@ -405,6 +405,30 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 메인 카드 맨 위의 32px 줄. 수를 적지 않고 상태를 말한다. 톤이 바뀌면 줄 전체의 바탕이 바뀐다(`info/10` 보는 중, `warning/10` 진행 중·분리된 HEAD). 안의 버튼은 `Button sm`. 오른쪽 끝은 `StatusActivity`(도는 명령 + 작업 기록).
 
+### 3.14 필터 `FilterBar` / `FilterChip` / `FilterDropdown` (`src/components/ui/`)
+
+**무엇.** 탭 바로 아래에서 지금 목록에 무엇이 보일지 거르는 한 줄과 그 안의 조각들. 보기 방식을 바꾸는 것(`Segmented`)이나 찾기(`DiffFindBar`)와는 다른 개념이다 — 필터는 데이터의 부분집합을, 보기 방식은 같은 데이터를 다르게 그린다.
+
+**언제.** 그래프의 레인(워크트리·저장소) 칩, 「이 브랜치만」 같은 켜고 끄는 조건, PR 상태처럼 여럿 중 하나를 고르는 조건이 있는 목록 위에. 걸 것이 없으면(스태시 탭 등) `FilterBar`가 스스로 아무것도 그리지 않는다.
+
+**쓰지 말 것.** 새로 고침·GitHub에서 열기 같은 작업 버튼(탭 줄 오른쪽에 둔다), 보는 브랜치 고르기 같은 화면 이동(툴바 경로), 같은 데이터를 다르게 그리는 전환(`Segmented`는 필터 막대의 오른쪽 슬롯에 놓되 그 자체는 필터가 아니다).
+
+**모양.**
+
+| 컴포넌트 | 모양 | API |
+|---|---|---|
+| `FilterBar` | 높이 36px(`h-9`), 좌우 8px(`px-2`), 항목 사이 6px(`gap-1.5`), 아래 1px `--line`. 왼쪽 슬롯 → 빈칸(`flex-1`) → 오른쪽 슬롯. 왼쪽·오른쪽 모두 없으면 아무것도 그리지 않는다(`null`) | `left?: ReactNode`, `right?: ReactNode` |
+| `FilterChip` | 24px, `--radius-chip`, 11.5px semibold. 꺼짐 = 테두리 `--line2` + 글자 `--fg2`. 켜짐 = `--acc-sel` 채움(테두리 없음) + 글자 `--fg`. 왼쪽 막대 없음 — 선택은 채움만으로 말한다(원칙, 2.9). 앞에 10px 견본(레인 색) 선택, 뒤에 수(`count`, `Count`처럼 알약 없는 글자) 선택 | `pressed: boolean`, `onClick?`, `swatchColor?`, `icon?`, `count?: ReactNode`, `locked?`, `title?`, `onRemove?`, `removeLabel?` |
+| `FilterDropdown` | 칩 모양 트리거 「이름 값 ▾」(이름은 `--muted`, 값은 `--fg`), `--chip` 채움, 누르면 `ContextMenu`의 `anchored` 자리가 트리거 아래에 뜬다(밖 클릭 예외·자리 잡은 뒤 첫 항목 포커스는 `ContextMenu`가 한다) | `label: string`, `value: T`, `options: {value: T, label: string}[]`, `onChange`, `ariaLabel?` |
+
+- 선택지가 둘이어도 거르는 것이면 `FilterDropdown`이다. `Segmented`는 같은 데이터를 다르게 그리는 보기 방식에만 쓴다(3.11).
+- `FilterChip`의 `locked`(늘 켜져 있어야 하는 칩)는 네이티브 `disabled`를 쓰지 않는다 — `aria-disabled` + `title`(이유)만 붙여서 마우스를 올리면 이유가 뜬다.
+- `onRemove`를 준 `FilterChip`(비교 중 칩)은 몸통이 버튼이 아니라 고정 표시다 — 안에 또 버튼(×)을 넣어야 해서 중첩 버튼을 피한다.
+
+**접근성.** `FilterChip`은 `aria-pressed`(눌러서 켜고 끄는 토글). `FilterDropdown`의 트리거는 `aria-haspopup="menu"` + `aria-expanded`, 메뉴는 `ContextMenu`의 `role="menu"` + 체크 표시를 그대로 쓴다.
+
+**지금 쓰는 곳.** 디자인 시스템 아트팩트(`FilterChipGallery`·`FilterDropdownDemo`·`FilterBarDemo`)뿐이다 — 화면(그래프의 레인 칩, PR 상태 필터 등)에 실제로 놓는 것은 뒤 단계에서 한다.
+
 ## 4. 결정 기록
 
 살펴본 뒤 정한 규칙이다. 「전」은 2026-09-26 코드 기준이다.
@@ -472,6 +496,7 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 | `Tooltip`, `SidebarHoverCard` | `ui/Tooltip.tsx`, `sidebar/SidebarHoverCard.tsx` | 있음 |
 | `Tab`, `TabGroup` | `ui/Tabs.tsx` | 있음 |
 | `Segmented` | `ui/Segmented.tsx` | 있음 |
+| `FilterBar`, `FilterChip`, `FilterDropdown` | `ui/FilterBar.tsx`, `ui/FilterChip.tsx`, `ui/FilterDropdown.tsx` | 있음(화면 적용은 뒤 단계) |
 | `Switch` | `settings/ui/Switch.tsx` | 있음 |
 | `TextInput`, `SearchInput`, `Textarea` | `ui/TextInput.tsx` | 있음 |
 | `Select`, `BranchCombobox` | `ui/` | 있음 |

@@ -24,6 +24,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Notice } from "@/components/ui/Notice";
 import { DialogFrame } from "@/components/ui/DialogFrame";
 import { Segmented, type SegmentedOption } from "@/components/ui/Segmented";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { FilterChip } from "@/components/ui/FilterChip";
+import { FilterDropdown, type FilterDropdownOption } from "@/components/ui/FilterDropdown";
 import { TextInput, Textarea, SearchInput } from "@/components/ui/TextInput";
 import { ContextMenu, type ContextMenuSection } from "@/components/ui/ContextMenu";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
@@ -296,6 +299,88 @@ const SEGMENTED_OPTIONS: SegmentedOption<string>[] = [
 function SegmentedDemo() {
   const [value, setValue] = useState("changes");
   return <Segmented value={value} options={SEGMENTED_OPTIONS} onChange={setValue} ariaLabel="작업 전환" />;
+}
+
+/* ── FilterBar / FilterChip / FilterDropdown(필터) ── */
+
+function FilterChipGallery() {
+  const [on, setOn] = useState(true);
+  return (
+    <Row label="꺼짐 / 켜짐(견본·수) / 잠김(늘 켜짐 + 이유) / 닫기(×, 비교 중 칩)">
+      <FilterChip pressed={false} onClick={() => {}}>
+        xms-app
+      </FilterChip>
+      <FilterChip
+        pressed={on}
+        onClick={() => setOn((v) => !v)}
+        swatchColor="hsl(205,55%,45%)"
+        count={<Count value={2} tone="live" prefix="●" />}
+      >
+        xms-app
+      </FilterChip>
+      <FilterChip pressed locked title="기본 폴더는 늘 보여요">
+        main
+      </FilterChip>
+      <FilterChip pressed onRemove={() => {}}>
+        main..feat/x
+      </FilterChip>
+    </Row>
+  );
+}
+
+const FILTER_DROPDOWN_OPTIONS: FilterDropdownOption<"open" | "closed" | "all">[] = [
+  { value: "open", label: "열림" },
+  { value: "closed", label: "닫힘" },
+  { value: "all", label: "전체" },
+];
+
+function FilterDropdownDemo() {
+  const [value, setValue] = useState<"open" | "closed" | "all">("open");
+  return (
+    <div className="relative h-[160px]">
+      <FilterDropdown label="상태" value={value} options={FILTER_DROPDOWN_OPTIONS} onChange={setValue} />
+    </div>
+  );
+}
+
+const FILTER_BAR_VIEW_OPTIONS: SegmentedOption<string>[] = [
+  { value: "commits", label: "커밋 순서" },
+  { value: "files", label: "파일별" },
+];
+
+function FilterBarDemo() {
+  const [lane, setLane] = useState(true);
+  const [mode, setMode] = useState("commits");
+  const [query, setQuery] = useState("");
+  return (
+    <Card className="w-[520px]">
+      <FilterBar
+        left={
+          <FilterChip
+            pressed={lane}
+            onClick={() => setLane((v) => !v)}
+            swatchColor="hsl(205,55%,45%)"
+            count={<Count value={2} tone="live" prefix="●" />}
+          >
+            xms-app
+          </FilterChip>
+        }
+        right={
+          <>
+            <Segmented value={mode} options={FILTER_BAR_VIEW_OPTIONS} onChange={setMode} size="sm" ariaLabel="보기 방식" />
+            <SearchInput
+              size="sm"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onClear={() => setQuery("")}
+              placeholder="찾기"
+              aria-label="필터 찾기"
+            />
+          </>
+        }
+      />
+    </Card>
+  );
 }
 
 /* ── TextInput / Textarea / SearchInput ── */
@@ -636,6 +721,9 @@ const GitBaro = {
   Notice,
   DialogFrame,
   Segmented,
+  FilterBar,
+  FilterChip,
+  FilterDropdown,
   TextInput,
   Textarea,
   SearchInput,
@@ -671,6 +759,9 @@ const GitBaro = {
     NoticeGallery,
     DialogFrameDemo,
     SegmentedDemo,
+    FilterChipGallery,
+    FilterDropdownDemo,
+    FilterBarDemo,
     TextInputGallery,
     ContextMenuDemo,
     TabsDemo,
