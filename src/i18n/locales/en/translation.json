@@ -980,7 +980,27 @@
     "selectHint": "Its files and diff show here.",
     "openToCommit": "Open this working tree",
     "allQuiet_one": "{{count}} quiet repository is hidden: it is on its default branch with no unpushed commits and no uncommitted changes. Use Show all to see it.",
-    "allQuiet_other": "All {{count}} repositories are quiet and hidden: they are on their default branch with no unpushed commits and no uncommitted changes. Use Show all to see them."
+    "allQuiet_other": "All {{count}} repositories are quiet and hidden: they are on their default branch with no unpushed commits and no uncommitted changes. Use Show all to see them.",
+    "fileView": {
+      "viewLabel": "View",
+      "segCommits": "Commit order",
+      "segFiles": "By file",
+      "groupMulti": "Files touched by multiple commits",
+      "groupSingle": "Files touched by one commit",
+      "commits_one": "{{count}} commit",
+      "commits_other": "{{count}} commits",
+      "ticketNote": "Touched by {{keys}}",
+      "differentWork_one": "Touched by {{count}} different ticket",
+      "differentWork_other": "Touched by {{count}} different tickets",
+      "touchedBy": "Commits that touched this file",
+      "combinedScope_one": "Combined change across {{count}} commit",
+      "combinedScope_other": "Combined change across {{count}} commits",
+      "singleScope": "This commit's change only",
+      "netUnchanged": "These commits cancel out, so nothing changed in the end",
+      "emptyTitle": "No commits to push",
+      "repoTruncated": "{{repo}}: some older commits were not checked",
+      "loading": "Reading files"
+    }
   },
   "gitActions": {
     "syncGroup": "Sync",

@@ -6,15 +6,18 @@ import { AlertTriangle, Folder } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { useUIStore, type ReviewFileView } from "@/stores/ui";
 import { repoAccountsByPath } from "@/lib/repo-tree";
 import { Card, EmptyState } from "@/components/layout/ContentArea";
 import { GraphSplit } from "@/components/layout/GraphSplit";
 import { RepoLaneCommitGraph } from "@/components/graph/CommitGraph";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
+import { Segmented, type SegmentedOption } from "@/components/ui/Segmented";
 import type { WorkspaceRepoHistory } from "@/types";
 import { WorkspaceTitle } from "./WorkspaceTitle";
 import { StatusActivity } from "./StatusActivity";
 import { ReviewFilesPanel, type ReviewSelection } from "./ReviewFilesPanel";
+import { FileTouchesView } from "./FileTouchesView";
 import { WorkSwitcher } from "@/components/commit/WorkSwitcher";
 import type { RepoLaneGraph } from "@/components/graph/repo-lanes";
 
@@ -40,6 +43,8 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const accounts = useAccountStore((s) => s.accounts);
   const [showAll, setShowAll] = useState(false);
   const [selection, setSelection] = useState<ReviewSelection>(null);
+  const reviewView = useUIStore((s) => s.reviewFileViewByWorkspace[workspaceId] ?? "commits");
+  const setReviewFileView = useUIStore((s) => s.setReviewFileView);
   // 저장소마다 마지막으로 고른 커밋. 「작업 중인 변경」으로 갔다가 「커밋」 칸으로 돌아올 때 쓴다.
   const [lastCommitByRepo, setLastCommitByRepo] = useState<Readonly<Record<string, CommitSelection>>>({});
 
@@ -81,6 +86,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
         </Card>
       ) : (
         <GraphSplit
+          topCollapsed={reviewView === "files"}
           top={
           <section
             aria-label={t("shell.panelTabs")}
@@ -89,6 +95,13 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
             <div className="flex items-center gap-2 min-h-8 pl-3 pr-3 shrink-0 border-b border-(--line)">
               {/* 탭이 하나뿐이라 탭 줄 대신 제목만 둔다(카드 머리, 디자인 시스템 3.5). */}
               <span className="shrink-0 text-[12.5px] font-bold text-foreground">{t("shell.graphTab")}</span>
+              <Segmented
+                value={reviewView}
+                onChange={(v) => setReviewFileView(workspaceId, v)}
+                size="sm"
+                ariaLabel={t("review.fileView.viewLabel")}
+                options={REVIEW_VIEW_OPTIONS(t)}
+              />
               <span className="flex-1" />
               <RepoLegend repos={data.visible} />
               {data.hiddenCount > 0 || showAll ? (
@@ -104,53 +117,67 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
               {/* 저장소 화면의 git 상태 줄과 같은 자리: 오프라인 표시, 도는 git 명령, 작업 기록 열기. */}
               <StatusActivity />
             </div>
-            <RepoLaneCommitGraph
-              graph={data.graph}
-              lanePaths={data.lanePaths}
-              repoLabel={repoLabel}
-              selectedKey={selection?.key ?? null}
-              baseTime={data.baseTime}
-              baseBranchLabel={data.baseBranchLabel}
-              isLoading={data.isLoading}
-              emptyMessage={emptyMessage}
-              onSelectCommit={(repoPath, commit, key) => {
-                const picked: CommitSelection = { kind: "commit", key, repoPath, oid: commit.id };
-                setSelection(picked);
-                setLastCommitByRepo((prev) => ({ ...prev, [repoPath]: picked }));
-              }}
-              onSelectWip={(wip, key) =>
-                setSelection({
-                  kind: "wip",
-                  key,
-                  repoPath: wip.repoPath,
-                  path: wip.path,
-                  branch: wip.branch,
-                  isMain: wip.isMain,
-                })
-              }
-            />
+            {reviewView === "commits" && (
+              <RepoLaneCommitGraph
+                graph={data.graph}
+                lanePaths={data.lanePaths}
+                repoLabel={repoLabel}
+                selectedKey={selection?.key ?? null}
+                baseTime={data.baseTime}
+                baseBranchLabel={data.baseBranchLabel}
+                isLoading={data.isLoading}
+                emptyMessage={emptyMessage}
+                onSelectCommit={(repoPath, commit, key) => {
+                  const picked: CommitSelection = { kind: "commit", key, repoPath, oid: commit.id };
+                  setSelection(picked);
+                  setLastCommitByRepo((prev) => ({ ...prev, [repoPath]: picked }));
+                }}
+                onSelectWip={(wip, key) =>
+                  setSelection({
+                    kind: "wip",
+                    key,
+                    repoPath: wip.repoPath,
+                    path: wip.path,
+                    branch: wip.branch,
+                    isMain: wip.isMain,
+                  })
+                }
+              />
+            )}
           </section>
           }
           bottom={
             <Card className="flex-1">
-              <ReviewFilesPanel
-                selection={selection}
-                repoLabel={repoLabel}
-                switcher={
-                  <WorkspaceWorkSwitcher
-                    selection={selection}
-                    graph={data.graph}
-                    lastCommit={selection ? (lastCommitByRepo[selection.repoPath] ?? null) : null}
-                    onSelect={setSelection}
-                  />
-                }
-              />
+              {reviewView === "commits" ? (
+                <ReviewFilesPanel
+                  selection={selection}
+                  repoLabel={repoLabel}
+                  switcher={
+                    <WorkspaceWorkSwitcher
+                      selection={selection}
+                      graph={data.graph}
+                      lastCommit={selection ? (lastCommitByRepo[selection.repoPath] ?? null) : null}
+                      onSelect={setSelection}
+                    />
+                  }
+                />
+              ) : (
+                <FileTouchesView paths={data.visible.map((r) => r.path)} repoLabel={repoLabel} />
+              )}
             </Card>
           }
         />
       )}
     </div>
   );
+}
+
+/** 그래프 카드 머리의 [커밋 순서 | 파일별] 전환 선택지. */
+function REVIEW_VIEW_OPTIONS(t: TFunction): SegmentedOption<ReviewFileView>[] {
+  return [
+    { value: "commits", label: t("review.fileView.segCommits") },
+    { value: "files", label: t("review.fileView.segFiles") },
+  ];
 }
 
 /** 저장소의 기준(main) 상태를 한 줄로. 갈라진 지점을 못 찾았거나 잘렸을 때만 문구가 있다. */

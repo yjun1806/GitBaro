@@ -7,6 +7,7 @@ import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useFollowStore } from "@/stores/follow";
+import { useUIStore } from "@/stores/ui";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
 import type {
   ActivityEvent,
@@ -114,6 +115,10 @@ vi.mock("@/api/queries", () => ({
   useWorktreeHeadHistories: () => [],
   useWipFilesMany: () => [],
   useSiblingFileDiffs: (sides: unknown[]) => sides.map(() => ({ data: undefined })),
+  // 「파일별 보기」: 이 스위트는 세그먼트 스위치 자체와 값 기억만 확인하므로 늘 빈 결과로 둔다.
+  useUnpushedFileTouches: (paths: string[]) =>
+    paths.map((p) => ({ path: p, error: null, truncated: false, rangeBase: null, head: null, files: [] })),
+  useRangeFileDiff: () => ({ data: null, isLoading: false, isError: false }),
 }));
 
 vi.mock("@/components/history/CommitDetail", () => ({
@@ -170,6 +175,7 @@ beforeEach(async () => {
   histories = baseHistories();
   reviewRepos = baseReviewRepos();
   useRepositoryStore.setState({ repos: [repo(APP), repo(API), repo(DESIGN)], activeRepo: null, activeRepoPath: null });
+  useUIStore.setState({ reviewFileViewByWorkspace: {} });
   useWorkspaceStore.setState({
     workspaces: [{ id: "w1", name: "xames", accountKey: "local", repoPaths: [APP, API, DESIGN] }],
     activeWorkspaceId: "w1",
@@ -346,6 +352,26 @@ describe("WorkspaceReview", () => {
       </QueryClientProvider>,
     );
     expect(within(row()).getByText("origin/feat/noti")).toBeTruthy();
+  });
+
+  it("shows a commit-order/by-file switch at the top of the graph card, defaulting to commit order", () => {
+    renderReview();
+    const seg = screen.getByRole("radiogroup", { name: "View" });
+    expect(within(seg).getByRole("radio", { name: "Commit order" }).getAttribute("aria-checked")).toBe("true");
+    expect(within(seg).getByRole("radio", { name: "By file" }).getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("switches to the per-file view and remembers the choice for this workspace", () => {
+    renderReview();
+    fireEvent.click(screen.getByRole("radio", { name: "By file" }));
+    // 그래프(WIP 행)는 사라지고, 파일별 보기의 빈 상태가 대신 보인다.
+    expect(screen.queryByRole("button", { name: /Uncommitted changes/ })).toBeNull();
+    expect(screen.getByText("No commits to push")).toBeTruthy();
+    expect(useUIStore.getState().reviewFileViewByWorkspace.w1).toBe("files");
+
+    fireEvent.click(screen.getByRole("radio", { name: "Commit order" }));
+    expect(screen.getByRole("button", { name: /^xames-backend · Uncommitted changes · .* branch · .* · 1 file$/ })).toBeTruthy();
+    expect(useUIStore.getState().reviewFileViewByWorkspace.w1).toBe("commits");
   });
 
   it("puts the title in the toolbar's title slot when there is one", () => {

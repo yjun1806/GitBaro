@@ -13,6 +13,11 @@ import type { Theme } from "@/types";
 /** Line-diff layout the user last picked; remembered across files and restarts. */
 export type DiffLineMode = "unified" | "split";
 
+/** 워크스페이스 리뷰 화면의 그래프 카드가 보여 줄 것: 커밋 순서(그래프) 또는 파일별. */
+export type ReviewFileView = "commits" | "files";
+
+const REVIEW_FILE_VIEWS: readonly ReviewFileView[] = ["commits", "files"];
+
 interface UIState {
   theme: Theme;
   activeTab: "changes" | "history" | "stash" | "actions";
@@ -37,6 +42,8 @@ interface UIState {
    * 파일 목록에 포커스를 옮기고 지운다. 저장하지 않는다.
    */
   workingFocusAt: number | null;
+  /** 워크스페이스마다 마지막으로 고른 리뷰 보기(커밋 순서·파일별, 워크스페이스 id로 키). */
+  reviewFileViewByWorkspace: Readonly<Record<string, ReviewFileView>>;
   setTheme: (theme: Theme) => void;
   setActiveTab: (tab: "changes" | "history" | "stash" | "actions") => void;
   setSidebarWidth: (width: number) => void;
@@ -51,6 +58,7 @@ interface UIState {
   setDiffMaximized: (maximized: boolean) => void;
   setMaximizedFileListOpen: (open: boolean) => void;
   setWorkingFocusAt: (at: number | null) => void;
+  setReviewFileView: (workspaceId: string, view: ReviewFileView) => void;
 }
 
 /** Sidebar width in the two-column shell's design (`gen_d.py` sidebar, 276px). */
@@ -61,7 +69,13 @@ const DIFF_LINE_MODES: readonly DiffLineMode[] = ["unified", "split"];
 /** Fields of the UI store written to `gitbaro-ui` (see `partialize`). */
 type PersistedUI = Pick<
   UIState,
-  "sidebarHidden" | "sidebarWidth" | "diffLineMode" | "graphPanelRatio" | "fileListWidth" | "maximizedFileListOpen"
+  | "sidebarHidden"
+  | "sidebarWidth"
+  | "diffLineMode"
+  | "graphPanelRatio"
+  | "fileListWidth"
+  | "maximizedFileListOpen"
+  | "reviewFileViewByWorkspace"
 >;
 
 /**
@@ -82,6 +96,8 @@ type PersistedUI = Pick<
  * (`sanitizePersistedUI`) 버전을 올리지 않는다. 다른 필드의 뜻은 그대로라 옛 값을 지우지 않는다.
  * 없앤 `reviewBasis`(검토 기준 설정)도 버전을 올리지 않는다. 옛 저장값에 남은 그 필드는
  * `sanitizePersistedUI`가 읽지 않고, 다음 저장 때 `partialize`가 빼서 사라진다.
+ * `reviewFileViewByWorkspace`(워크스페이스 리뷰의 커밋 순서·파일별 선택)도 나중에 더한 선택 필드라 버전을
+ * 올리지 않는다. 없으면 빈 객체이므로 모든 워크스페이스가 기본값(`commits`)으로 시작한다.
  */
 export const UI_STORE_VERSION = 0;
 
@@ -114,6 +130,14 @@ export function sanitizePersistedUI(persisted: unknown): Partial<UIState> {
     out.fileListWidth = clampFileListWidth(p.fileListWidth);
   }
   if (typeof p.maximizedFileListOpen === "boolean") out.maximizedFileListOpen = p.maximizedFileListOpen;
+  if (typeof p.reviewFileViewByWorkspace === "object" && p.reviewFileViewByWorkspace !== null) {
+    const src = p.reviewFileViewByWorkspace as Record<string, unknown>;
+    const byWorkspace: Record<string, ReviewFileView> = {};
+    for (const [workspaceId, view] of Object.entries(src)) {
+      if (REVIEW_FILE_VIEWS.includes(view as ReviewFileView)) byWorkspace[workspaceId] = view as ReviewFileView;
+    }
+    out.reviewFileViewByWorkspace = byWorkspace;
+  }
   return out;
 }
 
@@ -135,6 +159,7 @@ export const useUIStore = create<UIState>()(
       isDiffMaximized: false,
       maximizedFileListOpen: true,
       workingFocusAt: null,
+      reviewFileViewByWorkspace: {},
 
       setTheme: (theme) => set({ theme }),
 
@@ -156,6 +181,10 @@ export const useUIStore = create<UIState>()(
       setDiffMaximized: (maximized) => set({ isDiffMaximized: maximized }),
       setMaximizedFileListOpen: (open) => set({ maximizedFileListOpen: open }),
       setWorkingFocusAt: (at) => set({ workingFocusAt: at }),
+      setReviewFileView: (workspaceId, view) =>
+        set((state) => ({
+          reviewFileViewByWorkspace: { ...state.reviewFileViewByWorkspace, [workspaceId]: view },
+        })),
     }),
     {
       name: "gitbaro-ui",
@@ -175,6 +204,7 @@ export const useUIStore = create<UIState>()(
         graphPanelRatio: state.graphPanelRatio,
         fileListWidth: state.fileListWidth,
         maximizedFileListOpen: state.maximizedFileListOpen,
+        reviewFileViewByWorkspace: state.reviewFileViewByWorkspace,
       }),
       merge: (persisted, current) => ({ ...current, ...sanitizePersistedUI(persisted) }),
     },

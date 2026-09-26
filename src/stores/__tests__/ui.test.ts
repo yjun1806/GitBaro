@@ -98,6 +98,7 @@ describe("ui store after the two-column shell", () => {
       "fileListWidth",
       "graphPanelRatio",
       "maximizedFileListOpen",
+      "reviewFileViewByWorkspace",
       "sidebarHidden",
       "sidebarWidth",
     ]);
@@ -236,5 +237,36 @@ describe("maximized diff file list", () => {
     const merged = merge({ sidebarHidden: true, sidebarWidth: 300 }, useUIStore.getInitialState());
     expect(merged.maximizedFileListOpen).toBe(true);
     expect(merged.sidebarHidden).toBe(true);
+  });
+});
+
+describe("review file view per workspace", () => {
+  it("starts every workspace at commit order (an empty map)", () => {
+    expect(useUIStore.getInitialState().reviewFileViewByWorkspace).toEqual({});
+  });
+
+  it("remembers a workspace's choice without touching another workspace's", () => {
+    useUIStore.getState().setReviewFileView("w1", "files");
+    useUIStore.getState().setReviewFileView("w2", "commits");
+    expect(useUIStore.getState().reviewFileViewByWorkspace).toEqual({ w1: "files", w2: "commits" });
+    const partialize = useUIStore.persist.getOptions().partialize!;
+    expect(partialize(useUIStore.getState())).toMatchObject({ reviewFileViewByWorkspace: { w1: "files", w2: "commits" } });
+    useUIStore.setState({ reviewFileViewByWorkspace: {} });
+  });
+
+  it("keeps a saved map and drops an unknown view value", () => {
+    expect(sanitizePersistedUI({ reviewFileViewByWorkspace: { w1: "files" } })).toEqual({
+      reviewFileViewByWorkspace: { w1: "files" },
+    });
+    expect(sanitizePersistedUI({ reviewFileViewByWorkspace: { w1: "graph" } })).toEqual({
+      reviewFileViewByWorkspace: {},
+    });
+    expect(sanitizePersistedUI({ reviewFileViewByWorkspace: "junk" })).toEqual({});
+  });
+
+  it("falls back to an empty map for users who saved before the field existed", () => {
+    const merge = useUIStore.persist.getOptions().merge!;
+    const merged = merge({ sidebarHidden: true }, useUIStore.getInitialState());
+    expect(merged.reviewFileViewByWorkspace).toEqual({});
   });
 });

@@ -978,7 +978,27 @@
     "selectHint": "고른 것의 파일과 diff가 여기에 나와요.",
     "openToCommit": "이 작업 트리 열기",
     "allQuiet_one": "조용한 저장소 {{count}}개를 숨겼어요. 기본 브랜치에 있고 원격에 없는 커밋도, 커밋 안 한 변경도 없어요. 「모두 보기」로 펼칠 수 있어요.",
-    "allQuiet_other": "조용한 저장소 {{count}}개를 모두 숨겼어요. 기본 브랜치에 있고 원격에 없는 커밋도, 커밋 안 한 변경도 없어요. 「모두 보기」로 펼칠 수 있어요."
+    "allQuiet_other": "조용한 저장소 {{count}}개를 모두 숨겼어요. 기본 브랜치에 있고 원격에 없는 커밋도, 커밋 안 한 변경도 없어요. 「모두 보기」로 펼칠 수 있어요.",
+    "fileView": {
+      "viewLabel": "보기 방식",
+      "segCommits": "커밋 순서",
+      "segFiles": "파일별",
+      "groupMulti": "커밋 여러 개가 건드린 파일",
+      "groupSingle": "커밋 하나만 건드린 파일",
+      "commits_one": "커밋 {{count}}개",
+      "commits_other": "커밋 {{count}}개",
+      "ticketNote": "{{keys}}가 바꿈",
+      "differentWork_one": "서로 다른 작업 {{count}}개가 바꿈",
+      "differentWork_other": "서로 다른 작업 {{count}}개가 바꿈",
+      "touchedBy": "이 파일을 건드린 커밋",
+      "combinedScope_one": "묶인 커밋 {{count}}개를 합친 변경",
+      "combinedScope_other": "묶인 커밋 {{count}}개를 합친 변경",
+      "singleScope": "이 커밋의 변경만",
+      "netUnchanged": "결과적으로 바뀐 내용이 없어요",
+      "emptyTitle": "올릴 커밋이 없어요",
+      "repoTruncated": "{{repo}}: 오래된 커밋 일부는 확인하지 않았어요",
+      "loading": "파일을 읽는 중"
+    }
   },
   "gitActions": {
     "syncGroup": "동기화",
