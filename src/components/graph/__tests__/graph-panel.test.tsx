@@ -448,10 +448,14 @@ describe("GraphPanel worktree chips (D5)", () => {
       const f1 = document.querySelector('[data-commit-id="f1"]') as HTMLElement;
       expect(f1.querySelector("circle")?.getAttribute("fill")).toBe("var(--ln)");
       expect(f1.querySelector("circle title")?.textContent).toBe("feat/x");
-      // 지금 연 워크트리(main)의 줄기와 main 이름표는 칩 견본 색이다.
+      // 지금 연 워크트리(main)의 줄기는 칩 견본 색이다. main은 HEAD이기도 해서 레인 색 채움
+      // 대신 HEAD 고유의 굵은 테두리를 유지한다(레인 색에 덮이면 HEAD 표시가 사라진다).
       const c1 = document.querySelector('[data-commit-id="c1"]') as HTMLElement;
       expect(c1.querySelector("circle")?.getAttribute("fill")).toBe(worktreeColor(REPO));
-      expect(c1.querySelector('[style*="--lane-bg"]')?.textContent).toBe("main");
+      const mainLabel = within(c1).getByTitle("main");
+      expect(mainLabel.getAttribute("style")).toBeFalsy();
+      expect(mainLabel.className).toContain("border-foreground/50");
+      expect(mainLabel.className).toContain("font-bold");
     } finally {
       history.pages.pop();
     }

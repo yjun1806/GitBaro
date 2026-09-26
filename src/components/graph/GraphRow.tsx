@@ -395,14 +395,23 @@ export function GraphWipRow({
         <span className="flex items-center gap-2 min-w-0">
           {leading}
           <span className="italic text-(--fg2) truncate">{wipLabel}</span>
-          {/* 이 변경이 쌓인 브랜치(그 브랜치 최신 커밋 위)와 워크트리. */}
-          {target.branch !== null ? (
-            <RefLabelMark name={branchText} kind="worktree" laneColor={color} className="max-w-[200px]" />
-          ) : (
-            <RefLabelMark name={branchText} kind="local" className="max-w-[200px]" />
-          )}
+          {/* 이 변경이 쌓인 브랜치(그 브랜치 최신 커밋 위)와 워크트리. 브랜치는 늘 브랜치 아이콘이고,
+              체크아웃한 워크트리가 있으면 그 레인 색으로 채운다 — 워크트리 이름표(폴더 아이콘)와
+              헷갈리지 않게 종류를 지킨다. */}
+          <RefLabelMark
+            name={branchText}
+            kind="local"
+            laneColor={target.branch !== null ? color : null}
+            className="max-w-[200px]"
+          />
           {target.worktree !== null ? (
-            <RefLabelMark name={target.worktree} kind="worktree" laneColor={color} className="max-w-[180px]" />
+            <RefLabelMark
+              name={target.worktree}
+              kind="worktree"
+              laneColor={color}
+              title={t("graph.worktree")}
+              className="max-w-[180px]"
+            />
           ) : (
             <span className="shrink-0 text-[11.5px] text-muted-foreground">{worktreeText}</span>
           )}

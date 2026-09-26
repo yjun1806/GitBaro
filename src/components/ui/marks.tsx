@@ -96,18 +96,26 @@ const REF_KIND_CLASS: Record<Exclude<RefLabelKind, "worktree">, string> = {
 export interface RefLabelProps {
   name: string;
   kind: RefLabelKind;
-  /** 이 브랜치를 체크아웃한 워크트리의 레인 색(`kind="worktree"`일 때만 쓴다). 없으면 회색. */
+  /**
+   * 이 브랜치를 체크아웃한 워크트리의 레인 색. `kind="local"`(체크아웃된 로컬 브랜치)·`kind="worktree"`
+   * (워크트리 이름)에서만 채움으로 쓴다. 원격·HEAD·태그는 종류를 가르는 모양(테두리만·굵은 테두리·초록)을
+   * 레인 색보다 앞세운다 — 안 그러면 레인 색이 있는 원격 브랜치가 로컬 브랜치와 같은 채움으로 보여
+   * 구분이 사라진다.
+   */
   laneColor?: string | null;
   className?: string;
+  /** 툴팁 글자. 기본은 `name`. 로컬에만 있는 태그처럼 이름에 상태를 덧붙일 때 쓴다. */
+  title?: string;
 }
 
 /** git 참조(브랜치·태그·워크트리·HEAD)의 이름(3.2). 종류·위치로 모양이 갈린다(D4). */
-export function RefLabel({ name, kind, laneColor, className }: RefLabelProps) {
+export function RefLabel({ name, kind, laneColor, className, title }: RefLabelProps) {
   const Icon = kind === "tag" || kind === "tag-local" ? Tag : kind === "worktree" ? FolderGit2 : GitBranch;
-  const laneStyle = kind === "worktree" ? laneLabelStyle(laneColor) : undefined;
+  const usesLane = kind === "local" || kind === "worktree";
+  const laneStyle = usesLane ? laneLabelStyle(laneColor) : undefined;
   return (
     <span
-      title={name}
+      title={title ?? name}
       style={laneStyle}
       className={cn(
         "inline-flex items-center gap-1 h-[18px] max-w-[140px] px-1.5 rounded-(--radius-chip) font-mono text-[10.5px] font-semibold leading-none border overflow-hidden",

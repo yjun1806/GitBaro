@@ -42,6 +42,44 @@ describe("RefLabel", () => {
     expect(getByTitle("wt-1").getAttribute("style")).toBeFalsy();
     expect(getByTitle("wt-1").className).toContain("bg-card");
   });
+
+  it("colors a local branch from the lane color when given (checked out by a worktree)", () => {
+    const { getByTitle } = render(<RefLabel name="feat/x" kind="local" laneColor="hsl(200, 50%, 50%)" />);
+    expect(getByTitle("feat/x").getAttribute("style")).toContain("--lane-bg");
+    expect(getByTitle("feat/x").className).toContain("bg-(--lane-bg)");
+  });
+
+  it("keeps the remote outline even when a lane color is given (does not merge with local/worktree)", () => {
+    const { getByTitle } = render(<RefLabel name="origin/feat/x" kind="remote" laneColor="hsl(200, 50%, 50%)" />);
+    const label = getByTitle("origin/feat/x");
+    expect(label.getAttribute("style")).toBeFalsy();
+    expect(label.className).toContain("bg-transparent");
+    expect(label.className).toContain("border-border");
+  });
+
+  it("keeps the bold HEAD outline even when a lane color is given", () => {
+    const { getByTitle } = render(<RefLabel name="feat/x" kind="head" laneColor="hsl(200, 50%, 50%)" />);
+    const label = getByTitle("feat/x");
+    expect(label.getAttribute("style")).toBeFalsy();
+    expect(label.className).toContain("border-foreground/50");
+    expect(label.className).toContain("font-bold");
+  });
+
+  it("renders each kind with a distinct look so local/remote/HEAD/tag/worktree never collide", () => {
+    const kinds = ["local", "remote", "head", "tag", "tag-local", "worktree"] as const;
+    const classes = kinds.map((kind) => {
+      const { getByTitle, unmount } = render(<RefLabel name="x" kind={kind} />);
+      const cls = getByTitle("x").className;
+      unmount();
+      return cls;
+    });
+    expect(new Set(classes).size).toBe(kinds.length);
+  });
+
+  it("uses a custom title over the name when given (e.g. a local-only tag)", () => {
+    render(<RefLabel name="v1" kind="tag-local" title="v1 (local only)" />);
+    expect(screen.getByTitle("v1 (local only)").textContent).toBe("v1");
+  });
 });
 
 describe("RepoTile", () => {
