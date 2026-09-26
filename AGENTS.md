@@ -247,8 +247,9 @@ cd src-tauri && cargo build          # Build
 
 ### Review model
 
-- The review basis is **commits not on any remote** (`git rev-list HEAD --not --remotes`, `git/unpushed.rs`), counted even when the branch has no upstream yet.
-- The unpushed range (remote boundary → HEAD, committed changes only) is reviewed as one combined diff: `get_range_changed_files` / `get_range_file_diff` (`commands/range_changes.rs`) compare two commits' trees. The fork point from the default branch comes from `get_divergence_point`.
+- The purpose is watching what agents change, not approving it. Never add approval, "viewed", "reviewed", or "N left to review" concepts; words describe what changed or what is happening now.
+- The basis is **commits not on any remote** (`git rev-list HEAD --not --remotes`, `git/unpushed.rs`), counted even when the branch has no upstream yet.
+- The unpushed range (remote boundary → HEAD, committed changes only) can be shown as one combined diff: `get_range_changed_files` / `get_range_file_diff` (`commands/range_changes.rs`) compare two commits' trees. The fork point from the default branch comes from `get_divergence_point`.
 - Viewing a branch in the graph does not check it out (`stores/history-view.ts`).
 - The repository display alias (repository settings) is display-only. Paths, git commands, account lookup, and storage keys use the real folder path and name. Use `useRepoDisplay` to show a name.
 
