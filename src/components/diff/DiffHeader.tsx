@@ -53,7 +53,13 @@ export function DiffHeader({
     : filePath;
 
   return (
-    <div className="flex items-center gap-3 px-4 h-[36px] bg-card border-b border-(--line) min-w-0">
+    // 따라가기(FollowPanel)가 diff 칸 안의 휠·누름·키를 「사용자가 diff를 움직였다」로 보고
+    // 멈추는데, 이 머리(모드 전환·찾기·크게 보기 버튼)를 누른 것까지 그렇게 보면 안 된다.
+    // 이 표(data-diff-header)로 그 구분을 준다.
+    <div
+      data-diff-header=""
+      className="flex items-center gap-3 px-4 h-[36px] bg-card border-b border-(--line) min-w-0"
+    >
       <FileStatusBadge status={status} size="md" />
 
       <div className="flex-1 min-w-0 flex items-center gap-0.5">

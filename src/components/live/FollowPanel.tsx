@@ -16,6 +16,8 @@ import { useFollowStore, type FollowMode } from "@/stores/follow";
 import { FOLLOW_KEY, useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { diffDelta, type DiffDelta } from "@/lib/diff-delta";
+import { useJustChanged } from "./useJustChanged";
+import { FocusFlash } from "@/components/ui/FocusFlash";
 import { FileStatusBadge } from "@/lib/file-status";
 import { cn, formatRelativeTime, getErrorMessage, trimTrailingSlash } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
@@ -33,6 +35,7 @@ import type { DiffOutput, StatusEntry, WipFile } from "@/types";
 import { useWorkingFileMenu } from "@/components/commit/useWorkingFileMenu";
 import { useFileMenu } from "@/components/commit/useFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 /** `registerWatchPaths`에 쓰는 이 화면의 key. 감시 대상 목록에서 맨 앞에 온다. */
 export const FOLLOW_WATCH_KEY = FOLLOW_KEY;
@@ -63,7 +66,7 @@ export function FollowBadge({ mode }: { mode: FollowMode }) {
       )}
     >
       <span
-        className={cn("w-1.5 h-1.5 rounded-full", following ? "bg-(--live)" : "bg-(--faint)")}
+        className={cn("w-1.5 h-1.5 rounded-full", following ? "bg-(--live) animate-live-breathe" : "bg-(--faint)")}
         aria-hidden="true"
       />
       {following ? t("live.following") : t("live.paused")}
@@ -273,6 +276,8 @@ function FollowFileList({
   const { t } = useTranslation();
   const now = useNow(1_000);
   const selectedIndex = selected === null ? -1 : files.findIndex((f) => f.path === selected);
+  // 방금 바뀐 파일의 행을 한 번 비춘다(diff의 새 줄과 같은 막). 「N초 전」 글자는 계속 세지만 비추기는 한 번뿐이다.
+  const justChanged = useJustChanged(files);
   // 위아래 화살표로 파일을 옮겨 고른다(고르면 따라가기가 멈춘다).
   const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
     items: files,
@@ -298,7 +303,7 @@ function FollowFileList({
             onClick={() => onPick(f.path)}
             onContextMenu={(e) => onContextMenu(f.path, e)}
             className={cn(
-              "w-full flex items-center gap-2 min-h-(--row) px-3 text-left border-b border-(--line) transition-colors",
+              "relative isolate w-full flex items-center gap-2 min-h-(--row) px-3 text-left border-b border-(--line) transition-colors",
               f.path === selected
                 ? "bg-(--acc-sel)"
                 : activeIndex === index
@@ -306,6 +311,7 @@ function FollowFileList({
                   : "hover:bg-accent",
             )}
           >
+            {justChanged?.paths.has(f.path) && <FocusFlash key={justChanged.at} testId="file-flash" />}
             <FileStatusBadge status={f.status} />
             <span className="flex-1 min-w-0 truncate text-[12.5px] text-foreground">
               <span>{name}</span>
@@ -365,8 +371,9 @@ export interface FollowPanelProps {
 
 /**
  * 실시간 따라가기(D4). 워크트리의 커밋하지 않은 파일을 수정 시각 순으로 보여 주고,
- * 따라가는 중에는 가장 최근 파일을 자동으로 골라 방금 생긴 줄을 강조한다.
- * 사용자가 파일을 고르거나 diff를 스크롤하면 멈춘다.
+ * 따라가는 중에는 가장 최근 파일을 자동으로 골라 방금 생긴 줄로 스크롤한 뒤 그 줄을 한 번 비추고
+ * (`FocusFlash`), 다음 변경까지 남는 표시(조용한 바탕·주황 줄 번호)를 둔다. 방금 바뀐 파일의 목록 행도
+ * 같은 막으로 한 번 비춘다. 사용자가 파일을 고르거나 diff를 스크롤하면 멈춘다.
  */
 export function FollowPanel({ path, variant, header, footer, switcher }: FollowPanelProps) {
   const { t } = useTranslation();
@@ -435,10 +442,11 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
   const handleResume = () => (isTarget ? resume() : start(path));
 
   // 사용자가 diff를 직접 움직이면(휠, 스크롤바·본문 누르기, 키) 따라가기를 멈춘다.
-  // 따라가기가 줄을 옮기는 스크롤은 이 이벤트를 내지 않는다. 안내 상자 안의 누름은 뺀다.
+  // 따라가기가 줄을 옮기는 스크롤은 이 이벤트를 내지 않는다. 안내 상자 안의 누름과 diff 머리
+  // (모드 전환·찾기·크게 보기 버튼)는 뺀다 — 그건 diff를 옮기는 게 아니라 보는 방식을 바꾸는 것이다.
   const handleIntervention = (e: SyntheticEvent) => {
     if (!following) return;
-    if (e.target instanceof Element && e.target.closest("[data-follow-toast]")) return;
+    if (e.target instanceof Element && e.target.closest("[data-follow-toast], [data-diff-header]")) return;
     handlePause();
   };
 
@@ -504,7 +512,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
       {isError ? (
         <p className="px-3 py-2 text-xs text-danger">{t("live.loadFailed")}</p>
       ) : isLoading ? (
-        <p className="px-3 py-2 text-xs text-muted-foreground">{t("diff.loadingDiff")}</p>
+        <LoadingState layout="row" label={t("diff.loadingDiff")} />
       ) : list.length === 0 ? (
         <p className="px-3 py-2 text-xs text-muted-foreground">{t("live.noChanges")}</p>
       ) : (
@@ -551,9 +559,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
       ) : diffError ? (
         <div className="flex-1 flex items-center justify-center text-sm text-danger">{t("diff.failedToLoad")}</div>
       ) : diffLoading && !diff ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-          {t("diff.loadingDiff")}
-        </div>
+        <LoadingState label={t("diff.loadingDiff")} />
       ) : (
         <>
           {shownSiblings.length > 0 && siblingFilePath && (
@@ -573,8 +579,10 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
             status={shown.status}
             staged={staged}
             freshLines={freshLines}
+            freshAt={fresh?.at ?? null}
             maximizable
             repoPath={path}
+            // 따라가는 중에만 새 줄로 옮긴다. 멈춘 동안은 사용자가 보던 자리를 지키고 줄 표시만 바뀐다.
             revealLine={following && fresh ? (fresh.delta.ranges[0]?.start ?? null) : null}
             headerExtra={
               <>
@@ -598,7 +606,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
         <div
           data-follow-toast
           role="status"
-          className="absolute right-4 top-12 z-10 flex items-center gap-2.5 py-2 pl-3 pr-2 rounded-(--radius-item) bg-foreground text-background text-[12px] shadow-(--shadow)"
+          className="absolute right-4 top-12 z-10 flex items-center gap-2.5 py-2 pl-3 pr-2 rounded-(--radius-item) bg-foreground text-background text-[12px] shadow-(--shadow) animate-pop-in"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-(--live)" aria-hidden="true" />
           {freshMessage(t, fresh.delta)}

@@ -68,30 +68,32 @@ describe("branchColors", () => {
 });
 
 describe("remoteBoundaryIndex", () => {
-  const own = () => true;
-
   it("points at the first commit on a remote below the unpushed ones", () => {
-    const list = [
-      { id: "c3", isUnpushed: true },
-      { id: "c2", isUnpushed: true },
-      { id: "c1", isUnpushed: false },
-      { id: "c0", isUnpushed: false },
-    ];
-    expect(remoteBoundaryIndex(list, own)).toBe(2);
+    const list = [{ isUnpushed: true }, { isUnpushed: true }, { isUnpushed: false }, { isUnpushed: false }];
+    expect(remoteBoundaryIndex(list)).toBe(2);
   });
 
   it("draws nothing when everything is pushed or nothing pushed is loaded yet", () => {
-    expect(remoteBoundaryIndex([{ id: "a", isUnpushed: false }], own)).toBeNull();
-    expect(remoteBoundaryIndex([{ id: "a", isUnpushed: true }], own)).toBeNull();
-    expect(remoteBoundaryIndex([], own)).toBeNull();
+    expect(remoteBoundaryIndex([{ isUnpushed: false }])).toBeNull();
+    expect(remoteBoundaryIndex([{ isUnpushed: true }])).toBeNull();
+    expect(remoteBoundaryIndex([])).toBeNull();
+    // 원격 여부를 모르는 목록(다른 화면의 커밋)에는 경계가 없다.
+    expect(remoteBoundaryIndex([{}, {}])).toBeNull();
   });
 
-  it("ignores commits drawn from other worktrees", () => {
+  it("goes below the last unpushed commit when merged remote commits sit between local ones", () => {
+    // 원격 커밋 m9를 merge한 뒤 시간순: u3(merge) · m9 · u1 · m8. 「여기부터 아래는 원격에 있음」이
+    // 참이려면 경계는 m8 위여야 한다(m9 위가 아니다).
     const list = [
-      { id: "other", isUnpushed: false },
-      { id: "mine", isUnpushed: true },
-      { id: "base", isUnpushed: false },
+      { id: "u3", isUnpushed: true },
+      { id: "m9", isUnpushed: false },
+      { id: "u1", isUnpushed: true },
+      { id: "m8", isUnpushed: false },
     ];
-    expect(remoteBoundaryIndex(list, (id) => id !== "other")).toBe(2);
+    expect(remoteBoundaryIndex(list)).toBe(3);
+  });
+
+  it("skips commits whose remote state is unknown", () => {
+    expect(remoteBoundaryIndex([{ isUnpushed: true }, {}, { isUnpushed: false }])).toBe(2);
   });
 });

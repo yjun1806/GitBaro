@@ -15,6 +15,7 @@ import { useHistoryViewStore } from "@/stores/history-view";
 import { syncStatusPaths } from "@/components/sidebar/tree-model";
 import { worktreeColor } from "../worktree-history";
 import { useGraphWorktreesStore } from "../graph-worktrees";
+import { UNPUSHED_ROW_CLASS } from "../GraphRow";
 import type {
   CommitInfo,
   GitOperation,
@@ -672,16 +673,62 @@ describe("GraphPanel commits not on any remote", () => {
 
   afterEach(() => {
     history.pages[0] = history.pages[0].map(({ isUnpushed: _drop, ...c }) => c);
+    for (const key of Object.keys(changesVsDefaultByPath)) delete changesVsDefaultByPath[key];
   });
 
-  it("draws unpushed commits solid and pushed ones hollow, with a boundary at the first pushed commit", () => {
+  const dot = (id: string) =>
+    document.querySelector(`[data-commit-id="${id}"] circle[data-dot]`)?.getAttribute("data-dot");
+  const tinted = (id: string) =>
+    document.querySelector(`[data-commit-id="${id}"]`)?.className.includes(UNPUSHED_ROW_CLASS);
+  /** 커밋 행과 경계 행을 화면 순서대로. */
+  const rowOrder = () =>
+    [...document.querySelectorAll("[data-commit-id], [role=separator]")].map(
+      (el) => el.getAttribute("data-commit-id") ?? el.getAttribute("data-testid"),
+    );
+
+  it("tints unpushed commits and puts an 'on the remote' row above the first pushed one", () => {
     renderPanel();
-    const dot = (id: string) =>
-      document.querySelector(`[data-commit-id="${id}"] circle[data-dot]`)?.getAttribute("data-dot");
     expect(["c1", "c2", "c3", "c4"].map(dot)).toEqual(["unpushed", "unpushed", "pushed", "pushed"]);
-    const boundary = document.querySelectorAll("[data-remote-boundary]");
-    expect([...boundary].map((el) => el.getAttribute("data-commit-id"))).toEqual(["c3"]);
-    expect(screen.getByTestId("remote-boundary").getAttribute("title")).toBe("On a remote from here down");
+    expect(["c1", "c2", "c3", "c4"].map(tinted)).toEqual([true, true, false, false]);
+    expect(rowOrder()).toEqual(["c1", "c2", "remote-boundary-row", "c3", "c4"]);
+    // 원격 이름표 + 문장 + 아래 커밋의 시각. 개수는 사이드바와 Push 버튼이 맡으므로 여기엔 없다.
+    const boundary = screen.getByRole("separator", { name: /On the remote from here down/ });
+    expect(boundary.textContent).toMatch(
+      /^originOn the remote from here down · the commits above are not pushed yet\d+ years? ago$/,
+    );
+  });
+
+  it("puts the remote boundary above the fork point when both sit on the same commit", async () => {
+    changesVsDefaultByPath[REPO] = {
+      baseStatus: "found",
+      mergeBaseOid: "c3",
+      branch: "feat/y",
+      defaultBranch: "main",
+      committed: [],
+    };
+    renderPanel();
+    await screen.findByTestId("fork-point-row");
+    expect(rowOrder()).toEqual(["c1", "c2", "remote-boundary-row", "fork-point-row", "c3", "c4"]);
+  });
+
+  it("names no remote on the boundary row when the repository has several", () => {
+    const twoRemotes = {
+      ...remoteRepo,
+      remotes: [...remoteRepo.remotes, { name: "upstream", url: "https://github.com/u/app.git" }],
+    } as RepoInfo;
+    useRepositoryStore.setState({ repos: [twoRemotes], activeRepo: twoRemotes, activeRepoPath: REPO });
+    renderPanel();
+    const boundary = screen.getByTestId("remote-boundary-row");
+    expect(boundary.textContent).not.toContain("origin");
+    expect(boundary.textContent).toMatch(/^remote/);
+  });
+
+  it("draws no band, boundary or hollow dots without a remote", () => {
+    useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
+    renderPanel();
+    expect(screen.queryByTestId("remote-boundary-row")).toBeNull();
+    expect(["c1", "c3"].map(dot)).toEqual(["plain", "plain"]);
+    expect(["c1", "c3"].map(tinted)).toEqual([false, false]);
   });
 });
 

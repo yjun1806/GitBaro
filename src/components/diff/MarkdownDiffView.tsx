@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Loader2 } from "lucide-react";
+
 import { paint, type PaintLabels } from "@/lib/md-diff/paint";
 import { useDocDiff } from "@/lib/md-diff/use-doc-diff";
 import { clearFindHighlights, documentRanges, paintFindHighlights } from "./find-highlight";
 import "./md-diff.css";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 interface MarkdownDiffViewProps {
   oldContent: string;
@@ -97,20 +98,11 @@ export function MarkdownDiffView({ oldContent, newContent, onError, find = null,
 
   // 오류는 부모가 통합 보기로 전환하며 토스트로 설명한다 — 여기서 또 말하면 두 번 말하는 셈이다.
   if (state.status !== "ready") {
-    return (
-      <div className="flex-1 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-        {state.status === "error" ? null : (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            {t("mdDiff.rendering")}
-          </>
-        )}
-      </div>
-    );
+    return state.status === "error" ? <div className="flex-1" /> : <LoadingState label={t("mdDiff.rendering")} />;
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-auto">
+    <div className="flex-1 min-h-0 overflow-auto animate-content-in">
       <div ref={hostRef} className="md-diff" onClick={handleClick} />
     </div>
   );

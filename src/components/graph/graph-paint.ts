@@ -63,21 +63,21 @@ export function mutedChainNames(
 }
 
 /**
- * 「원격에 올라간 지점」: 원격에 없는 커밋들 아래 처음 나오는, 원격에 있는 커밋의 번호.
- * 원격에 없는 커밋이 하나도 없거나(모두 올라감) 원격에 있는 커밋을 아직 불러오지 않았으면 null.
- * `isOwn`이 거짓인 커밋(함께 그린 다른 워크트리의 커밋)은 보지 않는다.
+ * 「원격에 올라간 지점」 행을 둘 자리: 원격에 없는 커밋 가운데 마지막 것 아래 처음 나오는, 원격에
+ * 있는 커밋의 번호. 그 행부터 아래는 모두 원격에 있다 — 원격 커밋을 merge해 원격에 없는 커밋 사이에
+ * 원격 커밋이 끼어도 경계는 그 아래로 간다. 함께 그린 다른 워크트리의 커밋도 같이 센다(화면의
+ * 모든 행에 대해 참이어야 한다).
+ * 원격에 없는 커밋이 하나도 없거나(모두 올라감) 그 아래 원격에 있는 커밋을 아직 불러오지 않았으면 null.
+ * 원격 여부를 모르는 커밋(`isUnpushed` 없음)은 건너뛴다.
  */
-export function remoteBoundaryIndex(
-  commits: readonly { id: string; isUnpushed?: boolean }[],
-  isOwn: (id: string) => boolean,
-): number | null {
-  let sawUnpushed = false;
+export function remoteBoundaryIndex(commits: readonly { isUnpushed?: boolean }[]): number | null {
+  let lastUnpushed = -1;
   for (let i = 0; i < commits.length; i++) {
-    const c = commits[i];
-    if (!isOwn(c.id) || c.isUnpushed === undefined) continue;
-    if (c.isUnpushed) sawUnpushed = true;
-    else if (sawUnpushed) return i;
-    else return null;
+    if (commits[i].isUnpushed === true) lastUnpushed = i;
+  }
+  if (lastUnpushed === -1) return null;
+  for (let i = lastUnpushed + 1; i < commits.length; i++) {
+    if (commits[i].isUnpushed === false) return i;
   }
   return null;
 }

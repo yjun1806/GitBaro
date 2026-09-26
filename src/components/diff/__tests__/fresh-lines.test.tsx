@@ -22,7 +22,7 @@ globalThis.ResizeObserver ??= class {
   disconnect() {}
 } as unknown as typeof ResizeObserver;
 
-const { VirtualizedDiffView } = await import("../VirtualizedDiffView");
+const { VirtualizedDiffView, FRESH_FLASH_MS } = await import("../VirtualizedDiffView");
 
 const OLD = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join("\n") + "\n";
 // 3행 뒤에 세 줄(새 쪽 4–6행)을 넣었다.
@@ -50,7 +50,12 @@ function buildFile() {
   return file;
 }
 
-function renderView(viewMode: "unified" | "split", freshLines?: ReadonlySet<number>, revealLine: number | null = null) {
+function renderView(
+  viewMode: "unified" | "split",
+  freshLines?: ReadonlySet<number>,
+  revealLine: number | null = null,
+  freshAt: number | null = null,
+) {
   return render(
     <VirtualizedDiffView
       diffFile={buildFile()}
@@ -59,6 +64,7 @@ function renderView(viewMode: "unified" | "split", freshLines?: ReadonlySet<numb
       highlight={false}
       fontSize={12}
       freshLines={freshLines}
+      freshAt={freshAt}
       revealLine={revealLine}
     />,
   );
@@ -78,6 +84,65 @@ describe("VirtualizedDiffView fresh lines (follow mode)", () => {
   it("marks nothing without fresh lines", () => {
     const { container } = renderView("unified");
     expect(container.querySelectorAll("[data-fresh]")).toHaveLength(0);
+  });
+
+  it.each(["unified", "split"] as const)(
+    "marks the new-side line number of fresh lines instead of drawing a bar on the left edge in %s view",
+    (mode) => {
+      const { container } = renderView(mode, new Set([4, 5, 6]));
+      const numbers = [...container.querySelectorAll<HTMLElement>("[data-fresh-no]")];
+      expect(numbers.map((el) => el.textContent)).toEqual(["4", "5", "6"]);
+      expect(numbers.every((el) => el.getAttribute("data-line-no") === "new")).toBe(true);
+      // 사용자가 싫어하는 왼쪽 세로 막대(inset 그림자·왼쪽 테두리)는 어느 줄에도 없다.
+      const rows = [...container.querySelectorAll<HTMLElement>("[data-fresh]")];
+      expect(rows.every((el) => !el.style.boxShadow && !el.style.borderLeft)).toBe(true);
+    },
+  );
+
+  it.each(["unified", "split"] as const)(
+    "flashes the fresh lines drawn right after they arrive, and only marks them later in %s view",
+    (mode) => {
+      const fresh = new Set([4, 5, 6]);
+      // Drawn within the flash window: every fresh line carries the one-time overlay, inside the marked row.
+      const { container, unmount } = renderView(mode, fresh, null, Date.now());
+      const overlays = [...container.querySelectorAll("[data-focus-flash]")];
+      expect(overlays).toHaveLength(3);
+      expect(overlays.every((el) => el.parentElement?.hasAttribute("data-fresh"))).toBe(true);
+      unmount();
+
+      // Drawn after the window (a row scrolled back into view): the lasting mark only, no replay.
+      const late = renderView(mode, fresh, null, Date.now() - FRESH_FLASH_MS - 1);
+      expect(late.container.querySelectorAll("[data-fresh]")).toHaveLength(3);
+      expect(late.container.querySelectorAll("[data-focus-flash]")).toHaveLength(0);
+      late.unmount();
+
+      // No arrival time at all: the lasting mark only.
+      const none = renderView(mode, fresh);
+      expect(none.container.querySelectorAll("[data-focus-flash]")).toHaveLength(0);
+    },
+  );
+
+  it("flashes again when the same lines change once more", () => {
+    // 같은 줄이 또 바뀌면 새 도착 시각이 오고, 막은 새로 마운트돼 다시 비춘다.
+    const fresh = new Set([4, 5, 6]);
+    const at = Date.now();
+    const view = (freshAt: number) => (
+      <VirtualizedDiffView
+        diffFile={buildFile()}
+        viewMode="unified"
+        isDark={false}
+        highlight={false}
+        fontSize={12}
+        freshLines={fresh}
+        freshAt={freshAt}
+      />
+    );
+    const { container, rerender } = render(view(at));
+    const first = container.querySelector("[data-focus-flash]");
+    rerender(view(at));
+    expect(container.querySelector("[data-focus-flash]")).toBe(first);
+    rerender(view(at + 1));
+    expect(container.querySelector("[data-focus-flash]")).not.toBe(first);
   });
 
   it.each(["unified", "split"] as const)("scrolls the revealed new-side line into the middle in %s view", (mode) => {

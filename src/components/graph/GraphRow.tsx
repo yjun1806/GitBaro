@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { ArrowUp, Bot, FolderGit2, GitBranch } from "lucide-react";
 import { RefBadge } from "@/components/history/CommitItem";
+import { FocusFlash } from "@/components/ui/FocusFlash";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { GraphEdge, GraphRowLayout } from "@/lib/graph-lanes";
 import type { CommitInfo, RefLabel } from "@/types";
@@ -32,9 +33,16 @@ export function edgePath(edge: GraphEdge, dotLane: number): string {
 
 /**
  * 커밋 점 모양. `plain`: 채운 점(원격이 없을 때).
- * `unpushed`: 원격에 없는 커밋 — 채운 점 + 옅은 고리. `pushed`: 원격에 있는 커밋 — 속 빈 점.
+ * `unpushed`: 원격에 없는 커밋 — 채운 점 + 옅은 고리, 행 바탕은 옅은 띠(`UNPUSHED_ROW_CLASS`).
+ * `pushed`: 원격에 있는 커밋 — 속 빈 점.
  */
 export type CommitDot = "plain" | "unpushed" | "pushed";
+
+/**
+ * 원격에 없는 커밋 행의 바탕. 섹션 머리 띠와 같은 옅은 회색이라, 위 WIP 행부터 「원격에 올라간 지점」
+ * 행까지가 한 덩어리(아직 push 안 한 작업)로 읽힌다. 고른 행·강조 행·hover 바탕이 이보다 앞선다.
+ */
+export const UNPUSHED_ROW_CLASS = "bg-(--acc-faint)";
 
 interface GraphCellProps {
   layout: GraphRowLayout;
@@ -112,10 +120,13 @@ interface GraphRowProps {
   laneTitle?: (chain: number) => string | undefined;
   /** 브랜치 이름표 색(그 브랜치를 체크아웃한 워크트리의 색). 없으면 회색 이름표. */
   refColor?: (label: RefLabel) => string | null;
-  /** 이 행 위 가장자리에 「원격에 올라간 지점」 경계를 그린다. */
-  remoteBoundary?: boolean;
   /** 설명 칸 맨 앞(ref 라벨 앞)에 둘 것. 저장소별 레인 모드의 저장소 표시에 쓴다. */
   leading?: ReactNode;
+  /**
+   * 따라가는 중에 새로 나타난 커밋(`useNewCommits`). 행을 한 번 비춘다(`FocusFlash`). 행이 다시 마운트되지
+   * 않는 한 다시 그려도 다시 비추지 않는다.
+   */
+  flash?: boolean;
   onClick: () => void;
   onContextMenu?: (e: MouseEvent) => void;
   /** 브랜치·태그 이름표 우클릭. 주면 행의 메뉴 대신 이름표 메뉴를 연다. */
@@ -140,8 +151,8 @@ export function GraphRow({
   dot = "plain",
   laneTitle,
   refColor,
-  remoteBoundary = false,
   leading,
+  flash = false,
   onClick,
   onContextMenu,
   onRefContextMenu,
@@ -160,18 +171,17 @@ export function GraphRow({
       onContextMenu={onContextMenu}
       aria-current={isSelected ? "true" : undefined}
       data-commit-id={commit.id}
-      data-remote-boundary={remoteBoundary || undefined}
       className={cn(
-        "relative flex items-center w-full text-left border-b border-(--line) select-none transition-colors",
+        "relative isolate flex items-center w-full text-left border-b border-(--line) select-none transition-colors",
         isSelected
           ? "bg-(--acc-sel)"
           : isHighlighted
             ? "bg-accent ring-1 ring-inset ring-primary/30"
-            : "hover:bg-accent",
+            : cn("hover:bg-accent", dot === "unpushed" && UNPUSHED_ROW_CLASS),
       )}
       style={{ height: H }}
     >
-      {remoteBoundary && <RemoteBoundary />}
+      {flash && <FocusFlash testId="commit-flash" />}
       <GraphCell
         layout={layout}
         width={graphWidth}
@@ -242,23 +252,6 @@ export function GraphRow({
         </span>
       </span>
     </button>
-  );
-}
-
-/**
- * 「원격에 올라간 지점」 경계: 이 행 위 가장자리의 가는 점선. 위는 원격에 없는 커밋, 여기부터 원격에 있다.
- * 선 위에 마우스를 올리면 이름이 보인다.
- */
-function RemoteBoundary() {
-  const { t } = useTranslation();
-  return (
-    <span
-      data-testid="remote-boundary"
-      title={t("graph.remoteBoundary")}
-      className="absolute left-0 right-0 -top-[3px] h-[6px] z-[1] flex items-center"
-    >
-      <span aria-hidden="true" className="w-full border-t border-dashed border-(--ln)" />
-    </span>
   );
 }
 
@@ -346,13 +339,6 @@ export function GraphWipRow({
       onClick={onSelect}
       className="flex items-center flex-1 min-w-0 h-full text-left"
     >
-      {/* 워크트리 색의 짧은 막대: 이 행이 어느 워크트리의 변경인지 레인과 같은 색으로 알린다. */}
-      <span
-        aria-hidden="true"
-        data-testid="wip-bar"
-        className="self-center shrink-0 w-[3px] h-[18px] rounded-full ml-0.5 -mr-[5px]"
-        style={{ background: color }}
-      />
       <svg width={graphWidth} height={H} viewBox={`0 0 ${graphWidth} ${H}`} aria-hidden="true" className="shrink-0">
         {layout?.edges.map((edge, i) => (
           <path
@@ -431,30 +417,32 @@ export function wipBranchText(t: TFunction, target: WipTarget): string {
     : t("graph.wipDetachedUnknown");
 }
 
-interface ForkPointRowProps {
-  /** 기본 브랜치 이름(`main`). */
-  branch: string;
-  /** 갈라진 지점 커밋의 시각(epoch s). */
+interface SeparatorRowProps {
+  /** 행 앞의 이름표(브랜치 이름, 원격 이름). */
+  chip: string;
+  /** 이 행이 뜻하는 경계. 스크린 리더 이름으로도 쓴다. */
+  text: string;
+  /** 경계 바로 아래 커밋의 시각(epoch s). */
   timestamp: number | null;
   graphWidth: number;
   /** 이 행을 지나 아래로 이어지는 선(바로 위 행의 아래 가장자리 선). */
   through: readonly { lane: number; chain: number }[];
   colorOf: (chain: number) => string;
+  testId: string;
 }
 
 /**
- * 저장소 그래프의 「main에서 갈라진 지점」 행(D4). 갈라진 지점 커밋 바로 위에 끼며, 이 행 위가
- * 이 브랜치에서 새로 만든 커밋이다. 그래프 선은 끊기지 않고 지나간다.
+ * 커밋 행 사이에 끼는 경계 행. 바로 아래 커밋이 어떤 경계인지 말로 적는다(「main에서 갈라진 지점」,
+ * 「원격에 올라간 지점」). 그래프 선은 끊기지 않고 지나간다.
  */
-export function ForkPointRow({ branch, timestamp, graphWidth, through, colorOf }: ForkPointRowProps) {
-  const { t } = useTranslation();
+function SeparatorRow({ chip, text, timestamp, graphWidth, through, colorOf, testId }: SeparatorRowProps) {
   return (
     <div
       role="separator"
-      aria-label={t("graph.forkPoint", { branch })}
+      aria-label={text}
       className="flex items-center border-b border-(--line)"
       style={{ height: H }}
-      data-testid="fork-point-row"
+      data-testid={testId}
     >
       <svg width={graphWidth} height={H} viewBox={`0 0 ${graphWidth} ${H}`} aria-hidden="true" className="shrink-0">
         {through.map(({ lane, chain }) => (
@@ -470,13 +458,51 @@ export function ForkPointRow({ branch, timestamp, graphWidth, through, colorOf }
       </svg>
       <span className="flex items-center gap-2 flex-1 min-w-0 pl-2 pr-3 text-[12.5px]">
         <span className="shrink-0 px-[7px] py-px rounded-[6px] bg-(--chip) text-[10.5px] font-bold text-(--fg2)">
-          {branch}
+          {chip}
         </span>
-        <span className="flex-1 truncate text-(--fg2)">{t("graph.forkPoint", { branch })}</span>
+        <span className="flex-1 truncate text-(--fg2)">{text}</span>
         {timestamp !== null && (
           <span className="shrink-0 text-[12px] text-muted-foreground">{formatRelativeTime(timestamp)}</span>
         )}
       </span>
     </div>
   );
+}
+
+interface ForkPointRowProps {
+  /** 기본 브랜치 이름(`main`). */
+  branch: string;
+  /** 갈라진 지점 커밋의 시각(epoch s). */
+  timestamp: number | null;
+  graphWidth: number;
+  through: readonly { lane: number; chain: number }[];
+  colorOf: (chain: number) => string;
+}
+
+/**
+ * 저장소 그래프의 「main에서 갈라진 지점」 행(D4). 갈라진 지점 커밋 바로 위에 끼며, 이 행 위가
+ * 이 브랜치에서 새로 만든 커밋이다.
+ */
+export function ForkPointRow({ branch, ...rest }: ForkPointRowProps) {
+  const { t } = useTranslation();
+  return <SeparatorRow {...rest} chip={branch} text={t("graph.forkPoint", { branch })} testId="fork-point-row" />;
+}
+
+interface RemoteBoundaryRowProps {
+  /** 원격 이름(`origin`). 원격이 여럿이면 「원격」. */
+  remote: string;
+  /** 경계 바로 아래(원격에 있는 첫) 커밋의 시각(epoch s). */
+  timestamp: number | null;
+  graphWidth: number;
+  through: readonly { lane: number; chain: number }[];
+  colorOf: (chain: number) => string;
+}
+
+/**
+ * 「원격에 올라간 지점」 행. 원격에 있는 첫 커밋 바로 위에 끼며, 이 행 위(옅은 띠 행)가 아직
+ * push 안 한 커밋이고 여기부터 아래는 모두 원격에 있다(`remoteBoundaryIndex`).
+ */
+export function RemoteBoundaryRow({ remote, ...rest }: RemoteBoundaryRowProps) {
+  const { t } = useTranslation();
+  return <SeparatorRow {...rest} chip={remote} text={t("graph.remoteBoundary")} testId="remote-boundary-row" />;
 }

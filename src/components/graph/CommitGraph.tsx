@@ -1,6 +1,6 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
+
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRepositoryStore } from "@/stores/repository";
@@ -29,6 +29,7 @@ import { CommitContextMenu } from "@/components/history/CommitContextMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { useWipRowMenu } from "./useWipRowMenu";
 import { useRefLabelMenu } from "./useRefLabelMenu";
+import { useNewCommits } from "./useNewCommits";
 import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
 import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
 import type { CommitInfo, HistoryTarget, RefLabel } from "@/types";
@@ -39,6 +40,7 @@ import {
   GRAPH_COLUMNS,
   GraphRow,
   GraphWipRow,
+  RemoteBoundaryRow,
   type CommitDot,
 } from "./GraphRow";
 import {
@@ -64,6 +66,7 @@ import {
 import { branchColorOf, MUTED_LANE } from "./lane-style";
 import { BranchRangeGraph } from "@/components/branch/BranchRangeGraph";
 import { activeRange, isStaleRange, useBranchRangeStore } from "@/components/branch/branch-range";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 export interface CommitGraphProps {
   /** 맨 위 WIP 행(`useGraphReview`가 순서까지 정한 목록). */
@@ -333,13 +336,15 @@ function CommitGraphList({
       label.kind === "tag" ? null : branchColorOf(label.name, label.kind === "remoteBranch", colorByBranch),
     [colorByBranch],
   );
+  // 원격이 있을 때만 「원격에 있는지」를 그린다: 원격에 없는 커밋은 옅은 띠 행 + 채운 점, 원격에 있는
+  // 커밋은 속 빈 점, 둘 사이에 「원격에 올라간 지점」 행. 개수는 사이드바의 ↑N과 Push 버튼이 맡는다.
   const markRemote = hasRemote;
   const dotOf = (commit: CommitInfo): CommitDot =>
     !markRemote || commit.isUnpushed === undefined ? "plain" : commit.isUnpushed ? "unpushed" : "pushed";
-  const boundaryIdx = useMemo(
-    () => (markRemote ? remoteBoundaryIndex(commits, (id) => ownIds.has(id)) : null),
-    [markRemote, commits, ownIds],
-  );
+  const boundaryIdx = useMemo(() => (markRemote ? remoteBoundaryIndex(commits) : null), [markRemote, commits]);
+  // 경계 행의 이름표: 「원격에 없음」은 어느 원격에도 없다는 뜻이라, 원격이 여럿이면 이름을 고르지 않는다.
+  const remotes = useRepositoryStore((s) => s.activeRepo?.remotes);
+  const remoteLabel = remotes?.length === 1 ? remotes[0].name : t("graph.anyRemote");
 
   const selectedIdx = useMemo(
     () => commits.findIndex((c) => c.id === selectedCommitId),
@@ -350,6 +355,21 @@ function CommitGraphList({
     onSelect: (c) => selectCommit(c.id),
     selectedIndex: selectedIdx,
   });
+
+  // 따라가는 중에 새로 나타난 커밋(에이전트가 커밋함)을 한 번 비춘다. 다른 저장소·다른 브랜치 보기·
+  // 함께 그리는 워크트리가 바뀌어 목록이 통째로 바뀔 때는 비추지 않는다(경로만 비교한다 — HEAD가
+  // 바뀌어 그 워크트리의 이력을 다시 읽는 것은 「새 커밋」이다).
+  const followTarget = useFollowStore((s) => s.target);
+  const commitIds = useMemo(() => commits.map((c) => c.id), [commits]);
+  const shownPathsKey = worktreeHeads
+    .map((h) => h.path)
+    .sort()
+    .join("\u0001");
+  const newCommits = useNewCommits(
+    commitIds,
+    `${activeRepoPath ?? ""}\u0000${JSON.stringify(historyTarget ?? null)}\u0000${shownPathsKey}`,
+    followTarget !== null,
+  );
 
   // 무한 스크롤: 맨 아래 표시가 보이면 다음 페이지를 불러온다.
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -393,7 +413,6 @@ function CommitGraphList({
     [openRefMenu],
   );
 
-
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       <div
@@ -422,7 +441,7 @@ function CommitGraphList({
         )}
 
         {isLoading ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t("history.loadingHistory")}</p>
+          <LoadingState label={t("history.loadingHistory")} />
         ) : commits.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{t("history.noCommits")}</p>
         ) : (
@@ -431,14 +450,25 @@ function CommitGraphList({
             if (!layout) return null;
             const emailKey = commit.author.email?.toLowerCase() ?? "";
             const prevLayout = index > 0 ? layouts.get(commits[index - 1].id) : undefined;
+            const through = prevLayout ? edgesThroughBottom(prevLayout.edges) : [];
             return (
               <Fragment key={commit.id}>
+                {/* 두 경계가 같은 커밋 위에 오면(새 브랜치를 아직 push 안 함) 원격 경계가 위, 갈라진 지점이 아래다. */}
+                {boundaryIdx === index && (
+                  <RemoteBoundaryRow
+                    remote={remoteLabel}
+                    timestamp={commit.timestamp}
+                    graphWidth={graphWidth}
+                    through={through}
+                    colorOf={colorOf}
+                  />
+                )}
                 {forkIdx === index && changes?.defaultBranch && (
                   <ForkPointRow
                     branch={changes.defaultBranch}
                     timestamp={commit.timestamp}
                     graphWidth={graphWidth}
-                    through={prevLayout ? edgesThroughBottom(prevLayout.edges) : []}
+                    through={through}
                     colorOf={colorOf}
                   />
                 )}
@@ -456,7 +486,7 @@ function CommitGraphList({
                   dot={dotOf(commit)}
                   laneTitle={laneTitle}
                   refColor={refColor}
-                  remoteBoundary={boundaryIdx === index}
+                  flash={newCommits.has(commit.id)}
                   onSelect={selectCommit}
                   onRowContextMenu={handleRowContextMenu}
                   onRefContextMenu={handleRefContextMenu}
@@ -467,9 +497,7 @@ function CommitGraphList({
         )}
         <div ref={loadMoreRef} />
         {isFetchingNextPage && (
-          <div className="flex items-center justify-center py-3 text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-          </div>
+          <LoadingState layout="row" className="justify-center" />
         )}
       </div>
 
@@ -614,7 +642,8 @@ interface HistoryGraphRowProps {
   dot: CommitDot;
   laneTitle: (chain: number) => string | undefined;
   refColor: (label: RefLabel) => string | null;
-  remoteBoundary: boolean;
+  /** 따라가는 중에 새로 나타난 커밋이면 한 번 비춘다. */
+  flash: boolean;
   onSelect: (commitId: string) => void;
   onRowContextMenu: (commit: CommitInfo, e: MouseEvent) => void;
   onRefContextMenu: (label: RefLabel, e: MouseEvent) => void;
@@ -742,7 +771,7 @@ export function RepoLaneCommitGraph({
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
         {isLoading && graph.rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t("history.loadingHistory")}</p>
+          <LoadingState label={t("history.loadingHistory")} />
         ) : graph.rows.length === 0 ? (
           <p className="py-6 px-4 text-center text-sm text-muted-foreground">{emptyMessage ?? t("review.noCommits")}</p>
         ) : (

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronUp, ChevronDown, UnfoldVertical } from "lucide-react";
 import { DiffOverviewRuler } from "./DiffOverviewRuler";
+import { FocusFlash } from "@/components/ui/FocusFlash";
 import { findLineMatches, type FindCell, type FindMatch, type FindSide } from "./diff-find";
 import { clearFindHighlights, paintFindHighlights, rangesIn, textNodesOf } from "./find-highlight";
 import {
@@ -290,6 +291,11 @@ interface VirtualizedDiffViewProps {
   fontSize: number;
   /** 새 쪽 줄 번호 중 「방금 바뀐 줄」로 강조할 것(따라가기, D4). */
   freshLines?: ReadonlySet<number>;
+  /**
+   * `freshLines`가 들어온 때(epoch ms). 그 뒤 `FRESH_FLASH_MS` 안에 그리는 방금 바뀐 줄은 한 번
+   * 비춘다(`FocusFlash`). 그 뒤에 화면에 들어오는 줄(스크롤로 다시 마운트)은 남는 표시만 보인다.
+   */
+  freshAt?: number | null;
   /** 이 새 쪽 줄 번호가 보이도록 스크롤한다. 값이 바뀔 때만 움직인다. */
   revealLine?: number | null;
   /** 바뀌면 같은 줄이라도 다시 스크롤한다(같은 스레드를 다시 눌렀을 때). */
@@ -358,9 +364,19 @@ function lineText(value: string | undefined): string {
   return (value ?? "").replace(/\r?\n$/, "");
 }
 
-/** 방금 바뀐 줄 표시: 주황 옅은 배경과 왼쪽 3px 막대(시안 D4). */
-const FRESH_BG = "var(--live-soft)";
-const FRESH_MARK = "inset 3px 0 0 var(--live)";
+/**
+ * 방금 바뀐 줄에 다음 변경까지 남는 표시: 조용한 주황 바탕과 주황 굵은 새 쪽 줄 번호. 왼쪽 세로 막대는
+ * 쓰지 않는다(사용자가 싫어하는 모양). 막 표시가 걷힌 뒤(`FocusFlash`) 이것만 남는다.
+ */
+const FRESH_BG = "var(--live-faint)";
+const FRESH_NUM: React.CSSProperties = { color: "var(--live)", fontWeight: 600 };
+/**
+ * 방금 바뀐 줄을 비추는(`animate-focus-flash`, 1.2초) 창. 이 안에 그리는 줄만 막을 얹는다 — 창이 지난 뒤
+ * 스크롤로 다시 마운트되는 줄까지 비추면 스크롤할 때마다 깜빡인다.
+ */
+export const FRESH_FLASH_MS = 1_500;
+/** 비추는 막이 글자 아래, 바탕 위에 깔리도록 줄을 쌓임 맥락으로 만든다(`FocusFlash`의 `-z-10`). */
+const FRESH_HOST: React.CSSProperties = { position: "relative", isolation: "isolate" };
 
 export function VirtualizedDiffView({
   diffFile,
@@ -369,6 +385,7 @@ export function VirtualizedDiffView({
   highlight,
   fontSize,
   freshLines,
+  freshAt = null,
   revealLine = null,
   revealNonce = 0,
   onLineContextMenu,
@@ -383,6 +400,8 @@ export function VirtualizedDiffView({
 
   const rowHeight = resolveRowHeight(fontSize);
   const isSplit = viewMode === "split";
+  // 방금 바뀐 줄을 비추는 창 안이면 그 때가 막의 `key`다 — 같은 줄이 또 바뀌면(새 때) 다시 비춘다.
+  const flashKey = freshAt !== null && Date.now() - freshAt < FRESH_FLASH_MS ? freshAt : null;
 
   // 펼치기는 `diffFile` 내부 상태를 바꿀 뿐 새 객체를 만들지 않는다 — React가 알아채도록
   // 직접 신호를 준다. 파일이 바뀌면 새 `diffFile`이 오므로 자연히 초기화된다.
@@ -673,15 +692,21 @@ export function VirtualizedDiffView({
         className="flex"
         data-fresh={fresh || undefined}
         style={{
+          ...(fresh ? FRESH_HOST : undefined),
           minHeight: rowHeight,
           background: fresh ? FRESH_BG : contentBg(type),
-          boxShadow: fresh ? FRESH_MARK : undefined,
         }}
       >
+        {fresh && flashKey !== null && <FocusFlash key={flashKey} />}
         <span data-line-no="old" title={numTitle} style={{ ...numStyle, background: numberBg(type) }}>
           {line.oldLineNumber ?? ""}
         </span>
-        <span data-line-no="new" title={numTitle} style={{ ...numStyle, background: numberBg(type) }}>
+        <span
+          data-line-no="new"
+          data-fresh-no={fresh || undefined}
+          title={numTitle}
+          style={{ ...numStyle, ...(fresh ? FRESH_NUM : undefined), background: numberBg(type) }}
+        >
           {line.newLineNumber ?? ""}
         </span>
         <ContentCell content={content} style={contentStyle} findSide="line" />
@@ -708,15 +733,27 @@ export function VirtualizedDiffView({
       <>
         <span
           data-line-no={side}
+          data-fresh-no={fresh || undefined}
           title={isEmpty ? undefined : numTitle}
-          style={{ ...numStyle, background: isEmpty ? "var(--diff-empty-content--)" : numberBg(type) }}
+          style={{
+            ...numStyle,
+            ...(fresh ? FRESH_NUM : undefined),
+            background: isEmpty ? "var(--diff-empty-content--)" : numberBg(type),
+          }}
         >
           {line.lineNumber ?? ""}
         </span>
         <span
           data-fresh={fresh || undefined}
-          style={{ display: "flex", background: bg, flex: 1, minWidth: 0, boxShadow: fresh ? FRESH_MARK : undefined }}
+          style={{
+            ...(fresh ? FRESH_HOST : undefined),
+            display: "flex",
+            background: bg,
+            flex: 1,
+            minWidth: 0,
+          }}
         >
+          {fresh && flashKey !== null && <FocusFlash key={flashKey} />}
           {!isEmpty && <ContentCell content={content} style={contentStyle} findSide={side} />}
         </span>
       </>
@@ -787,7 +824,7 @@ export function VirtualizedDiffView({
   };
 
   return (
-    <div className="flex-1 min-h-0 relative">
+    <div className="flex-1 min-h-0 relative animate-content-in">
       <div
         ref={parentRef}
         className="absolute inset-0 overflow-y-auto overflow-x-hidden diff-tailwindcss-wrapper"

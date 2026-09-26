@@ -7,6 +7,8 @@ import { useFollowStore } from "@/stores/follow";
 import { useRepositoryStore } from "@/stores/repository";
 import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
+import { useUIStore } from "@/stores/ui";
+import { DiffHeader } from "@/components/diff/DiffHeader";
 import type { ActivityEvent, DiffHunk, DiffOutput, RepoInfo, RepoReviewStatus, WipFile } from "@/types";
 
 const REPO = "/work/app";
@@ -72,22 +74,43 @@ vi.mock("@/hooks/useOpenWorktree", () => ({ useOpenWorktree: () => openWorktree 
 Element.prototype.scrollIntoView = vi.fn();
 
 vi.mock("@/components/diff/DiffViewer", () => ({
+  // 실제 DiffHeader를 그대로 쓴다 — 「크게 보기」 버튼을 눌러도 따라가기가 멈추지 않는지는
+  // 그 버튼(과 그것을 감싸는 data-diff-header 표)이 실제 컴포넌트에 있어야 검증할 수 있다.
   DiffViewer: ({
     diff,
     staged,
     freshLines,
+    freshAt,
     revealLine,
     headerExtra,
+    maximizable,
   }: {
     diff: DiffOutput | null;
     staged?: boolean;
     freshLines?: ReadonlySet<number>;
+    freshAt?: number | null;
     revealLine?: number | null;
     headerExtra?: React.ReactNode;
+    maximizable?: boolean;
   }) => (
     <div>
-      <div data-testid="diff-header">{headerExtra}</div>
-      <div data-testid="diff-viewer" data-reveal={revealLine ?? ""} data-staged={String(staged ?? false)}>
+      <DiffHeader
+        filePath={diff?.filePath ?? "none"}
+        status="modified"
+        addedLines={0}
+        removedLines={0}
+        viewMode="unified"
+        modes={["unified"]}
+        onSelectMode={() => {}}
+        extra={<div data-testid="diff-header">{headerExtra}</div>}
+        maximizable={maximizable}
+      />
+      <div
+        data-testid="diff-viewer"
+        data-reveal={revealLine ?? ""}
+        data-fresh-at={freshAt ?? ""}
+        data-staged={String(staged ?? false)}
+      >
         {`${diff?.filePath ?? "none"} fresh=${[...(freshLines ?? [])].join(",")}`}
       </div>
     </div>
@@ -142,6 +165,7 @@ beforeEach(async () => {
   useLiveChangesStore.setState({ watched: [], overflow: [] });
   useRepositoryStore.setState({ activeRepoPath: REPO, repos: [] });
   useActivityTargetsStore.setState({ extraByKey: {} });
+  useUIStore.setState({ isDiffMaximized: false });
   useFollowStore.getState().start(WT);
 });
 
@@ -258,6 +282,90 @@ describe("FollowPanel", () => {
     backend.contents["src/b.ts"] = lines(30, { 23: ["a", "b", "c"] });
     await emit(WT);
     expect((await screen.findByRole("status")).textContent).toContain("방금 24–26행이 추가됐어요");
+  });
+});
+
+describe("FollowPanel — focus cues while following", () => {
+  const flashedRows = () =>
+    screen.getAllByTestId("file-flash").map((el) => el.closest("[role=listitem]")?.getAttribute("title"));
+
+  it("flashes the row of the file that just changed, but not the first list", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.queryByTestId("file-flash")).toBeNull();
+
+    // b.ts is saved again (a newer modification time); a.ts is untouched.
+    backend.files = [wipFile("src/b.ts", nowSecs() + 1), wipFile("src/a.ts", nowSecs() - 40)];
+    backend.contents["src/b.ts"] = lines(31);
+    await emit(WT);
+
+    await waitFor(() => expect(flashedRows()).toEqual(["src/b.ts"]));
+    const overlay = screen.getByTestId("file-flash");
+    // The seconds counter re-renders the list every second; the cue stays put instead of replaying.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_100);
+    });
+    expect(screen.getByTestId("file-flash")).toBe(overlay);
+  });
+
+  it("tells the diff when the fresh lines arrived so it can flash them once", async () => {
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.getByTestId("diff-viewer").getAttribute("data-fresh-at")).toBe("");
+
+    const before = Date.now();
+    backend.contents["src/b.ts"] = lines(30, { 23: ["a", "b", "c"] });
+    await emit(WT);
+
+    await waitFor(() => expect(diffText()).toContain("fresh=24,25,26"));
+    const at = Number(screen.getByTestId("diff-viewer").getAttribute("data-fresh-at"));
+    expect(at).toBeGreaterThanOrEqual(before);
+    expect(at).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("keeps following when the diff is scrolled by the app, not by the user", async () => {
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    // 따라가기가 새 줄로 옮기는 스크롤은 scroll 이벤트만 낸다. 휠·포인터·키가 아니면 멈추지 않는다.
+    fireEvent.scroll(screen.getByTestId("follow-diff"));
+    expect(useFollowStore.getState().mode).toBe("following");
+
+    fireEvent.wheel(screen.getByTestId("follow-diff"));
+    expect(useFollowStore.getState().mode).toBe("paused");
+  });
+
+  it("keeps following when the diff is switched to the maximized view", async () => {
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+
+    // A real click starts with a pointerdown, which is what the follow-diff wrapper
+    // listens for (onPointerDownCapture) to detect the user scrolling the diff.
+    const maximize = screen.getByRole("button", { name: "Maximize diff (Esc to restore)" });
+    fireEvent.pointerDown(maximize);
+    fireEvent.click(maximize);
+    expect(useUIStore.getState().isDiffMaximized).toBe(true);
+    expect(useFollowStore.getState().mode).toBe("following");
+
+    const restore = screen.getByRole("button", { name: "Restore size" });
+    fireEvent.pointerDown(restore);
+    fireEvent.click(restore);
+    expect(useUIStore.getState().isDiffMaximized).toBe(false);
+    expect(useFollowStore.getState().mode).toBe("following");
+  });
+
+  it("does not move the diff to new lines while paused", async () => {
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    fireEvent.wheel(screen.getByTestId("follow-diff"));
+
+    backend.contents["src/b.ts"] = lines(30, { 23: ["a", "b", "c"] });
+    await emit(WT);
+
+    // The lines are still marked (and flashed) on the file the user stayed on, but the view does not jump.
+    await waitFor(() => expect(diffText()).toContain("fresh=24,25,26"));
+    expect(screen.getByTestId("diff-viewer").getAttribute("data-reveal")).toBe("");
+    expect(screen.getByTestId("diff-viewer").getAttribute("data-fresh-at")).not.toBe("");
   });
 });
 

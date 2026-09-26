@@ -66,6 +66,8 @@ interface DiffViewerProps {
   staged?: boolean;
   /** 줄 보기에서 「방금 바뀐 줄」로 강조할 새 쪽 줄 번호(따라가기). */
   freshLines?: ReadonlySet<number>;
+  /** `freshLines`가 들어온 때(epoch ms). 그 직후에 그리는 방금 바뀐 줄을 한 번 비춘다(따라가기). */
+  freshAt?: number | null;
   /** 줄 보기에서 이 새 쪽 줄 번호가 보이도록 스크롤한다(따라가기). */
   revealLine?: number | null;
   /** 바뀌면 같은 `revealLine`으로 다시 스크롤한다(PR 스레드의 같은 줄을 다시 눌렀을 때). */
@@ -83,6 +85,7 @@ export function DiffViewer({
   status = "modified",
   staged = false,
   freshLines,
+  freshAt = null,
   revealLine = null,
   revealNonce = 0,
   headerExtra,
@@ -342,6 +345,7 @@ export function DiffViewer({
           highlight={wantHighlight}
           fontSize={codeFontSize}
           freshLines={freshLines}
+          freshAt={freshAt}
           revealLine={revealLine}
           revealNonce={revealNonce}
           onLineContextMenu={openMenu}
