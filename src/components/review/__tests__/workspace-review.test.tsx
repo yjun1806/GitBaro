@@ -77,13 +77,10 @@ const statuses: Record<string, StatusEntry[]> = {
   [API_WT]: [{ path: "src/settings.ts", status: "modified", staged: false } as StatusEntry],
 };
 
-/** main 대비 변경(탭 배지·갈라진 지점 행). 테스트마다 채운다. */
-const changesVsDefaultByPath: Record<string, unknown> = {};
 
 const syncState = vi.hoisted(() => ({ byPath: {} as Record<string, { unpushed: number }> }));
 vi.mock("@/api/queries", () => ({
-  useChangesVsDefaultOnHead: (entries: readonly { path: string }[]) =>
-    entries.map((e) => ({ data: changesVsDefaultByPath[e.path] })),
+  useChangesVsDefaultOnHead: (entries: readonly unknown[]) => entries.map(() => ({ data: undefined })),
   useReviewStatusQuery: () => ({ data: reviewRepos, isLoading: false }),
   useWorkspaceHistories: (repos: { path: string }[]) => repos.map((r) => histories[r.path]),
   useStatusMany: (paths: string[]) =>
@@ -139,12 +136,6 @@ vi.mock("@tauri-apps/api/event", () => ({
       if (i >= 0) handlers.splice(i, 1);
     };
   }),
-}));
-
-vi.mock("../FilesByRepo", () => ({
-  FilesByRepo: ({ repos }: { repos: { name: string }[] }) => (
-    <div>files-by-repo {repos.map((r) => r.name).join(",")}</div>
-  ),
 }));
 
 const { WorkspaceReview } = await import("../WorkspaceReview");
@@ -230,30 +221,10 @@ describe("WorkspaceReview", () => {
     expect(laneFill(container, "api1")).toBe(before.api);
   });
 
-  it("switches the graph panel to changes by file for the shown repositories and back", () => {
+  it("has only the graph tab: no changes-vs-main tab", () => {
     renderReview();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
-    // xames-backend는 워크트리가 둘이라(main + xames-backend-feat) 그래프의 WIP 행과 같은 목록이 나온다(W7 review).
-    expect(
-      screen.getByText("files-by-repo xames-app,xames-backend,xames-backend · xames-backend-feat"),
-    ).toBeTruthy();
-    expect(screen.queryByText("Where each repository branched off its default branch")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Show all (1 hidden)" }));
-    expect(
-      screen.getByText(
-        "files-by-repo xames-app,xames-backend,xames-backend · xames-backend-feat,xames-design",
-      ),
-    ).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: /^Commit graph/ }));
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Commit graph"]);
     expect(screen.getByText("Where each repository branched off its default branch")).toBeTruthy();
-  });
-
-  it("lists every worktree of a repository in the files tab, not just its main working tree (W7 review)", () => {
-    renderReview();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
-    const filesByRepo = screen.getByText(/^files-by-repo /);
-    const names = filesByRepo.textContent!.replace("files-by-repo ", "").split(",");
-    expect(names).toEqual(["xames-app", "xames-backend", "xames-backend · xames-backend-feat"]);
   });
 
   it("shows a linked worktree once when it is also registered as a repository", () => {
@@ -269,9 +240,6 @@ describe("WorkspaceReview", () => {
       </QueryClientProvider>,
     );
     expect(screen.getAllByRole("button", { name: /Uncommitted changes · .* · 1 file$/ })).toHaveLength(1);
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
-    const names = screen.getByText(/^files-by-repo /).textContent!.replace("files-by-repo ", "").split(",");
-    expect(names).toEqual(["xames-app", "xames-backend", "xames-backend · xames-backend-feat"]);
   });
 
   it("reaches the activity log from the workspace header", async () => {

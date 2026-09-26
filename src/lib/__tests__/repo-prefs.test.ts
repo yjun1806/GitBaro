@@ -3,7 +3,6 @@ import {
   ALIAS_MAX_LENGTH,
   normalizeRepoPrefs,
   repoAvatarColor,
-  repoDefaultBase,
   repoDisplayName,
   sanitizeRepoPrefsMap,
   withRepoPrefs,
@@ -20,17 +19,21 @@ describe("normalizeRepoPrefs", () => {
     expect(normalizeRepoPrefs({ alias: "   " })).toBeNull();
   });
 
-  it("keeps only palette colors, known notification choices and a real branch name", () => {
+  it("keeps only palette colors and known notification choices", () => {
     expect(
       normalizeRepoPrefs({
         hue: 13,
-        compareBase: " ",
         notify: { newCommits: "yes", ciFailures: "off", other: "on" },
       }),
     ).toEqual({ notify: { ciFailures: "off" } });
-    expect(normalizeRepoPrefs({ hue: AVATAR_HUES[2], compareBase: "develop" })).toEqual({
-      hue: AVATAR_HUES[2],
-      compareBase: "develop",
+    expect(normalizeRepoPrefs({ hue: AVATAR_HUES[2] })).toEqual({ hue: AVATAR_HUES[2] });
+  });
+
+  it("drops the removed compare-base setting from old stored values without failing", () => {
+    expect(normalizeRepoPrefs({ alias: "Shop", compareBase: "develop" })).toEqual({ alias: "Shop" });
+    expect(normalizeRepoPrefs({ compareBase: "develop" })).toBeNull();
+    expect(sanitizeRepoPrefsMap({ [APP]: { compareBase: "develop", hue: AVATAR_HUES[1] } })).toEqual({
+      [APP]: { hue: AVATAR_HUES[1] },
     });
   });
 
@@ -58,9 +61,9 @@ describe("sanitizeRepoPrefsMap", () => {
 describe("withRepoPrefs", () => {
   it("merges a patch without touching other fields or other repositories", () => {
     const before = { [APP]: { alias: "Shop", hue: AVATAR_HUES[0] }, "/work/api": { alias: "API" } };
-    const after = withRepoPrefs(before, APP, { compareBase: "develop" });
+    const after = withRepoPrefs(before, APP, { notify: { newCommits: "off" } });
     expect(after).toEqual({
-      [APP]: { alias: "Shop", hue: AVATAR_HUES[0], compareBase: "develop" },
+      [APP]: { alias: "Shop", hue: AVATAR_HUES[0], notify: { newCommits: "off" } },
       "/work/api": { alias: "API" },
     });
     expect(before[APP]).toEqual({ alias: "Shop", hue: AVATAR_HUES[0] });
@@ -82,22 +85,5 @@ describe("display helpers", () => {
   it("uses the chosen avatar color, or the color derived from the path", () => {
     expect(repoAvatarColor(APP, {})).toEqual(avatarColor(APP));
     expect(repoAvatarColor(APP, { [APP]: { hue: AVATAR_HUES[3] } })).toEqual(avatarColorFromHue(AVATAR_HUES[3]));
-  });
-});
-
-describe("repoDefaultBase", () => {
-  const prefs = { [APP]: { compareBase: "develop" } };
-  const owners: Record<string, string> = { "/work/app-feat": APP };
-  const ownerOf = (p: string) => owners[p];
-
-  it("applies a repository's default base to the repository and to its worktrees", () => {
-    expect(repoDefaultBase(prefs, APP, ownerOf)).toBe("develop");
-    expect(repoDefaultBase(prefs, "/work/app/", ownerOf)).toBe("develop");
-    expect(repoDefaultBase(prefs, "/work/app-feat", ownerOf)).toBe("develop");
-  });
-
-  it("is null when neither the path nor its owner has one", () => {
-    expect(repoDefaultBase(prefs, "/work/other", ownerOf)).toBeNull();
-    expect(repoDefaultBase({}, APP, ownerOf)).toBeNull();
   });
 });

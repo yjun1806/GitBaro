@@ -1,7 +1,7 @@
 //! 추적하지 않는 새 파일의 줄 수. 너무 큰 파일은 읽지 않는다.
 //!
 //! 새 파일은 에이전트가 만든 로그·빌드 결과물일 수 있어 크기가 제한이 없다. 1 MiB 를 넘으면
-//! 줄 수를 세지 않고 diff 도 「너무 큼」으로 보여 준다(WIP 목록과 main 대비 변경이 같은 규칙).
+//! 줄 수를 세지 않는다(WIP 목록).
 
 use std::io::Read;
 use std::path::Path;
@@ -68,18 +68,6 @@ fn count_lines(bytes: &[u8]) -> Option<usize> {
     let newlines = bytes.iter().filter(|b| **b == b'\n').count();
     let trailing = usize::from(bytes.last().is_some_and(|b| *b != b'\n'));
     Some(newlines + trailing)
-}
-
-/// 작업 트리 파일이 추적하지 않는 새 파일이고 한도보다 큰가. 파일이 없거나 인덱스에 있으면 `false`.
-pub fn is_too_large_untracked(repo: &git2::Repository, rel_path: &str) -> bool {
-    let Some(workdir) = repo.workdir() else { return false };
-    let in_index = repo
-        .index()
-        .ok()
-        .is_some_and(|index| index.get_path(Path::new(rel_path), 0).is_some());
-    !in_index
-        && std::fs::symlink_metadata(workdir.join(rel_path))
-            .is_ok_and(|m| m.is_file() && m.len() > UNTRACKED_COUNT_LIMIT)
 }
 
 #[cfg(test)]

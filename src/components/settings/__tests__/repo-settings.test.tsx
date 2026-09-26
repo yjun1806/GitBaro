@@ -102,7 +102,6 @@ describe("Repository settings", () => {
       "Name",
       "GitHub account",
       "Remote sync",
-      "Compare base",
       "List",
       "Notifications",
       "Info",
@@ -172,18 +171,6 @@ describe("Repository settings", () => {
 
     fireEvent.click(follow);
     expect(useRepositoryStore.getState().autoSyncByRepo).toEqual({});
-  });
-
-  it("sets the default compare base from the repository's branches", async () => {
-    renderHost();
-    openAt("compare");
-    const select = screen.getByRole("combobox", { name: "Default compare base" });
-    await screen.findByRole("option", { name: "develop" });
-    expect(within(select).queryByRole("option", { name: "origin/HEAD" })).toBeNull();
-    fireEvent.change(select, { target: { value: "develop" } });
-    expect(useRepositoryStore.getState().repoPrefs[APP]).toEqual({ compareBase: "develop" });
-    fireEvent.change(select, { target: { value: "" } });
-    expect(useRepositoryStore.getState().repoPrefs).toEqual({});
   });
 
   it("marks a favorite and moves the repository into a workspace of its account", () => {

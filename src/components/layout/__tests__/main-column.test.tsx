@@ -16,21 +16,6 @@ vi.mock("@/components/toolbar", () => ({ ToolbarRoot: () => <div>toolbar</div> }
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/components/stash/StashView", () => ({ StashView: () => <div>stash-list</div> }));
 vi.mock("@/components/actions/ActionsView", () => ({ ActionsView: () => <div>actions-list</div> }));
-const filesMounts = vi.hoisted(() => ({ count: 0 }));
-vi.mock("@/components/review/FilesByRepo", async () => {
-  const { useState } = await import("react");
-  return {
-    // 마운트마다 번호를 매겨, 저장소를 바꿀 때 새로 마운트되는지(고른 파일이 남지 않는지) 본다.
-    FilesByRepo: ({ repos }: { repos: { path: string }[] }) => {
-      const [mount] = useState(() => ++filesMounts.count);
-      return (
-        <div>
-          files-by-repo {repos.map((r) => r.path).join(",")} #{mount}
-        </div>
-      );
-    },
-  };
-});
 vi.mock("@/components/commit/ChangesView", () => ({ ChangesView: () => <div>changes-view</div> }));
 vi.mock("@/components/repository/RepoListView", () => ({ RepoListView: () => <div>repo-list</div> }));
 vi.mock("@/components/diff/DiffViewer", () => ({ DiffViewer: () => <div>diff-viewer</div> }));
@@ -65,7 +50,7 @@ const historyPages = {
 /** 지금 연 저장소가 병합·pull 충돌 등으로 멈췄는지(`useMergeState`). */
 let mergeStateValue: string | null = null;
 
-/** main 대비 변경(탭 배지·갈라진 지점 행). 테스트마다 채운다. */
+/** main과 갈라진 지점(갈라진 지점 행). 테스트마다 채운다. */
 const changesVsDefaultByPath: Record<string, unknown> = {};
 
 vi.mock("@/api/queries", () => ({
@@ -230,23 +215,19 @@ describe("MainColumn (two-column shell)", () => {
     expect(useUIStore.getState().activeTab).toBe("history");
   });
 
-  it("has four panel tabs that switch the list and the area below", () => {
+  it("has three panel tabs that switch the list and the area below", () => {
     renderShell();
     const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual(["Commit graph", "Changes vs default branch", "Stash", "Actions"]);
+    expect(tabs.map((t) => t.textContent)).toEqual(["Commit graph", "Stash", "Actions"]);
     expect(tabs[0].getAttribute("aria-selected")).toBe("true");
     expect(screen.getByText("history-list")).toBeTruthy();
 
     fireEvent.click(tabs[1]);
-    expect(screen.getByText(/^files-by-repo/)).toBeTruthy();
-    expect(screen.queryByText("history-list")).toBeNull();
-
-    fireEvent.click(tabs[2]);
     expect(screen.getByText("stash-list")).toBeTruthy();
     expect(screen.queryByText("history-list")).toBeNull();
     expect(screen.getByText("No stash selected")).toBeTruthy();
 
-    fireEvent.click(screen.getAllByRole("tab")[3]);
+    fireEvent.click(screen.getAllByRole("tab")[2]);
     expect(screen.getByText("actions-list")).toBeTruthy();
     act(() => useSelectionStore.getState().selectRun(7));
     expect(screen.getByText("actions-detail")).toBeTruthy();
@@ -271,23 +252,6 @@ describe("MainColumn (two-column shell)", () => {
     }
   });
 
-  it("shows changes by file below the tab header, and starts it over for another repository", () => {
-    const other = { ...repo, path: "/work/other", name: "other" } as RepoInfo;
-    useRepositoryStore.setState({ repos: [repo, other] });
-    renderShell();
-    fireEvent.click(screen.getByRole("tab", { name: /^Changes vs / }));
-    const first = screen.getByText(/^files-by-repo \/work\/app #/).textContent;
-    // 아래 칸의 파일 목록·diff 대신 파일별 변경을 그린다.
-    expect(screen.queryByText("history-list")).toBeNull();
-    expect(screen.queryByText("changes-view")).toBeNull();
-
-    act(() => useRepositoryStore.setState({ activeRepo: other, activeRepoPath: other.path }));
-    const next = screen.getByText(/^files-by-repo \/work\/other #/).textContent;
-    // 다시 마운트됐다(마운트 번호가 다르다).
-    expect(next?.split("#")[1]).not.toBe(first?.split("#")[1]);
-    expect(screen.getByRole("tab", { name: /^Changes vs / }).getAttribute("aria-selected")).toBe("true");
-  });
-
   it("keeps the stash tab when the panel remounts with an old commit selection", () => {
     const { unmount } = renderShell();
     fireEvent.click(screen.getByText("history-list"));
@@ -307,7 +271,6 @@ describe("MainColumn (two-column shell)", () => {
     renderShell();
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
       "커밋 그래프",
-      "기본 브랜치 대비 변경",
       "스태시",
       "Actions",
     ]);
@@ -345,7 +308,7 @@ describe("MainColumn — workspace scope (W4-T1)", () => {
     expect(screen.getByRole("button", { name: "Show all (1 hidden)" })).toBeTruthy();
     // 모두 숨겼을 때는 「커밋 없음」이 아니라 숨긴 저장소가 있다고 알린다.
     expect(screen.getByText(/1 quiet repository is hidden/)).toBeTruthy();
-    // 워크스페이스 화면에도 탭(커밋 그래프·파일별 변경)이 있지만, 저장소 전용 탭(스태시)은 없다.
+    // 워크스페이스 화면에도 커밋 그래프 탭이 있지만, 저장소 전용 탭(스태시)은 없다.
     expect(screen.queryByRole("tab", { name: "Stash" })).toBeNull();
     expect(screen.queryByText("changes-view")).toBeNull();
     expect(screen.queryByText("No repository selected")).toBeNull();

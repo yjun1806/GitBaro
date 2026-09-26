@@ -961,75 +961,61 @@ export async function getWipFiles(path: string): Promise<WipFile[]> {
   return invoke("get_wip_files", { path });
 }
 
-// W5-T5 — main 대비 변경
+// 커밋 범위의 변경(push 안 한 범위)과 main 과 갈라진 지점
 
-import type { BranchChanges, ChangesScope, FileDiffVsDefault } from "@/types";
+import type { DivergencePoint, RangeChangedFile, TreeFileDiff } from "@/types";
 
-/** 범위 인자 중 정한 것만 넘긴다(없으면 백엔드 기본값: 기본 브랜치 대비, HEAD + 작업 트리). */
-function scopeArgs(scope?: ChangesScope): Partial<ChangesScope> {
-  return {
-    ...(scope?.base ? { base: scope.base } : {}),
-    ...(scope?.target ? { target: scope.target } : {}),
-  };
+/** 저장소(워크트리) 하나의 HEAD가 기본 브랜치(main)와 갈라진 지점. 파일을 비교하지 않아 가볍다. */
+export async function getDivergencePoint(path: string): Promise<DivergencePoint> {
+  return invoke("get_divergence_point", { path });
 }
 
 /**
- * 저장소 하나가 main(또는 `scope.base`)과 갈라진 지점 이후로 바꾼 파일과 커밋 안 한 변경.
- * `scope.target`을 주면 체크아웃하지 않고 그 브랜치를 본다. 저장소마다 따로 부른다.
+ * `baseOid` → `headOid`에서 바뀐 파일(경로 순서). `baseOid`가 null이면 처음부터(빈 트리)와 비교한다.
+ * 둘 다 40자 커밋 OID여야 한다. 커밋하지 않은 변경은 넣지 않는다.
  */
-export async function getChangesVsDefault(path: string, scope?: ChangesScope): Promise<BranchChanges> {
-  return invoke("get_changes_vs_default", { path, ...scopeArgs(scope) });
+export async function getRangeChangedFiles(
+  path: string,
+  baseOid: string | null,
+  headOid: string,
+): Promise<RangeChangedFile[]> {
+  return invoke("get_range_changed_files", { path, baseOid, headOid });
 }
 
-interface RawFileDiffVsDefault extends Omit<RawFileDiff, "staged" | "binaryPreview"> {
+interface RawTreeFileDiff extends Omit<RawFileDiff, "staged"> {
   oldPath: string | null;
   baseOid: string | null;
-  baseIsDivergencePoint: boolean;
+  baseIsMergeBase: boolean;
 }
 
 /** 줄 단위 diff 원본을 화면용 `DiffOutput` 모양으로 바꾼다. */
-function fileDiffVsDefaultFromRaw(raw: RawFileDiffVsDefault): FileDiffVsDefault {
+function treeFileDiffFromRaw(raw: RawTreeFileDiff): TreeFileDiff {
   return {
     filePath: raw.filePath,
     oldPath: raw.oldPath,
     oldContent: raw.oldContent,
     newContent: raw.newContent,
     binary: raw.binary,
+    binaryPreview: raw.binaryPreview,
     baseOid: raw.baseOid,
-    baseIsDivergencePoint: raw.baseIsDivergencePoint,
-    hunks: raw.hunks.map((h) => ({
-      header: h.header,
-      oldStart: h.oldStart,
-      oldLines: h.lines.filter((l) => l.kind !== "addition").length,
-      newStart: h.newStart,
-      newLines: h.lines.filter((l) => l.kind !== "deletion").length,
-      lines: h.lines.map((l) => ({
-        content: l.content,
-        lineType: mapLineKind(l.kind),
-        oldLineNo: l.oldLineNo,
-        newLineNo: l.newLineNo,
-      })),
-    })),
+    baseIsMergeBase: raw.baseIsMergeBase,
+    hunks: hunksFromRaw(raw.hunks),
   };
 }
 
 /**
- * 파일 하나를 그 저장소 main과 갈라진 지점 → 작업 트리로 비교한 줄 단위 diff.
- * `oldPath`에는 `BranchChangedFile.oldPath`(이름을 바꾼 파일의 이전 경로)를 넘긴다.
+ * 파일 하나를 `baseOid`(null이면 빈 트리) → `headOid`로 비교한 줄 단위 diff.
+ * `oldPath`에는 `RangeChangedFile.oldPath`(이름을 바꾼 파일의 이전 경로)를 넘긴다.
  */
-export async function getFileDiffVsDefault(
+export async function getRangeFileDiff(
   path: string,
+  baseOid: string | null,
+  headOid: string,
   filePath: string,
   oldPath: string | null = null,
-  scope?: ChangesScope,
-): Promise<FileDiffVsDefault> {
-  const raw: RawFileDiffVsDefault = await invoke("get_file_diff_vs_default", {
-    path,
-    filePath,
-    oldPath,
-    ...scopeArgs(scope),
-  });
-  return fileDiffVsDefaultFromRaw(raw);
+): Promise<TreeFileDiff> {
+  const raw: RawTreeFileDiff = await invoke("get_range_file_diff", { path, baseOid, headOid, filePath, oldPath });
+  return treeFileDiffFromRaw(raw);
 }
 
 // W5-T2 — 여러 저장소 원격 작업 확인 창(D3)
@@ -1126,13 +1112,13 @@ export async function getPullRequestFileDiff(
   headSha: string,
   filePath: string,
   oldPath: string | null,
-): Promise<FileDiffVsDefault> {
-  const raw: RawFileDiffVsDefault = await invoke("get_pull_request_file_diff", {
+): Promise<TreeFileDiff> {
+  const raw: RawTreeFileDiff = await invoke("get_pull_request_file_diff", {
     repoPath,
     baseSha,
     headSha,
     filePath,
     oldPath,
   });
-  return fileDiffVsDefaultFromRaw(raw);
+  return treeFileDiffFromRaw(raw);
 }

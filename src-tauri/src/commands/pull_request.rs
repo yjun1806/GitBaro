@@ -4,13 +4,11 @@
 //! 파일 diff 는 base·head 커밋이 로컬에 있으면 로컬 git 으로 만든다(원문이 있어 접힌 구간 펼치기와
 //! 문서 보기가 된다). 없으면 화면이 GitHub patch(`list_pull_request_files` 의 `hunks`)를 쓴다.
 
-use std::path::Path;
-
-use git2::{DiffOptions, Oid, Patch, Repository};
+use git2::{Oid, Repository};
 
 use crate::commands::auth::{call_with_token_retry, resolve_repo_owner};
-use crate::commands::branch_changes::{ensure_relative, patch_hunks, FileDiffVsDefault};
 use crate::error::AppError;
+use crate::git::file_diff::{tree_file_diff, TreeFileDiff};
 use crate::github::client::GitHubClient;
 use crate::github::pr_parse::{self, PrFiles, PullRequestDetail, PullRequestSummary};
 use crate::github::pull_request::{self, PrStateFilter};
@@ -95,7 +93,7 @@ pub async fn get_pull_request_file_diff(
     head_sha: String,
     file_path: String,
     old_path: Option<String>,
-) -> Result<FileDiffVsDefault, AppError> {
+) -> Result<TreeFileDiff, AppError> {
     tokio::task::spawn_blocking(move || {
         local_file_diff(&repo_path, &base_sha, &head_sha, &file_path, old_path.as_deref())
     })
@@ -111,80 +109,30 @@ fn has_commits(repo_path: &str, shas: &[&str]) -> bool {
         .all(|sha| Oid::from_str(sha).is_ok_and(|oid| repo.find_commit(oid).is_ok()))
 }
 
-fn blob_text(repo: &Repository, tree: &git2::Tree, path: &str) -> Option<String> {
-    let entry = tree.get_path(Path::new(path)).ok()?;
-    let blob = repo.find_blob(entry.id()).ok()?;
-    Some(String::from_utf8_lossy(blob.content()).into_owned())
-}
-
 pub(crate) fn local_file_diff(
     repo_path: &str,
     base_sha: &str,
     head_sha: &str,
     file_path: &str,
     old_path: Option<&str>,
-) -> Result<FileDiffVsDefault, AppError> {
-    ensure_relative(file_path)?;
-    if let Some(old) = old_path {
-        ensure_relative(old)?;
-    }
+) -> Result<TreeFileDiff, AppError> {
     let repo = Repository::open(repo_path)?;
     let head = Oid::from_str(head_sha)?;
     let base = Oid::from_str(base_sha)?;
-    let (merge_base, is_point) = match repo.merge_base(head, base) {
+    let (merge_base, is_merge_base) = match repo.merge_base(head, base) {
         Ok(oid) => (oid, true),
         Err(e) if e.code() == git2::ErrorCode::NotFound => (base, false),
         Err(e) => return Err(e.into()),
     };
     let old_tree = repo.find_commit(merge_base)?.tree()?;
     let new_tree = repo.find_commit(head)?.tree()?;
-
-    let mut opts = DiffOptions::new();
-    opts.include_typechange(true).disable_pathspec_match(true).pathspec(file_path);
-    if let Some(old) = old_path {
-        opts.pathspec(old);
-    }
-    let mut diff = repo.diff_tree_to_tree(Some(&old_tree), Some(&new_tree), Some(&mut opts))?;
-    if old_path.is_some() {
-        diff.find_similar(Some(git2::DiffFindOptions::new().renames(true)))?;
-    }
-
-    let mut hunks = Vec::new();
-    let mut binary = false;
-    for idx in 0..diff.deltas().count() {
-        let Some(patch) = Patch::from_diff(&diff, idx)? else {
-            continue;
-        };
-        let delta = patch.delta();
-        if delta.flags().is_binary() || delta.old_file().is_binary() || delta.new_file().is_binary() {
-            binary = true;
-            continue;
-        }
-        hunks.extend(patch_hunks(&patch)?);
-    }
-    let count = |kind: &str| hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == kind).count();
-    let (insertions, deletions) = (count("addition"), count("deletion"));
-    let text = |content: Option<String>| content.filter(|_| !binary).unwrap_or_default();
-
-    Ok(FileDiffVsDefault {
-        file_path: file_path.to_string(),
-        old_path: old_path.map(str::to_string),
-        binary,
-        insertions,
-        deletions,
-        old_content: text(blob_text(&repo, &old_tree, old_path.unwrap_or(file_path))),
-        new_content: text(blob_text(&repo, &new_tree, file_path)),
-        hunks,
-        base_oid: Some(merge_base.to_string()),
-        base_is_divergence_point: is_point,
-        binary_preview: None,
-    })
+    tree_file_diff(&repo, Some(&old_tree), &new_tree, file_path, old_path, Some(merge_base), is_merge_base)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
 
     /// 끝나면(테스트가 실패해도) 지우는 임시 폴더.
@@ -251,7 +199,7 @@ mod tests {
         let (dir, base, head) = repo_with_pr();
         let path = dir.path().to_str().unwrap();
         let diff = local_file_diff(path, &base, &head, "a.txt", None).unwrap();
-        assert!(diff.base_is_divergence_point);
+        assert!(diff.base_is_merge_base);
         assert_eq!((diff.insertions, diff.deletions), (1, 1));
         assert_eq!(diff.old_content, "1\n2\n3\n");
         assert_eq!(diff.new_content, "1\n2\nthree\n");

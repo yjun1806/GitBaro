@@ -4,7 +4,7 @@ import type { PrStateFilter } from "@/types";
 interface PrViewState {
   /**
    * 저장소 화면에서 「PR」 탭이 열려 있는가. 그래프 패널(탭 머리·목록)과 메인 칸(아래 상세)이 함께 본다.
-   * 「파일별 변경」 탭처럼 저장하지 않는 화면 상태다(저장된 탭 `ui.activeTab`과 따로 둔다).
+   * 저장하지 않는 화면 상태다(저장된 탭 `ui.activeTab`과 따로 둔다).
    */
   open: boolean;
   filter: PrStateFilter;

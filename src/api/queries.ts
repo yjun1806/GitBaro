@@ -36,7 +36,7 @@ import {
   abortMergeOrRebase,
   continueMergeOrRebase,
 } from "./commands";
-import type { ChangesScope, DefaultBranch, HistoryTarget, RepoSyncStatus } from "@/types";
+import type { DefaultBranch, HistoryTarget, RepoSyncStatus } from "@/types";
 import { useSelectionStore } from "@/stores/selection";
 import { selectionAfterStashPushed, selectionAfterStashRemoved } from "@/lib/stash-selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
@@ -110,10 +110,8 @@ export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> 
       "remoteTags",
       "reviewStatus",
       "workspaceHistory",
-      // 「파일별 변경」(D7) 탭도 push·pull로 바뀐다 — 특히 push 뒤 "커밋 아직 안 올림" 안내와
-      // pull 뒤의 파일 목록. 빠지면 최대 30초(staleTime) 동안 옛 목록이 남는다(W7 리뷰).
-      "changesVsDefault",
-      "fileDiffVsDefault",
+      // pull이 HEAD를, fetch가 origin/main을 옮기면 main과 갈라진 지점이 바뀐다.
+      "divergencePoint",
       // fetch가 origin/HEAD를 바꾸거나 원격 기본 브랜치를 처음 받아 올 수 있다.
       "defaultBranches",
       // 그래프에 함께 그린 다른 워크트리의 이력. HEAD가 그대로여도 push·fetch 뒤 원격 라벨이 바뀐다.
@@ -542,7 +540,7 @@ export function useReviewStatusQuery(repoPaths: string[]) {
 }
 
 // W3-T4
-import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import type { InfiniteData, QueryState } from "@tanstack/react-query";
 import type { BranchInfo, CommitInfo, WorkflowRun } from "@/types";
 
@@ -834,90 +832,66 @@ export function useWorktreeHeadHistories(heads: readonly { path: string; head: s
   });
 }
 
-// W7-T1 — 파일별 변경(D7)
-import { getChangesVsDefault, getFileDiffVsDefault } from "@/api/commands";
-
-/** 「파일별 변경」 목록을 다시 읽는 주기. `repo:activity`를 받으면 그 저장소는 바로 다시 읽는다. */
-export const CHANGES_VS_DEFAULT_POLL_MS = 30_000;
+// 커밋 범위의 변경(push 안 한 범위)과 main 과 갈라진 지점
+import { getDivergencePoint, getRangeChangedFiles, getRangeFileDiff } from "@/api/commands";
 
 /**
- * main 대비 변경 쿼리 키. 기본 범위는 예전 키 `["changesVsDefault", path]`를 그대로 써서 탭 배지·
- * 갈라진 지점 행과 캐시를 함께 쓴다. 기준 브랜치나 보는 브랜치를 정하면 그 값을 뒤에 붙인다
- * (접두어 무효화는 그대로 적용된다).
+ * 저장소(워크트리) 하나의 HEAD가 main과 갈라진 지점. `headOid`를 키에 넣어 HEAD가 바뀌면 다시 읽는다.
+ * 그 밖에는 주기적으로 다시 읽지 않는다: 커밋·체크아웃은 파일 감시가, fetch가 옮긴 `origin/main`은
+ * `invalidateAfterSync`가 `["divergencePoint"]`를 무효화한다.
  */
-export function changesVsDefaultKey(path: string, scope?: ChangesScope | null): readonly unknown[] {
-  if (!scope || (!scope.base && !scope.target)) return ["changesVsDefault", path];
-  return ["changesVsDefault", path, scope.base ?? "", scope.target ?? ""];
+export function divergencePointKey(path: string, headOid: string | null = null): readonly unknown[] {
+  return ["divergencePoint", path, headOid ?? ""];
 }
 
-/** 파일 하나의 main 대비 diff 쿼리 키. 규칙은 `changesVsDefaultKey`와 같다. */
-export function fileDiffVsDefaultKey(
-  repoPath: string,
-  filePath: string,
-  oldPath: string | null,
-  scope?: ChangesScope | null,
-): readonly unknown[] {
-  const key = ["fileDiffVsDefault", repoPath, filePath, oldPath];
-  return !scope || (!scope.base && !scope.target) ? key : [...key, scope.base ?? "", scope.target ?? ""];
-}
-
-/** 저장소마다 main 대비 변경(`get_changes_vs_default`). 결과는 `paths` 순서다. `scopes`도 같은 순서다. */
-export function useChangesVsDefaultMany(paths: readonly string[], scopes?: readonly (ChangesScope | null)[]) {
-  return useQueries({
-    queries: paths.map((path, i) => ({
-      queryKey: changesVsDefaultKey(path, scopes?.[i]),
-      queryFn: () => getChangesVsDefault(path, scopes?.[i] ?? undefined),
-      refetchInterval: CHANGES_VS_DEFAULT_POLL_MS,
-      refetchIntervalInBackground: false,
-    })),
-  });
-}
-
-/** 파일 여러 개의 main 대비 diff. 결과는 `files` 순서다. */
-export function useFileDiffsVsDefault(
-  files: readonly { repoPath: string; filePath: string; oldPath: string | null; scope?: ChangesScope | null }[],
-) {
-  return useQueries({
-    queries: files.map(({ repoPath, filePath, oldPath, scope }) => ({
-      queryKey: fileDiffVsDefaultKey(repoPath, filePath, oldPath, scope),
-      queryFn: () => getFileDiffVsDefault(repoPath, filePath, oldPath, scope ?? undefined),
-      staleTime: 30_000,
-    })),
+export function useDivergencePoint(path: string | null, headOid: string | null = null) {
+  return useQuery({
+    queryKey: divergencePointKey(path ?? "", headOid),
+    queryFn: () => getDivergencePoint(path!),
+    enabled: !!path,
+    staleTime: Infinity,
   });
 }
 
 /**
- * 탭 개수 배지와 저장소 그래프의 「main에서 갈라진 지점」 행이 쓰는 main 대비 변경.
- * 「파일별 변경」 목록과 같은 조회 키라 캐시를 함께 쓴다. 이쪽은 주기적으로 다시 읽지 않고,
- * 워크트리의 HEAD가 바뀔 때만 다시 읽는다(커밋한 변경 목록은 HEAD가 바뀌어야 달라진다).
- * pull·push·fetch 뒤에는 `invalidateAfterSync`가 다시 읽게 한다. 커밋하지 않은 변경은
- * 파일 감시로 바로 갱신되는 `status`에서 따로 센다.
+ * @deprecated 옛 「main 대비 변경」 조회의 자리. 이제는 갈라진 지점만 읽는다(`useDivergencePoint`와 같은 키).
+ * TODO(ui agent): switch to useDivergencePoint — CommitGraph의 「main에서 갈라진 지점」 행만 쓴다.
  */
-export function useChangesVsDefaultOnHead(
-  entries: readonly { path: string; headOid: string | null; scope?: ChangesScope | null }[],
-) {
-  const queryClient = useQueryClient();
-  const headKey = entries.map((e) => `${e.path}\u0000${e.headOid ?? ""}`).join("\u0001");
-  const lastHeads = useRef(new Map<string, string | null>());
-  useEffect(() => {
-    const seen = lastHeads.current;
-    for (const { path, headOid } of entries) {
-      const before = seen.get(path);
-      if (before !== undefined && before !== headOid) {
-        void queryClient.invalidateQueries({ queryKey: ["changesVsDefault", path] });
-      }
-      seen.set(path, headOid);
-    }
-    // headKey가 목록의 내용을 대신 비교한다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [headKey, queryClient]);
+export function useChangesVsDefaultOnHead(entries: readonly { path: string; headOid: string | null }[]) {
   return useQueries({
-    queries: entries.map(({ path, scope }) => ({
-      queryKey: changesVsDefaultKey(path, scope),
-      queryFn: () => getChangesVsDefault(path, scope ?? undefined),
+    queries: entries.map(({ path, headOid }) => ({
+      queryKey: divergencePointKey(path, headOid),
+      queryFn: () => getDivergencePoint(path),
       staleTime: Infinity,
-      refetchInterval: false as const,
     })),
+  });
+}
+
+/**
+ * `baseOid`(null이면 처음부터) → `headOid`에서 바뀐 파일. 두 커밋이 정해지면 결과가 바뀌지 않으므로
+ * 다시 읽지 않는다. `headOid`가 null이면 부르지 않는다.
+ */
+export function useRangeChangedFiles(path: string | null, baseOid: string | null, headOid: string | null) {
+  return useQuery({
+    queryKey: ["rangeChangedFiles", path, baseOid, headOid],
+    queryFn: () => getRangeChangedFiles(path!, baseOid, headOid!),
+    enabled: !!path && !!headOid,
+    staleTime: Infinity,
+  });
+}
+
+/** 같은 범위의 파일 하나의 diff. `file`이 null이면 부르지 않는다. */
+export function useRangeFileDiff(
+  path: string | null,
+  baseOid: string | null,
+  headOid: string | null,
+  file: { path: string; oldPath: string | null } | null,
+) {
+  return useQuery({
+    queryKey: ["rangeFileDiff", path, baseOid, headOid, file?.path ?? null, file?.oldPath ?? null],
+    queryFn: () => getRangeFileDiff(path!, baseOid, headOid!, file!.path, file!.oldPath),
+    enabled: !!path && !!headOid && !!file,
+    staleTime: Infinity,
   });
 }
 

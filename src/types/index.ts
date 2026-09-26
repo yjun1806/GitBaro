@@ -674,10 +674,28 @@ export interface WipFile {
   deletions: number | null;
 }
 
-// W5-T5 — main 대비 변경
+// 커밋 범위의 변경(push 안 한 범위)과 main 과 갈라진 지점
 
-/** `get_changes_vs_default`의 바뀐 파일 하나. */
-export interface BranchChangedFile {
+/** `get_divergence_point`의 결과. HEAD가 기본 브랜치(main)와 갈라진 지점. */
+export interface DivergencePoint {
+  /** 체크아웃한 로컬 브랜치. detached HEAD면 null. */
+  branch: string | null;
+  /** HEAD 커밋. 커밋이 없는 저장소면 null. */
+  headOid: string | null;
+  defaultBranch: string | null;
+  /** 갈라진 지점을 준 참조(`main`, `origin/main`). */
+  baseRef: string | null;
+  /** 커밋이 없는 저장소면 null. */
+  baseStatus: WorkspaceBaseStatus | null;
+  /**
+   * `baseStatus`가 `found`일 때만 있다. `branch === defaultBranch`면 upstream(`baseRef`, 예: `origin/main`)과의
+   * 공통 조상이다(그 위가 아직 push하지 않은 커밋).
+   */
+  mergeBaseOid: string | null;
+}
+
+/** `get_range_changed_files`의 바뀐 파일 하나. 두 커밋의 트리만 비교한다(커밋 안 한 변경은 없다). */
+export interface RangeChangedFile {
   /** 저장소 루트 기준 경로. 지운 파일은 지우기 전 경로. */
   path: string;
   /** 이름을 바꾼 파일의 이전 경로. */
@@ -686,63 +704,22 @@ export interface BranchChangedFile {
   additions: number;
   deletions: number;
   isBinary: boolean;
-  /** 새 파일이 1 MiB를, 추적하는 파일이 8 MiB를 넘어 줄 단위로 비교하지 않았다. 줄 수는 0이다. */
-  tooLarge?: boolean;
-  /**
-   * 이 목록이 보여 주는 쪽(커밋 트리 또는 작업 트리)의 파일 내용 id. 보통 blob OID이고, 1 MiB를 넘는
-   * 작업 트리 파일은 `size:<바이트>:mtime:<나노초>`다. 지운 파일이면 null. 「봤음」 표시가 내용이 바뀌었는지 가린다.
-   */
-  blobId?: string | null;
+  /** 한쪽이 8 MiB를 넘어 줄 단위로 비교하지 않았다. 줄 수는 0이다. */
+  tooLarge: boolean;
 }
 
 /**
- * `get_changes_vs_default`의 결과. 저장소 하나가 main과 갈라진 지점 이후로 바꾼 파일.
- * 여러 저장소는 저장소마다 따로 부른다. 갈라진 지점은 `WorkspaceRepoHistory`와 같은 규칙이다.
+ * 파일 하나를 두 커밋(트리)으로 비교한 줄 단위 diff. `get_range_file_diff`와 PR 파일의 로컬 diff
+ * (`get_pull_request_file_diff`)가 돌려준다. 8 MiB를 넘는 파일은 읽지 않는다: `binary`가 true이고
+ * `binaryPreview.meta.tooLarge`가 true다.
  */
-/**
- * 「main 대비 변경」의 비교 범위(`get_changes_vs_default`의 선택 인자).
- * - `base`: 기본 브랜치 대신 비교할 브랜치. null이면 기본 브랜치 규칙.
- * - `target`: 체크아웃하지 않고 보는 브랜치. null이면 HEAD와 작업 트리(커밋 안 한 변경 포함).
- */
-export interface ChangesScope {
-  base: string | null;
-  target: string | null;
-}
-
-export interface BranchChanges {
-  path: string;
-  branch: string | null;
-  headOid: string | null;
-  defaultBranch: string | null;
-  baseRef: string | null;
-  /** `found`가 아니면 `committed`는 비고 `files`는 `uncommitted`와 같다. 커밋이 없는 저장소면 null. */
-  baseStatus: WorkspaceBaseStatus | null;
-  mergeBaseOid: string | null;
-  /**
-   * 갈라진 지점 → HEAD. `branch === defaultBranch`면 기준은 upstream(`baseRef`, 예: `origin/main`)이고,
-   * 이 목록은 아직 push하지 않은 커밋의 변경이다. 화면은 이 경우를 따로 설명해야 한다.
-   */
-  committed: BranchChangedFile[];
-  /**
-   * HEAD → 작업 트리(스테이징·추적하지 않는 파일 포함).
-   * `git rm --cached`로 인덱스에서만 뺀 파일은 같은 경로가 `deleted`와 `untracked` 두 번 나온다.
-   */
-  uncommitted: BranchChangedFile[];
-  /** 갈라진 지점 → 작업 트리. 고쳤다가 되돌린 파일은 빠진다. */
-  files: BranchChangedFile[];
-}
-
-/**
- * `get_file_diff_vs_default`의 결과. 파일 하나를 갈라진 지점 → 작업 트리로 비교한다.
- * 1 MiB를 넘는 새 파일과 8 MiB를 넘는 추적 파일은 읽지 않는다: `binary`가 true이고 `binaryPreview.meta.tooLarge`가 true다.
- */
-export interface FileDiffVsDefault extends DiffOutput {
-  /** 이름을 바꾼 파일이면 갈라진 지점에서의 경로. */
+export interface TreeFileDiff extends DiffOutput {
+  /** 이름을 바꾼 파일이면 옛 쪽 경로. */
   oldPath: string | null;
-  /** 비교 기준 커밋. 갈라진 지점을 못 찾으면 HEAD, 커밋이 없는 저장소면 null. */
+  /** 옛 쪽 커밋. 빈 트리(처음부터)와 비교했으면 null. */
   baseOid: string | null;
-  /** false면 갈라진 지점을 못 찾아 HEAD와 비교한 결과다(`BranchChanges.files`와 같은 규칙). */
-  baseIsDivergencePoint: boolean;
+  /** 옛 쪽 커밋이 두 커밋의 공통 조상인가. false면 조상이 아닌 커밋과 그대로 비교했다. */
+  baseIsMergeBase: boolean;
 }
 
 // W5-T2 — 여러 저장소 원격 작업 확인 창(D3)

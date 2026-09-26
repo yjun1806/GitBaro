@@ -1162,36 +1162,6 @@
     "showMore_other": "{{count}} more worktrees · show together",
     "showCurrentOnly": "Only this worktree"
   },
-  "filesByRepo": {
-    "tab": "Changes vs {{base}}",
-    "subtitleSingle": "1 repository · changes since it left the comparison base · uncommitted changes included",
-    "subtitleMany": "{{count}} repositories · each compared with its own base · uncommitted changes included",
-    "loadFailed": "Couldn't read the changes: {{error}}",
-    "loading": "Loading…",
-    "noChanges": "No files changed since the comparison base.",
-    "selectTitle": "Pick a file",
-    "selectHint": "Choose a file to see its diff against the comparison base.",
-    "detached": "detached HEAD",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
-    "noBase": "Couldn't find where this branch left {{branch}}. Showing uncommitted changes only.",
-    "unborn": "No commits yet. Showing uncommitted changes only.",
-    "binary": "binary",
-    "groupBy": "Group files",
-    "groupByRepo": "By repository",
-    "groupByFolder": "By folder",
-    "tabDefault": "Changes vs default branch",
-    "summary_one": "{{count}} file changed on {{branch}} since it left {{base}} · {{committed}} committed + {{uncommitted}} uncommitted",
-    "summary_other": "{{count}} files changed on {{branch}} since it left {{base}} · {{committed}} committed + {{uncommitted}} uncommitted",
-    "summaryViewing_one": "{{count}} file changed on {{branch}} since it left {{base}} · {{committed}} committed (viewing, so uncommitted changes are left out)",
-    "summaryViewing_other": "{{count}} files changed on {{branch}} since it left {{base}} · {{committed}} committed (viewing, so uncommitted changes are left out)",
-    "summaryOnDefault_one": "Changes on {{branch}} not pushed yet (vs {{base}}) · {{count}} file · {{committed}} committed + {{uncommitted}} uncommitted",
-    "summaryOnDefault_other": "Changes on {{branch}} not pushed yet (vs {{base}}) · {{count}} files · {{committed}} committed + {{uncommitted}} uncommitted",
-    "baseLabel": "Base",
-    "basePicker": "Comparison base",
-    "baseDefault": "Default branch ({{branch}})",
-    "baseWorktree": "Worktree base ({{branch}})"
-  },
   "layout": {
     "resizeFileList": "Resize file list (double-click to reset)",
     "resizeGraph": "Resize graph panel (double-click to reset)"
@@ -1291,20 +1261,6 @@
     "copyLine": "Copy line {{line}}",
     "openFileInEditor": "Open file in editor",
     "diffMenu": "Diff menu"
-  },
-  "fileReview": {
-    "progress_one": "{{viewed}} of {{count}} file viewed",
-    "progress_other": "{{viewed}} of {{count}} files viewed",
-    "viewed": "Viewed",
-    "markViewed": "Mark as viewed",
-    "unmarkViewed": "Unmark as viewed",
-    "markAllViewed": "Mark all as viewed",
-    "unmarkAll": "Unmark all",
-    "viewedGroup_one": "{{count}} viewed",
-    "viewedGroup_other": "{{count}} viewed",
-    "collapseViewed": "Collapse viewed",
-    "expandViewed": "Expand viewed",
-    "listMenu": "Changes list menu"
   },
   "pr": {
     "tab": "Pull requests",
@@ -1497,7 +1453,6 @@
       "name": "Name",
       "account": "GitHub account",
       "sync": "Remote sync",
-      "compare": "Compare base",
       "list": "List",
       "notifications": "Notifications",
       "info": "Info",
@@ -1527,11 +1482,6 @@
       "notRunnable": "Auto sync runs once the repository has an account and a remote. You can set it up now.",
       "followDefault": "Use the app default",
       "followDefaultDescription": "On: use Settings › Sync. Off: set this repository on its own."
-    },
-    "compare": {
-      "description": "The branch the “Changes vs {base}” tab compares with first, in the main folder and every worktree.",
-      "label": "Default compare base",
-      "hint": "A base picked in the tab goes back to this one when the app restarts."
     },
     "list": {
       "favorite": "Favorite",

@@ -2,12 +2,11 @@ import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { AlertTriangle, Files, Folder, GitCommitVertical } from "lucide-react";
+import { AlertTriangle, Folder, GitCommitVertical } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { repoAccountsByPath } from "@/lib/repo-tree";
-import { baseName } from "./review-model";
 import { Card, EmptyState } from "@/components/layout/ContentArea";
 import { GraphSplit } from "@/components/layout/GraphSplit";
 import { RepoLaneCommitGraph } from "@/components/graph/CommitGraph";
@@ -22,13 +21,7 @@ import type { RepoLaneGraph } from "@/components/graph/repo-lanes";
 type CommitSelection = Extract<ReviewSelection, { kind: "commit" }>;
 import { useWorkspaceReview, type ReviewRepo } from "./useWorkspaceReview";
 import { useReviewActivityRefresh } from "./useReviewActivityRefresh";
-import { FilesByRepo } from "./FilesByRepo";
-import { FilesGroupByPicker } from "./FilesGroupByPicker";
-import { useFilesViewStore } from "./files-view";
-import { badgeCount } from "./tab-counts";
-import { useBranchChangesTab } from "./useChangedFileCount";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
-import { cn } from "@/lib/utils";
 
 export interface WorkspaceReviewProps {
   workspaceId: string;
@@ -39,7 +32,6 @@ export interface WorkspaceReviewProps {
 /**
  * 워크스페이스를 고른 상태의 메인 칸(D1). 제목, 여러 저장소 커밋 그래프(저장소별 레인),
  * 아래에 고른 커밋이나 커밋하지 않은 변경의 파일 목록과 diff.
- * 「main 대비 변경」 탭(D7)을 고르면 그래프 대신 저장소별 main 대비 변경 목록을 보여 준다.
  * 조용한 저장소(main에 있고 원격에 없는 커밋·커밋하지 않은 변경이 없음)는 접고 「모두 보기」로 펼친다.
  */
 export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
@@ -51,9 +43,6 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const [selection, setSelection] = useState<ReviewSelection>(null);
   // 저장소마다 마지막으로 고른 커밋. 「작업 중인 변경」으로 갔다가 「커밋」 칸으로 돌아올 때 쓴다.
   const [lastCommitByRepo, setLastCommitByRepo] = useState<Readonly<Record<string, CommitSelection>>>({});
-  const [tab, setTab] = useState<"graph" | "files">("graph");
-  const groupBy = useFilesViewStore((s) => s.groupBy);
-  const setGroupBy = useFilesViewStore((s) => s.setGroupBy);
 
   const data = useWorkspaceReview(paths, showAll);
   useReviewActivityRefresh(data.repoPaths);
@@ -68,25 +57,6 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const repoLabel = useCallback((path: string) => nameByPath.get(path) ?? path, [nameByPath]);
 
   const titleSlot = useToolbarTitleSlot();
-  // 그래프 탭은 저장소마다 모든 워크트리의 WIP 행을 보여 준다(에이전트가 딴 워크트리에서 작업하기
-  // 때문이다). 「main 대비 변경」도 같은 목록을 봐야 두 탭이 같은 이야기를 한다 — main만 보면 안 된다.
-  const filesRepos = useMemo(
-    () =>
-      data.visible.flatMap((r) =>
-        r.worktrees.map((w) => ({
-          path: w.path,
-          name: w.isMain ? r.name : `${r.name} · ${baseName(w.path)}`,
-        })),
-      ),
-    [data.visible],
-  );
-
-  // 「main 대비 변경」 배지: 그 탭이 보여 줄 워크트리마다 main 대비 파일 수의 합.
-  const fileCountEntries = useMemo(
-    () => data.visible.flatMap((r) => r.worktrees.map((w) => ({ path: w.path, headOid: w.headOid }))),
-    [data.visible],
-  );
-  const branchChanges = useBranchChangesTab(fileCountEntries);
 
   if (!workspace) return null;
 
@@ -112,37 +82,18 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
         </Card>
       ) : (
         <GraphSplit
-          topCollapsed={tab !== "graph"}
           top={
           <section
             aria-label={t("shell.panelTabs")}
-            className={cn(
-              "relative flex flex-col shrink-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden",
-              tab === "graph" && "flex-1 min-h-0",
-            )}
+            className="relative flex flex-col shrink-0 flex-1 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
           >
             <div className="flex items-center gap-2 min-h-8 pl-3 pr-3 shrink-0 border-b border-(--line)">
               <TabGroup aria-label={t("shell.panelTabs")} className="shrink-0 gap-2 border-b-0">
-                <Tab
-                  variant="inline"
-                  active={tab === "graph"}
-                  onClick={() => setTab("graph")}
-                  icon={<GitCommitVertical className="w-3.5 h-3.5" />}
-                >
+                <Tab variant="inline" active onClick={NO_OP} icon={<GitCommitVertical className="w-3.5 h-3.5" />}>
                   {t("shell.graphTab")}
-                </Tab>
-                <Tab
-                  variant="inline"
-                  active={tab === "files"}
-                  onClick={() => setTab("files")}
-                  icon={<Files className="w-3.5 h-3.5" />}
-                  count={badgeCount(branchChanges.count)}
-                >
-                  {branchChanges.label}
                 </Tab>
               </TabGroup>
               <span className="flex-1" />
-              {tab === "files" && <FilesGroupByPicker value={groupBy} onChange={setGroupBy} />}
               <RepoLegend repos={data.visible} />
               {data.hiddenCount > 0 || showAll ? (
                 <button
@@ -157,60 +108,57 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
               {/* 저장소 화면의 git 상태 줄과 같은 자리: 오프라인 표시, 도는 git 명령, 작업 기록 열기. */}
               <StatusActivity />
             </div>
-            {tab === "graph" && (
-              <RepoLaneCommitGraph
-                graph={data.graph}
-                lanePaths={data.lanePaths}
-                repoLabel={repoLabel}
-                selectedKey={selection?.key ?? null}
-                baseTime={data.baseTime}
-                baseBranchLabel={data.baseBranchLabel}
-                isLoading={data.isLoading}
-                emptyMessage={emptyMessage}
-                onSelectCommit={(repoPath, commit, key) => {
-                  const picked: CommitSelection = { kind: "commit", key, repoPath, oid: commit.id };
-                  setSelection(picked);
-                  setLastCommitByRepo((prev) => ({ ...prev, [repoPath]: picked }));
-                }}
-                onSelectWip={(wip, key) =>
-                  setSelection({
-                    kind: "wip",
-                    key,
-                    repoPath: wip.repoPath,
-                    path: wip.path,
-                    branch: wip.branch,
-                    isMain: wip.isMain,
-                  })
-                }
-              />
-            )}
+            <RepoLaneCommitGraph
+              graph={data.graph}
+              lanePaths={data.lanePaths}
+              repoLabel={repoLabel}
+              selectedKey={selection?.key ?? null}
+              baseTime={data.baseTime}
+              baseBranchLabel={data.baseBranchLabel}
+              isLoading={data.isLoading}
+              emptyMessage={emptyMessage}
+              onSelectCommit={(repoPath, commit, key) => {
+                const picked: CommitSelection = { kind: "commit", key, repoPath, oid: commit.id };
+                setSelection(picked);
+                setLastCommitByRepo((prev) => ({ ...prev, [repoPath]: picked }));
+              }}
+              onSelectWip={(wip, key) =>
+                setSelection({
+                  kind: "wip",
+                  key,
+                  repoPath: wip.repoPath,
+                  path: wip.path,
+                  branch: wip.branch,
+                  isMain: wip.isMain,
+                })
+              }
+            />
           </section>
           }
           bottom={
-            tab === "graph" ? (
-              <Card className="flex-1">
-                <ReviewFilesPanel
-                  selection={selection}
-                  repoLabel={repoLabel}
-                  switcher={
-                    <WorkspaceWorkSwitcher
-                      selection={selection}
-                      graph={data.graph}
-                      lastCommit={selection ? (lastCommitByRepo[selection.repoPath] ?? null) : null}
-                      onSelect={setSelection}
-                    />
-                  }
-                />
-              </Card>
-            ) : (
-              <FilesByRepo repos={filesRepos} groupBy={groupBy} />
-            )
+            <Card className="flex-1">
+              <ReviewFilesPanel
+                selection={selection}
+                repoLabel={repoLabel}
+                switcher={
+                  <WorkspaceWorkSwitcher
+                    selection={selection}
+                    graph={data.graph}
+                    lastCommit={selection ? (lastCommitByRepo[selection.repoPath] ?? null) : null}
+                    onSelect={setSelection}
+                  />
+                }
+              />
+            </Card>
           }
         />
       )}
     </div>
   );
 }
+
+/** 워크스페이스 화면의 탭은 그래프 하나라 눌러도 할 일이 없다. */
+const NO_OP = () => undefined;
 
 /** 저장소의 기준(main) 상태를 한 줄로. 갈라진 지점을 못 찾았거나 잘렸을 때만 문구가 있다. */
 function historyNote(t: TFunction, h: WorkspaceRepoHistory | undefined): string | null {

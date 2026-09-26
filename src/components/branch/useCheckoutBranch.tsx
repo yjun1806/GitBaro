@@ -27,8 +27,7 @@ const CHECKOUT_QUERY_KEYS = [
   "stashShow",
   "recentBranches",
   "worktrees",
-  "changesVsDefault",
-  "fileDiffVsDefault",
+  "divergencePoint",
   "defaultBranches",
 ];
 

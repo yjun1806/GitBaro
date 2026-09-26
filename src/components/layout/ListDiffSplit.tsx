@@ -39,7 +39,7 @@ const CARD_RADIUS = 14;
 const LIST_EXIT = { x: -12, y: 0 };
 
 /**
- * 파일 목록 ↔ diff 두 칸. 다섯 화면(변경 목록, 따라가기, 커밋 상세, 파일별 변경, 스태시 상세)이
+ * 파일 목록 ↔ diff 두 칸. 여러 화면(변경 목록, 따라가기, 커밋 상세, 스태시 상세, PR 상세)이
  * 같은 폭(`ui.fileListWidth`)을 함께 쓴다. diff를 크게 보는 중(`ui.isDiffMaximized`)이면
  * 목록과 손잡이를 숨기고 diff만 남긴다. `files`가 있으면 diff 왼쪽에 좁은 파일 목록을 둔다
  * (`ui.maximizedFileListOpen`으로 접는다). 커지고 줄어드는 움직임은 `maximize-motion.ts`.

@@ -1145,33 +1145,6 @@
     "showMore_other": "워크트리 {{count}}개 더 · 함께 보기",
     "showCurrentOnly": "지금 워크트리만"
   },
-  "filesByRepo": {
-    "tab": "{{base}} 대비 변경",
-    "subtitleSingle": "저장소 1곳 · 비교 기준과 갈라진 뒤의 변경 · 커밋 안 한 변경 포함",
-    "subtitleMany": "저장소 {{count}}곳 · 저장소마다 비교 기준과 갈라진 뒤의 변경 · 커밋 안 한 변경 포함",
-    "loadFailed": "변경을 읽지 못했어요: {{error}}",
-    "loading": "불러오는 중…",
-    "noChanges": "비교 기준과 갈라진 뒤 바뀐 파일이 없어요.",
-    "selectTitle": "파일을 고르세요",
-    "selectHint": "파일을 고르면 비교 기준 대비 diff를 보여 줘요.",
-    "detached": "detached HEAD",
-    "fileCount_one": "파일 {{count}}",
-    "fileCount_other": "파일 {{count}}",
-    "noBase": "{{branch}}에서 갈라진 지점을 찾지 못해 커밋 안 한 변경만 보여요.",
-    "unborn": "아직 커밋이 없어 커밋 안 한 변경만 보여요.",
-    "binary": "바이너리",
-    "groupBy": "파일 나누기",
-    "groupByRepo": "저장소별",
-    "groupByFolder": "폴더별",
-    "tabDefault": "기본 브랜치 대비 변경",
-    "summary_other": "{{branch}}이(가) {{base}}에서 갈라진 뒤 바꾼 파일 {{count}}개 · 커밋 {{committed}} + 커밋 안 함 {{uncommitted}}",
-    "summaryViewing_other": "{{branch}}이(가) {{base}}에서 갈라진 뒤 바꾼 파일 {{count}}개 · 커밋 {{committed}} (보는 중이라 커밋 안 한 변경은 빼요)",
-    "summaryOnDefault_other": "{{branch}}에서 아직 push하지 않은 변경 ({{base}} 대비) · 파일 {{count}}개 · 커밋 {{committed}} + 커밋 안 함 {{uncommitted}}",
-    "baseLabel": "기준",
-    "basePicker": "비교 기준",
-    "baseDefault": "기본 브랜치 ({{branch}})",
-    "baseWorktree": "워크트리 기반 ({{branch}})"
-  },
   "layout": {
     "resizeFileList": "파일 목록 폭 조절(두 번 누르면 기본 크기)",
     "resizeGraph": "그래프 패널 높이 조절(두 번 누르면 기본 크기)"
@@ -1270,20 +1243,6 @@
     "copyLine": "{{line}}번 줄 복사",
     "openFileInEditor": "편집기에서 파일 열기",
     "diffMenu": "diff 메뉴"
-  },
-  "fileReview": {
-    "progress_one": "파일 {{count}}개 중 {{viewed}}개 봤음",
-    "progress_other": "파일 {{count}}개 중 {{viewed}}개 봤음",
-    "viewed": "봤음",
-    "markViewed": "봤음으로 표시",
-    "unmarkViewed": "봤음 해제",
-    "markAllViewed": "모두 봤음으로",
-    "unmarkAll": "모두 해제",
-    "viewedGroup_one": "봤음 {{count}}개",
-    "viewedGroup_other": "봤음 {{count}}개",
-    "collapseViewed": "봤음 접기",
-    "expandViewed": "봤음 펼치기",
-    "listMenu": "변경 목록 메뉴"
   },
   "pr": {
     "tab": "PR",
@@ -1476,7 +1435,6 @@
       "name": "이름",
       "account": "GitHub 계정",
       "sync": "원격 동기화",
-      "compare": "비교 기준",
       "list": "목록",
       "notifications": "알림",
       "info": "정보",
@@ -1506,11 +1464,6 @@
       "notRunnable": "계정과 원격이 있어야 자동으로 확인합니다. 설정은 미리 해 둘 수 있습니다.",
       "followDefault": "앱 기본값 따르기",
       "followDefaultDescription": "켜 두면 설정 › 동기화의 기본값을 씁니다. 끄면 이 저장소만 따로 정합니다."
-    },
-    "compare": {
-      "description": "「{base} 대비 변경」 탭이 처음 비교할 브랜치입니다. 기본 폴더와 워크트리 모두에 씁니다.",
-      "label": "기본 비교 기준",
-      "hint": "탭에서 바꾼 기준은 앱을 다시 켜면 이 값으로 돌아옵니다."
     },
     "list": {
       "favorite": "즐겨찾기",

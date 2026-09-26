@@ -18,8 +18,8 @@ pub mod review;
 pub mod workspace_history;
 // W5-T4
 pub mod wip;
-// W5-T5
-pub mod branch_changes;
+// 커밋 범위의 변경(push 안 한 범위), main 과 갈라진 지점
+pub mod range_changes;
 // W5-T2
 pub mod remote_plan;
 pub mod unpushed;

@@ -128,9 +128,10 @@ pub fn run() {
             commands::workspace_history::get_workspace_history,
             // W5-T4
             commands::wip::get_wip_files,
-            // W5-T5
-            commands::branch_changes::get_changes_vs_default,
-            commands::branch_changes::get_file_diff_vs_default,
+            // 커밋 범위의 변경
+            commands::range_changes::get_divergence_point,
+            commands::range_changes::get_range_changed_files,
+            commands::range_changes::get_range_file_diff,
             // W5-T2
             commands::remote_plan::plan_remote_op,
             // W5-T3

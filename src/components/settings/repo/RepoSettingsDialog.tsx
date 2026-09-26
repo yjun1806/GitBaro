@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bell, GitCompare, Info, List, RefreshCw, Tag, Trash2, UserRound } from "lucide-react";
+import { Bell, Info, List, RefreshCw, Tag, Trash2, UserRound } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useRepoSettingsStore, type RepoSettingsSection } from "@/stores/repo-settings";
 import { useRepoAvatarColor, useRepoName } from "@/hooks/useRepoDisplay";
@@ -11,7 +11,6 @@ import { RepoAvatarBadge } from "./RepoAvatarBadge";
 import { NameSection } from "./NameSection";
 import { AccountSection } from "./AccountSection";
 import { SyncSection } from "./SyncSection";
-import { CompareSection } from "./CompareSection";
 import { ListSection } from "./ListSection";
 import { NotifySection } from "./NotifySection";
 import { InfoSection } from "./InfoSection";
@@ -37,7 +36,6 @@ export function RepoSettingsDialog({ repo, initialSection = "name", onClose }: R
     { id: "name", label: t("repoSettings.nav.name"), icon: Tag },
     { id: "account", label: t("repoSettings.nav.account"), icon: UserRound },
     { id: "sync", label: t("repoSettings.nav.sync"), icon: RefreshCw },
-    { id: "compare", label: t("repoSettings.nav.compare"), icon: GitCompare },
     { id: "list", label: t("repoSettings.nav.list"), icon: List },
     { id: "notifications", label: t("repoSettings.nav.notifications"), icon: Bell },
     { id: "info", label: t("repoSettings.nav.info"), icon: Info },
@@ -57,7 +55,6 @@ export function RepoSettingsDialog({ repo, initialSection = "name", onClose }: R
       {active === "name" && <NameSection repo={repo} />}
       {active === "account" && <AccountSection repo={repo} />}
       {active === "sync" && <SyncSection repo={repo} />}
-      {active === "compare" && <CompareSection repo={repo} />}
       {active === "list" && <ListSection repo={repo} />}
       {active === "notifications" && <NotifySection repo={repo} />}
       {active === "info" && <InfoSection repo={repo} />}

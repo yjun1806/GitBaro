@@ -48,7 +48,7 @@ export function Code({ block, children }: { block?: boolean; children: ReactNode
 export function FileStatusLetter({ status }: { status: FileStatus });   // lib/file-status.tsx에서 옮긴다
 ```
 
-- 원형: `Count` ← `sidebar/RowSignals.tsx:33-72`; `StatusChip` ← `pr/PrBits.tsx:10`(`CHIP`); `RefLabel` ← `history/CommitItem.tsx:25-73` + `graph/lane-style.ts`(`LANE_LABEL_CLASS`, `laneLabelStyle`); `RepoTile` ← `sidebar/row-style.ts:13`(`LEADING_TILE`) + `settings/repo/RepoAvatarBadge.tsx`; `Dot` ← `RowSignals.tsx:46-53`; `FileStatusLetter` ← `review/FilesByRepo.tsx:540`.
+- 원형: `Count` ← `sidebar/RowSignals.tsx:33-72`; `StatusChip` ← `pr/PrBits.tsx:10`(`CHIP`); `RefLabel` ← `history/CommitItem.tsx:25-73` + `graph/lane-style.ts`(`LANE_LABEL_CLASS`, `laneLabelStyle`); `RepoTile` ← `sidebar/row-style.ts:13`(`LEADING_TILE`) + `settings/repo/RepoAvatarBadge.tsx`; `Dot` ← `RowSignals.tsx:46-53`; `FileStatusLetter` ← 원형이던 `review/FilesByRepo.tsx`는 없앴다. 모양은 `design-system.md`의 파일 상태 글자를 따른다.
 
 ### `Card.tsx`, `EmptyState.tsx`, `Notice.tsx`, `DialogFrame.tsx`
 
@@ -229,18 +229,9 @@ export function DialogFrame({ title, titleId, onClose, size = "md", dismissible,
 
 | 파일:줄 | 바꿀 것 | 규칙 |
 |---|---|---|
-| `review/FilesByRepo.tsx:307-308,595` | 오류 → `<Notice tone="danger">`; `:317` → `EmptyState layout="row"` | 3.7, D15 |
-| `review/FilesByRepo.tsx:343,536` | `hover:bg-accent/60` → `hover:bg-accent` | 3.4 |
-| `review/FilesByRepo.tsx:421` | 폴더 머리 `h-6 … text-[11px]` → `SectionLabel` | D16 |
-| `review/FilesByRepo.tsx:451-479` | 저장소 머리: 타일 `:461` → `<RepoTile size="sm">`; 이름 `text-[12px]` → `text-[12.5px] font-semibold`; 브랜치 `:470-474` → `<RefLabel kind="local">`; `:479` `text-[11px] text-(--faint)` → `text-[11.5px] text-muted-foreground` | D6, D4, D18 |
-| `review/FilesByRepo.tsx:498,544,547` | `text-[11px]`/`text-[10.5px]` `text-(--faint)` → `text-[11.5px] text-muted-foreground` | 2.2, D18 |
-| `review/FilesByRepo.tsx:540` | 상태 글자 → `<FileStatusLetter>`(모양은 이 줄이 원형이므로 그대로) | D5 |
-| `review/FilesByRepo.tsx:551-554` | `text-[11px]` → `text-[11.5px]` | D20 |
 | `review/ReviewFilesPanel.tsx:65,121` | 오류 → `Notice danger`; PR 버튼 → `Button sm secondary` | 3.7, 3.1 |
 | `review/WorkspaceReview.tsx:120` | 카드 → `Card`; `:139` → `Count`(Tabs가 처리); `:152` → `Button sm ghost` | D27, D1 |
 | `review/WorkspaceReview.tsx:236-250` | 저장소 범례 칩(`h-[22px] rounded-[6px] text-[11px] font-bold` + 인라인 색) → `<RepoTile size="sm">` + 이름 `text-[11.5px]` + `<RefLabel kind="worktree" laneColor>` | D4, D6 |
-| `review/BasePicker.tsx:42-48` | 라벨 `text-[11px]` → `text-[11.5px]`; 버튼 → `Button sm secondary`(mono 유지) | D8 |
-| `review/FilesGroupByPicker.tsx:17` | → `Button sm secondary` | D8 |
 | `review/WorkspaceTitle.tsx:26` | `text-[14px] font-bold` → `font-semibold`; `:22` 타일 `rounded-lg` → `rounded-(--radius-item)` | D11, 2.4 |
 | `review/MultiRepoRemoteDialog.tsx:56-73` | → `DialogFrame size="lg"`; 제목 `text-[15px] font-bold` → 14px semibold; 설명 그대로(12.5) | D11, D13 |
 | `review/MultiRepoRemoteDialog.tsx:87,95,121-123,136-149` | 오류 → `Notice danger`; 표 머리 `text-[11px] text-(--faint)` → `SectionLabel` 띠; 메모 `text-[12px] text-foreground/80` → `text-[11.5px] text-muted-foreground`; 발 왼쪽 글 `text-[12px]` → `text-[11.5px]` | D16, D18 |
@@ -248,7 +239,6 @@ export function DialogFrame({ title, titleId, onClose, size = "md", dismissible,
 | `review/MultiRepoRemoteDialog.tsx:223-247,272` | 타일 → `<RepoTile size="md">`; 명령 `code` → `<Code>`; `text-[12px] font-bold` → `text-[12.5px] font-semibold`; `text-(--faint)` → `text-muted-foreground` | D6, 3.2 |
 | `review/GitStatusLine.tsx:51,113-121,152` | `CHIP` → `Button sm primary` / `secondary`; upstream 버튼 → `Button sm ghost`(`tabular-nums` 유지) | 3.1 |
 | `review/StatusActivity.tsx:47-52` | 버튼 → `Button sm ghost`(`aria-pressed` 유지) | 3.1 |
-| `review/ViewedProgress.tsx:17,34` | `text-[11px]` → `text-[11.5px]`; 접기 → `Button sm ghost` | 2.2 |
 | `live/FollowPanel.tsx:63-69` | 「따라가는 중」 `rounded-full h-5` → `<StatusChip tone="live" icon={<Dot …/>}>` | D2 |
 | `live/FollowPanel.tsx:243-257` | 보기 방식 → `<Segmented size="sm">` | D24 |
 | `live/FollowPanel.tsx:313,318-339` | `FileStatusBadge` → `FileStatusLetter`; `text-[11px]`·`text-[10.5px]` `text-(--faint)` → `text-[11.5px] text-muted-foreground`(방금 바뀐 시각의 `text-(--live) font-bold`는 유지); `+N −N` `text-success/danger` → `text-diff-add-fg/text-diff-del-fg`, `text-[11px]` → `text-[11.5px]` | D5, D18, D20 |

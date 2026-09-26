@@ -253,7 +253,7 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 **언제 아니다.** 켜고 끄는 칩(`WorktreeChips`)은 버튼이다(3.11). 저장소 이름은 `RepoTile` + 글자다.
 
-**지금 쓰는 곳.** `CommitItem` 이름표, `GraphRow` WIP 행·구분선 이름표, `BranchPanelRow` 워크트리 칩, `OverlapBadge` 워크트리 이름표, `WorkspaceReview` 저장소 범례의 브랜치, `FilesByRepo` 저장소 머리의 브랜치.
+**지금 쓰는 곳.** `CommitItem` 이름표, `GraphRow` WIP 행·구분선 이름표, `BranchPanelRow` 워크트리 칩, `OverlapBadge` 워크트리 이름표, `WorkspaceReview` 저장소 범례의 브랜치.
 
 #### `RepoTile` (새로 만든다; `LEADING_TILE`·`RepoAvatarBadge`를 합친다)
 
@@ -281,7 +281,7 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 ### 3.3 파일 상태
 
-파일 한 줄의 맨 앞에 상태를 보인다. 모양은 하나다: **글자 하나**(`M A D R C U !`) mono `caption` 10.5px bold, 상태 색(`statusTextColors`), 폭 고정(`w-2.5`), `title`에 뜻. `FilesByRepo`의 모양이 기준이다. 색 칸에 아이콘을 넣는 `FileStatusBadge`(16px 타일)는 없앤다 — 행 앞에 색 칸이 줄마다 서면 목록이 시끄럽다.
+파일 한 줄의 맨 앞에 상태를 보인다. 모양은 하나다: **글자 하나**(`M A D R C U !`) mono `caption` 10.5px bold, 상태 색(`statusTextColors`), 폭 고정(`w-2.5`), `title`에 뜻. 색 칸에 아이콘을 넣는 `FileStatusBadge`(16px 타일)는 없앤다 — 행 앞에 색 칸이 줄마다 서면 목록이 시끄럽다.
 
 색: 수정 `warning`, 추가·미추적 `success`, 삭제·충돌 `danger`, 이름 바꿈·복사 `info`, 무시 `muted`. 브랜드 색은 쓰지 않는다(`statusTextColors`의 `renamed: text-primary`를 `text-info`로).
 
@@ -311,7 +311,6 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 - **카드 머리**: 높이 32px(`h-8`), `px-3`, `border-b border-(--line)`. 제목 `body` 12.5px bold, 부제 `meta` `--muted`. 탭이 있으면 탭이 머리다(`GraphPanel`). 머리의 작업 버튼은 `Button sm ghost`·`iconOnly`.
 - **떠 있는 패널 머리**(`PanelHeader`): 제목 `heading` 14px semibold, 부제 `meta`, 오른쪽에 `primary md` 하나 + 닫기 `iconOnly md`.
 - **구역 라벨** `SectionLabel`(새로 만든다; `PanelSectionHeader`가 원형): `meta` 11.5px semibold `--muted`, `px-3 pt-2 pb-1`, 접는 것이면 ▾ + `aria-expanded`, 접혔을 때만 `Count`. 띠 변형은 `bg-(--acc-faint) border-b`(패널 안 구역, 저장소별 그룹 머리). `uppercase` 없음.
-- **저장소 그룹 머리**(`FilesByRepo`): 띠 변형 + `RepoTile sm` + 이름 `body` semibold + `RefLabel`(브랜치) + 오른쪽 `meta`.
 
 ### 3.6 빈 상태 `EmptyState` (`layout/ContentArea.tsx`에서 `ui/`로 옮긴다)
 
@@ -375,7 +374,7 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 - **분할 선택** `Segmented`(`settings/ui/`에서 `ui/`로 옮긴다): 몇 개 안 되는 선택지 중 하나. 틀 `bg-(--chip)` `--radius-item` `p-0.5`, 조각 `--radius-chip`, 고른 조각 `bg-card shadow-(--shadow-sm) font-semibold`. 크기 `md` 조각 24px `body` 12.5(설정, 작업 전환) / `sm` 조각 20px `meta` 11.5(목록 필터, diff 보기 방식, 이미지 비교 방식). `role="radiogroup"`, 화살표로 옮긴다.
 - **켜고 끄는 칩**(`WorktreeChips`): 켜짐·꺼짐이 있는 버튼이다. `Button sm secondary` + `aria-pressed`, 꺼지면 점선 테두리 + `opacity-60`. 앞에 레인 색 견본 10px.
 - **스위치** `Switch`: 켜면 브랜드 색. 설정에서만.
-- **체크** `ViewedCheckbox`(봤음)는 회색 채움이다. 스테이징 체크는 네이티브 `accent-primary`. 둘은 뜻이 다르다(봤음은 리뷰 진행, 스테이징은 git 작업). 새 체크 칸이 필요하면 스테이징 쪽을 따른다.
+- **체크**: 스테이징 체크처럼 네이티브 `accent-primary`를 쓴다. 새 체크 칸도 이것을 따른다.
 
 ### 3.12 입력칸 `TextInput` (새로 만든다; 설정의 `FIELD`가 원형)
 
@@ -398,7 +397,7 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 | D2 | 상태 칩이 넷: PR 18px/10.5, 스레드 16px/10, 브랜치 `rounded`/10px/py-3px, 워크트리 정리 가능 `rounded`/10px | `StatusChip` 18px/10.5/6px 하나. 톤 여섯 |
 | D3 | PR 초안 칩이 브랜드 틴트(`PrListView:198`) | 상태에 브랜드 색 없음. `neutral` |
 | D4 | 이름표가 넷: 커밋 행 `rounded`/10px/medium, WIP 행 6px/10.5/bold, 워크트리 칩 흰 바탕 테두리, 겹침 띠 이름표 | `RefLabel` 18px/6px/10.5 semibold 하나. 종류·위치로 채움만 갈린다 |
-| D5 | 파일 상태가 둘: 색 칸 아이콘(`FileStatusBadge`) vs 글자(`FilesByRepo`) | 글자 하나. 색 칸 없앰 |
+| D5 | 파일 상태가 둘: 색 칸 아이콘(`FileStatusBadge`) vs 글자(없앤 `FilesByRepo`) | 글자 하나. 색 칸 없앰 |
 | D6 | 저장소 타일이 다섯 크기·세 모서리(16/4px, 18/5px, 20/5px, 28/8px, 32/7px) | `RepoTile` 네 크기, 모서리 5px(≤20)·8px(32) |
 | D7 | 점 크기 6·7·8px | 6px, 테 3px |
 | D8 | 버튼 높이 20·22·24·26·28·30·32·36px, 글자 10–14px | `sm` 24/11.5, `md` 28/12.5, `lg` 36/13(환영·안내 화면만) |
@@ -453,4 +452,3 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 | `Select`, `BranchCombobox` | `ui/` | 고침(높이·글자) |
 | `Spinner`, `BusyIcon`, `LoadingState`, `SwitchingOverlay` | `ui/` | 있음 |
 | `FocusFlash` | `ui/FocusFlash.tsx` | 있음 |
-| `ViewedCheckbox` | `ui/ViewedCheckbox.tsx` | 있음 |

@@ -21,7 +21,7 @@ import { checkedOutBranch, useSetHistoryView } from "./useHistoryView";
 const ICON = "w-3.5 h-3.5";
 
 /** 브랜치를 지운 뒤 다시 읽을 쿼리(툴바 브랜치 패널의 삭제와 같다). */
-const DELETE_QUERY_KEYS = ["branches", "repoSyncStatus", "commitHistory", "recentBranches", "changesVsDefault"];
+const DELETE_QUERY_KEYS = ["branches", "repoSyncStatus", "commitHistory", "recentBranches", "divergencePoint"];
 
 /**
  * 커밋 그래프의 브랜치·태그 이름표 우클릭 메뉴. 동작은 툴바 브랜치 패널과 같다:

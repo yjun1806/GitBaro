@@ -15,7 +15,7 @@ export interface GraphSplitProps {
   /** 아래 칸(파일 목록과 diff). */
   bottom: ReactNode;
   /**
-   * 위 칸이 탭 머리만 남은 상태(「파일별 변경」 탭). 이때는 높이를 나누지 않고 머리 높이만 쓴다.
+   * 위 칸이 탭 머리만 남은 상태. 이때는 높이를 나누지 않고 머리 높이만 쓴다.
    */
   topCollapsed?: boolean;
 }
@@ -36,7 +36,7 @@ export function GraphSplit({ top, bottom, topCollapsed = false }: GraphSplitProp
   const leaving = usePaneExit(topRef, maximized, GRAPH_EXIT);
 
   // 위 칸은 늘 같은 자리에 마운트해 둔다. 접거나 숨길 때 다시 마운트되면 그래프 패널이 제 화면
-  // 상태(「파일별 변경」 탭 열림 등)를 잃는다. diff를 크게 보는 동안에는 숨기기만 한다.
+  // 상태(열린 탭 등)를 잃는다. diff를 크게 보는 동안에는 숨기기만 한다.
   const split = !topCollapsed && !maximized;
   const sized = !topCollapsed && (!maximized || leaving);
   return (

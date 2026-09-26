@@ -38,10 +38,9 @@ const GIT_DIR_QUERY_KEYS = [
   "recentBranches",
   "fileDiff",
   "wipFiles",
-  // 「파일별 변경」(D7) 탭도 git-dir 전용 변화(예: 터미널에서 한 commit)에는 30초 poll까지
-  // 기다렸다 — repo:activity가 .git을 무시해서 유일한 신호가 이 이벤트다(W7 리뷰).
-  "changesVsDefault",
-  "fileDiffVsDefault",
+  // main과 갈라진 지점은 주기적으로 다시 읽지 않는다. 터미널에서 한 commit·checkout처럼 git-dir만
+  // 바뀌는 변화는 이 이벤트가 유일한 신호다(repo:activity는 .git을 무시한다).
+  "divergencePoint",
 ] as const;
 
 /**

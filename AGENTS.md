@@ -29,7 +29,7 @@ GitBaro/
 │   │   ├── live/                  # Follow panel (live changes as an agent edits)
 │   │   ├── pr/                    # Read-only pull request list, detail, files
 │   │   ├── repository/            # Repo list, add/clone dialogs, sync indicator
-│   │   ├── review/                # Changes-vs-base tab, viewed marks, workspace review, multi-repo remote dialog
+│   │   ├── review/                # Workspace review, git status line, multi-repo remote dialog
 │   │   ├── settings/              # Settings panel
 │   │   │   ├── app/               # App settings sections (general, appearance, tools, about)
 │   │   │   ├── repo/              # Repository settings dialog and its sections
@@ -46,7 +46,6 @@ GitBaro/
 │   │   ├── activity-targets.ts    # Paths each screen asks the activity watcher to watch
 │   │   ├── auto-sync.ts           # Last auto-sync result per repository
 │   │   ├── commit-draft.ts        # Unfinished commit message per repository
-│   │   ├── file-review.ts         # Per-file "viewed" marks (persisted)
 │   │   ├── follow.ts              # Live follow on/off and the followed file
 │   │   ├── history-view.ts        # Branch being viewed without checkout
 │   │   ├── live-changes.ts        # Recent file activity per repo/worktree
@@ -86,6 +85,7 @@ GitBaro/
 │   │   │   ├── libgit.rs          # LibGitEngine — libgit2-based ops (read-only, fast)
 │   │   │   ├── status.rs          # Working-tree status via `git status --porcelain=v2`
 │   │   │   ├── diff.rs            # Diff conversion utilities
+│   │   │   ├── file_diff.rs       # Files changed and line diff between two trees (commit range, PR)
 │   │   │   ├── branch.rs          # Branch name validation
 │   │   │   ├── commit.rs          # Commit message/oid validation, ref map
 │   │   │   ├── binary.rs          # Binary file detection & image preview
@@ -104,7 +104,7 @@ GitBaro/
 │   │   │   ├── git.rs             # status, stage, unstage, commit, diff, fetch, push, pull, stash
 │   │   │   ├── auto_sync.rs       # per-repo auto sync: post-fetch snapshot, safe ff-only to upstream
 │   │   │   ├── branch.rs          # branches, create, switch, delete, compare, merge, rename, bases
-│   │   │   ├── branch_changes.rs  # files changed since the split from the default branch
+│   │   │   ├── range_changes.rs   # fork point from the default branch; files and diff between two commits
 │   │   │   ├── history.rs         # commit history (any branch, no checkout), detail, file diff, avatars
 │   │   │   ├── workspace_history.rs # workspace timeline across repos
 │   │   │   ├── wip.rs             # uncommitted files ordered by edit time (live follow)
@@ -248,7 +248,7 @@ cd src-tauri && cargo build          # Build
 ### Review model
 
 - The review basis is **commits not on any remote** (`git rev-list HEAD --not --remotes`, `git/unpushed.rs`), counted even when the branch has no upstream yet.
-- The "changes vs base" tab compares against the repository's compare base (repository settings), and per-file "viewed" marks remember which content was viewed (`stores/file-review.ts`).
+- The unpushed range (remote boundary → HEAD, committed changes only) is reviewed as one combined diff: `get_range_changed_files` / `get_range_file_diff` (`commands/range_changes.rs`) compare two commits' trees. The fork point from the default branch comes from `get_divergence_point`.
 - Viewing a branch in the graph does not check it out (`stores/history-view.ts`).
 - The repository display alias (repository settings) is display-only. Paths, git commands, account lookup, and storage keys use the real folder path and name. Use `useRepoDisplay` to show a name.
 
@@ -313,7 +313,7 @@ Backend: Add a module under `src-tauri/src/` and expose commands through `src-ta
 
 - **컴포넌트 파일**: `PascalCase.tsx` (`BranchPanel.tsx`, `CommitComposer.tsx`)
 - **유틸리티/훅 파일**: `kebab-case.ts` (`group-files.ts`, `fuzzy-search.ts`). `src/hooks/`의 훅 파일은 훅 이름 그대로 쓴다 (`useTauriEvent.ts`).
-- **스토어 파일**: `kebab-case.ts` (`repository.ts`, `file-review.ts`)
+- **스토어 파일**: `kebab-case.ts` (`repository.ts`, `history-view.ts`)
 - **컴포넌트 이름**: `PascalCase` (`BranchPanel`, `DiffViewer`)
 - **이벤트 핸들러 props**: `on` 접두사 (`onDelete`, `onCommit`, `onChange`)
 - **내부 핸들러**: `handle` 접두사 (`handleDeleteClick`, `handleConfirm`)
@@ -395,7 +395,7 @@ match engine.fetch("origin", &token).await {
 
 ```tsx
 // 올바른 패턴
-export function ViewedCheckbox({ viewed, path, onToggle }: ViewedCheckboxProps) {
+export function GraphSplit({ top, bottom, topCollapsed = false }: GraphSplitProps) {
 ```
 
 - **Zustand selector**: 스토어에서 필요한 필드만 개별 selector로 구독한다. 전체 스토어를 구독하지 않는다.

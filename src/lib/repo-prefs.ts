@@ -1,5 +1,4 @@
 import { AVATAR_HUES, avatarColor, avatarColorFromHue, type AvatarColor } from "@/lib/avatar-color";
-import { trimTrailingSlash } from "@/lib/utils";
 
 /** 저장소별 알림 설정. 없으면 앱 설정을 따른다. */
 export type NotifyOverride = "on" | "off";
@@ -15,8 +14,6 @@ export interface RepoPrefs {
   alias?: string;
   /** 아바타 색상(hue, `AVATAR_HUES` 중 하나). 없으면 경로에서 정한 색. */
   hue?: number;
-  /** 「{base} 대비 변경」의 기본 비교 기준 브랜치. 없으면 기본 브랜치. */
-  compareBase?: string;
   /** 알림 종류별 설정. 항목이 없으면 앱 설정을 따른다. */
   notify?: Partial<Record<RepoNotifyKind, NotifyOverride>>;
 }
@@ -28,7 +25,10 @@ const NOTIFY_KINDS: readonly RepoNotifyKind[] = ["newCommits", "ciFailures"];
 const isPlainRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
-/** 값 하나를 정리한다. 쓸 게 하나도 없으면 null. */
+/**
+ * 값 하나를 정리한다. 쓸 게 하나도 없으면 null. 모르는 필드(예: 없앤 비교 기준 설정 `compareBase`)는
+ * 오류 없이 버린다.
+ */
 export function normalizeRepoPrefs(value: unknown): RepoPrefs | null {
   if (!isPlainRecord(value)) return null;
   const out: RepoPrefs = {};
@@ -37,9 +37,6 @@ export function normalizeRepoPrefs(value: unknown): RepoPrefs | null {
     if (alias) out.alias = alias;
   }
   if (typeof value.hue === "number" && AVATAR_HUES.includes(value.hue)) out.hue = value.hue;
-  if (typeof value.compareBase === "string" && value.compareBase.trim()) {
-    out.compareBase = value.compareBase.trim();
-  }
   if (isPlainRecord(value.notify)) {
     const src = value.notify;
     const notify: Partial<Record<RepoNotifyKind, NotifyOverride>> = {};
@@ -93,20 +90,4 @@ export function repoDisplayName(
 export function repoAvatarColor(path: string, prefs: Readonly<Record<string, RepoPrefs>>): AvatarColor {
   const hue = prefs[path]?.hue;
   return hue === undefined ? avatarColor(path) : avatarColorFromHue(hue);
-}
-
-/**
- * 작업 폴더 경로의 기본 비교 기준. 경로가 저장소 자신이면 그 저장소 설정을,
- * 워크트리면 `ownerOf`로 찾은 저장소 설정을 쓴다.
- */
-export function repoDefaultBase(
-  prefs: Readonly<Record<string, RepoPrefs>>,
-  path: string,
-  ownerOf: (path: string) => string | undefined,
-): string | null {
-  const key = trimTrailingSlash(path);
-  const own = prefs[key]?.compareBase;
-  if (own) return own;
-  const owner = ownerOf(key);
-  return (owner && prefs[owner]?.compareBase) || null;
 }

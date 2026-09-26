@@ -3,7 +3,7 @@
 //! 값이 빠지거나 null 이어도(지운 계정, 지운 포크, 권한 없는 체크) 실패하지 않고 빈 값으로 채운다.
 //! 목록 하나가 이상하다고 PR 화면 전체를 못 보게 하지 않는다.
 
-use crate::commands::branch_changes::{VsDefaultDiffHunk, VsDefaultDiffLine};
+use crate::git::file_diff::{PatchHunk, PatchLine};
 use crate::error::AppError;
 use serde::Serialize;
 use serde_json::Value;
@@ -186,7 +186,7 @@ pub struct PrFile {
     pub additions: u64,
     pub deletions: u64,
     /// GitHub 이 준 patch 를 나눈 구간. 바이너리이거나 너무 커서 patch 가 없으면 없다.
-    pub hunks: Option<Vec<VsDefaultDiffHunk>>,
+    pub hunks: Option<Vec<PatchHunk>>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -495,8 +495,8 @@ fn hunk_starts(header: &str) -> Option<(u32, u32)> {
 /// GitHub `patch`(머리 `---`/`+++` 없이 `@@` 구간만 있는 unified diff)를 구간으로 나눈다.
 /// 줄 내용 끝에는 git2 diff 처럼 줄바꿈을 붙인다. `\ No newline at end of file` 은 뺀다.
 /// 머리를 못 읽는 구간이 있으면 None — 틀린 줄 번호로 코멘트 자리를 가리키느니 patch 를 안 보인다.
-pub fn parse_patch(patch: &str) -> Option<Vec<VsDefaultDiffHunk>> {
-    let mut hunks: Vec<VsDefaultDiffHunk> = Vec::new();
+pub fn parse_patch(patch: &str) -> Option<Vec<PatchHunk>> {
+    let mut hunks: Vec<PatchHunk> = Vec::new();
     let (mut old_no, mut new_no) = (0u32, 0u32);
     for raw in patch.split('\n') {
         let line = raw.strip_suffix('\r').unwrap_or(raw);
@@ -504,7 +504,7 @@ pub fn parse_patch(patch: &str) -> Option<Vec<VsDefaultDiffHunk>> {
             let (old_start, new_start) = hunk_starts(line)?;
             old_no = old_start;
             new_no = new_start;
-            hunks.push(VsDefaultDiffHunk {
+            hunks.push(PatchHunk {
                 header: format!("{line}\n"),
                 old_start,
                 new_start,
@@ -528,7 +528,7 @@ pub fn parse_patch(patch: &str) -> Option<Vec<VsDefaultDiffHunk>> {
         if new_line_no.is_some() {
             new_no += 1;
         }
-        hunk.lines.push(VsDefaultDiffLine {
+        hunk.lines.push(PatchLine {
             kind,
             content: format!("{}\n", &line[1..]),
             old_line_no,

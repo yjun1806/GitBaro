@@ -5,7 +5,6 @@ export type RepoSettingsSection =
   | "name"
   | "account"
   | "sync"
-  | "compare"
   | "list"
   | "notifications"
   | "info"
