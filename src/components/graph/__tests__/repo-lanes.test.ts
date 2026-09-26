@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CommitInfo } from "@/types";
-import { buildRepoLaneRows, repoLaneColor, type LaneRepo, type LaneWip } from "../repo-lanes";
+import { buildRepoLaneRows, mergeByTime, repoLaneColor, type LaneRepo, type LaneWip } from "../repo-lanes";
 
 function commit(id: string, timestamp: number): CommitInfo {
   return {
@@ -120,5 +120,24 @@ describe("repoLaneColor", () => {
     expect(colorOfRow([A.path, B.path], first.rows, "a2")).toBe(repoLaneColor("/w/a"));
     expect(colorOfRow([B.path, A.path], swapped.rows, "a2")).toBe(repoLaneColor("/w/a"));
     expect(repoLaneColor("/w/a")).not.toBe(repoLaneColor("/w/b"));
+  });
+});
+
+// `src/components/scope/scope-regions.ts`(영역별 레인 합치기)가 이 함수를 그대로 재사용한다.
+describe("mergeByTime", () => {
+  it("interleaves lists newest-first while keeping each list's own order", () => {
+    const a = [{ id: "a2", t: 50 }, { id: "a1", t: 10 }];
+    const b = [{ id: "b2", t: 40 }, { id: "b1", t: 30 }];
+    expect(mergeByTime([a, b], (x) => x.t).map((x) => x.id)).toEqual(["a2", "b2", "b1", "a1"]);
+  });
+
+  it("prefers an earlier list on a tie", () => {
+    const a = [{ id: "a1", t: 10 }];
+    const b = [{ id: "b1", t: 10 }];
+    expect(mergeByTime([a, b], (x) => x.t).map((x) => x.id)).toEqual(["a1", "b1"]);
+  });
+
+  it("handles empty lists", () => {
+    expect(mergeByTime([[], []], (x: { t: number }) => x.t)).toEqual([]);
   });
 });

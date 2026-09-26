@@ -104,6 +104,7 @@ describe("ui store after the two-column shell", () => {
       "fileListWidth",
       "graphPanelRatio",
       "maximizedFileListOpen",
+      "reviewFileView",
       "reviewFileViewByWorkspace",
       "sidebarHidden",
       "sidebarWidth",
@@ -274,5 +275,43 @@ describe("review file view per workspace", () => {
     const merge = useUIStore.persist.getOptions().merge!;
     const merged = merge({ sidebarHidden: true }, useUIStore.getInitialState());
     expect(merged.reviewFileViewByWorkspace).toEqual({});
+  });
+});
+
+// 범위 하나로 보기(워크스페이스·저장소·브랜치)는 [커밋 순서 | 파일별]을 워크스페이스별 맵이
+// 아니라 값 하나로 함께 쓴다. 옛 `reviewFileViewByWorkspace` 저장값은 읽지 못한 빌드로
+// 되돌아갈 사용자를 위해 그대로 두되(위 describe), 더는 읽지 않는다.
+describe("review file view (범위 전역 값)", () => {
+  it("starts at commit order", () => {
+    expect(useUIStore.getInitialState().reviewFileView).toBe("commits");
+  });
+
+  it("remembers the choice and persists it", () => {
+    useUIStore.getState().setScopeFileView("files");
+    expect(useUIStore.getState().reviewFileView).toBe("files");
+    const partialize = useUIStore.persist.getOptions().partialize!;
+    expect(partialize(useUIStore.getState())).toMatchObject({ reviewFileView: "files" });
+    useUIStore.setState({ reviewFileView: "commits" });
+  });
+
+  it("keeps a saved value and drops an unknown one", () => {
+    expect(sanitizePersistedUI({ reviewFileView: "files" })).toEqual({ reviewFileView: "files" });
+    expect(sanitizePersistedUI({ reviewFileView: "graph" })).toEqual({});
+  });
+
+  it("falls back to commit order for users who saved before the field existed", () => {
+    const merge = useUIStore.persist.getOptions().merge!;
+    const merged = merge({ sidebarHidden: true }, useUIStore.getInitialState());
+    expect(merged.reviewFileView).toBe("commits");
+  });
+
+  it("does not let an old reviewFileViewByWorkspace value leak into the new field", () => {
+    const merge = useUIStore.persist.getOptions().merge!;
+    const merged = merge(
+      { reviewFileViewByWorkspace: { w1: "files" } },
+      useUIStore.getInitialState(),
+    );
+    expect(merged.reviewFileView).toBe("commits");
+    expect(merged.reviewFileViewByWorkspace).toEqual({ w1: "files" });
   });
 });

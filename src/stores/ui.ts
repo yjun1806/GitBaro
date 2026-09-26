@@ -42,8 +42,15 @@ interface UIState {
    * 파일 목록에 포커스를 옮기고 지운다. 저장하지 않는다.
    */
   workingFocusAt: number | null;
-  /** 워크스페이스마다 마지막으로 고른 리뷰 보기(커밋 순서·파일별, 워크스페이스 id로 키). */
+  /**
+   * 워크스페이스마다 마지막으로 고른 리뷰 보기(커밋 순서·파일별, 워크스페이스 id로 키).
+   * @deprecated 범위 하나로 보기(워크스페이스·저장소·브랜치)에서는 {@link UIState.reviewFileView}
+   * 하나가 세 단계를 함께 쓴다. 옛 저장값을 읽기 위해서만 남겨 둔다(마이그레이션 없이 버전을
+   * 올리지 않으려고 `sanitizePersistedUI`가 계속 모양을 확인한다) — 더는 쓰지 않는다.
+   */
   reviewFileViewByWorkspace: Readonly<Record<string, ReviewFileView>>;
+  /** [커밋 순서 | 파일별] 선택. 범위(워크스페이스·저장소·브랜치) 세 단계가 함께 쓰는 값 하나다. */
+  reviewFileView: ReviewFileView;
   /** 커밋·스태시 상세의 정보 칸(제목 아래 요약/펼침)을 펼쳐 뒀는지. 기본은 접힘(저장). */
   commitInfoExpanded: boolean;
   setTheme: (theme: Theme) => void;
@@ -60,7 +67,10 @@ interface UIState {
   setDiffMaximized: (maximized: boolean) => void;
   setMaximizedFileListOpen: (open: boolean) => void;
   setWorkingFocusAt: (at: number | null) => void;
+  /** @deprecated {@link UIState.setScopeFileView}를 쓴다. */
   setReviewFileView: (workspaceId: string, view: ReviewFileView) => void;
+  /** [커밋 순서 | 파일별] 전역 선택을 바꾼다. */
+  setScopeFileView: (view: ReviewFileView) => void;
   setCommitInfoExpanded: (expanded: boolean) => void;
 }
 
@@ -79,6 +89,7 @@ type PersistedUI = Pick<
   | "fileListWidth"
   | "maximizedFileListOpen"
   | "reviewFileViewByWorkspace"
+  | "reviewFileView"
   | "commitInfoExpanded"
 >;
 
@@ -103,6 +114,12 @@ type PersistedUI = Pick<
  * `reviewFileViewByWorkspace`(워크스페이스 리뷰의 커밋 순서·파일별 선택)도 나중에 더한 선택 필드라 버전을
  * 올리지 않는다. 없으면 빈 객체이므로 모든 워크스페이스가 기본값(`commits`)으로 시작한다.
  * `commitInfoExpanded`(커밋 상세의 정보 칸 펼침 여부)도 나중에 더한 선택 필드다. 없으면 기본값(접힘)을 쓴다.
+ * `reviewFileView`(범위 하나로 보기의 전역 커밋 순서·파일별 선택)는 `reviewFileViewByWorkspace`를
+ * 대신한다. 워크스페이스별 값 하나가 아니라 세 단계(워크스페이스·저장소·브랜치)가 함께 쓰는 값
+ * 하나라 워크스페이스 id로 키를 두지 않는다. 옛 저장값의 `reviewFileViewByWorkspace`는 그대로
+ * 두고(다음에 이 값을 안 쓰는 빌드로 되돌려도 읽을 수 있게) `sanitizePersistedUI`가 계속 모양만
+ * 확인해 통과시킨다 — 새 필드로 옮겨 쓰지 않는다. 없으면 기본값(`commits`)을 쓰므로 버전을
+ * 올리지 않는다.
  */
 export const UI_STORE_VERSION = 0;
 
@@ -143,6 +160,9 @@ export function sanitizePersistedUI(persisted: unknown): Partial<UIState> {
     }
     out.reviewFileViewByWorkspace = byWorkspace;
   }
+  if (REVIEW_FILE_VIEWS.includes(p.reviewFileView as ReviewFileView)) {
+    out.reviewFileView = p.reviewFileView as ReviewFileView;
+  }
   if (typeof p.commitInfoExpanded === "boolean") out.commitInfoExpanded = p.commitInfoExpanded;
   return out;
 }
@@ -166,6 +186,7 @@ export const useUIStore = create<UIState>()(
       maximizedFileListOpen: true,
       workingFocusAt: null,
       reviewFileViewByWorkspace: {},
+      reviewFileView: "commits",
       commitInfoExpanded: false,
 
       setTheme: (theme) => set({ theme }),
@@ -192,6 +213,7 @@ export const useUIStore = create<UIState>()(
         set((state) => ({
           reviewFileViewByWorkspace: { ...state.reviewFileViewByWorkspace, [workspaceId]: view },
         })),
+      setScopeFileView: (view) => set({ reviewFileView: view }),
       setCommitInfoExpanded: (expanded) => set({ commitInfoExpanded: expanded }),
     }),
     {
@@ -213,6 +235,7 @@ export const useUIStore = create<UIState>()(
         fileListWidth: state.fileListWidth,
         maximizedFileListOpen: state.maximizedFileListOpen,
         reviewFileViewByWorkspace: state.reviewFileViewByWorkspace,
+        reviewFileView: state.reviewFileView,
         commitInfoExpanded: state.commitInfoExpanded,
       }),
       merge: (persisted, current) => ({ ...current, ...sanitizePersistedUI(persisted) }),
