@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::git::branch::validate_branch_name;
 use crate::git::cli::{GitCliEngine, WorktreeEntry};
-use crate::git::worktree_base::resolve_worktree_base_cached;
+use crate::git::worktree_base::{resolve_worktree_base_cached, BaseSource};
 
 #[tauri::command]
 pub async fn get_worktrees(
@@ -42,8 +42,9 @@ pub async fn get_worktrees(
         .filter_map(|(i, e)| e.branch.clone().map(|b| (i, b)))
         .collect();
     if !targets.is_empty() {
+        let repo_path_for_open = repo_path.clone();
         let bases = tokio::task::spawn_blocking(move || {
-            let Ok(repo) = git2::Repository::open(&repo_path) else {
+            let Ok(repo) = git2::Repository::open(&repo_path_for_open) else {
                 return Vec::new();
             };
             targets
@@ -53,6 +54,28 @@ pub async fn get_worktrees(
         })
         .await
         .unwrap_or_default();
+
+        // `HeadReflog`로 확실하게 판별된 값은 다음부터 곧장 읽히도록 기록해 둔다.
+        // 응답을 기다리게 하지 않도록 백그라운드에서, 실패해도 조용히 넘어간다.
+        let mut to_persist: Vec<(String, String)> = Vec::new();
+        for (i, base) in &bases {
+            if let (Some(b), Some(entry)) = (base, entries.get(*i)) {
+                if b.source == BaseSource::HeadReflog {
+                    if let Some(branch) = &entry.branch {
+                        to_persist.push((branch.clone(), b.name.clone()));
+                    }
+                }
+            }
+        }
+        if !to_persist.is_empty() {
+            let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+            tokio::spawn(async move {
+                for (branch, base_name) in to_persist {
+                    engine.persist_head_reflog_base(&branch, &base_name).await;
+                }
+            });
+        }
+
         for (i, base) in bases {
             if let Some(entry) = entries.get_mut(i) {
                 entry.base = base;

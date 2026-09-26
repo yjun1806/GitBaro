@@ -964,12 +964,34 @@ impl GitCliEngine {
         // 시작점을 해시로 남길 수도 있어서, 앱이 아는 값을 우선한다. 기록 실패는
         // 워크트리 생성 자체를 실패로 만들 일이 아니므로 경고만 남긴다.
         if let (Some(nb), Some(base)) = (new_branch, base_branch) {
-            let key = base_config_key(nb);
-            if let Err(e) = self.run_local_checked(&["config", &key, base]).await {
+            if let Err(e) = self.record_branch_base(nb, base).await {
                 tracing::warn!("[git] failed to record base branch for {}: {}", nb, e);
             }
         }
         Ok(())
+    }
+
+    /// `branch.<name>.gitbaroBase` 에 기반 브랜치 이름을 적는다. 이미 값이 있어도
+    /// 덮어쓴다 — 언제 덮어써도 되는지는 호출자가 미리 판단한다.
+    async fn record_branch_base(&self, branch: &str, base: &str) -> Result<(), AppError> {
+        let key = base_config_key(branch);
+        self.run_local_checked(&["config", &key, base]).await?;
+        Ok(())
+    }
+
+    /// `HeadReflog` 로 확실히 판별된 기반을 기록해 다음 조회부터는 곧장 읽힌다
+    /// (`recorded` 단계). 이미 값이 있으면 절대 덮어쓰지 않는다 — 호출자가 판별 시점에
+    /// 비어 있음을 확인했더라도, 그 사이 다른 경로로 값이 생겼을 수 있어 다시 확인한다.
+    /// 조회 응답을 막지 않도록 호출자가 기다리지 않는 자리(백그라운드)에서 부르는 것을
+    /// 전제한다 — 실패해도 판별 결과 자체에는 영향이 없으므로 경고만 남긴다.
+    pub async fn persist_head_reflog_base(&self, branch: &str, base: &str) {
+        let key = base_config_key(branch);
+        if self.run_local_probe_checked(&["config", "--get", &key]).await.is_ok() {
+            return; // 이미 기록돼 있다.
+        }
+        if let Err(e) = self.record_branch_base(branch, base).await {
+            tracing::warn!("[git] failed to persist head-reflog base for {}: {}", branch, e);
+        }
     }
 
     /// Remove a worktree via `git worktree remove`.

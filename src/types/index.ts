@@ -386,9 +386,11 @@ export interface MergePreCheckResult {
  * 워크트리 브랜치가 갈라져 나온 브랜치.
  * - `recorded`: GitBaro가 워크트리를 만들 때 기록한 값
  * - `reflog`: git이 브랜치를 만들 때 남긴 기록(`branch: Created from X`)
+ * - `headreflog`: 브랜치 기록엔 `Created from HEAD`만 남았지만, 그 순간 워크트리들의
+ *   HEAD reflog를 되짚어 확실하게 판별한 값. `reflog`와 마찬가지로 추정이 아니다.
  * - `inferred`: 기록이 없어 분기점이 가장 가까운 브랜치로 추정한 값
  */
-export type WorktreeBaseSource = "recorded" | "reflog" | "inferred";
+export type WorktreeBaseSource = "recorded" | "reflog" | "headreflog" | "inferred";
 
 export interface WorktreeBase {
   name: string;

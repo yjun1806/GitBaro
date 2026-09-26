@@ -5,7 +5,7 @@ use crate::git::commit::commit_to_info;
 use crate::git::engine::{BranchCompareResult, MergePreCheckResult, MergeStrategy};
 use crate::git::libgit::working_tree_dirty_summary;
 use crate::git::worktree_base::{
-    default_branch_with_fallback, resolve_worktree_base_cached, WorktreeBase,
+    default_branch_with_fallback, resolve_worktree_base_cached, BaseSource, WorktreeBase,
 };
 use serde_json::{json, Value};
 
@@ -887,12 +887,33 @@ pub async fn branch_bases(
     repo_path: String,
     names: Vec<String>,
 ) -> Result<Vec<BranchBaseInfo>, AppError> {
-    tokio::task::spawn_blocking(move || {
-        let repo = git2::Repository::open(&repo_path)?;
-        Ok(branch_bases_in(&repo, &names))
+    let repo_path_for_open = repo_path.clone();
+    let infos: Vec<BranchBaseInfo> = tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&repo_path_for_open)?;
+        Ok::<_, AppError>(branch_bases_in(&repo, &names))
     })
     .await
-    .map_err(|e| AppError::Channel(e.to_string()))?
+    .map_err(|e| AppError::Channel(e.to_string()))??;
+
+    // `HeadReflog`로 확실하게 판별된 값은 다음부터 곧장 읽히도록 기록해 둔다.
+    // 응답을 기다리게 하지 않도록 백그라운드에서, 실패해도 조용히 넘어간다.
+    let to_persist: Vec<(String, String)> = infos
+        .iter()
+        .filter_map(|info| {
+            let base = info.base.as_ref()?;
+            (base.source == BaseSource::HeadReflog).then(|| (info.name.clone(), base.name.clone()))
+        })
+        .collect();
+    if !to_persist.is_empty() {
+        let engine = GitCliEngine::new(std::path::Path::new(&repo_path));
+        tokio::spawn(async move {
+            for (branch, base_name) in to_persist {
+                engine.persist_head_reflog_base(&branch, &base_name).await;
+            }
+        });
+    }
+
+    Ok(infos)
 }
 
 fn branch_bases_in(repo: &git2::Repository, names: &[String]) -> Vec<BranchBaseInfo> {
