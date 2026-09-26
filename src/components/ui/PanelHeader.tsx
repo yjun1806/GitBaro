@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./Button";
 import { SearchInput } from "./TextInput";
@@ -96,6 +96,17 @@ export function SectionLabel({
 }: SectionLabelProps) {
   const heading = (
     <>
+      {onToggle && (
+        <ChevronDown
+          aria-hidden="true"
+          data-testid="section-label-chevron"
+          className={cn(
+            "w-2.5 h-2.5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none",
+            collapsed && "-rotate-90",
+          )}
+          strokeWidth={2.6}
+        />
+      )}
       <span className="truncate">{title}</span>
       {collapsed && count != null && <Count value={count} tone="muted" />}
     </>
