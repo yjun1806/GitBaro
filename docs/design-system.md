@@ -213,9 +213,11 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 | 지금 바뀌는 중 | `Dot` | 6px 점 |
 | 명령·경로 | `Code` | 칩 바탕의 고정폭 글자 |
 
-#### `Count` (새로 만든다)
+#### `Count` (`src/components/ui/marks.tsx`)
 
 **무엇.** 사용자가 행동할 수를 보인다: 커밋 안 한 파일, 올릴·받을 커밋, 접은 구역 안의 항목 수.
+
+**API.** `value: number`, `prefix?: "●" | "↑" | "↓" | ""`(기본 없음), `tone: "live" | "sync" | "muted"`, `label?: string`.
 
 **모양.** `caption` 10.5px semibold `tabular-nums`, 기호 + 수(`● 3`, `↑2`, `↓1`, `12`). 색은 뜻에 따른다: 커밋 안 한 파일 `--live`, 올릴·받을 커밋 `--fg2`, 항목 수 `--muted`. 일반적으로 **바탕·알약·테두리가 없다.** 다만 **예외**: 툴바 버튼과 탭 count는 채운 알약(`rounded-full` + 배경색)으로 표시하며, 이는 단일 source of truth 원칙(원칙 3)의 허가된 변형이다(2026-09-26 D35).
 
@@ -223,9 +225,11 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 **지금 쓰는 곳.** `RowSignals`(기준 모양), `TOOLBAR_BADGE`, `WorktreeZone` 워크트리 수, `Tab count`, `ChangesView` 그룹 수, `PanelSectionHeader` 접은 수, `AccountHeader` 저장소 수, `WorktreeChips` 커밋 안 한 수.
 
-#### `StatusChip` (새로 만든다; `PrBits`의 `CHIP`이 원형)
+#### `StatusChip` (`src/components/ui/marks.tsx`)
 
 **무엇.** 한 단어로 된 상태: 열림·초안·병합·닫힘(PR), 성공·실패·실행 중(CI), 승인·변경 요청(리뷰), 병합됨·오래됨(브랜치), 정리 가능(워크트리), 해결됨·오래된 스레드, 충돌, 따라가는 중.
+
+**API.** `tone: "neutral" | "success" | "danger" | "warning" | "info" | "live"`, `icon?: ReactNode`, `children: ReactNode`.
 
 **모양.** 높이 18px, `px-1.5`, `--radius-chip`, `caption` 10.5px semibold, 앞에 12px 아이콘 선택. 톤 여섯: `neutral`(`bg-(--chip) text-(--fg2)`), `success`, `danger`, `warning`, `info`(각 `bg-<tone>/15 text-<tone>`), `live`(`bg-(--live-soft) text-(--live)`).
 
@@ -235,9 +239,11 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 **지금 쓰는 곳.** `PrStateBadge`·`CiChip`·`ReviewDecisionChip`·`DraftChip`, `PrThread` 칩, `BranchStatusBadge`, `WorktreePanelRow` 정리 가능, `PrDetailPane` 충돌, `FollowPanel` 따라가는 중, `PrListView` 초안.
 
-#### `RefLabel` (새로 만든다; `CommitItem` 이름표와 `GraphRow` WIP 이름표를 합친다)
+#### `RefLabel` (`src/components/ui/marks.tsx`)
 
 **무엇.** 브랜치·태그·워크트리·HEAD 같은 git 참조의 이름.
+
+**API.** `name: string`, `kind: "local" | "remote" | "head" | "tag" | "tag-local" | "worktree"`, `laneColor?: string | null`, `className?: string`.
 
 **모양.** 높이 18px, `px-1.5`, `--radius-chip`, `font-mono` `caption` 10.5px semibold, 앞에 10px 아이콘(브랜치·태그·워크트리), `max-w` + `truncate`, `title`에 전체 이름. 모양은 종류와 위치로 갈린다(`CommitItem`의 규칙을 그대로 둔다).
 
@@ -255,27 +261,29 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 **지금 쓰는 곳.** `CommitItem` 이름표, `GraphRow` WIP 행·구분선 이름표, `BranchPanelRow` 워크트리 칩, `OverlapBadge` 워크트리 이름표, `WorkspaceReview` 저장소 범례의 브랜치.
 
-#### `RepoTile` (새로 만든다; `LEADING_TILE`·`RepoAvatarBadge`를 합친다)
+#### `RepoTile` (`src/components/ui/marks.tsx`)
 
 **무엇.** 저장소 하나. 저장소 색(`avatarColor`) 바탕에 첫 글자.
+
+**API.** `name: string`, `color: AvatarColor`, `size: "sm" | "md" | "lg" | "xl"`(크기별 16/18/20/28px).
 
 **크기.** `sm` 16px/글자 9px(파일 목록의 저장소 머리), `md` 18px/9px(사이드바, 창 안 줄), `lg` 20px/10.5px(툴바 경로), `xl` 28px/12px(저장소 목록의 두 줄 행, 저장소 설정 머리, 색 고르기). 모서리 5px, `xl`은 `--radius-item`. 글자 extrabold, `aria-hidden`(이름은 옆 글자가 말한다).
 
 **언제 아니다.** 저장소가 아닌 것(워크스페이스)은 회색 타일 + 아이콘(`NEUTRAL_TILE`). 사람은 둥근 아바타(`AccountAvatar`, `PrAvatar`).
 
-#### `Dot` (새로 만든다)
+#### `Dot` (`src/components/ui/marks.tsx`)
 
 **무엇.** 「지금 바뀌는 중」·「따라가는 중」 같은 살아 있는 상태의 점.
 
-**모양.** 6px(`w-1.5 h-1.5`) `rounded-full`, 색 `--live`(꺼지면 `--muted`). 방금 바뀐 순간에는 3px 테(`--live-soft`)가 한 번 퍼진다(`animate-live-ring`). 따라가는 중이면 숨 쉰다(`animate-live-breathe`). 점 옆에 수가 오면 `Count`다(`● 3`).
+**API.** `on: boolean`, `live?: boolean`, `breathe?: boolean`, `label?: string`.
 
 **지금 쓰는 곳.** `RowSignals`, `WorktreeChips`, `FollowPanel` 두 곳, `RepoSyncIndicator` dot 변형.
 
-#### `Code` (새로 만든다)
+#### `Code` (`src/components/ui/marks.tsx`)
 
 **무엇.** git 명령, 경로, 비교 범위(`main..feat/x`) 같은 글자 그대로의 값.
 
-**모양.** 줄 안: `bg-(--chip)` `--radius-chip` `px-1.5 py-px` mono `meta` 11.5px `text-(--fg2)`. 덩어리(명령 미리보기, 로그): `px-2.5 py-2`, `whitespace-pre-wrap`.
+**API.** `block?: boolean`, `children: ReactNode`.
 
 **지금 쓰는 곳.** `BranchRangeGraph` 범위, 설정의 경로(`GeneralSection`·`AboutSection`·`InfoSection`), `ConfirmCommandDialog` 명령, `ActivityLogPanel` 출력, `GhSetupGuard` 명령, `MultiRepoRemoteDialog` 명령.
 
@@ -307,14 +315,16 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 ### 3.5 카드·패널·머리
 
-- **카드(층 2)**: `Card`(`layout/ContentArea.tsx`, `PANEL_SURFACE`). 본문 칸의 모든 덩어리(그래프 패널, 파일 목록, diff, 설정 묶음)가 카드다. 클래스를 손으로 베끼지 않는다.
+- **카드(층 2)**: `Card` (`src/components/ui/Card.tsx`), `PANEL_SURFACE`. 본문 칸의 모든 덩어리(그래프 패널, 파일 목록, diff, 설정 묶음)가 카드다. 클래스를 손으로 베끼지 않는다. **API.** `children: ReactNode`, `className?: string`.
 - **카드 머리**: 높이 32px(`h-8`), `px-3`, `border-b border-(--line)`. 제목 `body` 12.5px bold, 부제 `meta` `--muted`. 탭이 있으면 탭이 머리다(`GraphPanel`). 머리의 작업 버튼은 `Button sm ghost`·`iconOnly`.
 - **떠 있는 패널 머리**(`PanelHeader`): 제목 `heading` 14px semibold, 부제 `meta`, 오른쪽에 `primary md` 하나 + 닫기 `iconOnly md`.
-- **구역 라벨** `SectionLabel`(새로 만든다; `PanelSectionHeader`가 원형): `meta` 11.5px semibold `--muted`, `px-3 pt-2 pb-1`, 접는 것이면 ▾ + `aria-expanded`, 접혔을 때만 `Count`. 띠 변형은 `bg-(--acc-faint) border-b`(패널 안 구역, 저장소별 그룹 머리). `uppercase` 없음.
+- **구역 라벨** `SectionLabel` (`ui/PanelHeader.tsx`): `meta` 11.5px semibold `--muted`, `px-3 pt-2 pb-1`, 접는 것이면 ▾ + `aria-expanded`, 접혔을 때만 `Count`. 띠 변형은 `bg-(--acc-faint) border-b`(패널 안 구역, 저장소별 그룹 머리). `uppercase` 없음.
 
-### 3.6 빈 상태 `EmptyState` (`layout/ContentArea.tsx`에서 `ui/`로 옮긴다)
+### 3.6 빈 상태 `EmptyState` (`src/components/ui/EmptyState.tsx`)
 
 **무엇.** 보일 것이 없거나 아직 고르지 않았을 때 그 칸에 놓는 것.
+
+**API.** `icon?: LucideIcon`, `title: string`, `description?: string`, `action?: ReactNode`, `layout?: "panel" | "row"`(기본 panel).
 
 **모양.** 두 가지뿐이다.
 
@@ -335,17 +345,19 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 | 종류 | 언제 | 컴포넌트 |
 |---|---|---|
-| 줄 안 안내 `Notice` | 그 칸의 내용과 함께 계속 보여야 하는 사실(병합 진행 중, 충돌 예고, 같은 파일을 다른 워크트리도 고침, fetch가 오래됨, gh 오류) | 새로 만든다 |
+| 줄 안 안내 `Notice` | 그 칸의 내용과 함께 계속 보여야 하는 사실(병합 진행 중, 충돌 예고, 같은 파일을 다른 워크트리도 고침, fetch가 오래됨, gh 오류) | `src/components/ui/Notice.tsx` |
 | 알림 `Toast` | 방금 끝난 일의 결과. 몇 초 뒤 사라진다 | `ErrorToast` |
 | 확인 창 | 되돌릴 수 없는 일 전에 묻는다 | `ConfirmCommandDialog` |
 
-**`Notice`**: `px-3 py-2`, `--radius-item`, `bg-<tone>/10 border border-<tone>/20`, 14px 아이콘 + 글 `meta` 11.5px(제목이 있으면 `body` semibold + 설명 `meta`), 오른쪽에 `Button sm` 최대 둘. 톤 `info`·`warning`·`danger`·`success`·`neutral`(`bg-(--chip)`). 칸 맨 위에 붙는 띠 변형(`banner`)은 모서리 없이 `border-b`만(`OverlapBadge` 띠, `GitStatusLine`의 「보는 중」 톤이 이것이다). `role="status"`, 오류는 `role="alert"`.
+**`Notice`** (`src/components/ui/Notice.tsx`): `px-3 py-2`, `--radius-item`, `bg-<tone>/10 border border-<tone>/20`, 14px 아이콘 + 글 `meta` 11.5px(제목이 있으면 `body` semibold + 설명 `meta`), 오른쪽에 `Button sm` 최대 둘. 톤 `info`·`warning`·`danger`·`success`·`neutral`(`bg-(--chip)`). 띠 변형(`banner`)은 모서리 없이 `border-b`만. **API.** `tone: "info" | "warning" | "danger" | "success" | "neutral"`, `icon?: LucideIcon`, `title?: string`, `children?: ReactNode`, `actions?: ReactNode`, `banner?: boolean`, `role?: "status" | "alert"`.
 
 **`Toast`**: 층 3(`FLOATING_SURFACE`), `--radius-item`, `px-3 py-2.5`, 아이콘 16px은 톤 색, 글 `body` `--fg`, 닫기 `iconOnly sm ghost`. 바탕을 색으로 채우지 않는다(강조 예산). 오른쪽 아래, `max-w-sm`, 5초, `animate-toast-in/out`. 한 번에 셋까지.
 
-### 3.8 창 `DialogFrame` (새로 만든다; `Dialog` 위에 머리·몸·발을 얹는다)
+### 3.8 창 `DialogFrame` (`src/components/ui/DialogFrame.tsx`)
 
 **무엇.** 답을 받아야 하는 모달. 접근성(`role="dialog"`, 포커스 가두기, Escape)은 `Dialog`가 하고, `DialogFrame`은 모양을 정한다.
+
+**API.** `title: string`, `titleId?: string`, `onClose?: () => void`, `size?: "sm" | "md" | "lg" | "xl"`(기본 md), `dismissible?: boolean`, `footer?: ReactNode`, `footerStart?: ReactNode`, `children: ReactNode`.
 
 **모양.** `FLOATING_SURFACE` + `--radius-panel` 14px. 너비 `sm` 360 / `md` 440 / `lg` 620 / `xl`(충돌 미리보기, 나란히 보기: 화면 크기). 머리 `px-4 py-3 border-b`: 제목 `heading` 14px semibold + 닫기 `iconOnly md ghost`(닫을 수 있을 때만). 몸 `px-4 py-4`, 글 `body`, 라벨 `meta` semibold `--fg2`. 발 `px-4 py-3 border-t`, 오른쪽 정렬, `Button md`: 취소 `ghost` → 실행 `primary` 또는 `danger` 순. 발에 상태 글이 있으면 왼쪽.
 
@@ -371,16 +383,16 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 ### 3.11 탭·분할 선택·스위치·체크
 
 - **탭** `Tab`: 밑줄 탭이다. 활성은 `--fg` + 브랜드 밑줄(`animate-indicator-x`), 비활성 `--muted`. `fill`(패널 폭을 나눠 가짐)과 `inline`(제 폭) 두 변형. 색 변형(`info`·`success`)은 없앤다. 탭 뒤의 수는 `Count`(알약 아님)이고 그 탭이 수의 주인일 때만 붙인다.
-- **분할 선택** `Segmented`(`settings/ui/`에서 `ui/`로 옮긴다): 몇 개 안 되는 선택지 중 하나. 틀 `bg-(--chip)` `--radius-item` `p-0.5`, 조각 `--radius-chip`, 고른 조각 `bg-card shadow-(--shadow-sm) font-semibold`. 크기 `md` 조각 24px `body` 12.5(설정, 작업 전환) / `sm` 조각 20px `meta` 11.5(목록 필터, diff 보기 방식, 이미지 비교 방식). `role="radiogroup"`, 화살표로 옮긴다.
+- **분할 선택** `Segmented` (`src/components/ui/Segmented.tsx`): 몇 개 안 되는 선택지 중 하나. 틀 `bg-(--chip)` `--radius-item` `p-0.5`, 조각 `--radius-chip`, 고른 조각 `bg-card shadow-(--shadow-sm) font-semibold`. **API.** `size?: "md" | "sm"`(조각 24px·20px), `disabled`·`title` per-option. `role="radiogroup"`, 화살표로 옮긴다.
 - **켜고 끄는 칩**(`WorktreeChips`): 켜짐·꺼짐이 있는 버튼이다. `Button sm secondary` + `aria-pressed`, 꺼지면 점선 테두리 + `opacity-60`. 앞에 레인 색 견본 10px.
 - **스위치** `Switch`: 켜면 브랜드 색. 설정에서만.
 - **체크**: 스테이징 체크처럼 네이티브 `accent-primary`를 쓴다. 새 체크 칸도 이것을 따른다.
 
-### 3.12 입력칸 `TextInput` (새로 만든다; 설정의 `FIELD`가 원형)
+### 3.12 입력칸 `TextInput` (`src/components/ui/TextInput.tsx`)
 
 - `md` 28px, `body` 12.5px, `px-2.5`, `border border-border bg-card`, `--radius-item`, hover 테두리 `--muted/40`, 포커스 `ring-2 ring-ring/40`. 라벨은 위에 `meta` semibold `--fg2`, 오류는 아래 `meta` `text-danger` `role="alert"`.
-- `search` 변형: 테두리 없이 `bg-(--chip)`, 앞에 12px 돋보기, 지우기 `iconOnly sm`. `md` 28(패널 머리, 사이드바) / `sm` 24(찾기 줄).
-- 여러 줄(커밋 본문)은 같은 모양의 `textarea`, 줄 높이 18px.
+- `SearchInput` 변형: 테두리 없이 `bg-(--chip)`, 앞에 12px 돋보기, 지우기 `iconOnly sm`. `size?: "md" | "sm"`(28 또는 24), `wrapperClassName?: string`, `surface?: "panel" | "frame"`. `md` 28(패널 머리, 사이드바) / `sm` 24(찾기 줄).
+- `Textarea`(여러 줄, 커밋 본문): 같은 모양, 줄 높이 18px.
 - `Select`·`BranchCombobox`도 같은 높이·글자·모서리다.
 
 ### 3.13 상태 줄 `GitStatusLineView`
@@ -437,23 +449,23 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 | 컴포넌트 | 파일 | 상태 |
 |---|---|---|
-| `Button`, `IconButton` | `ui/Button.tsx` | 새로 |
+| `Button`, `IconButton` | `ui/Button.tsx` | 있음 |
 | `toolbarButtonClass` | `toolbar/toolbar-button.ts` | 있음 |
-| `Count`, `StatusChip`, `RefLabel`, `RepoTile`, `Dot`, `Code` | `ui/marks.tsx`(한 파일, 작은 것들) | 새로 |
+| `Count`, `StatusChip`, `RefLabel`, `RepoTile`, `Dot`, `Code` | `ui/marks.tsx`(한 파일, 작은 것들) | 있음 |
 | `Row` 규칙 | 컴포넌트 없음. `TreeRowFrame`(사이드바)·각 목록 | 규칙만 |
-| `Card`, `PANEL_SURFACE`, `FLOATING_SURFACE` | `layout/ContentArea.tsx` → `ui/Card.tsx`, `ui/layers.ts` | 옮김 |
-| `PanelHeader`, `PanelSearch`, `SectionLabel`(←`PanelSectionHeader`) | `ui/PanelHeader.tsx` | 이름 바꿈 |
-| `EmptyState` | `layout/ContentArea.tsx` → `ui/EmptyState.tsx` | 옮김 |
-| `Notice` | `ui/Notice.tsx` | 새로 |
-| `Toast` | `error/ErrorToast.tsx` | 고침 |
-| `Dialog`, `DialogFrame`, `ConfirmCommandDialog` | `ui/Dialog.tsx`, `ui/DialogFrame.tsx`(새로) | |
+| `Card`, `PANEL_SURFACE`, `FLOATING_SURFACE` | `ui/Card.tsx`, `ui/layers.ts` | 있음 |
+| `PanelHeader`, `PanelSearch`, `SectionLabel` | `ui/PanelHeader.tsx` | 있음 |
+| `EmptyState` | `ui/EmptyState.tsx` | 있음 |
+| `Notice` | `ui/Notice.tsx` | 있음 |
+| `Toast` | `error/ErrorToast.tsx` | 있음 |
+| `Dialog`, `DialogFrame`, `ConfirmCommandDialog` | `ui/Dialog.tsx`, `ui/DialogFrame.tsx` | 있음 |
 | `AnchoredPanel` | `ui/AnchoredPanel.tsx` | 있음 |
-| `ContextMenu` | `ui/ContextMenu.tsx` | 고침(항목 모양, `anchored`) |
+| `ContextMenu` | `ui/ContextMenu.tsx` | 있음 |
 | `Tooltip`, `SidebarHoverCard` | `ui/Tooltip.tsx`, `sidebar/SidebarHoverCard.tsx` | 있음 |
-| `Tab`, `TabGroup` | `ui/Tabs.tsx` | 고침 |
-| `Segmented` | `settings/ui/Segmented.tsx` → `ui/Segmented.tsx` | 옮김 |
+| `Tab`, `TabGroup` | `ui/Tabs.tsx` | 있음 |
+| `Segmented` | `ui/Segmented.tsx` | 있음 |
 | `Switch` | `settings/ui/Switch.tsx` | 있음 |
-| `TextInput`, `SearchInput` | `settings/ui/controls.tsx` → `ui/TextInput.tsx` | 옮김·확장 |
-| `Select`, `BranchCombobox` | `ui/` | 고침(높이·글자) |
+| `TextInput`, `SearchInput`, `Textarea` | `ui/TextInput.tsx` | 있음 |
+| `Select`, `BranchCombobox` | `ui/` | 있음 |
 | `Spinner`, `BusyIcon`, `LoadingState`, `SwitchingOverlay` | `ui/` | 있음 |
 | `FocusFlash` | `ui/FocusFlash.tsx` | 있음 |
