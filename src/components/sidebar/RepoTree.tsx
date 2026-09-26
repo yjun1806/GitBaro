@@ -260,8 +260,8 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
           </button>
         </div>
 
-        {/* 스크롤 칸은 사이드바 좌우 여백(RepoRail의 --sb-gutter-l/r)까지 넓혀 카드 그림자가 가장자리에서 잘리지 않게 한다. */}
-        <div className="flex-1 min-h-0 -ml-(--sb-gutter-l) pl-(--sb-gutter-l) -mr-(--sb-gutter-r) pr-(--sb-gutter-r) pb-2 overflow-y-auto overflow-x-hidden">
+        {/* 스크롤 칸은 사이드바 좌우 여백(RepoRail의 --g)까지 넓혀 카드 그림자가 가장자리에서 잘리지 않게 한다. */}
+        <div className="flex-1 min-h-0 -ml-(--g) pl-(--g) -mr-(--g) pr-(--g) pb-2 overflow-y-auto overflow-x-hidden">
           {!searching && <WorkspaceSuggestion />}
 
           {/* 끌어서 놓기는 검색으로 거르지 않은 전체 트리(`tree`)의 순서로 계산한다. */}
@@ -278,7 +278,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
                 const accountOpen = isOpen(account.key);
                 const quietOpen = openQuiet.includes(account.accountKey);
                 return (
-                  <div key={account.key} role="none" className="flex flex-col gap-1.5">
+                  <div key={account.key} role="none" className="flex flex-col gap-(--g)">
                     <AccountHeader
                       label={account.label}
                       accountKey={account.accountKey}

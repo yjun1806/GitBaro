@@ -67,4 +67,29 @@ describe("SplitHandle", () => {
     fireEvent.doubleClick(handle);
     expect(onReset).toHaveBeenCalledTimes(1);
   });
+
+  // 사이드바/본문 사이처럼 카드 간격이 없는 경계에서는 손잡이가 레이아웃 폭을 차지하면 양쪽 여백이
+  // 어긋나 보인다(사용자 지적). overlay는 자리(`at`)에 스스로 가운데를 맞춰 떠 있을 뿐, 형제 요소를
+  // 밀어내는 flex 크기(w-(--g) 등)를 갖지 않는다.
+  it("overlay: sits on the boundary without taking flow width", () => {
+    render(
+      <SplitHandle
+        orientation="vertical"
+        variant="overlay"
+        at={276}
+        aria-label="resize sidebar"
+        onDragStart={vi.fn()}
+        onDrag={vi.fn()}
+        onReset={vi.fn()}
+      />,
+    );
+    const handle = screen.getByRole("separator", { name: "resize sidebar" });
+    expect(handle.className).toContain("absolute");
+    // "gap"/"inline"이 형제를 밀어내는 데 쓰는 flex 크기 클래스가 없어야 한다.
+    expect(handle.className).not.toMatch(/\bw-\(--g\)\b/);
+    expect(handle.className).not.toMatch(/\bw-px\b/);
+    // 위치는 좌표(`at`)와 자기 폭의 절반만큼 되돌리는 이동으로만 정해진다(경계에 가운데를 맞춘다).
+    expect(handle.style.left).toBe("276px");
+    expect(handle.style.transform).toBe("translateX(-50%)");
+  });
 });

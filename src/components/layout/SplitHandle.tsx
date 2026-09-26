@@ -11,15 +11,17 @@ export interface SplitHandleProps {
   onDrag: (deltaPx: number) => void;
   /** 두 번 누르면 기본 크기로 되돌린다. */
   onReset: () => void;
-  /** `inline`: 카드 안의 1px 선. `gap`: 카드 사이 8px 간격 자체가 손잡이다. */
-  variant?: "gap" | "inline";
+  /**
+   * `inline`: 카드 안의 1px 선. `gap`: 카드 사이 8px 간격 자체가 손잡이다(간격을 대신 차지한다).
+   * `overlay`: 레이아웃 폭·높이를 전혀 차지하지 않는다 — 이미 그려진 경계(배경 하나 위의 1px
+   * `--line`, 예: 사이드바와 본문 사이)에 겹쳐 뜬다. 자리는 `at`으로 받아 스스로 그 점에 가운데를
+   * 맞춘다. 양쪽 안쪽 여백이 손잡이 폭만큼 밀리지 않아 두 칸의 여백이 같게 보인다.
+   */
+  variant?: "gap" | "inline" | "overlay";
   /** `gap`일 때 손잡이 두께(px). 없으면 패널 간격(`--g`, 8px). */
   size?: number;
-  /**
-   * 세로 손잡이가 머리 줄을 가로지를 때, 머리 줄 아래 테두리(1px)를 이 높이(px)에 이어 그린다.
-   * 사이드바 머리와 툴바의 아래 테두리가 손잡이 자리에서 끊기지 않게 한다.
-   */
-  headerRulePx?: number;
+  /** `overlay`일 때 손잡이 중심을 둘 위치(px). 호출부가 경계선 좌표를 계산해 넘긴다. */
+  at?: number;
 }
 
 /**
@@ -34,10 +36,11 @@ export function SplitHandle({
   onReset,
   variant = "gap",
   size,
-  headerRulePx,
+  at,
 }: SplitHandleProps) {
   const start = useRef<number | null>(null);
   const vertical = orientation === "vertical";
+  const overlay = variant === "overlay";
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
@@ -67,27 +70,34 @@ export function SplitHandle({
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
       onDoubleClick={onReset}
-      style={variant === "gap" && size !== undefined ? (vertical ? { width: size } : { height: size }) : undefined}
-      className={cn(
-        "group relative shrink-0 touch-none select-none flex items-center justify-center",
-        vertical ? "cursor-col-resize" : "cursor-row-resize",
-        variant === "gap"
+      style={
+        overlay && at !== undefined
           ? vertical
-            ? "w-(--g) self-stretch"
-            : "h-(--g) w-full"
-          : vertical
-            ? "w-px self-stretch bg-(--line)"
-            : "h-px w-full bg-(--line)",
+            ? { left: at, transform: "translateX(-50%)" }
+            : { top: at, transform: "translateY(-50%)" }
+          : variant === "gap" && size !== undefined
+            ? vertical
+              ? { width: size }
+              : { height: size }
+            : undefined
+      }
+      className={cn(
+        "group touch-none select-none flex items-center justify-center",
+        vertical ? "cursor-col-resize" : "cursor-row-resize",
+        overlay
+          ? cn("absolute z-40", vertical ? "inset-y-0" : "inset-x-0")
+          : cn(
+              "relative shrink-0",
+              variant === "gap"
+                ? vertical
+                  ? "w-(--g) self-stretch"
+                  : "h-(--g) w-full"
+                : vertical
+                  ? "w-px self-stretch bg-(--line)"
+                  : "h-px w-full bg-(--line)",
+            ),
       )}
     >
-      {headerRulePx !== undefined && (
-        <span
-          aria-hidden="true"
-          data-header-rule
-          className="absolute inset-x-0 h-px bg-(--line) pointer-events-none"
-          style={{ top: headerRulePx - 1 }}
-        />
-      )}
       {/* 잡는 영역은 선보다 넓다(가는 선도 잡기 쉽게). */}
       <span
         aria-hidden="true"

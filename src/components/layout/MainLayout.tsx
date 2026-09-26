@@ -9,8 +9,6 @@ import "@/stores/selection"; // ensure cross-store subscriptions are registered
 import { RepoRail } from "./RepoRail";
 import { useSidebarToggleShortcut } from "./useSidebarToggleShortcut";
 import { MainColumn } from "./MainColumn";
-import { SIDEBAR_HANDLE_WIDTH } from "@/lib/layout-tokens";
-import { HEADER_HEIGHT_PX } from "@/lib/layout-tokens";
 import { SplitHandle } from "./SplitHandle";
 import { useDiffMaximizeEscape } from "./useDiffMaximize";
 import { ActivityLogPanel } from "./ActivityLogPanel";
@@ -59,17 +57,18 @@ export function MainLayout() {
     // 창 바탕은 층 0(창 틀)이다. 사이드바와 폭 조절 손잡이가 같은 색으로 이어지고,
     // 본문 칸(MainColumn)만 층 1 바탕을 깐다.
     <div className="flex flex-col h-screen bg-(--frame) text-foreground overflow-hidden">
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         {/* Sidebar at the user-sized width, or out of the way when hidden. */}
         <RepoRail width={sidebarWidth} />
 
-        {/* 시안에는 사이드바와 메인 사이에 선이 없다. 손잡이는 다른 칸 나누기와 같은 모양이다
-            (투명한 잡는 영역, 올리면 색이 드러나고, 두 번 누르면 기본 폭). */}
+        {/* 시안에는 사이드바와 메인 사이에 선이 없다(사이드바의 --line 테두리가 경계다). 손잡이는
+            레이아웃 폭을 차지하지 않고 그 경계 위에 겹쳐 뜬다 — 그래서 양쪽 안쪽 여백이 --g로 같게
+            보인다. 평소엔 투명하고 올리면 색이 드러나며, 두 번 누르면 기본 폭으로 돌아간다. */}
         {!sidebarHidden && (
           <SplitHandle
             orientation="vertical"
-            size={SIDEBAR_HANDLE_WIDTH}
-            headerRulePx={HEADER_HEIGHT_PX}
+            variant="overlay"
+            at={sidebarWidth}
             aria-label={t("shell.resizeSidebar")}
             onDragStart={handleDragStart}
             onDrag={handleDrag}

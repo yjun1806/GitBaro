@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ListTree } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
@@ -8,12 +8,7 @@ import { useSettings } from "@/api/queries";
 import { RepoHeaderContextMenu } from "@/components/repository/RepoHeaderContextMenu";
 import { RepoTree } from "@/components/sidebar/RepoTree";
 import { useSidebarTreeData } from "@/components/sidebar/useSidebarTreeData";
-import {
-  HEADER_HEIGHT_CLASS,
-  SIDEBAR_GUTTER_PX,
-  SIDEBAR_HANDLE_WIDTH,
-  TRAFFIC_LIGHT_INSET_PX,
-} from "@/lib/layout-tokens";
+import { HEADER_HEIGHT_CLASS, TRAFFIC_LIGHT_INSET_PX } from "@/lib/layout-tokens";
 import { cn } from "@/lib/utils";
 import { TOOLBAR_ICON, toolbarButtonClass } from "@/components/toolbar/toolbar-button";
 import type { RepoInfo } from "@/types";
@@ -83,15 +78,9 @@ export function RepoRail({ width }: RepoRailProps) {
           </button>
         </div>
 
-        {/* 오른쪽에 폭 조절 손잡이(창 틀 색)가 붙어 오른쪽 여백처럼 보인다.
-            그 폭만큼 오른쪽 안쪽 여백을 줄여 좌우 여백을 같게 맞춘다. 스크롤 칸도 같은 값을 쓴다. */}
-        <div
-          className="flex-1 min-h-0 pt-2.5 pb-1 pl-(--sb-gutter-l) pr-(--sb-gutter-r)"
-          style={{
-            "--sb-gutter-l": `${SIDEBAR_GUTTER_PX}px`,
-            "--sb-gutter-r": `${SIDEBAR_GUTTER_PX - SIDEBAR_HANDLE_WIDTH}px`,
-          } as CSSProperties}
-        >
+        {/* 폭 조절 손잡이는 경계선 위에 겹쳐 뜰 뿐 레이아웃 폭을 차지하지 않으므로(overlay),
+            네 방향 모두 본문 칸과 같은 --g로 맞춘다. 스크롤 칸(RepoTree)도 같은 값을 쓴다. */}
+        <div className="flex-1 min-h-0 p-(--g)">
           <RepoTree
             data={treeData}
             fetchingPath={fetchingPath}
