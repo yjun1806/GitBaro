@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode, Ref } from "react";
+import { memo, type MouseEvent, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Bot, FolderGit2, GitBranch } from "lucide-react";
@@ -143,8 +143,10 @@ interface GraphRowProps {
   onRefContextMenu?: (label: RefLabel, e: MouseEvent) => void;
   /** 지금 강조 중인 줄기(고른 커밋의 줄기, 없으면 마우스 올린 줄기). 없으면 강조 없음. */
   highlightChain?: number | null;
-  /** 강조 중인 줄기의 브랜치 이름(고른 행에만 칩으로 붙인다. 미리보기 중엔 붙이지 않는다). */
+  /** 강조 중인 줄기의 브랜치 이름. 미리보기 중이면 마우스 올린 행에, 아니면 고른 행에 붙인다. */
   chainLabel?: string;
+  /** 이 행이 이름 칩을 붙일 행인지(고른 행, 또는 미리보기 중이면 마우스 올린 행). */
+  chainLabelHere?: boolean;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   ref?: Ref<HTMLButtonElement>;
@@ -154,7 +156,7 @@ interface GraphRowProps {
  * 커밋 그래프의 커밋 행. 그래프 칸 + [설명(ref 라벨, 제목) / 작성자 / 시각 / 커밋].
  * 에이전트가 쓴 커밋(트레일러로 추정)은 작성자 칸에 흐린 표시와 「추정」 툴팁을 붙인다.
  */
-export function GraphRow({
+export const GraphRow = memo(function GraphRow({
   commit,
   layout,
   graphWidth,
@@ -171,6 +173,7 @@ export function GraphRow({
   flash = false,
   highlightChain = null,
   chainLabel,
+  chainLabelHere = false,
   onClick,
   onContextMenu,
   onRefContextMenu,
@@ -238,7 +241,7 @@ export function GraphRow({
           <span className={cn("truncate text-foreground", isSelected ? "font-bold" : "font-medium")}>
             {commit.summary}
           </span>
-          {isSelected && highlightChain !== null && chainLabel && (
+          {chainLabelHere && highlightChain !== null && chainLabel && (
             <span
               className="shrink-0 px-1.5 py-px rounded-(--radius-chip) text-[10.5px] font-semibold"
               style={{ color: colorOf(highlightChain) }}
@@ -276,7 +279,7 @@ export function GraphRow({
       </span>
     </button>
   );
-}
+});
 
 interface GraphWipRowProps {
   /** 설명 칸 앞부분(스크린 리더용 이름에도 쓴다). 파일 수는 이 컴포넌트가 붙인다. */
@@ -480,17 +483,19 @@ const LIVE_EDIT_MS = 60_000;
  * WIP 행의 따라가기 표시 두 조각(D4)을 한 번에 계산한다: 에이전트가 지금(1분 안) 고치는
  * 중이고 아직 따라가지 않으면 보일 안내(`trailing`), 늘 보이는 오른쪽 끝 버튼(`followButton`).
  * `t`·`now`는 부르는 화면이 이미 가진 값을 넘긴다(행마다 새로 훅을 만들지 않는다).
+ * `count`가 0이면(파일이 없음) `trailing`을 보이지 않는다 — 아래 「N분 전 수정」과 같은 규칙이다(#7).
  */
 export function followRowParts(
   t: TFunction,
   now: number,
   changedAt: number | null,
+  count: number | null,
   following: boolean,
   onToggle: () => void,
 ): { trailing: ReactNode; followButton: ReactNode } {
   const live = changedAt !== null && now - changedAt < LIVE_EDIT_MS;
   const trailing =
-    live && !following ? (
+    live && !following && (count ?? 0) > 0 ? (
       <span className="shrink-0 inline-flex items-center gap-1 text-[11.5px] font-semibold text-(--live)">
         <span className="w-1.5 h-1.5 rounded-full bg-(--live)" aria-hidden="true" />
         {t("graph.changedAgo", {
@@ -535,7 +540,9 @@ function RegionHeaderRow({ name, desc, tinted = false, action, graphWidth, throu
   const height = REGION_HEADER_HEIGHT;
   return (
     <div
-      role="separator"
+      // `role="separator"`는 자식을 장식으로 취급해 안의 버튼(`action`)을 보조기술에서 가린다(#5).
+      // 이름표가 붙은 묶음으로 노출해 버튼이 그대로 드러나게 한다. 시각은 그대로다.
+      role="group"
       aria-label={desc ? `${name} · ${desc}` : name}
       className={cn("flex items-center border-b border-(--line)", tinted && UNPUSHED_ROW_CLASS)}
       style={{ height }}

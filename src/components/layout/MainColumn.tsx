@@ -11,7 +11,7 @@ import { WorkspaceReview } from "@/components/review/WorkspaceReview";
 import { PrDetailPane } from "@/components/pr/PrDetailPane";
 import { usePrViewStore } from "@/components/pr/pr-view";
 import { UnpushedRangeDetailPane } from "@/components/graph/UnpushedRangeView";
-import { useUnpushedRangeViewStore } from "@/components/graph/unpushed-range-view";
+import { useRangeOpenForCurrentScope } from "@/components/graph/unpushed-range-view";
 import { Card, ContentArea, EmptyState } from "./ContentArea";
 import { GraphSplit } from "./GraphSplit";
 import { useDiffMaximizeReset } from "./useDiffMaximize";
@@ -52,7 +52,8 @@ export function MainColumn() {
   const repoListOpen = useUIStore((s) => s.repoListOpen);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const prOpen = usePrViewStore((s) => s.open);
-  const rangeOpen = useUnpushedRangeViewStore((s) => s.range !== null);
+  // 이 저장소·워크트리·보는 대상에 속한 범위일 때만 아래 칸을 범위 상세로 바꾼다(개선안 #1).
+  const rangeOpen = useRangeOpenForCurrentScope();
   const scope = useActiveScope();
   // 다른 저장소·워크스페이스로 옮기거나 목록을 열면 diff 크게 보기를 끝낸다(숨긴 목록으로 돌아올 길이 없어진다).
   useDiffMaximizeReset(`${scope?.kind === "workspace" ? scope.id : ""}:${activeRepoPath ?? ""}:${repoListOpen}`);

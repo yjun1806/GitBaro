@@ -250,6 +250,24 @@ describe("GraphPanel commit graph", () => {
     expect(row.textContent).toContain("modified 5 minutes ago");
   });
 
+  it("hides the 'changed just now' pill on a followed worktree once its files are gone (#7)", () => {
+    // 배경에서 다른 워크트리를 따라가는 중(paused)에 그 워크트리의 변경이 모두 사라져도(커밋됨 등)
+    // mtime은 최근으로 남을 수 있다 — 파일이 0개면 「방금 바뀜」 안내를 보이면 안 된다.
+    useUIStore.setState({ activeTab: "changes" });
+    useFollowStore.setState({ target: FEAT, mode: "paused", file: "some.ts" });
+    const original = syncByPath[FEAT];
+    syncByPath[FEAT] = { path: FEAT, dirtyCount: 0, dirtyLatestMtime: Date.now() - 1_000 };
+    try {
+      renderPanel();
+      const rows = screen.getAllByTestId("wip-row");
+      const featRow = rows.find((r) => r.textContent?.includes("feat/x"));
+      expect(featRow).toBeTruthy();
+      expect(within(featRow!).queryByText(/^Changed/)).toBeNull();
+    } finally {
+      syncByPath[FEAT] = original;
+    }
+  });
+
   it("keeps the commit context menu items on graph rows", () => {
     renderPanel();
     const row = document.querySelector('[data-commit-id="c2"]') as HTMLElement;
@@ -636,7 +654,7 @@ describe("GraphPanel commits not on any remote", () => {
     document.querySelector(`[data-commit-id="${id}"]`)?.className.includes(UNPUSHED_ROW_CLASS);
   /** 커밋 행과 머리 행을 화면 순서대로. */
   const rowOrder = () =>
-    [...document.querySelectorAll("[data-commit-id], [role=separator]")].map(
+    [...document.querySelectorAll("[data-commit-id], [data-testid$='-header-row']")].map(
       (el) => el.getAttribute("data-commit-id") ?? el.getAttribute("data-testid"),
     );
 
@@ -660,9 +678,84 @@ describe("GraphPanel commits not on any remote", () => {
     fireEvent.click(openBtn);
     expect(openBtn.getAttribute("aria-pressed")).toBe("true");
     // base = 경계가 앉은 커밋(원격에 있는 첫 커밋 c3), head = 열린 워크트리의 HEAD(c1).
-    expect(useUnpushedRangeViewStore.getState().range).toEqual({ repoPath: REPO, baseOid: "c3", headOid: "c1" });
+    expect(useUnpushedRangeViewStore.getState().range).toEqual({
+      repoPath: REPO,
+      historyTarget: { kind: "head" },
+      baseOid: "c3",
+      headOid: "c1",
+    });
     fireEvent.click(screen.getByRole("button", { name: "See everything to push" }));
     expect(useUnpushedRangeViewStore.getState().range).toBeNull();
+  });
+
+  it("exposes the 'see everything to push' button outside a presentational separator (#5)", () => {
+    renderPanel();
+    const header = screen.getByTestId("unpushed-header-row");
+    // `role="separator"`는 자식을 장식으로 감춰 버튼이 보조기술에 드러나지 않는다 — 이름 붙은
+    // 묶음(`group`)으로 바꿔 버튼을 그대로 노출한다.
+    expect(header.getAttribute("role")).toBe("group");
+    expect(within(header).getByRole("button", { name: "See everything to push" })).toBeTruthy();
+  });
+
+  it("closes the open range when another repository or worktree opens (#1)", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "See everything to push" }));
+    expect(useUnpushedRangeViewStore.getState().range).not.toBeNull();
+    act(() => useRepositoryStore.setState({ activeRepoPath: FEAT }));
+    expect(useUnpushedRangeViewStore.getState().range).toBeNull();
+  });
+
+  it("closes the open range when the viewed branch changes (#1)", () => {
+    branchList.push({ name: "feat/x", isHead: false, isRemote: false });
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "See everything to push" }));
+    expect(useUnpushedRangeViewStore.getState().range).not.toBeNull();
+    act(() => useHistoryViewStore.getState().view(REPO, { kind: "ref", name: "feat/x", isRemote: false }));
+    expect(useUnpushedRangeViewStore.getState().range).toBeNull();
+  });
+
+  // 「열려 있는 동안 head·경계를 따라간다」(#2)는 `unpushed-range-follow.test.tsx`에서 다룬다 — 이 파일의
+  // `useCommitHistoryInfinite` mock은 `historyData` 참조를 고정해 두므로(`rerender`가 recompute를
+  // 강제하지 않는다) 그 조건에 맞는 별도 mock으로 검증한다.
+
+  it("shows the remote branch actually on the boundary commit, not the checked-out branch (#6)", () => {
+    changesVsDefaultByPath[REPO] = {
+      baseStatus: "found",
+      mergeBaseOid: "c3",
+      branch: "feat/y",
+      defaultBranch: "main",
+      committed: [],
+    };
+    // c3(경계 커밋)에 origin/main 이름표가 실제로 달려 있다 — 체크아웃한 브랜치(feat/y)는 원격에 없다.
+    const original = history.pages[0];
+    history.pages[0] = original.map((c) =>
+      c.id === "c3" ? { ...c, refs: [{ name: "origin/main", kind: "remoteBranch" as const, isHead: false }] } : c,
+    );
+    try {
+      renderPanel();
+      const header = screen.getByTestId("remote-header-row");
+      expect(header.textContent).toContain("On origin");
+      expect(header.textContent).toContain("origin/main");
+      expect(header.textContent).not.toContain("feat/y");
+      expect(header.getAttribute("aria-label")).toBe("On origin · origin/main");
+    } finally {
+      history.pages[0] = original;
+    }
+  });
+
+  it("omits the branch part when the boundary commit carries no remote ref (#6)", () => {
+    changesVsDefaultByPath[REPO] = {
+      baseStatus: "found",
+      mergeBaseOid: "c3",
+      branch: "feat/y",
+      defaultBranch: "main",
+      committed: [],
+    };
+    renderPanel();
+    const header = screen.getByTestId("remote-header-row");
+    // 체크아웃한 브랜치 이름(feat/y)이 원격에 없는데도 나오면 안 된다.
+    expect(header.textContent).toBe("On origin");
+    expect(header.textContent).not.toContain("feat/y");
   });
 
   it("puts the remote header above the base header when both sit on the same commit", async () => {

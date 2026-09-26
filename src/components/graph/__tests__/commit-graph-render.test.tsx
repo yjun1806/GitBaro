@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ComponentProps } from "react";
 import "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
@@ -15,9 +16,10 @@ vi.mock("../GraphRow", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../GraphRow")>();
   return {
     ...actual,
-    GraphRow: (props: Parameters<typeof actual.GraphRow>[0]) => {
+    // `GraphRow`는 이제 `memo()`로 감싼 컴포넌트라 함수처럼 바로 호출할 수 없다 — JSX로 그린다.
+    GraphRow: (props: ComponentProps<typeof actual.GraphRow>) => {
       renders.set(props.commit.id, (renders.get(props.commit.id) ?? 0) + 1);
-      return actual.GraphRow(props);
+      return <actual.GraphRow {...props} />;
     },
   };
 });
@@ -92,5 +94,49 @@ describe("CommitGraph rows", () => {
     expect(renders.get("c3")).toBeGreaterThan(1);
     expect(renders.get("c1")).toBe(c1AfterFirstSelect);
     expect(renders.get("c4")).toBe(c4AfterFirstSelect);
+  });
+
+  // 강조 칩(`chainLabel`)은 줄기 색 인라인 style을 가진 유일한 span이다 — SVG의 `<title>`도 같은
+  // 글자("merged")를 담고 있어 `getByText`로는 여럿이 걸린다.
+  const chainChip = (row: HTMLElement) => row.querySelector("span[style]");
+
+  it("puts the chain-name chip on the hovered row during preview, not the selected row (#3)", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CommitGraph wips={[]} />
+      </QueryClientProvider>,
+    );
+    act(() => useSelectionStore.getState().selectCommit("c4"));
+    const c1 = document.querySelector('[data-commit-id="c1"]') as HTMLElement;
+    const c4 = document.querySelector('[data-commit-id="c4"]') as HTMLElement;
+    // 고른 뒤에는 고른 행(c4)에 줄기 이름 칩이 붙는다(브랜치 이름표가 없는 줄기라 "merged").
+    expect(chainChip(c4)?.textContent).toBe("merged");
+    fireEvent.mouseEnter(c1);
+    // 미리보기 중에는 마우스 올린 행(c1)에 칩이 붙고, 고른 행(c4)에서는 사라진다 — 뒤섞이지 않는다.
+    expect(chainChip(c1)?.textContent).toBe("merged");
+    expect(chainChip(c4)).toBeNull();
+    fireEvent.mouseLeave(c1);
+    expect(chainChip(c4)?.textContent).toBe("merged");
+  });
+
+  it("clears the hover preview on keyboard navigation, so the chip follows the new selection (#3)", () => {
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CommitGraph wips={[]} />
+      </QueryClientProvider>,
+    );
+    act(() => useSelectionStore.getState().selectCommit("c1"));
+    const c1 = document.querySelector('[data-commit-id="c1"]') as HTMLElement;
+    const c2 = document.querySelector('[data-commit-id="c2"]') as HTMLElement;
+    const c4 = document.querySelector('[data-commit-id="c4"]') as HTMLElement;
+    fireEvent.mouseEnter(c4);
+    expect(chainChip(c4)?.textContent).toBe("merged");
+    const nav = container.querySelector('[tabindex="0"]') as HTMLElement;
+    fireEvent.keyDown(nav, { key: "ArrowDown" });
+    expect(useSelectionStore.getState().selectedCommitId).toBe("c2");
+    // 방향키로 옮기면 미리보기가 풀려, 칩이 마우스 올린 행이 아니라 새로 고른 행을 따라간다.
+    expect(chainChip(c4)).toBeNull();
+    expect(chainChip(c2)?.textContent).toBe("merged");
+    expect(chainChip(c1)).toBeNull();
   });
 });

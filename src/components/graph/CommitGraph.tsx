@@ -56,7 +56,7 @@ import {
   wipTarget,
   type GraphWip,
 } from "./graph-model";
-import { repoLaneColor, type LaneWip, type RepoLaneGraph } from "./repo-lanes";
+import { repoLaneColor, type LaneWip, type RepoLaneGraph, type RepoLaneRow } from "./repo-lanes";
 import { mergeHistories, wipLaneOid, withWipLanes, worktreeColor } from "./worktree-history";
 import {
   branchColors,
@@ -69,7 +69,14 @@ import { branchColorOf, MUTED_LANE } from "./lane-style";
 import { BranchRangeGraph } from "@/components/branch/BranchRangeGraph";
 import { activeRange, isStaleRange, useBranchRangeStore } from "@/components/branch/branch-range";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { useUnpushedRangeViewStore } from "./unpushed-range-view";
+import {
+  activeUnpushedRange,
+  useUnpushedRangeViewStore,
+  type UnpushedRangeOwner,
+} from "./unpushed-range-view";
+
+/** `historyTarget`이 없을 때(단일 저장소 그래프의 기본값)의 소유자 값. */
+const HEAD_HISTORY_TARGET: HistoryTarget = { kind: "head" };
 
 export interface CommitGraphProps {
   /** 맨 위 WIP 행(`useGraphReview`가 순서까지 정한 목록). */
@@ -205,7 +212,7 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
       {wips.map((wip) => {
         const followed = activeTab === "changes" ? followModeOf(wip.path) : null;
         const following = followed === "following";
-        const { trailing, followButton } = followRowParts(t, now, wip.changedAt, following, () =>
+        const { trailing, followButton } = followRowParts(t, now, wip.changedAt, wip.count, following, () =>
           following ? stopFollow() : selection.selectWip(wip),
         );
         return (
@@ -376,12 +383,29 @@ function CommitGraphList({
   // 머리 행의 이름표: 「원격에 없음」은 어느 원격에도 없다는 뜻이라, 원격이 여럿이면 이름을 고르지 않는다.
   const remotes = useRepositoryStore((s) => s.activeRepo?.remotes);
   const remoteLabel = remotes?.length === 1 ? remotes[0].name : t("graph.anyRemote");
+  // 「origin에 있음」 머리의 브랜치 표시: 체크아웃/보는 브랜치(`changes.branch`)가 아니라 경계
+  // 커밋 자신에게 실제로 달린 원격 브랜치 이름표를 쓴다 — 체크아웃한 브랜치가 원격에 없어도(#6)
+  // 엉뚱하게 「그 브랜치가 원격에 있다」고 보이지 않는다. 원격이 하나면 그 원격의 이름표만 본다.
+  const boundaryRemoteRef = useMemo(() => {
+    if (boundaryIdx === null) return undefined;
+    const remoteRefs = (commits[boundaryIdx]?.refs ?? []).filter((r) => r.kind === "remoteBranch");
+    if (remotes?.length === 1) {
+      return remoteRefs.find((r) => r.name.startsWith(`${remotes[0].name}/`))?.name;
+    }
+    return remoteRefs[0]?.name;
+  }, [boundaryIdx, commits, remotes]);
 
   // 「올릴 내용 합쳐 보기」: 아직 push 안 한 범위(경계가 앉은 커밋 → HEAD)의 diff를 아래 칸에 연다.
+  // 이 저장소(워크트리)·보는 대상(historyTarget)이 범위의 주인이다(#1) — 다른 화면으로 옮기면 닫는다.
+  const rangeOwner = useMemo<UnpushedRangeOwner>(
+    () => ({ repoPath: activeRepoPath ?? "", historyTarget: historyTarget ?? HEAD_HISTORY_TARGET }),
+    [activeRepoPath, historyTarget],
+  );
   const rangeInStore = useUnpushedRangeViewStore((s) => s.range);
   const openRange = useUnpushedRangeViewStore((s) => s.open);
+  const syncRange = useUnpushedRangeViewStore((s) => s.sync);
   const closeRangeView = useUnpushedRangeViewStore((s) => s.close);
-  const rangeOpenHere = rangeInStore !== null && activeRepoPath !== null && rangeInStore.repoPath === activeRepoPath;
+  const rangeOpenHere = activeRepoPath !== null && activeUnpushedRange(rangeInStore, rangeOwner) !== null;
   const handleToggleRange = useCallback(() => {
     if (rangeOpenHere) {
       closeRangeView();
@@ -389,8 +413,24 @@ function CommitGraphList({
     }
     if (!activeRepoPath || !ownHead || boundaryIdx === null) return;
     const baseOid = commits[boundaryIdx]?.id ?? null;
-    openRange({ repoPath: activeRepoPath, baseOid, headOid: ownHead });
-  }, [rangeOpenHere, closeRangeView, activeRepoPath, ownHead, boundaryIdx, commits, openRange]);
+    openRange({ ...rangeOwner, baseOid, headOid: ownHead });
+  }, [rangeOpenHere, closeRangeView, activeRepoPath, ownHead, boundaryIdx, commits, openRange, rangeOwner]);
+
+  // 열려 있는 동안은 지금 HEAD·경계를 따라간다(#2): 새 커밋이 쌓이면 head가, push하면 경계가
+  // 옮겨 간다. 더 올릴 것이 없어지면(모두 push됨) 칸을 닫는다.
+  const hasOwnUnpushed = useMemo(
+    () => commits.some((c) => ownIds.has(c.id) && c.isUnpushed === true),
+    [commits, ownIds],
+  );
+  useEffect(() => {
+    if (!rangeOpenHere || !ownHead) return;
+    if (!markRemote || !hasOwnUnpushed) {
+      closeRangeView();
+      return;
+    }
+    if (boundaryIdx === null) return; // 아직 경계를 못 찾음(다음 페이지 대기) — 그대로 둔다.
+    syncRange(rangeOwner, commits[boundaryIdx]?.id ?? null, ownHead);
+  }, [rangeOpenHere, ownHead, markRemote, hasOwnUnpushed, boundaryIdx, commits, rangeOwner, syncRange, closeRangeView]);
 
   // 줄기 강조(D6): 고른 커밋의 줄기, 없으면 마우스 올린 커밋의 줄기. 미리보기는 선택보다 앞선다.
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
@@ -407,6 +447,8 @@ function CommitGraphList({
     const ref = named?.refs.find((r) => r.kind !== "tag");
     return ref?.name ?? laneTitle(highlightChain) ?? t("graph.laneMerged");
   }, [highlightChain, commits, layouts, laneTitle, t]);
+  // 이름 칩을 붙일 행: 마우스로 미리보기 중이면 그 행, 아니면 고른 행(#3) — 둘을 뒤섞지 않는다.
+  const chainLabelAnchorId = hoveredCommitId ?? selectedCommitId;
 
   // WIP 행부터 첫 커밋까지 이어지는 선(머리 행이 WIP 바로 아래에 낄 때 쓴다).
   const currentWipOid = useMemo(() => {
@@ -432,7 +474,11 @@ function CommitGraphList({
   );
   const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
     items: commits,
-    onSelect: (c) => selectCommit(c.id),
+    // 방향키로 옮기면 마우스 미리보기를 지운다(#3) — 강조가 고른 행을 따라가게 한다.
+    onSelect: (c) => {
+      setHoveredCommitId(null);
+      selectCommit(c.id);
+    },
     selectedIndex: selectedIdx,
   });
 
@@ -551,7 +597,7 @@ function CommitGraphList({
                 {boundaryIdx === index && (
                   <RemoteHeaderRow
                     remote={remoteLabel}
-                    branch={changes?.branch ?? undefined}
+                    branch={boundaryRemoteRef}
                     graphWidth={graphWidth}
                     through={through}
                     colorOf={colorOf}
@@ -583,6 +629,7 @@ function CommitGraphList({
                   flash={newCommits.has(commit.id)}
                   highlightChain={highlightChain}
                   chainLabel={chainLabel}
+                  chainLabelHere={commit.id === chainLabelAnchorId}
                   onSelect={selectCommit}
                   onRowContextMenu={handleRowContextMenu}
                   onRefContextMenu={handleRefContextMenu}
@@ -743,8 +790,10 @@ interface HistoryGraphRowProps {
   flash: boolean;
   /** 지금 강조 중인 줄기(고른 커밋의 줄기, 없으면 마우스 올린 줄기). 없으면 강조 없음. */
   highlightChain: number | null;
-  /** 강조 중인 줄기의 브랜치 이름(고른 행에만 칩으로 붙는다). */
+  /** 강조 중인 줄기의 브랜치 이름. 미리보기 중이면 마우스 올린 행에, 아니면 고른 행에 붙인다. */
   chainLabel?: string;
+  /** 이 행이 이름 칩을 붙일 행인지(#3, 미리보기·선택을 뒤섞지 않는다). */
+  chainLabelHere: boolean;
   onSelect: (commitId: string) => void;
   onRowContextMenu: (commit: CommitInfo, e: MouseEvent) => void;
   onRefContextMenu: (label: RefLabel, e: MouseEvent) => void;
@@ -836,8 +885,6 @@ export function RepoLaneCommitGraph({
   const startFollow = useFollowStore((s) => s.start);
   const stopFollow = useFollowStore((s) => s.stop);
   const followModeOf = useFollowModeOf();
-  // 「N초 전 바뀜」 안내가 흐르도록 1초마다 다시 그린다.
-  const now = useNow(1_000);
   const accountAvatarMap = useMemo(
     () => new Map(accounts.map((a) => [a.email.toLowerCase(), a.avatarUrl])),
     [accounts],
@@ -865,6 +912,16 @@ export function RepoLaneCommitGraph({
     selectedIndex: selectedIdx,
   });
   const navIndex = new Map(commitRows.map((r, i) => [r.key, i]));
+  // 커밋 행에 안정된 참조로 넘긴다(#4) — `.map()` 밖에서 한 번만 만들어야 `RepoLaneCommitRow`의
+  // `memo`가 매 렌더 다시 그리지 않는다.
+  const handleCommitContextMenu = useCallback(
+    (row: Extract<RepoLaneRow, { kind: "commit" }>, e: MouseEvent) => {
+      e.preventDefault();
+      onSelectCommit(row.repoPath, row.commit, row.key);
+      setCommitMenu({ commit: row.commit, repoPath: row.repoPath, ...contextMenuPoint(e) });
+    },
+    [onSelectCommit],
+  );
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -888,33 +945,24 @@ export function RepoLaneCommitGraph({
             switch (row.kind) {
               case "wip": {
                 const followed = selectedKey === row.key ? followModeOf(row.wip.path) : null;
-                const following = followed === "following";
-                const { trailing, followButton } = followRowParts(t, now, row.wip.changedAt, following, () => {
-                  if (following) {
-                    stopFollow();
-                    return;
-                  }
-                  startFollow(row.wip.path);
-                  onSelectWip(row.wip, row.key);
-                });
                 return (
-                  <GraphWipRow
+                  <RepoLaneWipRow
                     key={row.key}
-                    wipLabel={t("shell.uncommitted")}
-                    ariaContext={repoLabel(row.repoPath)}
-                    target={wipTarget(row.wip)}
-                    count={row.wip.count}
-                    changedAt={row.wip.changedAt}
-                    color={repoLaneColor(row.repoPath)}
+                    row={row}
                     graphWidth={graphWidth}
-                    selected={selectedKey === row.key}
-                    connectDown={false}
-                    layout={row.layout}
                     colorOf={colorOf}
-                    leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
-                    trailing={trailing}
-                    action={followButton}
+                    repoLabel={repoLabel}
+                    selected={selectedKey === row.key}
+                    following={followed === "following"}
                     onSelect={() => {
+                      startFollow(row.wip.path);
+                      onSelectWip(row.wip, row.key);
+                    }}
+                    onToggleFollow={() => {
+                      if (followed === "following") {
+                        stopFollow();
+                        return;
+                      }
                       startFollow(row.wip.path);
                       onSelectWip(row.wip, row.key);
                     }}
@@ -925,25 +973,19 @@ export function RepoLaneCommitGraph({
                 const idx = navIndex.get(row.key) ?? -1;
                 const emailKey = row.commit.author.email?.toLowerCase() ?? "";
                 return (
-                  <GraphRow
+                  <RepoLaneCommitRow
                     key={row.key}
-                    ref={itemRef(idx)}
-                    commit={row.commit}
-                    layout={row.layout}
+                    row={row}
+                    index={idx}
+                    itemRef={itemRef}
                     graphWidth={graphWidth}
                     colorOf={colorOf}
-                    remoteTags={null}
                     avatarUrl={accountAvatarMap.get(emailKey) || undefined}
                     isSelected={selectedKey === row.key}
                     isHighlighted={activeIndex === idx}
-                    wipAbove={false}
-                    leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
-                    onClick={() => onSelectCommit(row.repoPath, row.commit, row.key)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      onSelectCommit(row.repoPath, row.commit, row.key);
-                      setCommitMenu({ commit: row.commit, repoPath: row.repoPath, ...contextMenuPoint(e) });
-                    }}
+                    repoLabel={repoLabel}
+                    onSelect={onSelectCommit}
+                    onContextMenu={handleCommitContextMenu}
                   />
                 );
               }
@@ -973,6 +1015,104 @@ export function RepoLaneCommitGraph({
     </div>
   );
 }
+
+/**
+ * 저장소 레인 그래프의 WIP 행. 초 단위 갱신(`useNow`, 「N초 전 바뀜」 안내)을 이 컴포넌트 안에
+ * 가둬, 1초마다 이 행만 다시 그리고 커밋 행은 그대로 둔다(#4).
+ */
+function RepoLaneWipRow({
+  row,
+  graphWidth,
+  colorOf,
+  repoLabel,
+  selected,
+  following,
+  onSelect,
+  onToggleFollow,
+}: {
+  row: Extract<RepoLaneRow, { kind: "wip" }>;
+  graphWidth: number;
+  colorOf: (chain: number) => string;
+  repoLabel: (repoPath: string) => string;
+  selected: boolean;
+  following: boolean;
+  onSelect: () => void;
+  onToggleFollow: () => void;
+}) {
+  const { t } = useTranslation();
+  const now = useNow(1_000);
+  const { trailing, followButton } = followRowParts(t, now, row.wip.changedAt, row.wip.count, following, onToggleFollow);
+  return (
+    <GraphWipRow
+      wipLabel={t("shell.uncommitted")}
+      ariaContext={repoLabel(row.repoPath)}
+      target={wipTarget(row.wip)}
+      count={row.wip.count}
+      changedAt={row.wip.changedAt}
+      color={repoLaneColor(row.repoPath)}
+      graphWidth={graphWidth}
+      selected={selected}
+      connectDown={false}
+      layout={row.layout}
+      colorOf={colorOf}
+      leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
+      trailing={trailing}
+      action={followButton}
+      onSelect={onSelect}
+    />
+  );
+}
+
+interface RepoLaneCommitRowProps {
+  row: Extract<RepoLaneRow, { kind: "commit" }>;
+  index: number;
+  itemRef: (index: number) => (el: HTMLElement | null) => void;
+  graphWidth: number;
+  colorOf: (chain: number) => string;
+  avatarUrl: string | undefined;
+  isSelected: boolean;
+  isHighlighted: boolean;
+  repoLabel: (repoPath: string) => string;
+  onSelect: (repoPath: string, commit: CommitInfo, key: string) => void;
+  onContextMenu: (row: Extract<RepoLaneRow, { kind: "commit" }>, e: MouseEvent) => void;
+}
+
+/**
+ * 저장소 레인 그래프의 커밋 행. `memo`로 감싸(#4) WIP 행의 초 단위 갱신이나 다른 행의 선택
+ * 변화가 이 행까지 다시 그리게 하지 않는다 — 단일 저장소 그래프의 `HistoryGraphRow`와 같은 패턴이다.
+ */
+const RepoLaneCommitRow = memo(function RepoLaneCommitRow({
+  row,
+  index,
+  itemRef,
+  graphWidth,
+  colorOf,
+  avatarUrl,
+  isSelected,
+  isHighlighted,
+  repoLabel,
+  onSelect,
+  onContextMenu,
+}: RepoLaneCommitRowProps) {
+  const ref = useMemo(() => itemRef(index), [itemRef, index]);
+  return (
+    <GraphRow
+      ref={ref}
+      commit={row.commit}
+      layout={row.layout}
+      graphWidth={graphWidth}
+      colorOf={colorOf}
+      remoteTags={null}
+      avatarUrl={avatarUrl}
+      isSelected={isSelected}
+      isHighlighted={isHighlighted}
+      wipAbove={false}
+      leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
+      onClick={() => onSelect(row.repoPath, row.commit, row.key)}
+      onContextMenu={(e) => onContextMenu(row, e)}
+    />
+  );
+});
 
 /** 맨 아래 행: 각 저장소 레인이 모이는 「main에서 갈라진 지점」. */
 function BaseRow({
