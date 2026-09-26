@@ -45,7 +45,7 @@ export const FileTouchesDetail = forwardRef<HTMLDivElement, FileTouchesDetailPro
     : isCombined
       ? { path: touches.path, oldPath: touches.oldPath }
       : { path: activeCommit.path, oldPath: activeCommit.oldPath };
-  const diffQuery = useRangeFileDiff(row.repoPath, baseOid, headOid, diffFile);
+  const diffQuery = useRangeFileDiff(row.source.path, baseOid, headOid, diffFile);
 
   const ticketKeys = ticketNoteKeys(touches.commits);
 
@@ -60,11 +60,13 @@ export const FileTouchesDetail = forwardRef<HTMLDivElement, FileTouchesDetailPro
         diff={diffQuery.data ?? null}
         status={(isCombined ? touches.status : activeCommit.status) ?? "modified"}
         maximizable
-        repoPath={row.repoPath}
+        repoPath={row.source.path}
         headerExtra={
           isCombined ? (
             <span className="text-[10.5px] text-muted-foreground">
-              {t("review.fileView.combinedScope", { count: touches.commits.length })}
+              {touches.commits.length > 0
+                ? t("review.fileView.combinedScope", { count: touches.commits.length })
+                : t("review.fileView.mergeOnly")}
             </span>
           ) : (
             <span className="flex items-center gap-1 text-[10.5px] text-muted-foreground">
@@ -84,8 +86,17 @@ export const FileTouchesDetail = forwardRef<HTMLDivElement, FileTouchesDetailPro
           {touches.path}
         </span>
         <div className="flex items-center gap-3 flex-wrap min-w-0 text-[11.5px] text-muted-foreground">
-          <RepoTile name={repoLabel(row.repoPath)} color={avatarColorOf(row.repoPath)} size="sm" />
-          <span>{t("review.fileView.commits", { count: touches.commits.length })}</span>
+          <RepoTile name={repoLabel(row.source.repoPath)} color={avatarColorOf(row.source.repoPath)} size="sm" />
+          {row.source.worktreeLabel && (
+            <span className="font-mono" title={row.source.path}>
+              {row.source.worktreeLabel}
+            </span>
+          )}
+          <span>
+            {touches.commits.length > 0
+              ? t("review.fileView.commits", { count: touches.commits.length })
+              : t("review.fileView.mergeOnly")}
+          </span>
           {touches.status !== null && (
             <span className="font-mono">
               <span className="text-diff-add-fg">+{touches.additions}</span> <span className="text-diff-del-fg">−{touches.deletions}</span>
@@ -98,7 +109,7 @@ export const FileTouchesDetail = forwardRef<HTMLDivElement, FileTouchesDetailPro
           )}
         </div>
       </div>
-      <SectionLabel title={t("review.fileView.touchedBy")} className="shrink-0" />
+      {touches.commits.length > 0 && <SectionLabel title={t("review.fileView.touchedBy")} className="shrink-0" />}
       <div className="flex flex-col shrink-0 max-h-[35%] overflow-y-auto">
         {touches.commits.map((c) => {
           const selected = c.oid === selectedCommitOid;
@@ -113,7 +124,7 @@ export const FileTouchesDetail = forwardRef<HTMLDivElement, FileTouchesDetailPro
                 selected ? "bg-(--acc-sel)" : "hover:bg-accent",
               )}
             >
-              <RepoTile name={repoLabel(row.repoPath)} color={avatarColorOf(row.repoPath)} size="sm" />
+              <RepoTile name={repoLabel(row.source.repoPath)} color={avatarColorOf(row.source.repoPath)} size="sm" />
               <span className="shrink-0 font-mono text-[11.5px] text-muted-foreground">{c.shortOid}</span>
               <span className="flex-1 min-w-0 truncate text-[12.5px] text-foreground">{c.subject}</span>
               <span className="shrink-0 text-[11.5px] text-muted-foreground tabular-nums">{formatRelativeTime(c.authorTime)}</span>

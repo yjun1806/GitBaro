@@ -1,21 +1,33 @@
 //! 원격에 없는 커밋이 파일마다 어떻게 닿았나(워크스페이스 리뷰의 「파일별 보기」).
 //!
-//! 기준은 `git::unpushed`와 같다(`git rev-list HEAD --not --remotes`). 커밋마다 첫 부모와 트리를
-//! 비교하고(병합 커밋도 첫 부모만), 같은 파일을 건드린 커밋을 모은다. 이름을 바꾼 파일은 지금(HEAD)
-//! 이름으로 묶는다. 파일의 합친 변경은 `range_base` → HEAD 비교에서 온다.
+//! 두 가지를 함께 준다.
+//! - 파일 목록과 파일마다의 합친 변경: push 하면 실제로 바뀌는 것, 곧 `range_base` → HEAD 비교다
+//!   (`push_base` 가 `range_base` 를 고른다). `git pull` 로 병합해 들어온 동료의 변경은 이미 원격에
+//!   있으므로 목록에 없다.
+//! - 파일마다 그 파일을 건드린 커밋: `git::unpushed` 기준(`git rev-list HEAD --not --remotes`)의
+//!   원격에 없는 커밋 중 병합 커밋이 아닌 것만, 커밋마다 첫 부모와 비교한다. 병합 커밋은 첫 부모 대비
+//!   diff 에 병합해 들여온 남의 변경이 섞이므로 파일별 목록에 넣지 않고 수(`merges`)만 센다.
+//!
+//! 이름을 바꾼 파일은 지금(HEAD) 이름으로 묶는다. 결과는 입력(HEAD·추적 브랜치·원격 참조)이 그대로면
+//! 다시 계산하지 않는다(`repo_file_touches_cached`).
 
 use std::collections::{HashMap, HashSet};
+use std::sync::{Mutex, OnceLock};
 
-use git2::{ErrorCode, Oid, Repository};
+use git2::{BranchType, ErrorCode, Oid, Repository};
 use serde::Serialize;
 
 use crate::git::commit::subject_line;
 use crate::git::engine::FileStatus;
 use crate::git::file_diff::{changed_files_between, ChangedFile};
 use crate::git::unpushed::{commits_not_on_any_remote, upstream_tip};
+use crate::git::worktree_base::default_branch_with_fallback;
 
-/// 커밋을 이만큼만 읽는다. 넘으면 `truncated`.
+/// 커밋을 이만큼만 읽는다(커밋마다 diff 를 만드는 것도 이만큼만). 넘으면 `truncated`.
 pub const FILE_TOUCHES_LIMIT: usize = 500;
+
+/// 캐시에 두는 저장소(워크트리) 수. 넘으면 비운다.
+const CACHE_LIMIT: usize = 256;
 
 /// 파일 하나를 건드린 커밋 하나.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -27,7 +39,8 @@ pub struct CommitTouch {
     pub subject: String,
     /// 작성 시각(유닉스 초).
     pub author_time: i64,
-    /// 첫 부모. 이 커밋만의 diff 는 `parent_oid` → `oid` 로 본다. 첫 커밋이면 `None`(빈 트리).
+    /// 부모. 이 커밋만의 diff 는 `parent_oid` → `oid` 로 본다. 첫 커밋이면 `None`(빈 트리).
+    /// 병합 커밋은 목록에 오지 않으므로 부모는 하나다.
     pub parent_oid: Option<String>,
     /// 이 커밋에서의 경로. 뒤에서 이름을 바꿨으면 파일의 지금 경로와 다르다.
     pub path: String,
@@ -40,7 +53,7 @@ pub struct CommitTouch {
     pub too_large: bool,
 }
 
-/// 원격에 없는 커밋이 건드린 파일 하나.
+/// push 하면 바뀌는 파일 하나, 또는 원격에 없는 커밋이 건드렸지만 결과가 base 와 같은 파일.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileTouches {
@@ -57,7 +70,8 @@ pub struct FileTouches {
     pub deletions: usize,
     pub is_binary: bool,
     pub too_large: bool,
-    /// 최신 순.
+    /// 이 파일을 건드린 원격에 없는 병합 아닌 커밋, 최신 순. 비어 있으면 병합 커밋에서만 바뀌었다
+    /// (충돌 해결 등).
     pub commits: Vec<CommitTouch>,
 }
 
@@ -69,36 +83,96 @@ pub struct RepoFileTouches {
     pub path: String,
     /// 이 저장소를 읽지 못한 이유. 있으면 나머지는 비어 있다.
     pub error: Option<String>,
-    /// 원격에 없는 커밋이 `FILE_TOUCHES_LIMIT` 보다 많아 앞부분만 읽었다.
+    /// 원격에 없는 커밋이 `FILE_TOUCHES_LIMIT` 보다 많아 최신 커밋만 읽었다. 파일별 커밋 목록은 읽은
+    /// 커밋만 담는다.
     pub truncated: bool,
-    /// 범위 바로 아래 커밋: HEAD 에서 첫 부모를 따라 내려가 처음 만나는 원격에 있는 커밋.
-    /// 합친 diff 는 `range_base` → `head` 다. 범위가 처음 커밋까지 닿으면 `None`(빈 트리).
-    /// `truncated` 면 읽은 범위의 끝이라 원격에 없는 커밋일 수 있다. 원격에 없는 커밋이 없으면 `head` 와 같다.
+    /// 합친 diff 의 옛 쪽(`push_base`). 원격에 없는 커밋이 없으면 `head` 와 같다. 처음 커밋까지 원격에
+    /// 없으면 `None`(빈 트리).
     pub range_base: Option<String>,
     /// HEAD 커밋. 커밋이 없는 저장소면 `None`.
     pub head: Option<String>,
-    /// 커밋 2개 이상이 건드린 파일 먼저, 그다음 가장 최근 커밋 시각 순.
+    /// 읽은 커밋 중 병합 커밋 수. 이 커밋들은 파일별 커밋 목록에 없다.
+    pub merges: usize,
+    /// 커밋 2개 이상이 건드린 파일 먼저, 그다음 파일의 커밋 중 가장 늦은 작성 시각 순, 그다음 경로 순.
     pub files: Vec<FileTouches>,
 }
 
 impl RepoFileTouches {
     fn empty(path: &str) -> Self {
-        RepoFileTouches { path: path.to_string(), error: None, truncated: false, range_base: None, head: None, files: Vec::new() }
+        RepoFileTouches {
+            path: path.to_string(),
+            error: None,
+            truncated: false,
+            range_base: None,
+            head: None,
+            merges: 0,
+            files: Vec::new(),
+        }
     }
 }
+
+/// 결과를 바꿀 수 있는 입력. HEAD, 추적 브랜치 끝, 모든 원격 추적 참조(원격에 없는 커밋과 기본
+/// 브랜치를 정한다). 작업 트리·인덱스는 결과와 상관없다.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Inputs {
+    head: Option<Oid>,
+    upstream: Option<Oid>,
+    remotes: usize,
+    remote_refs: Vec<(String, String)>,
+}
+
+/// (저장소 경로, 한도) → (입력, 결과)
+type TouchesCache = HashMap<(String, usize), (Inputs, RepoFileTouches)>;
 
 /// 저장소 하나를 읽는다. 실패는 `error` 에 담고 에러로 올리지 않는다.
 pub fn repo_file_touches(path: &str, limit: usize) -> RepoFileTouches {
     match Repository::open(path).and_then(|repo| file_touches(&repo, path, limit)) {
         Ok(result) => result,
-        Err(e) => RepoFileTouches { error: Some(e.message().to_string()), ..RepoFileTouches::empty(path) },
+        Err(e) => failed(path, e),
     }
 }
 
-fn file_touches(repo: &Repository, path: &str, limit: usize) -> Result<RepoFileTouches, git2::Error> {
+/// `repo_file_touches` 와 같지만, HEAD·추적 브랜치·원격 참조가 지난번과 같으면 지난 결과를 준다.
+/// 화면이 주기적으로 다시 묻고, 파일 저장·스테이징처럼 결과와 상관없는 변화에도 다시 묻기 때문이다.
+pub fn repo_file_touches_cached(path: &str, limit: usize) -> RepoFileTouches {
+    static CACHE: OnceLock<Mutex<TouchesCache>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let repo = match Repository::open(path) {
+        Ok(repo) => repo,
+        Err(e) => return failed(path, e),
+    };
+    let key = (path.to_string(), limit);
+    let inputs = match inputs(&repo) {
+        Ok(inputs) => inputs,
+        Err(e) => return failed(path, e),
+    };
+    if let Some((cached_inputs, cached)) = cache.lock().ok().as_ref().and_then(|map| map.get(&key)) {
+        if *cached_inputs == inputs {
+            return cached.clone();
+        }
+    }
+    let result = match file_touches(&repo, path, limit) {
+        Ok(result) => result,
+        Err(e) => return failed(path, e),
+    };
+    if let Ok(mut map) = cache.lock() {
+        if map.len() >= CACHE_LIMIT {
+            map.clear();
+        }
+        map.insert(key, (inputs, result.clone()));
+    }
+    result
+}
+
+fn failed(path: &str, e: git2::Error) -> RepoFileTouches {
+    RepoFileTouches { error: Some(e.message().to_string()), ..RepoFileTouches::empty(path) }
+}
+
+/// HEAD 참조와 그 추적 브랜치 끝. HEAD 가 없으면(빈 저장소) `None`.
+fn head_and_upstream(repo: &Repository) -> Result<Option<(Oid, Option<Oid>)>, git2::Error> {
     let head_ref = match repo.head() {
         Ok(head_ref) => head_ref,
-        Err(e) if e.code() == ErrorCode::UnbornBranch => return Ok(RepoFileTouches::empty(path)),
+        Err(e) if e.code() == ErrorCode::UnbornBranch => return Ok(None),
         Err(e) => return Err(e),
     };
     let head = head_ref.peel_to_commit()?.id();
@@ -106,9 +180,33 @@ fn file_touches(repo: &Repository, path: &str, limit: usize) -> Result<RepoFileT
         .is_branch()
         .then(|| head_ref.shorthand())
         .flatten()
-        .and_then(|name| repo.find_branch(name, git2::BranchType::Local).ok())
+        .and_then(|name| repo.find_branch(name, BranchType::Local).ok())
         .as_ref()
         .and_then(upstream_tip);
+    Ok(Some((head, upstream)))
+}
+
+fn inputs(repo: &Repository) -> Result<Inputs, git2::Error> {
+    let (head, upstream) = head_and_upstream(repo)?.map_or((None, None), |(h, u)| (Some(h), u));
+    let mut remote_refs = Vec::new();
+    for reference in repo.references_glob("refs/remotes/*")? {
+        let reference = reference?;
+        let name = reference.name().unwrap_or("").to_string();
+        // origin/HEAD 는 이름을 가리킨다(기본 브랜치가 바뀌면 달라진다).
+        let target = match reference.target() {
+            Some(oid) => oid.to_string(),
+            None => reference.symbolic_target().unwrap_or("").to_string(),
+        };
+        remote_refs.push((name, target));
+    }
+    remote_refs.sort();
+    Ok(Inputs { head, upstream, remotes: repo.remotes()?.len(), remote_refs })
+}
+
+fn file_touches(repo: &Repository, path: &str, limit: usize) -> Result<RepoFileTouches, git2::Error> {
+    let Some((head, upstream)) = head_and_upstream(repo)? else {
+        return Ok(RepoFileTouches::empty(path));
+    };
 
     // 하나 더 읽어 한도를 넘었는지 안다.
     let mut oids = commits_not_on_any_remote(repo, &[head], upstream, limit + 1)?;
@@ -119,19 +217,21 @@ fn file_touches(repo: &Repository, path: &str, limit: usize) -> Result<RepoFileT
         return Ok(RepoFileTouches { range_base: Some(head.to_string()), ..base });
     }
 
-    let range_base = first_parent_below(repo, head, &oids.iter().copied().collect())?;
+    let range_base = push_base(repo, head, upstream, &oids.iter().copied().collect())?;
     let base_tree = range_base.map(|oid| repo.find_commit(oid).and_then(|c| c.tree())).transpose()?;
     let head_tree = repo.find_commit(head)?.tree()?;
-    let combined: HashMap<String, ChangedFile> = changed_files_between(repo, base_tree.as_ref(), &head_tree)?
-        .into_iter()
-        .map(|f| (f.path.clone(), f))
-        .collect();
+    let combined = changed_files_between(repo, base_tree.as_ref(), &head_tree)?;
 
     // 최신 커밋부터 읽으며, 그 시점의 경로 → 지금 경로를 이어 간다(이름 바꾸기를 거슬러 올라간다).
     let mut current_path: HashMap<String, String> = HashMap::new();
     let mut groups: HashMap<String, Vec<CommitTouch>> = HashMap::new();
+    let mut merges = 0;
     for oid in &oids {
         let commit = repo.find_commit(*oid)?;
+        if commit.parent_count() > 1 {
+            merges += 1;
+            continue;
+        }
         let parent = commit.parent_ids().next();
         let parent_tree = parent.map(|p| repo.find_commit(p).and_then(|c| c.tree())).transpose()?;
         for file in changed_files_between(repo, parent_tree.as_ref(), &commit.tree()?)? {
@@ -143,31 +243,89 @@ fn file_touches(repo: &Repository, path: &str, limit: usize) -> Result<RepoFileT
         }
     }
 
-    let mut files: Vec<FileTouches> = groups
+    // push 하면 바뀌는 파일 전부 + 커밋이 건드렸지만 결과가 base 와 같은 파일.
+    let mut files: Vec<FileTouches> = combined
         .into_iter()
-        .map(|(path, commits)| {
-            let range = combined.get(&path);
+        .map(|range| {
+            let commits = groups.remove(&range.path).unwrap_or_default();
             FileTouches {
-                old_path: range.and_then(|f| f.old_path.clone()),
-                status: range.map(|f| f.status.clone()),
-                additions: range.map_or(0, |f| f.additions),
-                deletions: range.map_or(0, |f| f.deletions),
-                is_binary: range.map_or_else(|| commits.iter().any(|c| c.is_binary), |f| f.is_binary),
-                too_large: range.map_or_else(|| commits.iter().any(|c| c.too_large), |f| f.too_large),
-                path,
+                old_path: range.old_path,
+                status: Some(range.status),
+                additions: range.additions,
+                deletions: range.deletions,
+                is_binary: range.is_binary,
+                too_large: range.too_large,
+                path: range.path,
                 commits,
             }
         })
         .collect();
+    files.extend(groups.into_iter().map(|(path, commits)| FileTouches {
+        old_path: None,
+        status: None,
+        additions: 0,
+        deletions: 0,
+        is_binary: commits.iter().any(|c| c.is_binary),
+        too_large: commits.iter().any(|c| c.too_large),
+        path,
+        commits,
+    }));
     files.sort_by(|a, b| {
-        let newest = |f: &FileTouches| f.commits.iter().map(|c| c.author_time).max().unwrap_or(0);
         (b.commits.len() >= 2)
             .cmp(&(a.commits.len() >= 2))
-            .then(newest(b).cmp(&newest(a)))
+            .then(latest_touch_time(b).cmp(&latest_touch_time(a)))
             .then(a.path.cmp(&b.path))
     });
 
-    Ok(RepoFileTouches { range_base: range_base.map(|o| o.to_string()), files, ..base })
+    Ok(RepoFileTouches { range_base: range_base.map(|o| o.to_string()), merges, files, ..base })
+}
+
+/// 파일의 정렬 시각: 그 파일을 건드린 커밋 중 가장 늦은 작성 시각. 커밋이 없으면 0.
+/// 화면(`file-touches-model.ts`의 `latestTouchTime`)도 저장소를 넘나들어 같은 규칙으로 다시 정렬한다.
+pub fn latest_touch_time(file: &FileTouches) -> i64 {
+    file.commits.iter().map(|c| c.author_time).max().unwrap_or(0)
+}
+
+/// 합친 diff 의 옛 쪽: push 하면 원격에서 HEAD 로 바뀌는 범위의 시작.
+///
+/// - 추적 브랜치가 있으면 HEAD 와 그 끝의 공통 조상(`git diff @{u}...HEAD`). HEAD 가 추적 브랜치를
+///   품고 있으면(pull 한 뒤) 추적 브랜치 끝 자신이라 `git diff @{u} HEAD` 와 같다. 아직 pull 하지
+///   않아 갈라져 있으면 동료의 새 커밋을 되돌리는 것처럼 보이지 않게 갈라진 지점을 쓴다.
+/// - 추적 브랜치가 없으면(publish 전, detached) 두 후보 중 HEAD 에 가까운 쪽.
+///   1. 원격 기본 브랜치(`origin/<기본 브랜치>`)와의 공통 조상. 기본 브랜치를 병합해 들였으면
+///      그 병합 뒤라서 들여온 남의 변경이 빠진다. PR 이 보여 줄 범위와 같다.
+///   2. HEAD 에서 첫 부모를 따라 내려가 원격에 없는 커밋 밖에서 처음 만나는 커밋. 이미 올린 다른
+///      브랜치(`origin/feat-a`) 위에 쌓은 브랜치면 이쪽이 가깝다. 읽은 커밋이 잘렸으면 읽은 범위의 끝이다.
+///
+/// 두 후보가 서로의 조상이 아니면(쌓은 브랜치에 기본 브랜치를 병합) 1 을 쓴다.
+fn push_base(repo: &Repository, head: Oid, upstream: Option<Oid>, read: &HashSet<Oid>) -> Result<Option<Oid>, git2::Error> {
+    if let Some(upstream) = upstream {
+        if let Some(base) = merge_base(repo, head, upstream)? {
+            return Ok(Some(base));
+        }
+    }
+    let below = first_parent_below(repo, head, read)?;
+    let default = default_remote_tip(repo).map(|tip| merge_base(repo, head, tip)).transpose()?.flatten();
+    Ok(match (below, default) {
+        (Some(below), Some(default)) if below != default && repo.graph_descendant_of(below, default)? => Some(below),
+        (_, Some(default)) => Some(default),
+        (below, None) => below,
+    })
+}
+
+/// 공통 조상. 이력이 이어지지 않으면 `None`.
+fn merge_base(repo: &Repository, a: Oid, b: Oid) -> Result<Option<Oid>, git2::Error> {
+    match repo.merge_base(a, b) {
+        Ok(base) => Ok(Some(base)),
+        Err(e) if e.code() == ErrorCode::NotFound => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+/// `origin/<기본 브랜치>` 의 끝. 기본 브랜치는 `merge_base::divergence_point` 와 같은 규칙으로 고른다.
+fn default_remote_tip(repo: &Repository) -> Option<Oid> {
+    let name = default_branch_with_fallback(repo)?;
+    repo.find_branch(&format!("origin/{name}"), BranchType::Remote).ok()?.get().target()
 }
 
 /// HEAD 에서 첫 부모를 따라 내려가 `range` 밖에서 처음 만나는 커밋. 처음 커밋까지 닿으면 `None`.
@@ -395,7 +553,9 @@ mod tests {
     }
 
     #[test]
-    fn a_merge_commit_is_compared_with_its_first_parent_only() {
+    fn a_merge_commit_is_left_out_of_per_file_lists() {
+        // 로컬 브랜치 둘을 병합했다. 병합 커밋의 첫 부모 대비 diff 는 side.txt 를 담지만, 그 변경은
+        // side 커밋이 이미 목록에 있다. 병합을 넣으면 같은 변경을 두 번 센다.
         let tmp = TempDir::new("merge");
         let (work, pushed) = cloned(&tmp);
         git(&work, &["checkout", "-q", "-b", "side"]);
@@ -405,14 +565,166 @@ mod tests {
         write(&work, "main.txt", "m\n");
         let on_main = commit_at(&work, "main", 3_000);
         git(&work, &["merge", "-q", "--no-ff", "--no-edit", "side"]);
-        let merge = git(&work, &["rev-parse", "HEAD"]);
 
         let r = touches(&work);
-        assert_eq!(r.range_base.as_deref(), Some(pushed.as_str()), "첫 부모 줄의 아래");
+        assert_eq!(r.range_base.as_deref(), Some(pushed.as_str()), "추적 브랜치(origin/main) 끝");
+        assert_eq!(r.merges, 1);
         let s = file(&r, "side.txt");
-        assert_eq!(oids(s), vec![merge.as_str(), side.as_str()], "병합은 첫 부모(main) 대비 side.txt 를 가져왔다");
-        assert_eq!(s.commits[0].parent_oid.as_deref(), Some(on_main.as_str()));
-        assert_eq!(oids(file(&r, "main.txt")), vec![on_main.as_str()], "병합 커밋은 첫 부모에 있던 변경을 다시 세지 않는다");
+        assert_eq!(oids(s), vec![side.as_str()]);
+        assert_eq!(s.status, Some(FileStatus::Added));
+        assert_eq!(oids(file(&r, "main.txt")), vec![on_main.as_str()]);
+        assert_eq!(r.files.len(), 2);
+    }
+
+    /// `origin.git` 을 따로 clone 해 `rel` 을 커밋하고 올린다(동료의 push). 올린 커밋을 돌려준다.
+    fn teammate_pushes(tmp: &TempDir, branch: &str, rel: &str, at: i64) -> String {
+        let mate = tmp.0.join("mate");
+        if !mate.exists() {
+            git(&tmp.0, &["clone", "-q", "origin.git", "mate"]);
+        }
+        git(&mate, &["checkout", "-q", branch]);
+        write(&mate, rel, "theirs\n");
+        let oid = commit_at(&mate, "teammate", at);
+        git(&mate, &["push", "-q", "origin", branch]);
+        oid
+    }
+
+    #[test]
+    fn remote_changes_merged_in_by_a_pull_are_not_unpushed_work() {
+        let tmp = TempDir::new("pull-merge");
+        let (work, _) = cloned(&tmp);
+        let theirs = teammate_pushes(&tmp, "main", "teammate.txt", 1_500);
+        write(&work, "mine.txt", "mine\n");
+        let mine = commit_at(&work, "mine", 2_000);
+        // `git pull --no-rebase` 와 같다.
+        git(&work, &["fetch", "-q"]);
+        git(&work, &["merge", "-q", "--no-edit", "origin/main"]);
+
+        let r = touches(&work);
+        assert_eq!(r.range_base.as_deref(), Some(theirs.as_str()), "push 는 origin/main 끝 위에 올린다");
+        assert_eq!(r.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), vec!["mine.txt"]);
+        assert_eq!(oids(file(&r, "mine.txt")), vec![mine.as_str()]);
+        assert_eq!(r.merges, 1);
+    }
+
+    #[test]
+    fn a_never_published_branch_that_merged_the_default_branch_hides_those_changes() {
+        let tmp = TempDir::new("feature-merge");
+        let (work, _) = cloned(&tmp);
+        git(&work, &["checkout", "-q", "-b", "feat"]);
+        write(&work, "f.txt", "f\n");
+        let f = commit_at(&work, "f", 2_000);
+        let theirs = teammate_pushes(&tmp, "main", "teammate.txt", 2_500);
+        git(&work, &["fetch", "-q"]);
+        git(&work, &["merge", "-q", "--no-edit", "origin/main"]);
+
+        let r = touches(&work);
+        assert_eq!(r.range_base.as_deref(), Some(theirs.as_str()), "origin/main 과의 공통 조상");
+        assert_eq!(r.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), vec!["f.txt"]);
+        assert_eq!(oids(file(&r, "f.txt")), vec![f.as_str()]);
+    }
+
+    #[test]
+    fn a_branch_stacked_on_another_pushed_branch_starts_from_that_branch() {
+        let tmp = TempDir::new("stacked");
+        let (work, _) = cloned(&tmp);
+        git(&work, &["checkout", "-q", "-b", "feat-a"]);
+        write(&work, "a2.txt", "a\n");
+        let a = commit_at(&work, "a", 2_000);
+        git(&work, &["push", "-q", "origin", "feat-a"]);
+        git(&work, &["checkout", "-q", "-b", "feat-b"]);
+        write(&work, "b.txt", "b\n");
+        commit_at(&work, "b", 3_000);
+
+        let r = touches(&work);
+        assert_eq!(r.range_base.as_deref(), Some(a.as_str()), "origin/main 보다 가까운 origin/feat-a");
+        assert_eq!(r.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), vec!["b.txt"]);
+    }
+
+    #[test]
+    fn a_change_made_only_in_a_merge_is_listed_without_commits() {
+        // 병합하며 고친 파일(충돌 해결 등)도 push 하면 바뀐다. 건드린 병합 아닌 커밋이 없을 뿐이다.
+        let tmp = TempDir::new("evil-merge");
+        let (work, _) = cloned(&tmp);
+        git(&work, &["checkout", "-q", "-b", "side"]);
+        write(&work, "side.txt", "s\n");
+        commit_at(&work, "side", 2_000);
+        git(&work, &["checkout", "-q", "main"]);
+        git(&work, &["merge", "-q", "--no-ff", "--no-commit", "side"]);
+        write(&work, "base.txt", "fixed in merge\n");
+        git(&work, &["add", "-A"]);
+        git(&work, &["commit", "-q", "--no-edit"]);
+
+        let r = touches(&work);
+        let fixed = file(&r, "base.txt");
+        assert_eq!(fixed.status, Some(FileStatus::Modified));
+        assert!(fixed.commits.is_empty());
+        assert_eq!(r.files.last().map(|f| f.path.as_str()), Some("base.txt"), "커밋이 없어 맨 뒤");
+    }
+
+    #[test]
+    fn a_diverged_upstream_is_compared_from_the_split_point() {
+        // 동료가 올렸지만 아직 pull 하지 않았다. 추적 브랜치 끝과 비교하면 동료의 파일을 지우는 것처럼 보인다.
+        let tmp = TempDir::new("diverged");
+        let (work, pushed) = cloned(&tmp);
+        teammate_pushes(&tmp, "main", "teammate.txt", 1_500);
+        git(&work, &["fetch", "-q"]);
+        write(&work, "mine.txt", "mine\n");
+        commit_at(&work, "mine", 2_000);
+
+        let r = touches(&work);
+        assert_eq!(r.range_base.as_deref(), Some(pushed.as_str()));
+        assert_eq!(r.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), vec!["mine.txt"]);
+    }
+
+    #[test]
+    fn files_are_ordered_by_their_latest_commit_time_not_walk_order() {
+        // 작성 시각이 커밋 순서와 거꾸로다(rebase·cherry-pick 뒤 흔하다). 파일의 커밋 중 가장 늦은
+        // 작성 시각으로 줄 세운다. 화면의 `latestTouchTime` 과 같은 규칙이다.
+        let tmp = TempDir::new("time-order");
+        let (work, _) = cloned(&tmp);
+        write(&work, "late.txt", "x\n");
+        commit_at(&work, "late authored, older commit", 9_000);
+        write(&work, "early.txt", "x\n");
+        commit_at(&work, "early authored, newer commit", 3_000);
+        let r = touches(&work);
+        assert_eq!(r.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), vec!["late.txt", "early.txt"]);
+        assert_eq!(latest_touch_time(&r.files[0]), 1_700_009_000);
+    }
+
+    #[test]
+    fn the_cached_result_is_reused_until_head_or_a_remote_ref_moves() {
+        let tmp = TempDir::new("cache");
+        let (work, _) = cloned(&tmp);
+        write(&work, "a.txt", "two\n");
+        let old = commit_at(&work, "old", 2_000);
+        write(&work, "a.txt", "three\n");
+        commit_at(&work, "new", 3_000);
+        let dir = work.to_str().unwrap();
+        let first = repo_file_touches_cached(dir, FILE_TOUCHES_LIMIT);
+        assert_eq!(first.error, None);
+
+        // 다시 계산하면 깨진 커밋을 읽다 실패한다. 입력이 그대로면 읽지 않는다.
+        let hex = &old;
+        std::fs::remove_file(work.join(".git/objects").join(&hex[..2]).join(&hex[2..])).unwrap();
+        write(&work, "untracked.txt", "wip\n");
+        assert_eq!(repo_file_touches_cached(dir, FILE_TOUCHES_LIMIT), first, "작업 트리 변화는 입력이 아니다");
+
+        write(&work, "a.txt", "four\n");
+        commit_at(&work, "newer", 4_000);
+        assert!(repo_file_touches_cached(dir, FILE_TOUCHES_LIMIT).error.is_some(), "HEAD 가 옮겨 다시 계산했다");
+    }
+
+    #[test]
+    fn the_cache_notices_a_push_made_elsewhere() {
+        let tmp = TempDir::new("cache-push");
+        let (work, _) = cloned(&tmp);
+        write(&work, "a.txt", "two\n");
+        commit_at(&work, "c", 2_000);
+        let dir = work.to_str().unwrap();
+        assert_eq!(repo_file_touches_cached(dir, FILE_TOUCHES_LIMIT).files.len(), 1);
+        git(&work, &["push", "-q", "origin", "main"]);
+        assert!(repo_file_touches_cached(dir, FILE_TOUCHES_LIMIT).files.is_empty(), "원격 추적 참조가 옮겨 다시 계산했다");
     }
 
     #[test]
@@ -487,7 +799,7 @@ mod tests {
     #[test]
     fn the_walk_stops_at_the_limit() {
         let tmp = TempDir::new("limit");
-        let (work, _) = cloned(&tmp);
+        let (work, pushed) = cloned(&tmp);
         let mut made = Vec::new();
         for i in 0..5 {
             write(&work, "a.txt", &format!("v{i}\n"));
@@ -497,10 +809,33 @@ mod tests {
         assert!(r.truncated);
         let a = file(&r, "a.txt");
         assert_eq!(oids(a), vec![made[4].as_str(), made[3].as_str(), made[2].as_str()]);
-        assert_eq!(r.range_base.as_deref(), Some(made[1].as_str()), "읽은 범위의 끝");
+        assert_eq!(r.range_base.as_deref(), Some(pushed.as_str()), "합친 변경은 추적 브랜치부터라 잘리지 않는다");
 
         let exact = repo_file_touches(work.to_str().unwrap(), 5);
         assert!(!exact.truncated, "딱 한도만큼이면 잘리지 않았다");
+    }
+
+    #[test]
+    fn a_never_fetched_remote_stops_at_the_limit_and_compares_from_the_end_of_what_was_read() {
+        // 원격 참조가 하나도 없으면 모든 커밋이 원격에 없다. 한도 밖 커밋은 읽지도, diff 를 만들지도 않는다.
+        use crate::git::walk::tests::delete_commit_object;
+        let tmp = TempDir::new("limit-never-fetched");
+        let work = tmp.0.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        git(&work, &["init", "-q", "-b", "main"]);
+        git(&work, &["remote", "add", "origin", "https://example.invalid/r.git"]);
+        let mut made = Vec::new();
+        for i in 0..6 {
+            write(&work, "a.txt", &format!("v{i}\n"));
+            made.push(commit_at(&work, &format!("c{i}"), 1_000 + i));
+        }
+        // 한도보다 하나 더(c5~c2)만 읽는다. 그보다 오래된 c0 이 깨져 있어도 실패하지 않는다.
+        delete_commit_object(&work, Oid::from_str(&made[0]).unwrap());
+        let r = repo_file_touches(work.to_str().unwrap(), 3);
+        assert_eq!(r.error, None);
+        assert!(r.truncated);
+        assert_eq!(r.range_base.as_deref(), Some(made[2].as_str()), "읽은 범위의 끝");
+        assert_eq!(oids(file(&r, "a.txt")), vec![made[5].as_str(), made[4].as_str(), made[3].as_str()]);
     }
 
     #[test]
@@ -531,7 +866,7 @@ mod tests {
             k.sort();
             k
         };
-        assert_eq!(keys(&json), vec!["error", "files", "head", "path", "rangeBase", "truncated"]);
+        assert_eq!(keys(&json), vec!["error", "files", "head", "merges", "path", "rangeBase", "truncated"]);
         assert_eq!(
             keys(&json["files"][0]),
             vec!["additions", "commits", "deletions", "isBinary", "oldPath", "path", "status", "tooLarge"]

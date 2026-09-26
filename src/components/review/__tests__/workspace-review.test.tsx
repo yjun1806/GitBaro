@@ -116,8 +116,12 @@ vi.mock("@/api/queries", () => ({
   useWipFilesMany: () => [],
   useSiblingFileDiffs: (sides: unknown[]) => sides.map(() => ({ data: undefined })),
   // 「파일별 보기」: 이 스위트는 세그먼트 스위치 자체와 값 기억만 확인하므로 늘 빈 결과로 둔다.
-  useUnpushedFileTouches: (paths: string[]) =>
-    paths.map((p) => ({ path: p, error: null, truncated: false, rangeBase: null, head: null, files: [] })),
+  useUnpushedFileTouches: (targets: { path: string }[]) =>
+    targets.map(({ path }) => ({
+      status: "success",
+      data: { path, error: null, truncated: false, rangeBase: null, head: null, merges: 0, files: [] },
+    })),
+  unpushedFileTouchesKey: (repoPath: string, path: string) => ["unpushedFileTouches", repoPath, path],
   useRangeFileDiff: () => ({ data: null, isLoading: false, isError: false }),
 }));
 

@@ -3,7 +3,7 @@
 
 use crate::error::AppError;
 use crate::git::commit::commit_to_info;
-use crate::git::file_touches::{repo_file_touches, RepoFileTouches, FILE_TOUCHES_LIMIT};
+use crate::git::file_touches::{repo_file_touches_cached, RepoFileTouches, FILE_TOUCHES_LIMIT};
 use crate::git::unpushed::{head_unpushed, UNPUSHED_LIMIT};
 use crate::git::CommitInfo;
 use serde::Serialize;
@@ -44,12 +44,13 @@ pub async fn get_unpushed_commits(repo_path: String, limit: Option<usize>) -> Re
     .map_err(|e| AppError::Channel(e.to_string()))?
 }
 
-/// 저장소(워크트리)마다 원격에 없는 커밋이 건드린 파일과, 파일마다 그 커밋들. 결과는 `paths` 순서다.
-/// 저장소마다 따로 읽는다: 한 곳이 실패하면 그 결과의 `error`만 채운다. 파일 diff 는
+/// 저장소(워크트리)마다 push 하면 바뀌는 파일과, 파일마다 그 파일을 건드린 원격에 없는 커밋(병합 커밋 제외).
+/// 결과는 `paths` 순서다. 저장소마다 따로 읽는다: 한 곳이 실패하면 그 결과의 `error`만 채운다.
+/// HEAD·추적 브랜치·원격 참조가 그대로인 저장소는 지난 결과를 준다(`repo_file_touches_cached`). 파일 diff 는
 /// `get_range_file_diff`로 본다(합친 변경은 `rangeBase` → `head`, 커밋 하나는 `parentOid` → `oid`).
 #[tauri::command]
 pub async fn get_unpushed_file_touches(paths: Vec<String>) -> Result<Vec<RepoFileTouches>, AppError> {
-    tokio::task::spawn_blocking(move || paths.iter().map(|p| repo_file_touches(p, FILE_TOUCHES_LIMIT)).collect())
+    tokio::task::spawn_blocking(move || paths.iter().map(|p| repo_file_touches_cached(p, FILE_TOUCHES_LIMIT)).collect())
         .await
         .map_err(|e| AppError::Channel(e.to_string()))
 }

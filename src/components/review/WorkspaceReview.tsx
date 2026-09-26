@@ -19,6 +19,7 @@ import { WorkspaceTitle } from "./WorkspaceTitle";
 import { StatusActivity } from "./StatusActivity";
 import { ReviewFilesPanel, type ReviewSelection } from "./ReviewFilesPanel";
 import { FileTouchesView } from "./FileTouchesView";
+import { fileTouchSources } from "./file-touches-model";
 import { WorkSwitcher } from "@/components/commit/WorkSwitcher";
 import type { RepoLaneGraph } from "@/components/graph/repo-lanes";
 
@@ -60,6 +61,12 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
 
   const nameByPath = useMemo(() => new Map(data.repos.map((r) => [r.path, r.name])), [data.repos]);
   const repoLabel = useCallback((path: string) => nameByPath.get(path) ?? path, [nameByPath]);
+  // 파일별 보기는 보이는 저장소의 모든 워크트리를 읽는다(숨김 규칙도 모든 워크트리의 원격에 없는 커밋을 센다).
+  // `data.visible`은 그릴 때마다 새 배열이라, 대상이 실제로 바뀔 때만 새 목록을 넘긴다.
+  const nextFileSources = fileTouchSources(data.visible);
+  const fileSourcesKey = JSON.stringify(nextFileSources);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fileSourcesKey가 nextFileSources의 내용을 대신 비교한다
+  const fileSources = useMemo(() => nextFileSources, [fileSourcesKey]);
 
   const titleSlot = useToolbarTitleSlot();
 
@@ -158,7 +165,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                   }
                 />
               ) : (
-                <FileTouchesView paths={data.visible.map((r) => r.path)} repoLabel={repoLabel} />
+                <FileTouchesView sources={fileSources} repoLabel={repoLabel} />
               )}
             </Card>
           }

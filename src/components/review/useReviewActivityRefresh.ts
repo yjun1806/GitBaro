@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { TAURI_EVENTS } from "@/api/events";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
+import { unpushedFileTouchesKey } from "@/api/queries";
 import { activityInvalidationKeys, activityTargetOf, type ReviewRepoPaths } from "./review-model";
 
 /**
@@ -19,7 +20,8 @@ export function useReviewActivityRefresh(repos: readonly ReviewRepoPaths[]): voi
     }
     if (activity.kind === "git") {
       for (const key of ["reviewStatus", "repoSyncStatus", "commitHistory"]) void queryClient.invalidateQueries({ queryKey: [key] });
-      void queryClient.invalidateQueries({ queryKey: ["unpushedFileTouches", target.root] });
+      // 파일별 보기는 그 워크트리만(`unpushedFileTouchesKey(저장소, 워크트리)`).
+      void queryClient.invalidateQueries({ queryKey: unpushedFileTouchesKey(target.repoPath, target.root) });
     }
   });
 }

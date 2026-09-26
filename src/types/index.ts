@@ -732,7 +732,7 @@ export interface CommitTouch {
   subject: string;
   /** 작성 시각(유닉스 초). */
   authorTime: number;
-  /** 첫 부모(병합 커밋도 첫 부모와만 비교한다). 첫 커밋이면 null(빈 트리). */
+  /** 부모(병합 커밋은 목록에 오지 않아 부모는 하나다). 첫 커밋이면 null(빈 트리). */
   parentOid: string | null;
   /** 이 커밋에서의 경로. 뒤에서 이름을 바꿨으면 `FileTouches.path`와 다르다. */
   path: string;
@@ -746,7 +746,10 @@ export interface CommitTouch {
   tooLarge: boolean;
 }
 
-/** 원격에 없는 커밋이 건드린 파일 하나. 합친 diff는 `getRangeFileDiff(repo, rangeBase, head, path, oldPath)`. */
+/**
+ * push하면 바뀌는 파일 하나, 또는 원격에 없는 커밋이 건드렸지만 결과가 base와 같은 파일.
+ * 합친 diff는 `getRangeFileDiff(repo, rangeBase, head, path, oldPath)`.
+ */
 export interface FileTouches {
   /** HEAD 기준 경로. 지운 파일은 지우기 전 경로. 이름을 바꾼 파일은 지금 이름으로 묶인다. */
   path: string;
@@ -759,26 +762,33 @@ export interface FileTouches {
   deletions: number;
   isBinary: boolean;
   tooLarge: boolean;
-  /** 최신 순. */
+  /** 이 파일을 건드린 원격에 없는 병합 아닌 커밋, 최신 순. 비어 있으면 병합 커밋에서만 바뀌었다(충돌 해결 등). */
   commits: CommitTouch[];
 }
 
-/** `get_unpushed_file_touches`의 저장소(워크트리) 하나. 기준은 원격에 없는 커밋(`git rev-list HEAD --not --remotes`)이다. */
+/**
+ * `get_unpushed_file_touches`의 저장소(워크트리) 하나. 파일 목록은 push하면 바뀌는 것(`rangeBase` → HEAD)이고,
+ * 파일마다의 커밋은 원격에 없는 커밋(`git rev-list HEAD --not --remotes`) 중 병합 아닌 커밋이다.
+ * `git pull`로 병합해 들어온 동료의 변경은 원격에 이미 있어 목록에 없다.
+ */
 export interface RepoFileTouches {
   /** 요청에 넘긴 경로 그대로. */
   path: string;
   /** 이 저장소를 읽지 못한 이유. 있으면 나머지는 비어 있다. */
   error: string | null;
-  /** 원격에 없는 커밋이 500개를 넘어 최신 500개만 읽었다. */
+  /** 원격에 없는 커밋이 500개를 넘어 최신 500개만 읽었다. 파일별 커밋 목록은 읽은 커밋만 담는다. */
   truncated: boolean;
   /**
-   * 범위 바로 아래 커밋: HEAD에서 첫 부모를 따라 내려가 처음 만나는 원격에 있는 커밋. 범위가 처음 커밋까지
-   * 닿으면 null(빈 트리와 비교). 원격에 없는 커밋이 없으면 `head`와 같다. `truncated`면 읽은 범위의 끝이다.
+   * 합친 diff의 옛 쪽. 추적 브랜치가 있으면 HEAD와 그 끝의 공통 조상(pull한 뒤면 추적 브랜치 끝). 없으면
+   * `origin/<기본 브랜치>`와의 공통 조상과, 첫 부모를 따라 내려가 처음 만나는 원격에 있는 커밋 중 HEAD에 가까운 쪽.
+   * 원격에 없는 커밋이 없으면 `head`와 같다. 처음 커밋까지 원격에 없으면 null(빈 트리와 비교).
    */
   rangeBase: string | null;
   /** HEAD 커밋. 커밋이 없는 저장소면 null. */
   head: string | null;
-  /** 커밋 2개 이상이 건드린 파일 먼저, 그다음 가장 최근 커밋 시각 순. */
+  /** 읽은 커밋 중 병합 커밋 수. 이 커밋들은 파일별 커밋 목록에 없다. */
+  merges: number;
+  /** 커밋 2개 이상이 건드린 파일 먼저, 그다음 파일의 커밋 중 가장 늦은 작성 시각 순(`latestTouchTime`), 그다음 경로 순. */
   files: FileTouches[];
 }
 

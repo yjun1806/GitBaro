@@ -885,27 +885,59 @@ export function useRangeFileDiff(
 
 // 원격에 없는 커밋을 파일별로 묶은 것(워크스페이스 리뷰의 「파일별 보기」)
 import { getUnpushedFileTouches } from "@/api/commands";
+import { getErrorMessage } from "@/lib/utils";
 import type { RepoFileTouches } from "@/types";
 
 /**
- * 저장소(워크트리)마다 원격에 없는 커밋이 건드린 파일. 키 앞부분이 `["unpushedFileTouches", path]`라 저장소
- * 하나만 무효화할 수 있다. 커밋·체크아웃은 git 폴더 감시(`useRepoWatcher`)와 리뷰 화면의 활동 신호가, push·fetch는
- * `invalidateAfterSync`가 무효화한다. 다른 곳에서 한 push처럼 원격 추적 브랜치만 옮겨 가는 변화는 신호가
- * 없어 `REVIEW_POLL_MS`마다 다시 읽는다. 다시 읽는 동안 앞 결과를 둔다. 결과는 `paths` 순서이고, 아직 못 읽은
- * 저장소는 undefined다.
+ * 파일별 보기를 다시 읽는 주기. 원격 추적 브랜치만 옮겨 가는 변화(다른 곳에서 한 push)는 신호가 없어
+ * 이 주기로 잡는다. 백엔드가 HEAD·추적 브랜치·원격 참조가 그대로면 지난 결과를 주므로 다시 읽어도 싸다.
  */
-export function useUnpushedFileTouches(paths: readonly string[]): (RepoFileTouches | undefined)[] {
+export const FILE_TOUCHES_POLL_MS = 60_000;
+
+/** 파일별 보기에서 읽을 워크트리 하나와 그 저장소. */
+export interface FileTouchTarget {
+  repoPath: string;
+  /** 워크트리 경로(메인 작업 트리면 `repoPath`와 같다). */
+  path: string;
+}
+
+/** 워크트리 하나의 조회 상태. 다시 읽다 실패해도 앞 결과가 있으면 `success`다. */
+export type FileTouchesState =
+  | { status: "pending" }
+  | { status: "error"; error: string }
+  | { status: "success"; data: RepoFileTouches };
+
+/**
+ * 키가 `["unpushedFileTouches", repoPath, path]`라 앞부분으로 저장소 하나(그 모든 워크트리)나 워크트리 하나만
+ * 무효화할 수 있다. 전체 키를 무효화해도 백엔드 캐시 덕에 바뀌지 않은 저장소는 싸다.
+ */
+export function unpushedFileTouchesKey(repoPath: string, path: string) {
+  return ["unpushedFileTouches", repoPath, path] as const;
+}
+
+/**
+ * 워크트리마다 push하면 바뀌는 파일과 파일마다의 원격에 없는 커밋. 커밋·체크아웃은 git 폴더 감시(`useRepoWatcher`,
+ * 저장소 단위)와 리뷰 화면의 활동 신호(워크트리 단위)가, push·fetch는 `invalidateAfterSync`가 무효화한다. 그 밖의
+ * 변화는 `FILE_TOUCHES_POLL_MS`마다 다시 읽어 잡는다. 다시 읽는 동안 앞 결과를 둔다. 결과는 `targets` 순서다.
+ */
+export function useUnpushedFileTouches(targets: readonly FileTouchTarget[]): FileTouchesState[] {
   return useQueries({
-    queries: paths.map((path) => ({
-      queryKey: ["unpushedFileTouches", path],
-      queryFn: async () => (await getUnpushedFileTouches([path]))[0],
+    queries: targets.map((target) => ({
+      queryKey: unpushedFileTouchesKey(target.repoPath, target.path),
+      queryFn: async () => (await getUnpushedFileTouches([target.path]))[0],
       staleTime: 15_000,
-      refetchInterval: REVIEW_POLL_MS,
+      refetchInterval: FILE_TOUCHES_POLL_MS,
       refetchIntervalInBackground: false,
       placeholderData: keepPreviousData,
     })),
-    combine: (results) => results.map((r) => r.data),
+    combine: (results) => results.map(fileTouchesState),
   });
+}
+
+function fileTouchesState(r: { data: RepoFileTouches | undefined; isError: boolean; error: unknown }): FileTouchesState {
+  if (r.data !== undefined) return { status: "success", data: r.data };
+  if (r.isError) return { status: "error", error: getErrorMessage(r.error) };
+  return { status: "pending" };
 }
 
 // Read-only PR viewer

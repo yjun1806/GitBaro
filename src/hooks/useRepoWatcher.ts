@@ -41,7 +41,8 @@ const GIT_DIR_QUERY_KEYS = [
   // main과 갈라진 지점은 주기적으로 다시 읽지 않는다. 터미널에서 한 commit·checkout처럼 git-dir만
   // 바뀌는 변화는 이 이벤트가 유일한 신호다(repo:activity는 .git을 무시한다).
   "divergencePoint",
-  // 워크스페이스 리뷰의 파일별 보기. 커밋·체크아웃·원격 추적 브랜치 변화를 따라간다.
+  // 워크스페이스 리뷰의 파일별 보기. 커밋·체크아웃·원격 추적 브랜치 변화를 따라간다. 키가
+  // [key, 저장소, 워크트리]라 이 저장소의 워크트리만 다시 읽는다(어느 워크트리가 바뀌었는지는 모른다).
   "unpushedFileTouches",
 ] as const;
 
