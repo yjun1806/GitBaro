@@ -32,7 +32,6 @@ import { useWorktreeChipMenu } from "./useWorktreeChipMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { ViewBranchPicker } from "./ViewBranchPicker";
 import { useHistoryView } from "./useHistoryView";
-import { GitStatusLine } from "@/components/review/GitStatusLine";
 import { trimTrailingSlash } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
 
@@ -142,8 +141,6 @@ export function GraphPanel() {
   return (
     <div role="region" aria-label={t("shell.panelTabs")} className="flex flex-col shrink-0 flex-1 min-h-0">
       <Card className="relative flex-1 min-h-0">
-        {/* 메인 칸 맨 위의 git 상태 줄. 보는 중이면 이 줄이 「보는 중」 띠가 된다. */}
-        <GitStatusLine />
         <div className="flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)">
           <TabGroup aria-label={t("shell.panelTabs")} className="flex-1 min-w-0 gap-2 px-3 border-b-0">
             <Tab
@@ -185,7 +182,7 @@ export function GraphPanel() {
           </TabGroup>
           {tab === "graph" && <ViewBranchPicker />}
           {tab === "graph" && <CompareChip />}
-          {/* 「작업 중인 변경 N」은 위 git 상태 줄에 있다. */}
+          {/* 「작업 중인 변경 N」은 아래 WIP 행이 말한다(여기 배지를 두지 않는다). */}
         </div>
 
         {tab === "graph" && graphListShown && !viewing && worktreeFilter.chips.length > 1 && (

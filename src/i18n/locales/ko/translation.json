@@ -1214,6 +1214,15 @@
     "wipHidden": "보는 중에는 커밋 안 한 변경을 숨겨요. 커밋 안 한 변경은 체크아웃한 작업 트리의 것이에요.",
     "composerHidden": "다른 브랜치를 보는 중이에요. 스테이징과 커밋은 체크아웃한 브랜치에서만 할 수 있어요."
   },
+  "statusBar": {
+    "workspace": {
+      "changed_one": "저장소 {{count}}개에 변경 있음",
+      "changed_other": "저장소 {{count}}개에 변경 있음",
+      "unpushed_one": "저장소 {{count}}개에 올릴 커밋 있음",
+      "unpushed_other": "저장소 {{count}}개에 올릴 커밋 있음",
+      "allQuiet": "모든 저장소가 조용해요"
+    }
+  },
   "statusLine": {
     "mainWorktree": "기본 폴더",
     "linkedWorktree": "작업 트리 {{name}}",

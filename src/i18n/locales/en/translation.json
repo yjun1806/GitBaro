@@ -1231,6 +1231,15 @@
     "wipHidden": "Uncommitted changes are hidden while viewing. They belong to the checked-out working tree.",
     "composerHidden": "You're viewing another branch. Staging and committing happen on the checked-out branch only."
   },
+  "statusBar": {
+    "workspace": {
+      "changed_one": "{{count}} repository has changes",
+      "changed_other": "{{count}} repositories have changes",
+      "unpushed_one": "{{count}} repository has commits to push",
+      "unpushed_other": "{{count}} repositories have commits to push",
+      "allQuiet": "All repositories are quiet"
+    }
+  },
   "statusLine": {
     "mainWorktree": "Primary folder",
     "linkedWorktree": "Working tree {{name}}",
