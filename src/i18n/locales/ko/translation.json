@@ -32,7 +32,12 @@
     "pull": "Pull",
     "accountGroup": "계정과 설정",
     "placePath": "지금 위치",
-    "branchCrumb": "브랜치 {{branch}}"
+    "branchCrumb": "브랜치 {{branch}}",
+    "branchStep": {
+      "viewingCrumb": "{{target}} 보는 중",
+      "backToRepo": "저장소로 돌아가기",
+      "backToRepoShort": "저장소로"
+    }
   },
   "changes": {
     "title": "Changes",

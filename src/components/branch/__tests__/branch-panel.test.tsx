@@ -191,6 +191,23 @@ describe("BranchPanel", () => {
     expect(handlers.onSwitch).not.toHaveBeenCalled();
   });
 
+  it("views all branches merged together from a pinned row, without checking anything out", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "모든 브랜치" }));
+    expect(handlers.onSwitch).not.toHaveBeenCalled();
+    expect(handlers.onClose).toHaveBeenCalled();
+    expect(useHistoryViewStore.getState()).toMatchObject({ repoPath: AUDIT, target: { kind: "all" } });
+  });
+
+  it("marks the 모든 브랜치 row as viewed and hides it while searching", () => {
+    useHistoryViewStore.getState().view(AUDIT, { kind: "all" });
+    renderPanel();
+    expect(screen.getByLabelText("보는 중")).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "브랜치 찾기" }), { target: { value: "readme" } });
+    expect(screen.queryByRole("button", { name: "모든 브랜치" })).toBeNull();
+  });
+
   it("marks the viewed row and ends viewing when checking out from the button", () => {
     useHistoryViewStore.getState().view(AUDIT, { kind: "ref", name: "docs/readme", isRemote: false });
     renderPanel();

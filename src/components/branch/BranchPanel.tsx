@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDownUp } from "lucide-react";
+import { ArrowDownUp, Eye, Layers } from "lucide-react";
 import { useBranchBases, useRecentBranches } from "@/api/queries";
 import { cn } from "@/lib/utils";
 import { isImeComposing } from "@/lib/keyboard";
@@ -127,6 +127,15 @@ export function BranchPanel({
     viewed?.kind === "ref" && viewed.name === row.branch.name && viewed.isRemote === row.branch.isRemote;
   // 보기와 섞이지 않게, 체크아웃·비교·Merge를 시작하면 보기를 끝낸다.
   const endView = () => useHistoryViewStore.getState().reset();
+
+  // 모든 브랜치를 합쳐 본다(체크아웃 없음). 예전 그래프 머리 「보는 브랜치」 고르기의
+  // ViewBranchPicker.viewableBranches와 같은 목록 위에서, 그 고르기에 있던 「모든 브랜치」
+  // 옵션만 여기 패널로 옮긴다(검색 중에는 실제 브랜치만 보이게 감춘다).
+  const isAllViewed = viewed?.kind === "all";
+  const viewAll = () => {
+    setView({ kind: "all" });
+    onClose();
+  };
 
   // 명시적인 체크아웃(다른 워크트리가 쓰는 브랜치는 그 워크트리로 이동).
   const runPrimary = (row: BranchPanelRow) => {
@@ -276,6 +285,7 @@ export function BranchPanel({
         />
 
         <div ref={rootRef} className="flex-1 min-h-0 overflow-y-auto border-t border-(--line)">
+          {!query && <AllBranchesRow selected={isAllViewed} onSelect={viewAll} />}
           {flattenSections(sections).length === 0 ? (
             <EmptyState layout="row" title={query ? t("branchPanel.noMatch") : t("branch.noBranches")} />
           ) : (
@@ -345,6 +355,35 @@ export function BranchPanel({
         />
       )}
     </AnchoredPanel>
+  );
+}
+
+/**
+ * 「모든 브랜치」를 합쳐 보는 고정 행. 실제 브랜치가 아니라 `BranchPanelRowView`를 쓸 수 없어
+ * ViewBranchPicker의 같은 옵션과 같은 뜻(Layers 아이콘, 체크아웃 없음)을 이 패널의 행 모양에 맞춰 그린다.
+ */
+function AllBranchesRow({ selected, onSelect }: { selected: boolean; onSelect: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      title={t("historyView.pickerHint")}
+      className={cn(
+        "flex items-center gap-2 w-full min-h-[42px] px-3.5 py-1 border-b border-(--line) text-left transition-colors",
+        selected ? "bg-(--acc-sel)" : "hover:bg-(--acc-sel)",
+      )}
+    >
+      <span className="w-3.5 shrink-0 flex justify-center">
+        {selected && (
+          <Eye className="w-[13px] h-[13px] text-info" strokeWidth={2.5} aria-label={t("branchPanel.viewing")} />
+        )}
+      </span>
+      <Layers className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      {/* 다른 행처럼 보는 중은 굵기가 아니라 Eye 아이콘으로만 말한다(BranchPanelRowView와 같은 규칙 —
+          거기도 isViewed로는 굵기를 바꾸지 않고, isCurrent일 때만 굵어진다). */}
+      <span className="text-[11.5px] font-medium text-(--fg)">{t("historyView.allBranches")}</span>
+    </button>
   );
 }
 

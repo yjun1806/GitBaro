@@ -6,6 +6,7 @@ import i18n from "@/i18n/config";
 import { useToastStore } from "@/stores/toast";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
+import { useHistoryViewStore } from "@/stores/history-view";
 import type { BranchInfo, RepoInfo, WorktreeInfo } from "@/types";
 import { useBranchRangeStore } from "../branch-range";
 
@@ -61,6 +62,8 @@ function renderZone() {
 }
 
 const row = (name: string) => within(document.querySelector<HTMLElement>(`[data-branch-name="${name}"]`)!);
+/** 행 본문(이름·둘째 줄) 버튼. 누르면 체크아웃하지 않고 본다(branch-panel.test.tsx와 같은 규칙). */
+const rowBody = (name: string) => document.querySelector<HTMLElement>(`[data-branch-name="${name}"] button`)!;
 
 beforeEach(async () => {
   await i18n.changeLanguage("en");
@@ -69,6 +72,7 @@ beforeEach(async () => {
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO, repoPrefs: {} });
   useUIStore.setState({ activeTab: "stash" });
   useBranchRangeStore.getState().clear();
+  useHistoryViewStore.getState().reset();
 });
 afterEach(cleanup);
 
@@ -107,5 +111,30 @@ describe("BranchZone — branch panel wiring", () => {
     useRepositoryStore.setState({ repoPrefs: { [REPO]: { alias: "Shop front" } } });
     renderZone();
     expect(within(screen.getByRole("dialog", { name: "Branches" })).getByText("Shop front")).toBeTruthy();
+  });
+
+  it("turns the crumb into the viewed branch (step change, not checkout) and offers a quick way back", () => {
+    renderZone();
+    // Before picking anything, the crumb shows the checked-out branch (main).
+    const crumbLabel = () => screen.getByTestId("branch-crumb").getAttribute("aria-label");
+    expect(crumbLabel()).toBe("Branch main");
+    expect(screen.queryByRole("button", { name: "Back to the repository" })).toBeNull();
+
+    fireEvent.click(rowBody("docs/y"));
+    expect(useHistoryViewStore.getState()).toMatchObject({ repoPath: REPO, target: { kind: "ref", name: "docs/y", isRemote: false } });
+    expect(crumbLabel()).toBe("Viewing docs/y");
+    expect(screen.getByTestId("branch-crumb").textContent).toContain("docs/y");
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to the repository" }));
+    expect(useHistoryViewStore.getState().target).toBeNull();
+    expect(crumbLabel()).toBe("Branch main");
+    expect(screen.queryByRole("button", { name: "Back to the repository" })).toBeNull();
+  });
+
+  it("shows the crumb as viewing all branches when that's picked from the panel", () => {
+    renderZone();
+    fireEvent.click(screen.getByRole("button", { name: "All branches" }));
+    expect(useHistoryViewStore.getState()).toMatchObject({ repoPath: REPO, target: { kind: "all" } });
+    expect(screen.getByTestId("branch-crumb").getAttribute("aria-label")).toBe("Viewing All branches");
   });
 });
