@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import { cn } from "@/lib/utils";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { clampPanelToViewport } from "@/lib/panel-position";
@@ -12,6 +12,8 @@ export interface AnchoredPanelProps {
   ariaLabel?: string;
   /** Classes for the panel itself (size, chrome — position comes from this component). */
   className?: string;
+  /** Extra inline styles (e.g. a width measured from the trigger). Position/maxHeight always win. */
+  style?: CSSProperties;
   /** Classes for the full-screen click-outside-to-close layer. Defaults to a transparent layer (no dimming — this is a popover, not a modal). */
   overlayClassName?: string;
   dismissible?: boolean;
@@ -37,6 +39,7 @@ export function AnchoredPanel({
   labelledBy,
   ariaLabel,
   className,
+  style,
   overlayClassName = "z-50",
   dismissible = true,
   closeOnBackdrop = true,
@@ -107,6 +110,7 @@ export function AnchoredPanel({
         // `clampPanelToViewport`). Once measured it overrides any static
         // `max-h-*` class the caller set for the pre-measurement fallback.
         style={{
+          ...style,
           position: "fixed",
           top: position?.top ?? 0,
           left: position?.left ?? 0,

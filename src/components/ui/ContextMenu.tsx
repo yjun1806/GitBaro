@@ -85,8 +85,11 @@ function useAnchoredPosition(menuRef: RefObject<HTMLElement | null>, anchor: Con
 
 export function ContextMenu({ sections, position, anchored, onClose, ariaLabel }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const { onKeyDown, restoreFocus } = useMenuKeyboard(ref, onClose);
   const anchoredPosition = useAnchoredPosition(ref, anchored);
+  // anchored 메뉴는 자리를 잰 뒤(visibility: hidden이 풀린 뒤)에만 첫 항목에 포커스를 준다 —
+  // 숨은 요소에 포커스를 주면 브라우저가 무시해서 그대로 포커스를 잃는다(D-high #2).
+  const isPositioned = anchored ? anchoredPosition !== null : true;
+  const { onKeyDown, restoreFocus } = useMenuKeyboard(ref, onClose, isPositioned);
   const fixedPoint = position ?? { x: 0, y: 0 };
   const style: { left: number; top: number; visibility?: "visible" | "hidden" } = anchored
     ? { left: (anchoredPosition ?? { top: 0, left: 0 }).left, top: (anchoredPosition ?? { top: 0, left: 0 }).top, visibility: anchoredPosition ? "visible" : "hidden" }
@@ -95,12 +98,16 @@ export function ContextMenu({ sections, position, anchored, onClose, ariaLabel }
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
+        // 이 메뉴를 여는 트리거(▾ 버튼 등) 위의 mousedown은 「바깥」으로 치지 않는다 — 그걸 닫음으로
+        // 세면 뒤이은 click의 토글 로직이 다시 열어서, 열린 메뉴가 같은 트리거로는 닫히지 않는다(D-high #1).
+        const anchorEl = anchored?.anchorRef.current;
+        if (anchorEl && (anchorEl === e.target || anchorEl.contains(e.target as Node))) return;
         onClose();
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
+  }, [onClose, anchored]);
 
   // 메뉴 밖을 스크롤하거나(휠) 창 크기를 바꾸거나 창을 떠나면 닫는다. 메뉴는 연 자리에 고정되어
   // 있어서 아래 목록이 움직이면 엉뚱한 행을 가리킨다. `scroll` 이벤트는 쓰지 않는다 — 우클릭으로

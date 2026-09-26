@@ -242,8 +242,10 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
           <SearchInput
             size="md"
             surface="frame"
+            wrapperClassName="flex-1 min-w-0"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onClear={() => setQuery("")}
             placeholder={t("sidebarTree.search")}
             aria-label={t("sidebarTree.search")}
           />

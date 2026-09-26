@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, useMemo } from "react";
-import type { KeyboardEvent } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { GitBranch, ChevronDown, Check, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { FLOATING_SURFACE } from "./layers";
+import { AnchoredPanel } from "./AnchoredPanel";
 import { EmptyState } from "./EmptyState";
 import type { BranchInfo } from "@/types";
 
@@ -15,6 +15,11 @@ interface BranchComboboxProps {
   className?: string;
 }
 
+/**
+ * 브랜치 고르는 콤보박스. 목록은 `AnchoredPanel`(고정 위치 + 뷰포트 안으로 클램프)로 띄운다 —
+ * `absolute`였을 때는 창(Dialog) 몸통의 `overflow-y-auto`나 감싼 카드의 `overflow-hidden`에
+ * 잘렸다(D-high #3). `AnchoredPanel`은 트리거 너비를 모르므로 열 때 재서 넘긴다.
+ */
 export function BranchCombobox({
   value,
   branches,
@@ -23,22 +28,16 @@ export function BranchCombobox({
   className,
 }: BranchComboboxProps) {
   const { t } = useTranslation();
+  const titleId = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [anchorWidth, setAnchorWidth] = useState<number | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    setAnchorWidth(triggerRef.current?.getBoundingClientRect().width ?? null);
   }, [open]);
 
   const filtered = useMemo(() => {
@@ -56,31 +55,27 @@ export function BranchCombobox({
   const handleOpen = () => {
     setOpen(true);
     setQuery("");
-    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const close = () => {
+    setOpen(false);
+    setQuery("");
   };
 
   const handleSelect = (branchName: string) => {
     onChange(branchName);
-    setOpen(false);
-    setQuery("");
-  };
-
-  // Escape closes only the dropdown; preventDefault keeps an enclosing Dialog open.
-  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== "Escape" || !open || e.nativeEvent.isComposing) return;
-    e.preventDefault();
-    setOpen(false);
-    setQuery("");
-    triggerRef.current?.focus();
+    close();
   };
 
   return (
-    <div ref={ref} className={cn("relative", className)} onKeyDown={handleKeyDown}>
+    <div className={cn("relative", className)}>
       {/* Trigger */}
       <button
         ref={triggerRef}
         type="button"
         onClick={handleOpen}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         className={cn(
           "w-full h-7 flex items-center gap-2 px-2.5 text-[12.5px]",
           "border border-border rounded-(--radius-item) bg-card text-foreground",
@@ -108,13 +103,23 @@ export function BranchCombobox({
 
       {/* Dropdown */}
       {open && (
-        <div className={cn("absolute left-0 right-0 top-full mt-1 rounded-(--radius-item) overflow-hidden animate-pop-in", FLOATING_SURFACE)}>
+        <AnchoredPanel
+          anchorRef={triggerRef}
+          onClose={close}
+          labelledBy={titleId}
+          style={anchorWidth ? { width: anchorWidth } : undefined}
+          className={cn("flex flex-col overflow-hidden rounded-(--radius-item)", FLOATING_SURFACE)}
+        >
+          <span id={titleId} className="sr-only">
+            {placeholder ?? t("branch.filterBranches")}
+          </span>
           {/* Search input */}
-          <div className="flex items-center gap-2 px-2.5 h-7 border-b border-border">
+          <div className="flex items-center gap-2 px-2.5 h-7 border-b border-border shrink-0">
             <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             <input
               ref={inputRef}
               type="text"
+              autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("branch.filterBranches")}
@@ -123,7 +128,7 @@ export function BranchCombobox({
           </div>
 
           {/* Options */}
-          <div className="max-h-48 overflow-y-auto p-1">
+          <div role="listbox" aria-labelledby={titleId} className="min-h-0 max-h-48 overflow-y-auto p-1">
             {filtered.length === 0 ? (
               <EmptyState layout="row" title={t("branch.noBranches")} />
             ) : (
@@ -132,6 +137,9 @@ export function BranchCombobox({
                 return (
                   <button
                     key={branch.name}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
                     onClick={() => handleSelect(branch.name)}
                     className={cn(
                       "w-full flex items-start gap-2 px-2.5 py-1.5 rounded-(--radius-chip) text-left transition-colors motion-reduce:transition-none",
@@ -181,7 +189,7 @@ export function BranchCombobox({
               })
             )}
           </div>
-        </div>
+        </AnchoredPanel>
       )}
     </div>
   );

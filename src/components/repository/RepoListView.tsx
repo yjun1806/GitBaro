@@ -274,10 +274,12 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
           ref={inputRef}
           size="md"
           surface="frame"
-          className="flex-1 min-w-0"
+          wrapperClassName="flex-1 min-w-0"
           placeholder={t("common.filter")}
+          aria-label={t("common.filter")}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
+          onClear={() => setFilter("")}
         />
         <div className="relative shrink-0">
           <Button
@@ -401,8 +403,31 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                             <p className="flex items-center gap-1 text-[12.5px] font-medium truncate leading-tight">
                               {/* 표시 이름이 있으면 그것만, 없으면 owner/폴더 이름 */}
                               <span className="truncate">{displayName}</span>
-                              {visibility?.isPrivate && <Lock className="w-3 h-3 shrink-0 text-muted-foreground" aria-hidden="true" />}
-                              {visibility?.isFork && <GitFork className="w-3 h-3 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                              {/* 로컬 전용 vs 공개/비공개/포크 — 뜻이 있는 아이콘이라 title(풍선말 +
+                                  접근성 이름)을 붙인다. aria-hidden만 두고 title 없이 보이지 않는다. */}
+                              {!hasRemote ? (
+                                <span title={t("repo.localOnly")} className="shrink-0 flex items-center">
+                                  <HardDrive className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
+                                </span>
+                              ) : (
+                                <>
+                                  {visibility?.isPrivate && (
+                                    <span title={t("repo.privateRepo")} className="shrink-0 flex items-center">
+                                      <Lock className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
+                                    </span>
+                                  )}
+                                  {visibility?.isFork && (
+                                    <span title={t("repo.forkRepo")} className="shrink-0 flex items-center">
+                                      <GitFork className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
+                                    </span>
+                                  )}
+                                  {visibility && !visibility.isPrivate && !visibility.isFork && (
+                                    <span title={t("repo.publicRepo")} className="shrink-0 flex items-center">
+                                      <Globe className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
+                                    </span>
+                                  )}
+                                </>
+                              )}
                             </p>
                             {repo.currentBranch && (
                               <div className="flex items-center gap-1 mt-0.5">

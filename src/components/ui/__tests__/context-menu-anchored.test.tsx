@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 
 afterEach(cleanup);
@@ -30,6 +30,52 @@ describe("ContextMenu anchored", () => {
   it("accepts an end-aligned anchor", () => {
     render(<AnchoredHost align="end" />);
     expect(screen.getByRole("menu")).toBeTruthy();
+  });
+});
+
+// D-high #1: SyncZone/SortMenu/RepoListView는 트리거 버튼의 onClick에서 `open`을 그대로 토글한다.
+// 메뉴가 트리거를 「바깥」으로 세면, 같은 클릭의 mousedown이 먼저 닫고 뒤따르는 click의 토글이
+// 다시 열어서 트리거로는 절대 닫을 수 없었다.
+function ToggleHost() {
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button ref={anchorRef} onClick={() => setOpen((v) => !v)}>
+        trigger
+      </button>
+      {open && (
+        <ContextMenu
+          anchored={{ anchorRef }}
+          onClose={() => setOpen(false)}
+          sections={[{ items: [{ label: "One", onClick: vi.fn() }] }]}
+        />
+      )}
+    </>
+  );
+}
+
+describe("ContextMenu anchored outside-click", () => {
+  it("closes on a second real click (mousedown then click) on the same trigger that opened it", () => {
+    render(<ToggleHost />);
+    const trigger = screen.getByRole("button", { name: "trigger" });
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu")).toBeTruthy();
+
+    // A real click is mousedown → mouseup → click, in that order.
+    fireEvent.mouseDown(trigger);
+    fireEvent.click(trigger);
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("still closes on a mousedown elsewhere (the ordinary outside-click case)", () => {
+    render(<ToggleHost />);
+    fireEvent.click(screen.getByRole("button", { name: "trigger" }));
+    expect(screen.getByRole("menu")).toBeTruthy();
+
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 });
 

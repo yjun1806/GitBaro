@@ -65,13 +65,15 @@ export interface SearchInputProps extends Omit<InputHTMLAttributes<HTMLInputElem
   size?: TextInputSize;
   /** 층 2(패널) 위는 `panel`(테두리 없이 `--chip` 채움), 층 0(바탕) 위는 `frame`(흰 바탕 + 테두리). */
   surface?: "panel" | "frame";
-  /** 주면 값이 있을 때 지우기 버튼을 보인다. */
+  /** 주면 값이 있을 때 지우기 버튼을 보이고, Esc로도 지운다. */
   onClear?: () => void;
+  /** 칸 자체(너비 등 레이아웃)에 붙일 클래스. `className`은 안쪽 `<input>`에 그대로 간다. */
+  wrapperClassName?: string;
 }
 
 /** 검색 입력칸(3.12). `md` 28px(패널 머리, 사이드바) / `sm` 24px(찾기 줄). */
 export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput(
-  { size = "md", surface = "panel", onClear, className, value, ...props },
+  { size = "md", surface = "panel", onClear, wrapperClassName, className, value, onKeyDown, ...props },
   ref,
 ) {
   const { t } = useTranslation();
@@ -81,17 +83,30 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
     <div
       className={cn(
         "flex items-center gap-1.5 px-2.5 rounded-(--radius-item)",
+        "focus-within:ring-2 focus-within:ring-ring/40",
         FIELD_SIZE_CLASS[size],
         surface === "frame" ? "bg-card border border-(--line2)" : "bg-(--chip)",
+        wrapperClassName,
       )}
     >
       <Search className="w-3 h-3 shrink-0 text-muted-foreground" aria-hidden="true" />
       <input
         ref={ref}
+        // 시맨틱상 type="search"가 더 맞지만, ARIA role이 textbox→searchbox로 바뀌어 기존 role
+        // 쿼리가 전부 깨진다(사이드바·diff 찾기·브랜치 패널 검색 등). Esc-지우기·지우기 버튼은 이미
+        // 아래에서 직접 구현하므로 네이티브 search 동작 없이도 기능은 같다.
         type="text"
         value={value}
         aria-labelledby={props["aria-label"] ? undefined : ids?.labelId}
         aria-describedby={ids?.descriptionId}
+        onKeyDown={(e) => {
+          if (onClear && e.key === "Escape" && typeof value === "string" && value.length > 0) {
+            e.stopPropagation();
+            onClear();
+            return;
+          }
+          onKeyDown?.(e);
+        }}
         {...props}
         className={cn("flex-1 min-w-0 bg-transparent outline-none placeholder:text-muted-foreground", className)}
       />

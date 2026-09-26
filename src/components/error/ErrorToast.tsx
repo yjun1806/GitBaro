@@ -35,7 +35,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
 
   return (
     <div
-      role="status"
+      role={toast.type === "error" ? "alert" : "status"}
       className={cn(
         "flex items-start gap-3 px-3 py-2.5 rounded-(--radius-item) max-w-sm w-full",
         FLOATING_SURFACE,
@@ -55,10 +55,10 @@ export function ErrorToast() {
   const toasts = useToastStore((s) => s.toasts);
   const removeToast = useToastStore((s) => s.removeToast);
 
-  if (toasts.length === 0) return null;
-
+  // 라이브 리전 칸 자체는 비어 있어도 계속 DOM에 남긴다. 알림이 없을 때 통째로 없어졌다가 다시
+  // 생기면 스크린리더가 그 칸을 라이브 리전으로 다시 등록하지 못해 다음 알림을 놓칠 수 있다.
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
+    <div aria-live="polite" className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
       ))}

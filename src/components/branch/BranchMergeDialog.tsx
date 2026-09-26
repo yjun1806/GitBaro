@@ -32,6 +32,7 @@ export function BranchMergeDialog({ repoPath, currentBranch, source, isDirty, on
       titleId={titleId}
       onClose={onClose}
       size="md"
+      closeOnBackdrop
     >
       {isLoading ? (
         <LoadingState label={t("compare.loading")} />

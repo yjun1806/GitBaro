@@ -188,7 +188,9 @@ export function CloneDialog({
                 surface="frame"
                 value={repoSearch}
                 onChange={(e) => setRepoSearch(e.target.value)}
+                onClear={() => setRepoSearch("")}
                 placeholder={t("clone.searchRepos")}
+                aria-label={t("clone.repository")}
                 disabled={!selectedAccountId || isCloning}
               />
               {isSearching && (

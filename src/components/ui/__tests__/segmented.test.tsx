@@ -96,6 +96,32 @@ describe("Segmented", () => {
     expect(screen.getByRole("radio", { name: "A" }).className).toContain("flex-1");
   });
 
+  // D-medium #5: fill 모드에서 조각이 좁아지면 whitespace-nowrap 글자가 넘쳤다. min-w-0 + 안쪽
+  // truncate span으로 줄이고, title이 없으면 글자 자체를 풍선말로 보인다.
+  it("truncates a long label in fill mode and falls back to it as the title", () => {
+    const options = [
+      { value: "a", label: "Working changes that would overflow a narrow segment" },
+      { value: "b", label: "B" },
+    ] as const;
+    render(<Segmented value="a" options={options} onChange={vi.fn()} ariaLabel="Pick" fill />);
+    const a = screen.getByRole("radio", { name: /Working changes/ });
+    expect(a.getAttribute("title")).toBe("Working changes that would overflow a narrow segment");
+    expect(a.className).toContain("min-w-0");
+    expect(a.querySelector("span")?.className).toContain("truncate");
+  });
+
+  it("prefers an explicit title over the label fallback, and stays hoverable while disabled", () => {
+    const options = [
+      { value: "a", label: "A" },
+      { value: "b", label: "B", disabled: true, title: "다른 브랜치를 보는 중" },
+    ] as const;
+    render(<Segmented value="a" options={options} onChange={vi.fn()} ariaLabel="Pick" />);
+    const b = screen.getByRole("radio", { name: "B" });
+    expect(b.getAttribute("title")).toBe("다른 브랜치를 보는 중");
+    // pointer-events-none이면 disabled 조각의 title이 hover로 뜨지 않는다.
+    expect(b.className).not.toContain("pointer-events-none");
+  });
+
   it("accepts a node (not just plain text) as a piece's label", () => {
     const options = [
       { value: "a", label: "Plain" },

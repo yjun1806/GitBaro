@@ -48,7 +48,9 @@ export function buttonClass({ variant = "secondary", size = "md", tone, iconOnly
   return cn(
     "inline-flex items-center justify-center shrink-0 rounded-(--radius-chip) whitespace-nowrap select-none outline-none",
     "transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring/40",
-    "disabled:opacity-45 disabled:pointer-events-none",
+    // pointer-events-none을 쓰면 hover가 버튼에 닿지 못해 title 풍선말도 함께 사라진다 — 끈 이유를
+    // 보여야 하는 자리(커밋 버튼 등)가 있어서 마우스는 받되 cursor로만 「눌러도 소용없다」를 표시한다.
+    "disabled:opacity-45 disabled:cursor-not-allowed",
     iconOnly ? ICON_ONLY_SIZE_CLASS[size] : SIZE_CLASS[size],
     weight,
     VARIANT_CLASS[variant],

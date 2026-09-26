@@ -27,6 +27,9 @@ export interface DialogFrameProps {
   footerStart?: ReactNode;
   /** 다른 창 위에 겹쳐 뜨는 창의 z-index 등(`Dialog`로 그대로 넘어간다). */
   overlayClassName?: string;
+  /** 막(바탕) 클릭으로 닫기. 기본은 `Dialog`와 같은 false — 마이그레이션 전부터 막 클릭으로
+   * 닫히던 창만 true로 켠다(그 전 동작을 그대로 지킨다). */
+  closeOnBackdrop?: boolean;
   children: ReactNode;
 }
 
@@ -43,6 +46,7 @@ export function DialogFrame({
   footer,
   footerStart,
   overlayClassName,
+  closeOnBackdrop,
   children,
 }: DialogFrameProps) {
   const { t } = useTranslation();
@@ -54,7 +58,15 @@ export function DialogFrame({
       labelledBy={resolvedTitleId}
       dismissible={dismissible}
       {...(overlayClassName ? { overlayClassName } : {})}
-      className={cn(FLOATING_SURFACE, "rounded-(--radius-panel) w-full mx-4 flex flex-col", SIZE_CLASS[size])}
+      {...(closeOnBackdrop !== undefined ? { closeOnBackdrop } : {})}
+      // 내용이 창 높이를 넘으면 몸통(overflow-y-auto)만 스크롤되게 창 자체를 뷰포트 안으로 가둔다.
+      // xl은 이미 `h-[88vh]`로 스스로 높이를 정하므로 여기서 더 낮게 누르지 않는다.
+      className={cn(
+        FLOATING_SURFACE,
+        "rounded-(--radius-panel) w-full mx-4 flex flex-col",
+        size !== "xl" && "max-h-[80vh]",
+        SIZE_CLASS[size],
+      )}
     >
       <div className="flex items-center gap-2 px-4 py-3 border-b border-(--line) shrink-0">
         <h2 id={resolvedTitleId} className="flex-1 min-w-0 text-[14px] font-semibold text-foreground truncate">

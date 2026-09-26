@@ -18,6 +18,8 @@ function enabledItems(menu: HTMLElement): HTMLElement[] {
 export function useMenuKeyboard(
   menuRef: RefObject<HTMLElement | null>,
   onClose: () => void,
+  /** 메뉴가 화면에 자리 잡아 보이는 상태인가. false인 동안은 포커스를 미룬다(숨은 요소는 포커스를 받지 않는다). */
+  ready = true,
 ) {
   const [opener] = useState(() =>
     typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null),
@@ -28,11 +30,12 @@ export function useMenuKeyboard(
   }, [opener]);
 
   useEffect(() => {
+    if (!ready) return;
     const menu = menuRef.current;
     if (!menu) return;
     const first = enabledItems(menu)[0];
     (first ?? menu).focus();
-  }, [menuRef]);
+  }, [menuRef, ready]);
 
   // Escape must close the menu even if focus has left it (e.g. after a
   // pointer click on its padding), and must not also close a dialog behind it,

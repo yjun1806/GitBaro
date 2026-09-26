@@ -87,4 +87,20 @@ describe("useRepoWatcher — fs:git-dir-change invalidation", () => {
       { timeout: 2000 },
     );
   });
+  it("refreshes the per-file view for every worktree of the changed repository only", async () => {
+    // 감시자는 어느 워크트리가 바뀌었는지 모르므로 그 저장소의 워크트리는 모두 다시 읽는다. 다른 저장소는 두고.
+    const { queryClient } = renderWatcher(REPO);
+    await waitFor(() => expect(handlers.has("fs:git-dir-change")).toBe(true));
+    const keys = [
+      ["unpushedFileTouches", REPO, REPO],
+      ["unpushedFileTouches", REPO, "/repos/app-feat"],
+      ["unpushedFileTouches", "/repos/other", "/repos/other"],
+    ];
+    for (const queryKey of keys) await queryClient.prefetchQuery({ queryKey, queryFn: async () => null });
+
+    handlers.get("fs:git-dir-change")?.({ payload: { repoPath: REPO } });
+
+    await waitFor(() => expect(queryClient.getQueryState(keys[0])?.isInvalidated).toBe(true), { timeout: 2000 });
+    expect(keys.map((k) => queryClient.getQueryState(k)?.isInvalidated)).toEqual([true, true, false]);
+  });
 });

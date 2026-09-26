@@ -48,6 +48,21 @@ describe("Button", () => {
     const button = screen.getByRole("button", { name: "delete" });
     expect(button).toHaveProperty("disabled", true);
   });
+
+  // D-medium #4: pointer-events-none이던 시절엔 disabled 버튼이 hover를 아예 받지 못해서
+  // title 풍선말(끈 이유)이 뜨지 않았다. cursor-not-allowed로만 「눌러도 소용없다」를 보인다.
+  it("keeps a disabled button hoverable (no pointer-events-none) so its title still shows", () => {
+    render(
+      <Button disabled title="아직 커밋할 것이 없습니다" aria-label="commit">
+        Commit
+      </Button>,
+    );
+    const button = screen.getByRole("button", { name: "commit" });
+    expect(button).toHaveProperty("disabled", true);
+    expect(button.getAttribute("title")).toBe("아직 커밋할 것이 없습니다");
+    expect(button.className).not.toContain("pointer-events-none");
+    expect(button.className).toContain("cursor-not-allowed");
+  });
 });
 
 describe("buttonClass", () => {

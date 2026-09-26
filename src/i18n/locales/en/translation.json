@@ -106,6 +106,7 @@
     "parents": "Parents",
     "changedFiles": "Changed Files",
     "loadingHistory": "Loading history",
+    "tagLocalOnly": "{{name}} (local only)",
     "contextMenu": {
       "createBranch": "Create branch here…",
       "checkout": "Check out this commit",
@@ -337,6 +338,10 @@
     "bareNotSupported": "This folder is a bare repository (no working tree), which GitBaro cannot open. Choose a folder with checked-out files.",
     "accountNoAccess": "This account cannot access the repository",
     "accountReadOnly": "Read-only — no push permission for this account",
+    "localOnly": "Local only — no remote",
+    "publicRepo": "Public repository",
+    "privateRepo": "Private repository",
+    "forkRepo": "Forked repository",
     "contextMenu": {
       "copyName": "Copy Repo Name",
       "copyPath": "Copy Repo Path",
@@ -1001,7 +1006,13 @@
       "netUnchanged": "These commits cancel out, so nothing changed in the end",
       "emptyTitle": "No commits to push",
       "repoTruncated": "{{repo}}: some older commits were not checked",
-      "loading": "Reading files"
+      "loading": "Reading files",
+      "groupMergeOnly": "Files changed only in a merge",
+      "mergeOnly": "Changed in a merge",
+      "sourceLoading": "{{repo}}: reading…",
+      "mergesLeftOut_one": "{{repo}}: {{count}} merge commit is not listed per file",
+      "mergesLeftOut_other": "{{repo}}: {{count}} merge commits are not listed per file",
+      "worktreeSource": "{{repo}} · {{worktree}}"
     }
   },
   "gitActions": {

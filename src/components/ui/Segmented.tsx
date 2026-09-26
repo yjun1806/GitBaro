@@ -85,6 +85,9 @@ export function Segmented<T extends string>({
     >
       {options.map((option, i) => {
         const selected = i === current;
+        // 채움 모드에서 조각이 좁아지면(fill) 글자가 넘친다 — 안쪽 span에서 줄이고, title이 없으면
+        // 글자 자체(문자열일 때만)를 풍선말로 보인다.
+        const fallbackTitle = typeof option.label === "string" ? option.label : undefined;
         return (
           <button
             key={option.value}
@@ -94,23 +97,24 @@ export function Segmented<T extends string>({
             type="button"
             role="radio"
             aria-checked={selected}
-            title={option.title}
+            title={option.title ?? fallbackTitle}
             tabIndex={i === rovingIndex ? 0 : -1}
             disabled={disabled || option.disabled}
             onClick={() => onChange(option.value)}
             className={cn(
-              "inline-flex items-center justify-center gap-1.5 rounded-(--radius-chip) whitespace-nowrap outline-none",
+              "inline-flex items-center justify-center gap-1.5 rounded-(--radius-chip) outline-none",
               "transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring/40",
-              "disabled:opacity-45 disabled:pointer-events-none",
+              // pointer-events-none이면 title 풍선말도 막힌다(끈 조각의 이유를 hover로 봐야 한다).
+              "disabled:opacity-45 disabled:cursor-not-allowed",
               PIECE_SIZE_CLASS[size],
-              fill && "flex-1",
+              fill && "flex-1 min-w-0",
               selected
                 ? "bg-card text-foreground font-semibold shadow-(--shadow-sm)"
                 : "text-(--fg2) hover:text-foreground",
             )}
           >
             {option.icon}
-            {option.label}
+            <span className="truncate whitespace-nowrap">{option.label}</span>
           </button>
         );
       })}
