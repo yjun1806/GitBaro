@@ -10,8 +10,10 @@ import {
   useCommitFileDiff,
   useCommitAvatars,
   useMergeState,
+  useCachedRepoSyncStatus,
 } from "@/api/queries";
 import { trimTrailingSlash } from "@/lib/utils";
+import { RefLabel } from "@/components/ui/marks";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { CommitDetail } from "@/components/history/CommitDetail";
 import { StashDetailView } from "@/components/stash/StashDetailView";
@@ -27,7 +29,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Notice } from "@/components/ui/Notice";
 import { ListDiffSplit } from "./ListDiffSplit";
-import type { MaximizedFiles } from "./maximized-files";
+import type { MaximizedFiles, MaximizedOrigin } from "./maximized-files";
 import type { FileStatus } from "@/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 
@@ -155,6 +157,7 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
   const { data: mergeState } = useMergeState(activeRepoPath);
   const merging = mergeState !== undefined && mergeState !== null;
   const working = useWorkingMaximizedFiles();
+  const activeBranch = useCachedRepoSyncStatus(activeRepoPath)?.branch ?? null;
 
   // 병합·pull·되돌리기 등이 충돌로 멈추면 따라가기를 끝낸다. 충돌을 푸는 배너와 스테이징
   // 목록(ChangesView)이 보여야 한다 — 그 흐름들은 「changes」 탭으로 옮기기만 하는데, 이미
@@ -180,12 +183,23 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
   }
 
   if (activeTab === "changes") {
+    const origin: MaximizedOrigin = {
+      kind: "working",
+      label: (
+        <>
+          <span className="italic text-(--fg2) shrink-0">{t("live.uncommitted")}</span>
+          {activeBranch && <RefLabel name={activeBranch} kind="local" className="max-w-[200px]" />}
+        </>
+      ),
+      meta: t("live.fileCount", { count: working.files.items.length }),
+    };
     return (
       <ListDiffSplit
         variant="cards"
         list={<ChangesView />}
         listOverlay={<SwitchingOverlay />}
         files={working.files}
+        origin={origin}
         detail={
           selectedFile ? (
             <DiffContent filePath={selectedFile} staged={selectedFileStaged} />

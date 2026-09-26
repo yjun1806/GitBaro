@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
-import { useHasMaximizedFiles } from "@/components/layout/maximized-files";
+import { useHasMaximizedFiles, useHasMaximizedOrigin } from "@/components/layout/maximized-files";
 import { Button } from "@/components/ui/Button";
 import { FileStatusLetter } from "@/components/ui/marks";
 import { Segmented } from "@/components/ui/Segmented";
@@ -128,11 +128,17 @@ function FileListButton() {
   );
 }
 
-/** diff 크게 보기 켜기·끄기. 켜면 그래프 패널과 파일 목록을 숨긴다(Escape로도 되돌린다). */
+/**
+ * diff 크게 보기 켜기·끄기. 켜면 그래프 패널과 파일 목록을 숨긴다(Escape로도 되돌린다). 크게 보는
+ * 동안 출처 머리 줄(`MaximizedOriginHeader`)이 있으면 그쪽이 「원래 크기로」를 맡으므로 이 아이콘은
+ * 숨긴다(원칙 3, 되돌리는 자리는 하나).
+ */
 function MaximizeButton() {
   const { t } = useTranslation();
   const maximized = useUIStore((s) => s.isDiffMaximized);
   const setMaximized = useUIStore((s) => s.setDiffMaximized);
+  const hasOrigin = useHasMaximizedOrigin();
+  if (maximized && hasOrigin) return null;
   const label = maximized ? t("diff.restoreSize") : t("diff.maximize");
   return (
     <Button

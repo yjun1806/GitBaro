@@ -65,6 +65,8 @@ vi.mock("@/api/queries", () => ({
   useRemoteTags: () => ({ data: undefined }),
   useWorktrees: () => ({ data: [] }),
   useRepoSyncStatuses: () => ({ data: undefined }),
+  // 크게 보기 머리 줄(작업 중인 변경)의 브랜치 이름.
+  useCachedRepoSyncStatus: () => undefined,
   useUnpushedCommits: () => ({ data: undefined }),
   useReviewStatusQuery: () => ({ data: undefined, isLoading: false }),
   useStashList: () => ({ data: [] }),

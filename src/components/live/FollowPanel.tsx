@@ -29,7 +29,7 @@ import {
 } from "@/components/worktree/OverlapBadge";
 import { SideBySideDiff } from "@/components/worktree/SideBySideDiff";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
-import type { MaximizedFiles } from "@/components/layout/maximized-files";
+import type { MaximizedFiles, MaximizedOrigin } from "@/components/layout/maximized-files";
 import type { DiffOutput, StatusEntry, WipFile } from "@/types";
 import { useWorkingFileMenu } from "@/components/commit/useWorkingFileMenu";
 import { useFileMenu } from "@/components/commit/useFileMenu";
@@ -41,7 +41,7 @@ import { Notice } from "@/components/ui/Notice";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionLabel } from "@/components/ui/PanelHeader";
 import { Segmented } from "@/components/ui/Segmented";
-import { Dot, FileStatusLetter, StatusChip } from "@/components/ui/marks";
+import { Dot, FileStatusLetter, RefLabel, StatusChip } from "@/components/ui/marks";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
 
 /** `registerWatchPaths`에 쓰는 이 화면의 key. 감시 대상 목록에서 맨 앞에 온다. */
@@ -373,6 +373,9 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
   useFollowRefresh(path, polled);
   const { data: files, isLoading, isError } = useWipFiles(path);
   const list = useMemo(() => files ?? [], [files]);
+  // 크게 보기 머리 줄에 둘 브랜치 이름(워크트리 목록은 이미 다른 화면이 읽어 둬 대개 캐시에서 온다).
+  const { data: worktreeList = [] } = useWorktrees(path);
+  const branch = worktreeList.find((w) => samePath(w.path, path))?.branch ?? null;
   // 방금 바뀐 파일의 행을 한 번 비춘다(diff의 새 줄과 같은 막). 「N초 전」 글자는 계속 세지만 비추기는
   // 한 번뿐이다. 목록이 비어도(작업 트리가 깨끗해져도) `FollowPanel`은 그대로 떠 있으니, 여기서
   // 기억해야 비었다가 파일이 다시 나타났을 때도 그 파일이 비춘다 — 목록이 빌 때 사라지는
@@ -449,6 +452,22 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
     const point = contextMenuPoint(e);
     if (variant === "cards") workingMenu.openMenu(wipEntry(file), point);
     else readOnlyMenu.open({ repoPath: path, filePath, exists: file.status !== "deleted" }, point);
+  };
+
+  // 크게 보기 머리 줄. 파일마다 다른 diff 머리의 ModifiedAgo와 달리, 목록 전체(정렬 시각 순 맨 위)의
+  // 최근 수정 시각을 한 번만 보인다.
+  const origin: MaximizedOrigin = {
+    kind: "follow",
+    label: (
+      <>
+        <span className="italic text-(--fg2) shrink-0">{t("live.uncommitted")}</span>
+        {branch && <RefLabel name={branch} kind="local" className="max-w-[200px]" />}
+        {following && <FollowBadge mode="following" />}
+      </>
+    ),
+    meta: [t("live.fileCount", { count: list.length }), list[0]?.modifiedAt != null ? formatRelativeTime(list[0].modifiedAt) : null]
+      .filter(Boolean)
+      .join(" · "),
   };
 
   // 크게 보는 diff 옆 파일 목록. 같은 목록·선택을 쓴다(고르면 따라가기가 멈추는 것도 같다).
@@ -621,6 +640,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
         list={listPane}
         listOverlay={<SwitchingOverlay />}
         files={maximizedFiles}
+        origin={origin}
         detail={diffPane}
         detailOverlay={<SwitchingOverlay />}
       >
@@ -630,7 +650,14 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
     );
   }
   return (
-    <ListDiffSplit variant="inline" data-testid="follow-panel" list={listPane} detail={diffPane} files={maximizedFiles}>
+    <ListDiffSplit
+      variant="inline"
+      data-testid="follow-panel"
+      list={listPane}
+      detail={diffPane}
+      files={maximizedFiles}
+      origin={origin}
+    >
       {sideBySide}
       {fileMenu.element}
     </ListDiffSplit>

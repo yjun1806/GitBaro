@@ -139,7 +139,10 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 | `animate-indicator-x` | 활성 탭 밑줄 |
 | `animate-live-ring` / `animate-live-breathe` | 지금 바뀌는 중 점 / 따라가는 중 점 |
 | `animate-focus-flash`(`FocusFlash`) | 따라가는 중 방금 바뀐 diff 줄·그래프 행·파일 행을 1.2초 한 번 비춤 |
+| `animate-wip-crawl` / `animate-wip-ring` | 그래프 WIP 행의 점선 원: 에이전트가 지금 쓰는 중(60초 안)이면 기어감(8초 한 바퀴) / `changedAt`이 앞으로 갈 때마다 테가 한 번 퍼짐(사이드바 점의 `animate-live-ring`과 같은 뜻, 900ms) |
+| `animate-maximize-origin-in` | 크게 보기 머리 줄(`MaximizedOriginHeader`): 카드가 다 커진 뒤(FLIP 200ms 후반) 120ms 늦게 흐려지며 나타남 |
 | `transition-colors` | hover·선택 채움(기본 길이 `--motion-fast`) |
+| `Dot`의 `pulseKey` | 「방금 바뀜」 테(`animate-live-ring`)를 값이 앞으로 갈 때마다 다시 마운트해 재생. 정적인 3px 테(부모, `live`)는 `transition-shadow`로 160ms에 걷힘 — 15초 틱에 갑자기 사라지지 않는다 |
 
 「동작 줄이기」는 `globals.css`가 한 번에 처리한다. 컴포넌트에 `motion-reduce:`를 붙이지 않는다(회전 표시는 예외 없이 돈다).
 
@@ -447,6 +450,8 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 | D37 | 창의 발 버튼들이 28px보다 크고 글자도 크다(px-4 py-2 text-sm) | 모든 버튼은 `Button md` 28px / 12.5px 통일. 창 발도 같음. 이전 36px 는 환영·안내 화면만 `lg`(3.1) |
 | D38 | 보조 버튼이 둘: 패널 칩 채움 vs 설정 테두리 | 보조 버튼은 칩 채움 하나(`bg-(--chip) text-(--fg2) hover:bg-accent`). 테두리 버튼 없음. 모든 곳에서 일관됨 |
 | D39 | 그래프 행의 작성자와 시각이 다른 크기(12px·11px 섞임) | 작성자 `body` 12.5px `--fg2`, 시각·해시 `meta` 11.5px. 일관된 행 높이(`GRAPH_ROW_HEIGHT`) 내에서 계층을 나눔 |
+| D40 | 그래프 WIP 원·사이드바 점의 「방금 바뀜」이 처음 켜질 때 한 번만 움직이고, 이후 이벤트는 숫자만 바뀌었다 | 이벤트마다(`changedAt`이 앞으로 갈 때) 테가 한 번 더 퍼진다(`animate-live-ring`을 키로 다시 마운트). 그래프 원은 살아 있는 동안(60초 안·파일 있음) 점선이 기어간다(`animate-wip-crawl`). 파일이 0이 되면(커밋) 원 테두리가 160ms에 옅어진다. 동작 줄이기는 기어가기·테 퍼짐 대신 정지한 3px 테 하나(사이드바 점과 같은 어휘) |
+| D41 | 크게 보는 동안 diff 머리(파일 경로 줄)만 남아 어느 커밋·PR·따라가는 중인지 알 길이 툴바뿐이었다 | 카드 맨 위에 32px 머리 줄(`MaximizedOriginHeader`): 종류 아이콘 → 출처(SHA·브랜치·PR 번호) → 제목 → 보조 정보 → 오른쪽 「원래 크기로」. 카드가 다 커진 뒤 120ms 늦게 나타나고, 되돌릴 때는 즉시 사라진다. diff 머리의 축소 아이콘은 이 머리 줄이 있으면 숨긴다(되돌리는 자리는 하나) |
 
 ## 5. 컴포넌트 ↔ 파일
 
@@ -472,3 +477,4 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 | `Select`, `BranchCombobox` | `ui/` | 있음 |
 | `Spinner`, `BusyIcon`, `LoadingState`, `SwitchingOverlay` | `ui/` | 있음 |
 | `FocusFlash` | `ui/FocusFlash.tsx` | 있음 |
+| `MaximizedOriginHeader` | `layout/MaximizedOriginHeader.tsx` | 있음 |

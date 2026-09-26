@@ -41,6 +41,31 @@ describe("ListDiffSplit", () => {
     expect(screen.getByTestId("list-pane").className).not.toContain("hidden");
     expect(mounts).toBe(2);
   });
+
+  it("shows the origin header only while maximized, spanning the whole detail pane, and never without an origin", () => {
+    const origin = { kind: "commit" as const, label: <span>c4cbaa5</span> };
+    render(<ListDiffSplit variant="inline" list={<div>list</div>} detail={<div>diff</div>} origin={origin} />);
+    expect(screen.queryByTestId("maximized-origin-header")).toBeNull();
+    act(() => useUIStore.getState().setDiffMaximized(true));
+    expect(screen.getByTestId("maximized-origin-header")).toBeTruthy();
+    // 파일 목록(있으면)과 diff 위에 걸쳐 카드 전체 폭이다 — detail-pane의 첫 자식이다.
+    expect(screen.getByTestId("detail-pane").firstElementChild).toBe(screen.getByTestId("maximized-origin-header"));
+  });
+
+  it("removes the origin header immediately on restore, with no exit animation", () => {
+    const origin = { kind: "commit" as const, label: <span>c4cbaa5</span> };
+    render(<ListDiffSplit variant="inline" list={<div>list</div>} detail={<div>diff</div>} origin={origin} />);
+    act(() => useUIStore.getState().setDiffMaximized(true));
+    expect(screen.getByTestId("maximized-origin-header")).toBeTruthy();
+    act(() => useUIStore.getState().setDiffMaximized(false));
+    expect(screen.queryByTestId("maximized-origin-header")).toBeNull();
+  });
+
+  it("does not show an origin header when maximized without an origin prop", () => {
+    render(<ListDiffSplit variant="inline" list={<div>list</div>} detail={<div>diff</div>} />);
+    act(() => useUIStore.getState().setDiffMaximized(true));
+    expect(screen.queryByTestId("maximized-origin-header")).toBeNull();
+  });
 });
 
 describe("GraphSplit", () => {

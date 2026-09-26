@@ -19,6 +19,7 @@ import {
 } from "@/api/queries";
 import type { CommitInfo, DiffOutput, FileStatus, RepoSyncStatus, WorkflowRun } from "@/types";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
+import type { MaximizedOrigin } from "@/components/layout/maximized-files";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { RepoWorkSwitcher } from "@/components/commit/WorkSwitcher";
 import { useFileMenu } from "@/components/commit/useFileMenu";
@@ -486,6 +487,15 @@ export function CommitDetail({
     </div>
   );
 
+  const origin: MaximizedOrigin = {
+    kind: "commit",
+    label: <Code>{commit.shortId}</Code>,
+    title: commit.summary,
+    meta: [commit.author.name, formatRelativeTime(commit.timestamp), pushPending ? t("commitDetail2.pushPending") : null]
+      .filter(Boolean)
+      .join(" · "),
+  };
+
   return (
     <ListDiffSplit
       variant="inline"
@@ -496,6 +506,7 @@ export function CommitDetail({
         onSelect: handleFileClick,
         onContextMenu: openFileMenu,
       }}
+      origin={origin}
       list={
         <>
           {switcher === undefined ? <RepoWorkSwitcher mode="commit" /> : switcher}

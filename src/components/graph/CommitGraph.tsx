@@ -214,13 +214,14 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
       {wips.map((wip) => {
         const followed = activeTab === "changes" ? followModeOf(wip.path) : null;
         const following = followed === "following";
-        const { trailing, followButton } = followRowParts(t, now, wip.changedAt, wip.count, following, () =>
+        const { trailing, followButton, live } = followRowParts(t, now, wip.changedAt, wip.count, following, () =>
           following ? stopFollow() : selection.selectWip(wip),
         );
         return (
           <GraphWipRow
             key={wip.path}
             trailing={trailing}
+            live={live}
             wipLabel={t("shell.uncommitted")}
             target={wipTarget({ ...wip, headOid: (wip.isCurrent ? currentHead : null) ?? wip.headOid ?? null })}
             count={wip.count}
@@ -1041,7 +1042,7 @@ function RepoLaneWipRow({
 }) {
   const { t } = useTranslation();
   const now = useNow(1_000);
-  const { trailing, followButton } = followRowParts(t, now, row.wip.changedAt, row.wip.count, following, onToggleFollow);
+  const { trailing, followButton, live } = followRowParts(t, now, row.wip.changedAt, row.wip.count, following, onToggleFollow);
   return (
     <GraphWipRow
       wipLabel={t("shell.uncommitted")}
@@ -1058,6 +1059,7 @@ function RepoLaneWipRow({
       leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
       trailing={trailing}
       action={followButton}
+      live={live}
       onSelect={onSelect}
     />
   );

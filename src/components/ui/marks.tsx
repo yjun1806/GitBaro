@@ -172,21 +172,40 @@ export interface DotProps {
   live?: boolean;
   /** 따라가는 중이면 숨 쉰다. */
   breathe?: boolean;
+  /**
+   * `live`가 켜져 있는 동안 앞으로 갈 때마다(예: `lastChangedAt`) 테를 다시 한 번 퍼뜨린다. 주지
+   * 않으면 처음 `live`가 켜질 때 한 번만 퍼진다(옛 동작). 값 자체는 뜻이 없다 — 바뀌었다는 사실만 쓴다.
+   */
+  pulseKey?: number;
   label?: string;
 }
 
-/** 「지금 바뀌는 중」 같은 살아 있는 상태의 점(3.2). 6px, 색은 `--live`(꺼지면 `--muted`). */
-export function Dot({ on, live = false, breathe = false, label }: DotProps) {
+/**
+ * 「지금 바뀌는 중」 같은 살아 있는 상태의 점(3.2). 6px, 색은 `--live`(꺼지면 `--muted`). `live`가
+ * 켜진 동안의 정적인 3px 테는 160ms에 걷힌다(`transition-shadow`) — 15초 틱에 갑자기 사라지지 않는다.
+ * 테가 한 번 더 크게 퍼지는 움직임(`animate-live-ring`)은 안쪽 자식에 두어 `pulseKey`가 바뀔 때만
+ * 새로 마운트한다 — 정적인 테(부모)와 한 번 퍼짐(자식)을 따로 움직인다.
+ */
+export function Dot({ on, live = false, breathe = false, pulseKey, label }: DotProps) {
   return (
     <span
       {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })}
       className={cn(
-        "inline-block w-1.5 h-1.5 rounded-full shrink-0",
+        "relative inline-block w-1.5 h-1.5 rounded-full shrink-0 transition-shadow duration-(--motion-base)",
         on ? "bg-(--live)" : "bg-muted-foreground",
-        live && "shadow-[0_0_0_3px_var(--live-soft)] animate-live-ring",
+        live && "shadow-[0_0_0_3px_var(--live-soft)]",
         breathe && "animate-live-breathe",
       )}
-    />
+    >
+      {live && (
+        <span
+          key={pulseKey}
+          aria-hidden="true"
+          data-testid="dot-pulse"
+          className="absolute -inset-[3px] rounded-full animate-live-ring"
+        />
+      )}
+    </span>
   );
 }
 

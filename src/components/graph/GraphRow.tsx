@@ -308,6 +308,11 @@ interface GraphWipRowProps {
   trailing?: ReactNode;
   /** 행 오른쪽 끝의 버튼(「작업 중인 변경 N」). 행 버튼 밖에 둔다(버튼 안에 버튼을 넣지 않는다). */
   action?: ReactNode;
+  /**
+   * 에이전트가 지금(1분 안) 파일을 고치는 중인가(`followRowParts`가 이미 계산해 넘긴다). 켜지면
+   * 점선 원이 기어가고, `changedAt`이 앞으로 갈 때마다 테가 한 번 퍼진다(D4 후속, 2026-09-26).
+   */
+  live?: boolean;
   onSelect: () => void;
   /** 행 우클릭(`useWipRowMenu`). */
   onContextMenu?: (e: MouseEvent) => void;
@@ -332,12 +337,16 @@ export function GraphWipRow({
   leading,
   trailing,
   action,
+  live = false,
   onSelect,
   onContextMenu,
 }: GraphWipRowProps) {
   const { t } = useTranslation();
   const x = laneX(layout?.lane ?? 0);
   const active = (count ?? 0) > 0;
+  // 「에이전트가 지금 쓰는 중」: changedAt이 최근(부모의 60초 판정)이고 파일이 남아 있을 때만.
+  // 커밋 직후처럼 changedAt은 최근인데 파일이 0이 된 순간에는 기어가지 않는다.
+  const editing = live && active;
   const branchText = wipBranchText(t, target);
   const worktreeText = target.worktree ?? t("graph.wipMainWorktree");
   const countText = count === null ? "…" : t("graph.fileCount", { count });
@@ -389,7 +398,38 @@ export function GraphWipRow({
           strokeOpacity={active ? 1 : 0.5}
           strokeWidth={2}
           strokeDasharray="2.5 2"
+          data-testid="wip-ring"
+          className={cn("transition-[stroke-opacity] duration-(--motion-base)", editing && "animate-wip-crawl")}
         />
+        {/* 동작 줄이기 전용 정지 테: 기어가기·테 퍼짐 대신 조용한 3px 테 하나로 「지금 쓰는 중」을 말한다. */}
+        {editing && (
+          <circle
+            cx={x}
+            cy={MID}
+            r={WIP_R + 3}
+            fill="none"
+            stroke="var(--live-soft)"
+            strokeWidth={3}
+            aria-hidden="true"
+            data-testid="wip-halo"
+            className="opacity-(--wip-halo-opacity)"
+          />
+        )}
+        {/* changedAt이 앞으로 갈 때마다 다시 마운트해 한 번 퍼진다(사이드바 점의 pulseKey와 같은 어휘). */}
+        {editing && (
+          <circle
+            key={changedAt}
+            cx={x}
+            cy={MID}
+            r={WIP_R}
+            fill="none"
+            stroke="var(--live-soft)"
+            strokeWidth={2}
+            aria-hidden="true"
+            data-testid="wip-pulse-ring"
+            className="[transform-box:fill-box] origin-center animate-wip-ring"
+          />
+        )}
       </svg>
       <span className={cn(GRAPH_COLUMNS, "flex-1 min-w-0 pl-2 pr-3 text-[12.5px]")}>
         <span className="flex items-center gap-2 min-w-0">
@@ -489,7 +529,7 @@ export function followRowParts(
   count: number | null,
   following: boolean,
   onToggle: () => void,
-): { trailing: ReactNode; followButton: ReactNode } {
+): { trailing: ReactNode; followButton: ReactNode; live: boolean } {
   const live = changedAt !== null && now - changedAt < LIVE_EDIT_MS;
   const trailing =
     live && !following && (count ?? 0) > 0 ? (
@@ -500,7 +540,11 @@ export function followRowParts(
         })}
       </span>
     ) : undefined;
-  return { trailing, followButton: <FollowRowButton mode={following ? "following" : null} live={live} onClick={onToggle} /> };
+  return {
+    trailing,
+    followButton: <FollowRowButton mode={following ? "following" : null} live={live} onClick={onToggle} />,
+    live,
+  };
 }
 
 /** WIP 행의 브랜치 표시: 「feat/x 브랜치」, 브랜치가 없으면 「브랜치 없음 (HEAD 1a2b3c4)」. */

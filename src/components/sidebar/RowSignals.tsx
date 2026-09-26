@@ -19,6 +19,15 @@ export interface RowSignalValues {
 }
 
 /**
+ * `changedAt`을 1초 단위로 묶는다. 접힌 워크스페이스·저장소 행처럼 여러 저장소를 합친 `changedAt`
+ * (그 경로들의 최댓값)은 짧은 간격으로 여러 번 앞으로 갈 수 있는데, 매번 테를 따로 퍼뜨리면 한 점이
+ * 너무 자주 반짝인다. 같은 초에 온 변화는 `Dot`의 `pulseKey`로 하나만 넘겨 테 한 번으로 합친다.
+ */
+export function pulseBucket(changedAt: number): number {
+  return Math.floor(changedAt / 1000);
+}
+
+/**
  * 행 오른쪽 표시(많아야 셋): 주황 점과 숫자 = 커밋 안 한 파일(10분 안에 파일이 바뀌었으면 점에 옅은 테 = 지금 바뀌는 중),
  * 「↓N」 = 받을 커밋, 「↑N」 = 올릴 커밋. 자세한 내용은 자세한 정보 카드에 있다.
  */
@@ -48,7 +57,7 @@ export function RowSignals({ values, now }: { values: RowSignalValues; now: numb
             live && !watched && "opacity-40",
           )}
         >
-          <Dot on live={live} />
+          <Dot on live={live} pulseKey={pulseBucket(changedAt)} />
           {dirty > 0 && <Count value={dirty} tone="live" />}
         </span>
       )}
