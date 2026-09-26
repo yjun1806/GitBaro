@@ -177,6 +177,11 @@ else
 fi
 rm -rf "${INSTALL_DIR:?}/$APP_NAME"
 ditto "$BUNDLED" "$INSTALL_DIR/$APP_NAME"
+# ditto 로 복사한 번들은 LaunchServices 에 바로 등록되지 않아 앱 목록·Spotlight 앱 검색에 안 나온다.
+# 실패해도 앱은 실행되므로 설치를 멈추지 않는다.
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+"$LSREGISTER" -f "$INSTALL_DIR/$APP_NAME" >/dev/null 2>&1 \
+  || warn "앱 목록 등록에 실패했습니다. Finder 에서 한 번 열면 등록됩니다."
 ok "$INSTALL_DIR/$APP_NAME"
 
 # 빌드 캐시는 일부러 남긴다. 지우면 다음 업데이트가 전체 재컴파일(수 분)이 된다.
