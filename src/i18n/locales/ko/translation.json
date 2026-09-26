@@ -1448,6 +1448,8 @@
       "signedIn": "로그인됨",
       "invalid": "로그인 만료",
       "invalidHint": "gh에 저장된 이 계정의 토큰이 더 이상 통하지 않습니다. 다시 로그인해야 fetch·pull·push에 쓸 수 있습니다.",
+      "notSignedIn": "gh에 로그인 안 됨",
+      "notSignedInHint": "터미널 등 GitBaro 밖에서 이 계정이 gh에서 로그아웃되었습니다. 다시 로그인해야 fetch·pull·push에 쓸 수 있습니다.",
       "unreachable": "확인하지 못함(오프라인?)",
       "scopes": "권한: {{scopes}}",
       "signInAgain": "다시 로그인"

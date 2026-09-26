@@ -1405,10 +1405,9 @@ impl GitCliEngine {
         Ok(final_output)
     }
 
-    /// `-c credential.helper=` when `remote` points at github.com, so the
-    /// account's token from GIT_ASKPASS wins over a keychain entry for another
-    /// account. Other hosts keep the user's credential helper untouched.
-    async fn credential_helper_override(&self, remote: &str, push: bool) -> &'static [&'static str] {
+    /// `remote`의 URL(`git remote get-url`, `push`면 `--push`)을 읽는다. 원격이
+    /// 없거나 조회가 실패하면 `None`.
+    async fn remote_url(&self, remote: &str, push: bool) -> Option<String> {
         let mut args = vec!["remote", "get-url"];
         if push {
             args.push("--push");
@@ -1419,13 +1418,32 @@ impl GitCliEngine {
             .args(&args)
             .current_dir(&self.repo_path)
             .output()
-            .await;
-        match output {
-            Ok(o) if o.status.success() => {
-                credential_helper_override_for_url(String::from_utf8_lossy(&o.stdout).trim())
-            }
-            _ => &[],
+            .await
+            .ok()?;
+        output
+            .status
+            .success()
+            .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    /// `-c credential.helper=` when `remote` points at github.com, so the
+    /// account's token from GIT_ASKPASS wins over a keychain entry for another
+    /// account. Other hosts keep the user's credential helper untouched.
+    async fn credential_helper_override(&self, remote: &str, push: bool) -> &'static [&'static str] {
+        match self.remote_url(remote, push).await {
+            Some(url) => credential_helper_override_for_url(&url),
+            None => &[],
         }
+    }
+
+    /// `remote`의 URL이 github.com을 가리키는지. 이 값에 따라 인증 실패를 앱의
+    /// GitHub 로그인 문제로 볼지(토큰 재시도, 실패 시 `TokenExpired`) 아니면 그
+    /// 원격 자체의 오류로 그대로 둘지를 호출부(`commands/git.rs`)가 정한다.
+    /// URL을 못 읽으면 `false` — GitHub 로그인 문제라고 단정하지 않는다.
+    pub(crate) async fn is_github_remote(&self, remote: &str, push: bool) -> bool {
+        self.remote_url(remote, push)
+            .await
+            .is_some_and(|url| crate::git::remote::is_github_com_url(&url))
     }
 
     /// Best-effort dry-run push that enumerates local tags which would be newly
@@ -2231,6 +2249,23 @@ mod tests {
         );
         assert!(credential_helper_override_for_url("https://gitlab.com/o/r.git").is_empty());
         assert!(credential_helper_override_for_url("https://ghe.corp.com/o/r.git").is_empty());
+    }
+
+    /// `is_github_remote`는 원격 이름이 아니라 그 URL의 호스트를 본다. github.com만
+    /// `true` — GitLab, GHE, 없는 원격은 모두 `false`(GitHub 로그인 문제로 단정하지 않음).
+    #[tokio::test]
+    async fn is_github_remote_checks_the_resolved_url_host() {
+        let dir = temp_repo("is-github-remote");
+        git(&dir, &["remote", "add", "origin", "https://github.com/o/r.git"]);
+        git(&dir, &["remote", "add", "gitlab", "https://gitlab.com/o/r.git"]);
+        git(&dir, &["remote", "add", "ghe", "https://ghe.corp.com/o/r.git"]);
+        let engine = GitCliEngine::new(&dir);
+
+        assert!(engine.is_github_remote("origin", false).await);
+        assert!(!engine.is_github_remote("gitlab", false).await);
+        assert!(!engine.is_github_remote("ghe", false).await);
+        assert!(!engine.is_github_remote("missing", false).await);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// 실제 `git worktree list --porcelain` 출력. 작업 디렉토리를 지운 워크트리는

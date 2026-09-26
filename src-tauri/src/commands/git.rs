@@ -4,7 +4,7 @@
 // 쓰기 (stage, unstage, discard, commit, stash): GitCliEngine — git과 같은 동작·hooks 보장
 // 리모트 (fetch, push, pull): GitCliEngine + AskpassScript — 인증
 
-use crate::commands::auth::retry_with_fresh_token;
+use crate::commands::auth::{resolve_token, retry_with_fresh_token};
 use crate::error::AppError;
 use crate::git::cli::GitCliEngine;
 use crate::git::engine::{GitEngine, GitRemoteEngine};
@@ -403,18 +403,30 @@ fn is_credential_rejected(err: &AppError) -> bool {
     }
 }
 
-/// 원격 작업 하나를 저장소 계정의 토큰으로 실행한다. git이 인증에 실패하면 gh에서 토큰을
-/// 한 번 새로 받아 다시 실행하고(`retry_with_fresh_token`), 그래도 자격 증명이 거절되면
-/// git 원문 대신 계정 이름을 담은 `TokenExpired`로 돌려준다.
+/// 원격 작업 하나를 저장소 계정의 토큰으로 실행한다.
+///
+/// `is_github_remote`가 `true`일 때만(대상 원격의 URL이 github.com) 인증 실패를 이
+/// 계정의 로그인 문제로 본다: git이 인증에 실패하면 gh에서 토큰을 한 번 새로 받아
+/// 다시 실행하고(`retry_with_fresh_token`), 그래도 자격 증명이 거절되면 git 원문 대신
+/// 계정 이름을 담은 `TokenExpired`로 돌려준다.
+///
+/// `false`면(GitLab, GHE 등 다른 호스트) 이 계정의 토큰은 애초에 그 원격에 쓰이지
+/// 않으므로(askpass는 github.com에만 답한다) 새로 받아도 소용없다. 재시도 없이 한 번만
+/// 실행하고 git 원문 오류를 그대로 돌려준다 — GitHub 로그인 탓으로 돌리지 않는다.
 async fn run_with_account_token<T, F, Fut>(
     token_store: &TokenStore,
     account_id: &str,
+    is_github_remote: bool,
     call: F,
 ) -> Result<T, AppError>
 where
     F: Fn(String) -> Fut,
     Fut: std::future::Future<Output = Result<T, AppError>>,
 {
+    if !is_github_remote {
+        let token = resolve_token(token_store, account_id).await?;
+        return call(token).await;
+    }
     retry_with_fresh_token(token_store, account_id, is_auth_error, call)
         .await
         .map_err(|e| sign_in_error(e, account_id))
@@ -614,7 +626,8 @@ pub async fn git_fetch(
         .with_automatic(automatic.unwrap_or(false));
 
     for remote in &remotes {
-        run_with_account_token(&token_store, &account_id, |token| {
+        let is_github = engine.is_github_remote(remote, false).await;
+        run_with_account_token(&token_store, &account_id, is_github, |token| {
             let (engine, remote) = (&engine, remote);
             async move { engine.fetch(remote, &token).await }
         })
@@ -722,7 +735,8 @@ pub async fn git_push(
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
     let force_flag = force.unwrap_or(false);
 
-    run_with_account_token(&token_store, &account_id, |token| {
+    let is_github = engine.is_github_remote(&remote, true).await;
+    run_with_account_token(&token_store, &account_id, is_github, |token| {
         let (engine, remote, refspec) = (&engine, &remote, &refspec);
         async move { engine.push(remote, refspec, &token, force_flag).await }
     })
@@ -757,7 +771,8 @@ pub async fn list_remote_tags(
     let remote = resolve_sync_target(&repo_path).await?.fetch_remote()?;
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle);
 
-    run_with_account_token(&token_store, &account_id, |token| {
+    let is_github = engine.is_github_remote(&remote, false).await;
+    run_with_account_token(&token_store, &account_id, is_github, |token| {
         let (engine, remote) = (&engine, &remote);
         async move { engine.list_remote_tags(remote, &token).await }
     })
@@ -780,7 +795,8 @@ pub async fn git_pull(
     let engine = GitCliEngine::with_app_handle(std::path::Path::new(&repo_path), app_handle)
         .with_identity(identity);
 
-    run_with_account_token(&token_store, &account_id, |token| {
+    let is_github = engine.is_github_remote(&remote, false).await;
+    run_with_account_token(&token_store, &account_id, is_github, |token| {
         let (engine, remote, merge_ref) = (&engine, &remote, &merge_ref);
         async move { engine.pull(remote, merge_ref, &token, rebase_flag).await }
     })
@@ -1421,13 +1437,62 @@ mod tests {
     async fn other_git_failures_pass_through_unchanged() {
         let store = TokenStore::new();
         store.set_token("octocat", "fake-token".into()).await;
-        let result: Result<(), AppError> = run_with_account_token(&store, "octocat", |_token| async {
-            Err(AppError::GitCli {
-                message: "Need to specify how to reconcile divergent branches.".into(),
-                exit_code: Some(128),
+        let result: Result<(), AppError> =
+            run_with_account_token(&store, "octocat", true, |_token| async {
+                Err(AppError::GitCli {
+                    message: "Need to specify how to reconcile divergent branches.".into(),
+                    exit_code: Some(128),
+                })
             })
-        })
-        .await;
+            .await;
         assert!(matches!(result, Err(AppError::GitCli { .. })));
+    }
+
+    /// GitLab/GHE 등 github.com이 아닌 원격의 인증 실패는, 텍스트가 GitHub 인증 실패
+    /// 문구와 똑같아도(`could not read username`) 이 계정의 로그인 문제로 보지 않는다.
+    /// 재시도도 하지 않는다 — 이 계정 토큰은 애초에 그 원격에 쓰이지 않으므로 새로
+    /// 받아 봐야 소용없다.
+    #[tokio::test]
+    async fn non_github_remote_auth_failures_are_not_blamed_on_github_sign_in() {
+        let store = TokenStore::new();
+        store.set_token("octocat", "fake-token".into()).await;
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let result: Result<(), AppError> =
+            run_with_account_token(&store, "octocat", false, |_token| {
+                calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                async {
+                    Err(AppError::GitCli {
+                        message: crate::git::cli::parse_git_error(
+                            "fatal: could not read Username for 'https://gitlab.com': terminal prompts disabled\n",
+                        ),
+                        exit_code: Some(128),
+                    })
+                }
+            })
+            .await;
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1, "재시도가 없어야 함");
+        match result {
+            Err(AppError::GitCli { message, .. }) => {
+                assert!(message.to_lowercase().contains("could not read username"), "{message}")
+            }
+            other => panic!("GitLab 원격 오류가 그대로 나와야 함, got {:?}", other),
+        }
+    }
+
+    /// github.com 원격의 같은 인증 실패는 여전히 재시도 뒤 `TokenExpired`로 바뀐다
+    /// (호스트 판별이 github.com 판정 자체를 건드리지 않았는지 확인).
+    #[test]
+    fn github_remote_auth_failures_still_map_to_token_expired() {
+        let rejected = AppError::GitCli {
+            message: crate::git::cli::parse_git_error(
+                "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n",
+            ),
+            exit_code: Some(128),
+        };
+        assert!(is_auth_error(&rejected));
+        match sign_in_error(rejected, "octocat") {
+            AppError::TokenExpired { account_id } => assert_eq!(account_id, "octocat"),
+            other => panic!("expected TokenExpired, got {:?}", other),
+        }
     }
 }

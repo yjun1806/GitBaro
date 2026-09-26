@@ -81,6 +81,10 @@ export function AccountSettings({
         ) : (
           accounts.map((account) => {
             const status = statusOf(account.username);
+            // gh 상태 조회는 성공했는데 이 계정이 목록에 없으면(터미널에서
+            // `gh auth logout -u X` 등) gh 자체에서 로그아웃된 것 — invalid와 마찬가지로
+            // 다시 로그인해야 풀린다.
+            const missingFromGh = ghStatus.isSuccess && !status;
             return (
               <div key={account.id} className="flex items-center gap-3 px-4 py-2.5 min-h-[52px]">
                 <AccountAvatar account={account} size="md" />
@@ -88,8 +92,9 @@ export function AccountSettings({
                   <p className="text-[13px] font-semibold text-foreground truncate">{account.username}</p>
                   {account.email && <p className="text-[12px] text-muted-foreground truncate">{account.email}</p>}
                   {status && <AuthStatusLine status={status} />}
+                  {missingFromGh && <NotSignedInLine />}
                 </div>
-                {status?.state === "invalid" && (
+                {(status?.state === "invalid" || missingFromGh) && (
                   <button type="button" onClick={() => onSignInAgain(account.username)} className={SETTINGS_BUTTON}>
                     <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
                     {t("settingsPanel.accounts.signInAgain")}
@@ -139,6 +144,18 @@ export function AccountSettings({
         </Dialog>
       )}
     </>
+  );
+}
+
+/** gh 상태 목록에 이 계정이 아예 없을 때 한 줄. gh 밖(터미널 등)에서 로그아웃된 경우다. */
+function NotSignedInLine() {
+  const { t } = useTranslation();
+  return (
+    <p className="text-[12px] text-muted-foreground">
+      <span className="text-danger">{t("settingsPanel.accounts.notSignedIn")}</span>
+      {" · "}
+      {t("settingsPanel.accounts.notSignedInHint")}
+    </p>
   );
 }
 

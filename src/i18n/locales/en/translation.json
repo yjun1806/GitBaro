@@ -1469,6 +1469,8 @@
       "signedIn": "Signed in",
       "invalid": "Sign-in expired",
       "invalidHint": "gh's token for this account no longer works. Sign in again to use it for fetch, pull, and push.",
+      "notSignedIn": "Not signed in to gh",
+      "notSignedInHint": "This account was signed out of gh outside GitBaro (e.g. in a terminal). Sign in again to use it for fetch, pull, and push.",
       "unreachable": "Could not check (offline?)",
       "scopes": "Scopes: {{scopes}}",
       "signInAgain": "Sign in again"
