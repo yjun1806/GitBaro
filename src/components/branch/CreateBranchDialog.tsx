@@ -1,11 +1,12 @@
 import { useState, useId, useRef } from "react";
-import { X, GitBranch, Loader2 } from "lucide-react";
+import { X, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { BranchInfo } from "@/types";
 import { Dialog } from "@/components/ui/Dialog";
 import { checkNewBranchName } from "./branch-name";
 import { isSubmitEnter } from "@/lib/keyboard";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface CreateBranchDialogProps {
   branches: BranchInfo[];
@@ -186,9 +187,10 @@ export function CreateBranchDialog({
           <button
             onClick={() => void handleCreate()}
             disabled={!valid || isCreating}
+            aria-busy={isCreating}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors"
           >
-            {isCreating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {isCreating && <Spinner />}
             {t("branch.createBranch")}
           </button>
         </div>

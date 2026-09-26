@@ -1,5 +1,6 @@
-import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useUIStore } from "@/stores/ui";
+import { Spinner } from "./Spinner";
 
 /**
  * 브랜치 전환(checkout + 재조회) 중 부모 영역을 덮는 반투명 로딩 오버레이.
@@ -7,11 +8,16 @@ import { useUIStore } from "@/stores/ui";
  * 않은 큰 저장소에서 "멈춤"이 아니라 "로딩 중"으로 보이게 하는 피드백.
  */
 export function SwitchingOverlay() {
+  const { t } = useTranslation();
   const isSwitching = useUIStore((s) => s.isSwitchingBranch);
   if (!isSwitching) return null;
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/50 backdrop-blur-[1px]">
-      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+    <div
+      role="status"
+      aria-label={t("branch.switching")}
+      className="absolute inset-0 z-20 flex items-center justify-center bg-background/50 backdrop-blur-[1px] animate-loading-in"
+    >
+      <Spinner size="lg" className="text-muted-foreground" />
     </div>
   );
 }

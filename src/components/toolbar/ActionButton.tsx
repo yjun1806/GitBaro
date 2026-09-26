@@ -1,9 +1,10 @@
 import { useRef, type ReactNode } from "react";
 import { useMenuKeyboard } from "@/hooks/useMenuKeyboard";
-import { ChevronDown, Loader2, type LucideIcon } from "lucide-react";
+import { ChevronDown, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
 import { TOOLBAR_BADGE, TOOLBAR_GROUP, TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
+import { BusyIcon } from "@/components/ui/Spinner";
 
 /**
  * 툴바 폭이 이보다 좁으면 버튼 이름을 숨기고 아이콘·배지만 둔다. 툴바 줄(`@container`)의 폭 기준이다.
@@ -79,6 +80,7 @@ export function ActionButton({
         onClick={onClick}
         disabled={disabled}
         aria-label={accessibleLabel}
+        aria-busy={busy}
         data-action={action}
         className={cn(
           toolbarButtonClass({ disabled, joinRight: Boolean(menu), open: menu?.isOpen }),
@@ -86,11 +88,7 @@ export function ActionButton({
           highlighted && !disabled && "text-foreground font-semibold",
         )}
       >
-        {busy ? (
-          <Loader2 className={cn(TOOLBAR_ICON, "animate-spin")} aria-hidden="true" />
-        ) : (
-          <Icon className={TOOLBAR_ICON} aria-hidden="true" />
-        )}
+        <BusyIcon busy={busy} icon={<Icon className={TOOLBAR_ICON} aria-hidden="true" />} />
         <span className={cn("whitespace-nowrap", TOOLBAR_LABEL_CLASS)}>{label}</span>
         {showBadge && (
           <span
@@ -142,7 +140,7 @@ export function ActionMenu({ items, onClose }: { items: ActionMenuItem[]; onClos
       role="menu"
       tabIndex={-1}
       onKeyDown={onKeyDown}
-      className={cn("absolute right-0 top-full mt-2 w-64 py-1 rounded-xl z-50 overflow-hidden", FLOATING_SURFACE)}
+      className={cn("absolute right-0 top-full mt-2 w-64 py-1 rounded-xl z-50 overflow-hidden animate-pop-in", FLOATING_SURFACE)}
     >
       {items.map((item) => (
         <button

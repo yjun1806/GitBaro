@@ -104,7 +104,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
       : undefined;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-(--g)">
+    <div className="flex flex-col flex-1 min-h-0 gap-(--g) animate-content-in">
       {titleSlot ? createPortal(title, titleSlot) : title}
       {data.repos.length === 0 ? (
         <Card className="flex-1">

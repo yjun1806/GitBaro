@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeftRight, GitCompare, Loader2, X } from "lucide-react";
+import { ArrowLeftRight, GitCompare, X } from "lucide-react";
 import { useBranchComparison, useBranches, useStatus } from "@/api/queries";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
@@ -16,6 +16,7 @@ import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { gitHubRepoUrl } from "@/lib/utils";
 import type { CommitInfo } from "@/types";
 import { rangeLabel, rangeLaneInput, useBranchRangeStore, type BranchRange } from "./branch-range";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 interface BranchRangeGraphProps {
   range: BranchRange;
@@ -128,10 +129,7 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
       <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
         {top}
         {isLoading ? (
-          <p className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            {t("compare.loading")}
-          </p>
+          <LoadingState label={t("compare.loading")} />
         ) : error ? (
           <p className="py-6 px-4 text-center text-sm text-danger">{getErrorMessage(error)}</p>
         ) : commits.length === 0 ? (

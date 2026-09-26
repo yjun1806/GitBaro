@@ -89,7 +89,7 @@ export function ContextMenu({ sections, position, onClose, ariaLabel }: ContextM
       aria-label={ariaLabel}
       tabIndex={-1}
       onKeyDown={onKeyDown}
-      className={cn("fixed outline-none rounded-lg z-[100] py-1 min-w-[200px]", FLOATING_SURFACE)}
+      className={cn("fixed outline-none rounded-lg z-[100] py-1 min-w-[200px] animate-pop-in", FLOATING_SURFACE)}
       style={{ left: position.x, top: position.y }}
     >
       {sections.map((section, si) => (

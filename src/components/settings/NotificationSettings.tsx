@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bell, Loader2 } from "lucide-react";
+import { Bell } from "lucide-react";
 import type { NotificationSettings as NotificationSettingsValue } from "@/types";
 import { useNotifyStore } from "@/stores/notify";
 import { deliverNotification } from "@/lib/notify/deliver";
@@ -8,6 +8,7 @@ import { SettingsSection } from "./ui/SettingsSection";
 import { SettingsRow } from "./ui/SettingsRow";
 import { Switch } from "./ui/Switch";
 import { SETTINGS_BUTTON } from "./ui/styles";
+import { BusyIcon } from "@/components/ui/Spinner";
 
 interface NotificationSettingsProps {
   value: NotificationSettingsValue;
@@ -71,12 +72,8 @@ export function NotificationSettings({ value, onChange }: NotificationSettingsPr
             )
           }
         >
-          <button type="button" onClick={handleTest} disabled={testing} className={SETTINGS_BUTTON}>
-            {testing ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-            ) : (
-              <Bell className="w-3.5 h-3.5" aria-hidden="true" />
-            )}
+          <button type="button" onClick={handleTest} disabled={testing} aria-busy={testing} className={SETTINGS_BUTTON}>
+            <BusyIcon busy={testing} icon={<Bell className="w-3.5 h-3.5" aria-hidden="true" />} />
             {t("notify.test.send")}
           </button>
         </SettingsRow>

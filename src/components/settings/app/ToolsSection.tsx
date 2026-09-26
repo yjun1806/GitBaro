@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
 import { detectInstalledAiClis, detectInstalledEditors, detectInstalledTerminals } from "@/api/commands";
 import type { AppSettings } from "@/types";
 import { cn } from "@/lib/utils";
 import { SettingsSection } from "../ui/SettingsSection";
 import { AiCliIcon, AppIcon } from "./app-icons";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 interface ToolChoice {
   id: string;
@@ -43,10 +44,7 @@ function ToolList({ title, description, choices, selected, loadingLabel, emptyLa
   return (
     <SettingsSection title={title} description={description}>
       {choices === null ? (
-        <p className="flex items-center gap-2 px-4 py-3 text-[12.5px] text-muted-foreground">
-          <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-          {loadingLabel}
-        </p>
+        <LoadingState layout="row" label={loadingLabel} className="px-4 py-3" />
       ) : choices.length === 0 ? (
         <p className="px-4 py-3 text-[12.5px] text-muted-foreground">{emptyLabel}</p>
       ) : (

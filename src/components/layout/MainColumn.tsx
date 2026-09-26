@@ -65,8 +65,8 @@ export function MainColumn() {
     <main className="relative flex flex-col flex-1 min-w-0 h-full bg-background">
       <ToolbarRoot />
 
-      {/* 메인 칸 여백은 사방 g로 같다. 사이드바(층 0)와 메인 바탕(층 1)은 색이 달라서,
-          왼쪽만 좁으면 카드 그림자가 경계에 끼어 한쪽으로 쏠려 보인다. */}
+      {/* 메인 칸 여백은 사방 g로 같다. 왼쪽만 좁으면 카드 그림자가 사이드바 쪽 경계에 끼어
+          한쪽으로 쏠려 보인다. */}
       <div className="flex flex-col flex-1 min-h-0 gap-(--g) p-(--g)">
         {repoListOpen ? (
           <RepoListCard />

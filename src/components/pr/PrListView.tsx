@@ -15,6 +15,7 @@ import { selectedPrNumber, usePrViewStore } from "./pr-view";
 import { usePrMenu } from "./usePrMenu";
 import { BranchPair, CiChip, DraftChip, PrAvatar, PrStateIcon, ReviewDecisionChip, TimeAgo } from "./PrBits";
 import { PrError, PrLoading, PrPlaceholder } from "./PrStates";
+import { BusyIcon } from "@/components/ui/Spinner";
 
 const FILTERS: PrStateFilter[] = ["open", "closed", "all"];
 
@@ -99,11 +100,12 @@ export function PrListView() {
           type="button"
           onClick={() => void handleRefresh()}
           disabled={!repoPath || !accountId || refreshing}
+          aria-busy={refreshing}
           title={t("pr.refresh")}
           aria-label={t("pr.refresh")}
           className="flex items-center justify-center w-6 h-6 rounded-(--radius-item) text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40 transition-colors"
         >
-          <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
+          <BusyIcon busy={refreshing} icon={<RefreshCw className="w-3.5 h-3.5" />} />
         </button>
         {repoUrl && (
           <button

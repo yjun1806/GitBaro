@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Play, Loader2 } from "lucide-react";
+import { Play } from "lucide-react";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { ActionsRunItem } from "./ActionsRunItem";
 import { ActionsRunContextMenu } from "./ActionsRunContextMenu";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import type { WorkflowRun } from "@/types";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 interface ActionsListProps {
   runs: WorkflowRun[];
@@ -32,12 +33,7 @@ export function ActionsList({
   });
 
   if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-12">
-        <Loader2 className="w-6 h-6 animate-spin" />
-        <p className="text-xs">{t("common.loading")}</p>
-      </div>
-    );
+    return <LoadingState className="h-full" />;
   }
 
   if (runs.length === 0) {

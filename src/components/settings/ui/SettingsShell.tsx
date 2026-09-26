@@ -78,7 +78,10 @@ export function SettingsShell<T extends string>({
           </button>
         </header>
         <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
-          <div className="flex flex-col gap-6 max-w-[640px] mx-auto px-6 py-5">{children}</div>
+          {/* 칸을 바꾸면 새 칸이 흐린 데서 선명해진다(key로 새로 그려 움직임을 다시 시작한다). */}
+          <div key={active} className="flex flex-col gap-6 max-w-[640px] mx-auto px-6 py-5 animate-content-in">
+            {children}
+          </div>
         </div>
       </div>
     </Dialog>

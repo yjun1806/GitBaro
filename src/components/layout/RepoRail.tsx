@@ -58,8 +58,9 @@ export function RepoRail({ width }: RepoRailProps) {
         inert={hidden}
         style={{ width }}
         className={cn(
-          // 시안의 사이드바는 바탕(canvas) 위에 선 없이 놓인다.
-          "absolute inset-y-0 left-0 z-30 flex flex-col bg-(--frame)",
+          // 사용자 결정(2026-09-26): 사이드바가 본문과 같은 바탕색(--frame === --canvas)을 쓴다.
+          // 색으로는 더 이상 경계가 안 보여서, 머리글 아래로 가장 옅은 선(--line)만 하나 긋는다.
+          "absolute inset-y-0 left-0 z-30 flex flex-col bg-(--frame) border-r border-(--line)",
           "transition-transform duration-180 ease-out motion-reduce:transition-none",
           hidden && "-translate-x-full",
         )}
@@ -68,7 +69,7 @@ export function RepoRail({ width }: RepoRailProps) {
             아래 테두리가 창 위쪽에서 하나로 이어져 보인다. macOS 트래픽 라이트는 창의
             맨 왼쪽 위, 즉 이 줄 안에 있으므로 그 자리(TRAFFIC_LIGHT_INSET_PX)는 여기서
             예약한다(Overlay 타이틀바). 사이드바 버튼은 숨겼을 때 툴바에 놓이는 자리와 같다. */}
-        <div className={cn("flex items-center gap-1.5 pr-2 shrink-0 border-b border-(--line2)", HEADER_HEIGHT_CLASS)}>
+        <div className={cn("flex items-center gap-1.5 pr-2 shrink-0 border-b border-(--line)", HEADER_HEIGHT_CLASS)}>
           <div className="h-full shrink-0" style={{ width: TRAFFIC_LIGHT_INSET_PX }} data-tauri-drag-region />
           <SidebarToggleButton placement="sidebar" />
           <button

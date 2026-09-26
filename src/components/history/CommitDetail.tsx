@@ -384,6 +384,7 @@ export function CommitDetail({
   return (
     <ListDiffSplit
       variant="inline"
+      className="animate-content-in"
       files={{
         items: changedFiles.map((f) => ({ key: f.path, path: f.path, status: f.status })),
         selectedKey: selectedPath,

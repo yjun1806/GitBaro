@@ -194,7 +194,7 @@ export function WorktreePanel({
       )}
 
       {confirmRemove && (
-        <div className="absolute inset-x-3.5 bottom-3.5 bg-card border border-border rounded-lg shadow-lg p-3 z-10">
+        <div className="absolute inset-x-3.5 bottom-3.5 bg-card border border-border rounded-lg shadow-lg p-3 z-10 animate-toast-in">
           <p className="text-sm text-foreground mb-2">
             {t("worktree.removeConfirm", { path: confirmRemove.split("/").filter(Boolean).pop() })}
           </p>

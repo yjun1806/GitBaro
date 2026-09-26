@@ -1,21 +1,10 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Ban,
-  CircleCheck,
-  CircleDashed,
-  Clock,
-  GitMerge,
-  GitPullRequest,
-  GitPullRequestClosed,
-  GitPullRequestDraft,
-  Loader2,
-  CircleMinus,
-  XCircle,
-} from "lucide-react";
+import { Ban, CircleCheck, CircleDashed, Clock, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, CircleMinus, XCircle } from "lucide-react";
 import { cn, formatDate, formatRelativeTime } from "@/lib/utils";
 import type { PrCheck, PrCiState, PrReviewDecision, PrReviewer, PullRequestSummary } from "@/types";
 import { isoToSeconds } from "./pr-model";
+import { Spinner } from "@/components/ui/Spinner";
 
 const CHIP = "inline-flex items-center gap-1 h-[18px] px-1.5 rounded-(--radius-chip) text-[10.5px] font-semibold shrink-0";
 
@@ -124,7 +113,7 @@ export function CiChip({ state }: { state: PrCiState }) {
 /** 체크 하나의 상태 아이콘. */
 export function CheckIcon({ check }: { check: PrCheck }) {
   const size = "w-3.5 h-3.5 shrink-0";
-  if (check.status === "in_progress") return <Loader2 className={cn(size, "text-warning animate-spin")} />;
+  if (check.status === "in_progress") return <Spinner className="text-warning" />;
   if (check.status !== "completed") return <Clock className={cn(size, "text-warning")} />;
   switch (check.conclusion) {
     case "success":

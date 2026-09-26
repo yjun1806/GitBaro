@@ -26,6 +26,7 @@ import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { ListDiffSplit } from "./ListDiffSplit";
 import type { MaximizedFiles } from "./maximized-files";
 import type { FileStatus } from "@/types";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 /* --- Empty / Placeholder States --- */
 
@@ -39,7 +40,7 @@ export function EmptyState({
   description: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
+    <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 animate-content-in">
       <div className="w-16 h-16 rounded-full bg-surface flex items-center justify-center">
         <Icon className="w-8 h-8" />
       </div>
@@ -62,11 +63,7 @@ function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }
     statusEntries.find((e) => e.path === filePath && e.staged === staged)?.status ?? "modified";
 
   if (isLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-        {t("diff.loadingDiff")}
-      </div>
-    );
+    return <LoadingState label={t("diff.loadingDiff")} />;
   }
 
   if (isError) {
@@ -89,11 +86,7 @@ function CommitDetailView({ commitId }: { commitId: string }) {
   const { data: fileDiff } = useCommitFileDiff(activeRepoPath, commitId, selectedFilePath);
 
   if (isLoading || !data) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-        {t("history.loadingHistory")}
-      </div>
-    );
+    return <LoadingState label={t("history.loadingHistory")} />;
   }
 
   // GitHub avatar > gravatar fallback

@@ -5,6 +5,7 @@ import { useMergeState, useMergeRecoveryMutations } from "@/api/queries";
 import { getErrorMessage } from "@/lib/utils";
 import { useToastStore } from "@/stores/toast";
 import type { GitOperation } from "@/types";
+import { BusyIcon } from "@/components/ui/Spinner";
 
 const OPERATION_LABEL_KEYS: Record<GitOperation, string> = {
   merge: "mergeRecovery.mergeInProgress",
@@ -74,17 +75,19 @@ export function MergeConflictBanner({ repoPath, conflictCount }: MergeConflictBa
         <button
           onClick={handleContinue}
           disabled={hasConflicts || conclude.isPending}
+          aria-busy={conclude.isPending}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-accent hover:bg-accent/90 text-accent-foreground rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <Check className="w-3.5 h-3.5" />
+          <BusyIcon busy={conclude.isPending} icon={<Check className="w-3.5 h-3.5" />} />
           {t("mergeRecovery.continue")}
         </button>
         <button
           onClick={handleAbort}
           disabled={abort.isPending}
+          aria-busy={abort.isPending}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg transition-colors disabled:opacity-40"
         >
-          <Ban className="w-3.5 h-3.5" />
+          <BusyIcon busy={abort.isPending} icon={<Ban className="w-3.5 h-3.5" />} />
           {t("mergeRecovery.abort")}
         </button>
       </div>

@@ -1,8 +1,9 @@
 import type { ElementType, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { getErrorMessage } from "@/lib/utils";
 import { prErrorKind } from "./pr-model";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 /** 가운데 아이콘 + 한두 줄. PR 목록·상세의 빈 상태와 안내. */
 export function PrPlaceholder({
@@ -31,13 +32,7 @@ export function PrPlaceholder({
 }
 
 export function PrLoading() {
-  const { t } = useTranslation();
-  return (
-    <div role="status" className="flex-1 flex flex-col items-center justify-center gap-3 py-10 text-muted-foreground">
-      <Loader2 className="w-6 h-6 animate-spin" />
-      <p className="text-xs">{t("common.loading")}</p>
-    </div>
-  );
+  return <LoadingState />;
 }
 
 /** GitHub 호출 실패 안내. 404·403·한도·원격 없음은 할 일을 말하고, 나머지는 원래 문구를 보인다. */

@@ -198,7 +198,8 @@
     "leaveChanges": "{{branch}}에 변경사항 남기기",
     "leaveChangesDesc": "작업 중인 내용이 이 Branch에 보관(stash)되며, 나중에 돌아와서 이어할 수 있습니다.",
     "bringChanges": "{{branch}}(으)로 변경사항 가져가기",
-    "bringChangesDesc": "작업 중인 내용이 새 Branch로 함께 이동합니다."
+    "bringChangesDesc": "작업 중인 내용이 새 Branch로 함께 이동합니다.",
+    "switching": "브랜치 전환 중"
   },
   "worktree": {
     "title": "워크트리",
@@ -287,7 +288,8 @@
     "noAccountsLinked": "연결된 계정 없음",
     "signInToGitHub": "GitHub 로그인",
     "addAnother": "다른 계정 추가",
-    "manageAccounts": "계정 관리"
+    "manageAccounts": "계정 관리",
+    "signInAs": "GitHub에서 {{username}} 계정으로 승인하세요. 브라우저가 다른 계정으로 로그인되어 있으면 먼저 그곳에서 계정을 바꾸세요."
   },
   "gh": {
     "notInstalled": "GitHub CLI가 설치되지 않았습니다",
@@ -511,6 +513,8 @@
     "networkErrorDesc": "연결 상태를 확인하세요",
     "sessionExpired": "세션 만료",
     "sessionExpiredDesc": "동기화하려면 다시 로그인하세요",
+    "credentialPromptBlocked": "git 설정이 자격 증명 요청을 막아서(credential.interactive=false) 계정 토큰을 쓰기 전에 멈췄습니다. 로그인 문제가 아니므로 다시 로그인해도 해결되지 않습니다.",
+    "signInExpired": "{{account}} 계정의 GitHub 로그인이 없거나 만료되었습니다. 설정 > 계정에서 다시 로그인하세요.",
     "repoNotFound": "저장소를 찾을 수 없음",
     "repoNotFoundDesc": "이 저장소에 접근할 수 없습니다",
     "readOnly": "읽기 전용",
@@ -724,7 +728,20 @@
     "mergeSummary": "머지 ({{mergeType}}), {{files}}개 파일 변경",
     "noChanges": "이미 최신 상태입니다",
     "progress": "{{percent}}%",
-    "loadMore": "더 보기 ({{remaining}}개 남음)"
+    "loadMore": "더 보기 ({{remaining}}개 남음)",
+    "op": {
+      "fetch": "Fetch 중",
+      "push": "Push 중",
+      "pull": "Pull 중",
+      "clone": "Clone 중",
+      "merge": "Merge 중",
+      "commit": "커밋 중",
+      "checkout": "Checkout 중",
+      "stash": "Stash 중",
+      "rebase": "Rebase 중",
+      "status": "상태 읽는 중",
+      "log": "기록 읽는 중"
+    }
   },
   "autoSync": {
     "fastForwardedToast_one": "{{repo}}: 원격 커밋 {{count}}개를 자동으로 받았어요",
@@ -896,7 +913,8 @@
     "wipDetached": "브랜치 없음 (HEAD {{sha}})",
     "wipDetachedUnknown": "브랜치 없음 (HEAD 분리)",
     "wipMainWorktree": "기본 폴더",
-    "remoteBoundary": "원격에 올라간 지점",
+    "remoteBoundary": "여기부터 아래는 원격에 있음 · 위 커밋은 아직 push 안 함",
+    "anyRemote": "원격",
     "laneMerged": "merge됨"
   },
   "commitDetail2": {
@@ -1425,7 +1443,14 @@
     },
     "accounts": {
       "description": "GitHub CLI(gh)에 로그인한 계정입니다. 저장소마다 쓸 계정은 저장소 설정에서 고릅니다.",
-      "empty": "로그인한 계정이 없습니다."
+      "empty": "로그인한 계정이 없습니다.",
+      "statusFailed": "gh에서 로그인 상태를 읽지 못했습니다: {{error}}",
+      "signedIn": "로그인됨",
+      "invalid": "로그인 만료",
+      "invalidHint": "gh에 저장된 이 계정의 토큰이 더 이상 통하지 않습니다. 다시 로그인해야 fetch·pull·push에 쓸 수 있습니다.",
+      "unreachable": "확인하지 못함(오프라인?)",
+      "scopes": "권한: {{scopes}}",
+      "signInAgain": "다시 로그인"
     },
     "sync": {
       "title": "원격 자동 최신화 기본값",

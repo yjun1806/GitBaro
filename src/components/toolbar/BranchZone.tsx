@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { GitBranch, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { GitBranch, ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useOwnerRepoPath, useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
@@ -35,6 +35,7 @@ import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { useCurrentPlaceMenu } from "./useCurrentPlaceMenu";
 import { useMenuActions } from "@/hooks/useMenuActions";
 import { useActiveRepoName } from "@/hooks/useRepoDisplay";
+import { Spinner } from "@/components/ui/Spinner";
 
 /** 제목 툴팁을 머리 줄 아래 경계보다 6px 아래에 띄운다(28px 버튼은 줄 안에서 가운데 정렬). */
 const TITLE_TOOLTIP_OFFSET_PX = (HEADER_HEIGHT_PX - 28) / 2 + 6;
@@ -272,7 +273,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
         >
           <span className="flex items-center gap-1 font-mono text-xs text-(--fg) min-w-0 shrink">
             {isSwitchingBranch ? (
-              <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
+              <Spinner />
             ) : (
               <GitBranch className="w-3.5 h-3.5 shrink-0 text-(--fg2)" />
             )}

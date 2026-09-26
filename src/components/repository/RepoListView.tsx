@@ -1,28 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  ChevronDown,
-  Search,
-  FolderOpen,
-  GitFork,
-  GitBranch,
-  Circle,
-  EllipsisVertical,
-  Globe,
-  Star,
-  Trash2,
-  HardDrive,
-  Plus,
-  Loader2,
-  Lock,
-  CloudOff,
-  Archive,
-  Building2,
-  User,
-  ShieldAlert,
-  ShieldX,
-  RefreshCw,
-} from "lucide-react";
+import { ChevronDown, Search, FolderOpen, GitFork, GitBranch, Circle, EllipsisVertical, Globe, Star, Trash2, HardDrive, Plus, Lock, CloudOff, Archive, Building2, User, ShieldAlert, ShieldX, RefreshCw } from "lucide-react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { useRepositoryStore, useRepoViewPath } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
@@ -39,6 +17,7 @@ import { AccountAvatar } from "@/components/account/AccountAvatar";
 import { RepoSyncIndicator } from "@/components/repository/RepoSyncIndicator";
 import { useRepoSyncStatuses } from "@/api/queries";
 import type { GitHubAccount, RepoInfo } from "@/types";
+import { Spinner } from "@/components/ui/Spinner";
 
 /* ─── RepoContextMenu ─── */
 
@@ -79,7 +58,7 @@ function RepoContextMenu({
   return (
     <div
       ref={ref}
-      className="absolute right-1 top-full mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50 py-1"
+      className="absolute right-1 top-full mt-1 w-48 bg-popover border border-border rounded-lg shadow-lg z-50 py-1 animate-pop-in"
     >
       <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
         {t("repo.linkAccount")}
@@ -360,7 +339,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
             <Plus className="w-4 h-4" />
           </button>
           {addMenuOpen && (
-            <div className="absolute right-0 top-full mt-1 min-w-48 bg-popover border border-border rounded-lg shadow-lg z-50 py-1">
+            <div className="absolute right-0 top-full mt-1 min-w-48 bg-popover border border-border rounded-lg shadow-lg z-50 py-1 animate-pop-in">
               <button
                 onClick={handleAddLocal}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left whitespace-nowrap"
@@ -526,9 +505,9 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                             )}
                             {/* Permission warning */}
                             {isValidating && (
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <Loader2 className="w-3 h-3 shrink-0 text-muted-foreground animate-spin" />
-                                <span className="text-xs text-muted-foreground">{t("common.loading")}</span>
+                              <div role="status" className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
+                                <Spinner size="sm" />
+                                {t("common.loading")}
                               </div>
                             )}
                             {!isValidating && permission && !permission.valid && (

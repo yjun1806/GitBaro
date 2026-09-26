@@ -11,6 +11,7 @@ import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useFileMenu } from "@/components/commit/useFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import type { FileStatus, StashFileSummary } from "@/types";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 const FILE_STATUSES: readonly string[] = ["modified", "added", "deleted", "renamed", "copied", "untracked", "ignored", "conflicted"];
 
@@ -157,11 +158,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
   };
 
   if (isLoading || !showResult) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-        {t("common.loading")}
-      </div>
-    );
+    return <LoadingState />;
   }
 
   const { entry, files } = showResult;
@@ -169,7 +166,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
   const totalDeletions = files.reduce((sum, f) => sum + f.deletions, 0);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full animate-content-in">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border space-y-2">
         <div className="flex items-center justify-between">

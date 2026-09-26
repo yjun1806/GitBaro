@@ -37,7 +37,7 @@ GitBaro/
 │   │   ├── sidebar/               # Sidebar tree: account > workspace > repo > worktree, drag and drop
 │   │   ├── stash/                 # Stash list, detail, save dialog
 │   │   ├── toolbar/               # Header path card (repo › folder › branch), sync and account zones
-│   │   ├── ui/                    # Primitives (Dialog, ContextMenu, Select, Tabs, Tooltip, layers.ts)
+│   │   ├── ui/                    # Primitives (Dialog, ContextMenu, Select, Tabs, Tooltip, Spinner, LoadingState, layers.ts)
 │   │   ├── welcome/               # First-launch welcome screen
 │   │   └── worktree/              # Worktree panel, create dialog, chips, overlap badge
 │   ├── stores/                    # Zustand stores
@@ -256,11 +256,13 @@ cd src-tauri && cargo build          # Build
 
 - One owner per number: each count (uncommitted files, commits to push, ...) is computed from one source. Show it at most once per level: the sidebar signal (navigation) and the one place where you act on it (e.g. the graph WIP row / WorkSwitcher tab for uncommitted files, the Push button for commits to push). Status lines and tab badges state the condition in words, without repeating the number.
 - Colors come from tokens in `src/styles/globals.css`, never raw hex or Tailwind palette colors.
-- Layers: 0 window frame (`--frame`), 1 canvas (`--canvas`), 2 card/panel (`PANEL_SURFACE`), 3 floating menus, popovers, dialogs, tooltips (`FLOATING_SURFACE`). Both surfaces are in `components/ui/layers.ts`.
+- Layers: 0 window frame (`--frame`) and 1 canvas (`--canvas`) share one ground color, so the sidebar, header, and content read as one surface; 2 card/panel (`PANEL_SURFACE`), 3 floating menus, popovers, dialogs, tooltips (`FLOATING_SURFACE`). Both surfaces are in `components/ui/layers.ts`.
 - The brand color (`--acc`, `primary`) is for emphasis only: selection, the main button, active tab underline, focus ring, links. Everything else is grays. Status colors (live, diff, CI) are separate from the brand color.
 - Text uses three levels: `--fg` body, `--fg2` secondary, `--muted` description.
 - Fonts: Pretendard for UI text, D2Coding for code and diffs (bundled in `src/assets/fonts/`).
 - Context menus: destructive items (`variant: "danger"`) go last, and the action asks for confirmation (`ConfirmCommandDialog` with `confirmVariant="destructive"`).
+- Loading: waiting for a panel's content is `LoadingState` (a list row: `layout="row"`); a busy button swaps its icon with `BusyIcon` and sets `disabled` + `aria-busy`; a small inline "working" mark is `Spinner` smoothed with `useSteadyFlag`. Never spin another icon or use `animate-pulse`. Details: `docs/loading-design.md`.
+- Motion: durations, easing, and enter animations (`animate-pop-in`, `animate-dialog-in`, `animate-reveal`, `animate-content-in`, ...) live in `src/styles/globals.css`. Animate opacity and transform only, and keep enter animations at `backwards` fill.
 
 ### Commit Messages
 

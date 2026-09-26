@@ -1,22 +1,14 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  ExternalLink,
-  CheckCircle,
-  XCircle,
-  Loader2,
-  Clock,
-  Ban,
-  SkipForward,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+import { ExternalLink, CheckCircle, XCircle, Clock, Ban, SkipForward, ChevronDown, ChevronRight } from "lucide-react";
 import { open } from "@tauri-apps/plugin-shell";
 import { useRepositoryStore } from "@/stores/repository";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useWorkflowRunJobs, useWorkflowRuns } from "@/api/queries";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { WorkflowJob, JobStep } from "@/types";
+import { Spinner } from "@/components/ui/Spinner";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 interface ActionsDetailViewProps {
   runId: number;
@@ -25,7 +17,7 @@ interface ActionsDetailViewProps {
 function StepStatusIcon({ status, conclusion }: { status: string; conclusion: string | null }) {
   const size = "w-3.5 h-3.5 shrink-0";
   if (status === "in_progress") {
-    return <Loader2 className={cn(size, "text-warning animate-spin")} />;
+    return <Spinner className="text-warning" />;
   }
   if (status === "queued" || status === "pending") {
     return <Clock className={cn(size, "text-muted-foreground")} />;
@@ -111,17 +103,13 @@ export function ActionsDetailView({ runId }: ActionsDetailViewProps) {
   );
 
   if (!run) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-        {t("common.loading")}
-      </div>
-    );
+    return <LoadingState />;
   }
 
   const createdTimestamp = Math.floor(new Date(run.createdAt).getTime() / 1000);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full animate-content-in">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border space-y-2">
         <div className="flex items-center justify-between">
@@ -147,9 +135,7 @@ export function ActionsDetailView({ runId }: ActionsDetailViewProps) {
       {/* Jobs */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12 text-muted-foreground">
-            <Loader2 className="w-5 h-5 animate-spin" />
-          </div>
+          <LoadingState />
         ) : jobs.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-xs text-muted-foreground">
             {t("actions.noRuns")}

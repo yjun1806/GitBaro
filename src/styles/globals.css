@@ -80,6 +80,44 @@
   --shadow-lg: var(--shadow-float);
   --shadow-xl: var(--shadow-float);
   --shadow-2xl: var(--shadow-float);
+
+  /* 움직임. 길이·곡선은 아래 :root의 --motion-* 토큰을 쓴다.
+     `transition-colors` 같은 전환의 기본 길이·곡선도 여기서 정한다(hover는 짧게). */
+  --default-transition-duration: var(--motion-fast);
+  --default-transition-timing-function: var(--ease-enter);
+  --ease-enter: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* 나타나는 움직임은 fill-mode를 backwards로 둔다. 끝난 뒤에도 transform을 붙들고 있으면(forwards·both)
+     그 요소가 position: fixed 자식(우클릭 메뉴 등)의 기준이 되어 자리가 어긋난다.
+
+     떠 있는 층 3(메뉴·드롭다운·팝오버): 흐린 데서 선명해지며 2px 내려앉는다. 크기는 바꾸지 않는다 —
+     자리를 잡으려고 떠 있는 요소의 크기를 재는 곳(AnchoredPanel, ContextMenu)이 어긋나지 않게. */
+  --animate-pop-in: motion-pop-in var(--motion-fast) var(--ease-enter) backwards;
+  /* 툴팁·정보 카드: 흐린 데서 선명해지기만 한다. */
+  --animate-fade-in: motion-fade-in var(--motion-fast) var(--ease-enter) backwards;
+  /* 모달 창과 그 뒤의 막 */
+  --animate-dialog-in: motion-dialog-in var(--motion-base) var(--ease-enter) backwards;
+  --animate-overlay-in: motion-fade-in var(--motion-base) var(--ease-enter) backwards;
+  /* 알림: 아래에서 올라오고, 사라질 때는 더 빨리 흐려진다. */
+  --animate-toast-in: motion-toast-in var(--motion-slow) var(--ease-enter) backwards;
+  --animate-toast-out: motion-toast-out var(--motion-fast) var(--ease-exit) forwards;
+  /* 펼친 트리 줄·카드: 위에서 살짝 내려오며 나타난다. 높이는 움직이지 않는다(목록이 출렁이지 않게). */
+  --animate-reveal: motion-reveal var(--motion-base) var(--ease-enter) backwards;
+  /* 내용 바꾸기(커밋·파일·스태시를 고를 때): 투명도만. 비었다가 차는 깜빡임이 없게 반쯤에서 시작한다. */
+  --animate-content-in: motion-content-in var(--motion-base) var(--ease-enter) backwards;
+  /* 읽는 중 표시: 짧게 끝나는 읽기에는 보이지 않게 조금 기다렸다가 나타난다. */
+  --animate-loading-in: motion-fade-in var(--motion-base) var(--ease-enter) 200ms backwards;
+  /* 활성 탭 밑줄: 가운데서 펴진다. */
+  --animate-indicator-x: motion-indicator-x var(--motion-base) var(--ease-enter) backwards;
+  /* 「지금 바뀌는 중」 점: 그렇게 된 순간 테가 한 번 퍼진다. */
+  --animate-live-ring: motion-live-ring 900ms var(--ease-enter) 1;
+  /* 「따라가는 중」 점: 천천히 숨 쉰다. */
+  --animate-live-breathe: motion-live-breathe 2.4s ease-in-out infinite;
+  /* 방금 바뀐 자리(따라가기의 새 줄·새 커밋 행·방금 바뀐 파일 행): 작업 중 색의 옅은 막(`FocusFlash`)이
+     잠깐 덮였다가 걷힌다. 한 번만 돌고, 끝나면 막은 투명해져(막의 기본 투명도 0) 남는 표시(diff 줄의
+     --live-faint 바탕과 주황 줄 번호)만 보인다. 흐려지기만 하는 움직임이라 「동작 줄이기」에서도 그대로 둔다. */
+  --animate-focus-flash: motion-focus-flash 1.2s var(--ease-enter) 1;
 }
 
 /* ── 그레이스케일 팔레트 (아이콘 #343434→#202020 기반 뉴트럴) ── */
@@ -193,10 +231,13 @@
   /* ── 리뷰 개편 시각 토큰 (원천: plans/design/README.md, plans/design/gen_c2.py TONES["뉴트럴"] + DENS["촘촘"])
      W1-T1: 위 시맨틱 토큰(--background 등)은 이 원천 토큰을 값으로 그대로 가리킨다(별칭).
      기존 컴포넌트는 시맨틱 토큰 이름을 그대로 쓰므로 고치지 않는다. */
-  /* 층 0~3 */
-  --frame: #e9e9e7;
-  --frame-hover: #e2e2e0;
-  --frame-sel: #dededc;
+  /* 층 0~3. 사용자 결정(2026-09-26): 창 틀(사이드바·머리 줄)과 본문 바탕을 한 색으로 합친다 —
+     --frame은 이제 --canvas와 같은 값이다(별칭). hover·선택 채움은 옛 frame(#e9e9e7) 대비 밟던
+     같은 밝기 단계(hover −7, 선택 −11)를 새 바탕(#f1f1ef) 위에서 그대로 유지해, 색이 옅어져도
+     hover·선택 피드백의 눈에 띄는 정도는 이전과 같다. */
+  --frame: var(--canvas);
+  --frame-hover: #eaeae8;
+  --frame-sel: #e6e6e4;
   /* 사이드바 흰 섬(층 2) 안 행의 hover·선택 채움. --frame-sel은 흰 바탕 위에서 너무 진해 따로 둔다. */
   --panel-hover: #f4f4f3;
   --panel-sel: #ebebe9;
@@ -225,6 +266,8 @@
 
   --live: #e5700b;
   --live-soft: rgba(229, 112, 11, 0.16);
+  /* 따라가기에서 「마지막으로 바뀐 줄」에 다음 변경까지 남는 바탕. 방금 비춘 막(--live-soft)보다 조용하다. */
+  --live-faint: rgba(229, 112, 11, 0.08);
   --status-fail: #d2442a;
 
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 20px rgba(0, 0, 0, 0.05);
@@ -298,9 +341,11 @@
 
   /* ── 리뷰 개편 시각 토큰 (다크): 이번 범위는 「같은 토큰 구조 유지, 깨지지 않으면 됨」(README).
      기존 다크 그레이스케일 계단에서 값을 고른다. */
-  --frame: #151515;
-  --frame-hover: #202020;
-  --frame-sel: #292929;
+  /* 라이트와 같은 결정: --frame을 --canvas 별칭으로 합치고, hover·선택은 옛 frame(#151515) 대비
+     밟던 밝기 단계(hover +11, 선택 +9)를 새 바탕(#1a1a1a) 위에서 그대로 유지한다. */
+  --frame: var(--canvas);
+  --frame-hover: #252525;
+  --frame-sel: #2e2e2e;
   --panel-hover: #292929;
   --panel-sel: #303030;
   --canvas: var(--gray-1000);
@@ -324,6 +369,7 @@
 
   --live: #e5700b;
   --live-soft: rgba(229, 112, 11, 0.16);
+  --live-faint: rgba(229, 112, 11, 0.1);
   --status-fail: #ec6a4f;
 
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
@@ -340,6 +386,109 @@
   --row: 28px;
   --item: 7px;
   --code-lh: 21px;
+}
+
+/* ── 움직임 ──
+   macOS처럼 짧고 조용하게: 나타날 때 120–220ms ease-out, 사라질 때는 더 짧게. 튕기거나 늦추는 움직임은 쓰지 않는다.
+   투명도와 transform만 움직여 배치를 다시 계산하지 않는다. 테마와 무관해서 한 번만 둔다. */
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 160ms;
+  --motion-slow: 220ms;
+}
+
+@keyframes motion-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes motion-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+@keyframes motion-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+@keyframes motion-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes motion-toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes motion-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+@keyframes motion-content-in {
+  from {
+    opacity: 0.4;
+  }
+}
+@keyframes motion-indicator-x {
+  from {
+    opacity: 0;
+    transform: scaleX(0.4);
+  }
+}
+@keyframes motion-live-ring {
+  from {
+    box-shadow: 0 0 0 0 var(--live-soft);
+  }
+  50% {
+    box-shadow: 0 0 0 5px var(--live-soft);
+  }
+}
+@keyframes motion-live-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes motion-focus-flash {
+  0%,
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 「동작 줄이기」: 자리를 옮기거나 크기를 바꾸는 움직임은 모두 흐려지기만으로 바꾸고, 계속 도는 표시(점)는 멈춘다.
+   읽는 중 회전(animate-spin)은 진행 중이라는 정보라서 남긴다. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --animate-pop-in: motion-fade-in var(--motion-fast) linear backwards;
+    --animate-dialog-in: motion-fade-in var(--motion-fast) linear backwards;
+    --animate-overlay-in: motion-fade-in var(--motion-fast) linear backwards;
+    --animate-toast-in: motion-fade-in var(--motion-fast) linear backwards;
+    --animate-toast-out: motion-toast-fade-out var(--motion-fast) linear forwards;
+    --animate-reveal: motion-fade-in var(--motion-fast) linear backwards;
+    --animate-indicator-x: motion-fade-in var(--motion-fast) linear backwards;
+    --animate-live-ring: none;
+    --animate-live-breathe: none;
+    /* --animate-focus-flash는 그대로 둔다: 자리를 옮기지 않고 한 번 흐려지기만 한다. */
+  }
+  .transition-transform {
+    transition-duration: 0s;
+  }
+}
+@keyframes motion-toast-fade-out {
+  to {
+    opacity: 0;
+  }
 }
 
 /* ── 스크롤바 (시맨틱 토큰 사용) ── */

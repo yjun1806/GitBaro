@@ -14,6 +14,7 @@ import { BranchCombobox } from "@/components/ui/BranchCombobox";
 import type { BranchInfo, WorktreeInfo } from "@/types";
 import { Dialog } from "@/components/ui/Dialog";
 import { isSubmitEnter } from "@/lib/keyboard";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface CreateWorktreeDialogProps {
   repoPath: string;
@@ -293,9 +294,11 @@ export function CreateWorktreeDialog({
           <button
             onClick={handleCreate}
             disabled={!isValid || creating}
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors"
+            aria-busy={creating}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors"
           >
-            {creating ? t("common.loading") : t("worktree.create")}
+            {creating && <Spinner />}
+            {t("worktree.create")}
           </button>
         </div>
     </Dialog>

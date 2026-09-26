@@ -1,19 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useId } from "react";
-import {
-  X,
-  Loader2,
-  AlertCircle,
-  FileWarning,
-  GitBranch,
-  ArrowLeftRight,
-  Minus,
-  Plus,
-} from "lucide-react";
+import { X, AlertCircle, FileWarning, GitBranch, ArrowLeftRight, Minus, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { getConflictFileDiff } from "@/api/commands";
 import type { DiffOutput, DiffHunk } from "@/types";
 import { Dialog } from "@/components/ui/Dialog";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 interface ConflictPreviewModalProps {
   repoPath: string;
@@ -344,12 +336,7 @@ export function ConflictPreviewModal({
             )}
 
             {isLoading && (
-              <div className="flex items-center justify-center flex-1 gap-2 text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm">
-                  {t("merge.preCheck.previewLoading")}
-                </span>
-              </div>
+              <LoadingState label={t("merge.preCheck.previewLoading")} />
             )}
             {error && !isLoading && (
               <div className="flex items-center justify-center flex-1 gap-2 text-destructive">

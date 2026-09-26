@@ -24,6 +24,7 @@ import { useRepoWatcher } from "@/hooks/useRepoWatcher";
 import { useVerifyWorktree } from "@/hooks/useVerifyWorktree";
 import { useActiveWorktreeGuard } from "@/hooks/useActiveWorktreeGuard";
 import { useActiveScope, useWorkspaceWatchPaths } from "@/hooks/useActiveScope";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 function AppContent() {
   const { t } = useTranslation();
@@ -266,11 +267,7 @@ function AppContent() {
 
   // Show loading screen while initial account check runs
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-pulse text-muted-foreground text-sm">{t("common.loading")}</div>
-      </div>
-    );
+    return <LoadingState className="h-screen" />;
   }
 
   const showWelcome = repos.length === 0 || debugWelcome;

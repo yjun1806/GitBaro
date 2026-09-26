@@ -1,10 +1,11 @@
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, X } from "lucide-react";
+import { X } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
 import { MergeActionPanel } from "@/components/history/MergeActionPanel";
 import { useBranchComparison } from "@/api/queries";
 import { getErrorMessage } from "@/lib/utils";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 interface BranchMergeDialogProps {
   repoPath: string;
@@ -46,10 +47,7 @@ export function BranchMergeDialog({ repoPath, currentBranch, source, isDirty, on
         </button>
       </div>
       {isLoading ? (
-        <div className="flex items-center justify-center gap-2 px-5 py-6 text-sm text-muted-foreground">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          {t("compare.loading")}
-        </div>
+        <LoadingState label={t("compare.loading")} />
       ) : error ? (
         <p className="px-5 py-4 text-sm text-danger">{getErrorMessage(error)}</p>
       ) : comparison ? (

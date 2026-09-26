@@ -1,18 +1,5 @@
 import { useState } from "react";
-import {
-  GitMerge,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  ArrowDownToLine,
-  Layers,
-  GitBranch,
-  ChevronRight,
-  Zap,
-  Shield,
-  ShieldAlert,
-  Eye,
-} from "lucide-react";
+import { GitMerge, AlertCircle, CheckCircle2, ArrowDownToLine, Layers, GitBranch, ChevronRight, Zap, Shield, ShieldAlert, Eye } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, getErrorMessage, isMergeConflictError } from "@/lib/utils";
@@ -24,6 +11,7 @@ import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import type { MergeStrategy } from "@/types";
 import { ConflictPreviewModal } from "./ConflictPreviewModal";
 import { ConfirmCommandDialog } from "@/components/ui/ConfirmCommandDialog";
+import { BusyIcon, Spinner } from "@/components/ui/Spinner";
 
 interface MergeActionPanelProps {
   repoPath: string;
@@ -155,9 +143,12 @@ export function MergeActionPanel({
 
       {/* Merge conflict pre-check banner */}
       {conflictCheck.isLoading && (
-        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-muted/50 border border-border">
-          <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />
-          <span className="text-[11px] text-muted-foreground">{t("merge.preCheck.checking")}</span>
+        <div
+          role="status"
+          className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-muted/50 border border-border text-[11px] text-muted-foreground"
+        >
+          <Spinner size="sm" />
+          {t("merge.preCheck.checking")}
         </div>
       )}
       {conflictCheck.data && !conflictCheck.isLoading && (
@@ -213,6 +204,7 @@ export function MergeActionPanel({
       <button
         onClick={() => setShowConfirm(true)}
         disabled={isDisabled}
+        aria-busy={isLoading}
         className={cn(
           "w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-opacity",
           "bg-primary text-primary-foreground",
@@ -221,17 +213,8 @@ export function MergeActionPanel({
             : "hover:opacity-90 active:opacity-80",
         )}
       >
-        {isLoading ? (
-          <>
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            {t("merge.merging")}
-          </>
-        ) : (
-          <>
-            <GitMerge className="w-3.5 h-3.5" />
-            {t("merge.incomingCount", { count: behindCount })}
-          </>
-        )}
+        <BusyIcon busy={isLoading} icon={<GitMerge className="w-3.5 h-3.5" />} />
+        {isLoading ? t("merge.merging") : t("merge.incomingCount", { count: behindCount })}
       </button>
 
       {showPreview && conflictCheck.data && (

@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/Spinner";
 
 /** 요약 글자 수를 보이기 시작하는 길이와, 넘으면 경고하는 길이(git 관례의 한 줄 72자). */
 export const SUMMARY_COUNTER_FROM = 60;
@@ -119,6 +120,7 @@ export function CommitComposer({
           type="button"
           onClick={onCommit}
           disabled={!canCommit || isCommitting}
+          aria-busy={isCommitting}
           title={targetTitle}
           data-testid="commit-target"
           className={cn(
@@ -129,7 +131,7 @@ export function CommitComposer({
         >
           {isCommitting ? (
             <>
-              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+              <Spinner />
               {t("commit.committing")}
             </>
           ) : (

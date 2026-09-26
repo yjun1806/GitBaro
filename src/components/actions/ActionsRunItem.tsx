@@ -1,13 +1,7 @@
-import {
-  CheckCircle,
-  XCircle,
-  Loader2,
-  Clock,
-  Ban,
-  SkipForward,
-} from "lucide-react";
+import { CheckCircle, XCircle, Clock, Ban, SkipForward } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { WorkflowRun } from "@/types";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface ActionsRunItemProps {
   run: WorkflowRun;
@@ -20,22 +14,22 @@ interface ActionsRunItemProps {
 
 function RunStatusIcon({ status, conclusion }: { status: string; conclusion: string | null }) {
   if (status === "in_progress") {
-    return <Loader2 className="w-4 h-4 text-warning animate-spin shrink-0" />;
+    return <Spinner className="text-warning" />;
   }
   if (status === "queued" || status === "pending" || status === "waiting") {
-    return <Clock className="w-4 h-4 text-muted-foreground shrink-0" />;
+    return <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
   }
   switch (conclusion) {
     case "success":
-      return <CheckCircle className="w-4 h-4 text-success shrink-0" />;
+      return <CheckCircle className="w-3.5 h-3.5 text-success shrink-0" />;
     case "failure":
-      return <XCircle className="w-4 h-4 text-danger shrink-0" />;
+      return <XCircle className="w-3.5 h-3.5 text-danger shrink-0" />;
     case "cancelled":
-      return <Ban className="w-4 h-4 text-muted-foreground shrink-0" />;
+      return <Ban className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
     case "skipped":
-      return <SkipForward className="w-4 h-4 text-muted-foreground shrink-0" />;
+      return <SkipForward className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
     default:
-      return <Clock className="w-4 h-4 text-muted-foreground shrink-0" />;
+      return <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
   }
 }
 

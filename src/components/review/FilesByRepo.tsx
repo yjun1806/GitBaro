@@ -38,6 +38,7 @@ import {
   useFileReviewStore,
   type FileReviewScope,
 } from "@/stores/file-review";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 export interface FilesByRepoRepo {
   /** 비교할 저장소(또는 지금 연 워크트리) 경로. */
@@ -308,7 +309,7 @@ export function FilesByRepo({ repos, groupBy = "repo" }: FilesByRepoProps) {
                   {t("filesByRepo.loadFailed", { error: getErrorMessage(result.error) })}
                 </div>
               ) : !changes ? (
-                <div className="px-3 py-2 text-[11.5px] text-muted-foreground">{t("filesByRepo.loading")}</div>
+                <LoadingState layout="row" label={t("filesByRepo.loading")} />
               ) : (
                 <>
                   {!single && <GroupNote t={t} changes={changes} scope={scopes[i] ?? null} />}
@@ -594,11 +595,7 @@ function SelectedFileDiff({ file }: { file: SelectedFile }) {
     return <div className="flex-1 flex items-center justify-center text-sm text-danger">{t("diff.failedToLoad")}</div>;
   }
   if (!result?.data) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-        {t("filesByRepo.loading")}
-      </div>
-    );
+    return <LoadingState label={t("filesByRepo.loading")} />;
   }
   return <DiffViewer diff={result.data} status={file.status} maximizable repoPath={file.repoPath} />;
 }

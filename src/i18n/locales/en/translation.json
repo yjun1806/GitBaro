@@ -198,7 +198,8 @@
     "leaveChanges": "Leave my changes on {{branch}}",
     "leaveChangesDesc": "Your in-progress work will be stashed on this branch for you to return to later.",
     "bringChanges": "Bring my changes to {{branch}}",
-    "bringChangesDesc": "Your in-progress work will follow you to the new branch."
+    "bringChangesDesc": "Your in-progress work will follow you to the new branch.",
+    "switching": "Switching branch"
   },
   "worktree": {
     "title": "Worktrees",
@@ -287,7 +288,8 @@
     "noAccountsLinked": "No accounts linked",
     "signInToGitHub": "Sign in to GitHub",
     "addAnother": "Add another account",
-    "manageAccounts": "Manage Accounts"
+    "manageAccounts": "Manage Accounts",
+    "signInAs": "Authorize as {{username}} on GitHub. If the browser is signed in to another account, switch accounts there first."
   },
   "gh": {
     "notInstalled": "GitHub CLI is not installed",
@@ -512,6 +514,8 @@
     "networkErrorDesc": "Check your connection",
     "sessionExpired": "Session expired",
     "sessionExpiredDesc": "Sign in again to sync",
+    "credentialPromptBlocked": "Git stopped before it could use the account's credentials because credential prompts are turned off (credential.interactive=false). This is not a sign-in problem, so signing in again will not help.",
+    "signInExpired": "GitHub sign-in for {{account}} is missing or expired. Sign in again in Settings > Accounts.",
     "repoNotFound": "Repository not found",
     "repoNotFoundDesc": "No access to this repository",
     "readOnly": "Read-only access",
@@ -725,7 +729,20 @@
     "mergeSummary": "Merged ({{mergeType}}), {{files}} files changed",
     "noChanges": "Already up to date",
     "progress": "{{percent}}%",
-    "loadMore": "Load more ({{remaining}} remaining)"
+    "loadMore": "Load more ({{remaining}} remaining)",
+    "op": {
+      "fetch": "Fetching",
+      "push": "Pushing",
+      "pull": "Pulling",
+      "clone": "Cloning",
+      "merge": "Merging",
+      "commit": "Committing",
+      "checkout": "Checking out",
+      "stash": "Stashing",
+      "rebase": "Rebasing",
+      "status": "Reading status",
+      "log": "Reading history"
+    }
   },
   "autoSync": {
     "fastForwardedToast_one": "{{repo}}: pulled {{count}} remote commit automatically",
@@ -898,7 +915,8 @@
     "wipDetached": "No branch (HEAD {{sha}})",
     "wipDetachedUnknown": "No branch (detached HEAD)",
     "wipMainWorktree": "primary folder",
-    "remoteBoundary": "On a remote from here down",
+    "remoteBoundary": "On the remote from here down · the commits above are not pushed yet",
+    "anyRemote": "remote",
     "laneMerged": "merged"
   },
   "commitDetail2": {
@@ -1446,7 +1464,14 @@
     },
     "accounts": {
       "description": "Accounts signed in to the GitHub CLI (gh). Pick the account for each repository in its repository settings.",
-      "empty": "No accounts signed in."
+      "empty": "No accounts signed in.",
+      "statusFailed": "Could not read sign-in status from gh: {{error}}",
+      "signedIn": "Signed in",
+      "invalid": "Sign-in expired",
+      "invalidHint": "gh's token for this account no longer works. Sign in again to use it for fetch, pull, and push.",
+      "unreachable": "Could not check (offline?)",
+      "scopes": "Scopes: {{scopes}}",
+      "signInAgain": "Sign in again"
     },
     "sync": {
       "title": "Default remote auto sync",

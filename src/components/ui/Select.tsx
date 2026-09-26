@@ -79,7 +79,7 @@ export function Select({
       </button>
 
       {open && (
-        <div className={cn("absolute left-0 right-0 top-full mt-1 rounded-lg z-50 py-1 max-h-48 overflow-y-auto", FLOATING_SURFACE)}>
+        <div className={cn("absolute left-0 right-0 top-full mt-1 rounded-lg z-50 py-1 max-h-48 overflow-y-auto animate-pop-in", FLOATING_SURFACE)}>
           {options.map((option) => (
             <button
               key={option.value}

@@ -117,7 +117,7 @@ export function Tab({
       {active && (
         <span
           className={cn(
-            "absolute bottom-0 h-0.5",
+            "absolute bottom-0 h-0.5 animate-indicator-x",
             variant === "fill" ? "inset-x-2 rounded-full" : "inset-x-0",
             colors.indicator,
           )}

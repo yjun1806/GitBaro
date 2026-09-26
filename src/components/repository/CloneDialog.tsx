@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useId } from "react";
-import { X, FolderOpen, Search, Download, Lock, GitFork, Loader2, ChevronDown, Check } from "lucide-react";
+import { X, FolderOpen, Search, Download, Lock, GitFork, ChevronDown, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { GitHubAccount } from "@/types";
@@ -9,6 +9,7 @@ import { AccountAvatar } from "@/components/account/AccountAvatar";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { useActivityStore } from "@/stores/activity";
 import { Dialog } from "@/components/ui/Dialog";
+import { BusyIcon, Spinner } from "@/components/ui/Spinner";
 
 type CloneTab = "github" | "url";
 
@@ -218,7 +219,7 @@ export function CloneDialog({
                     )} />
                   </button>
                   {accountPickerOpen && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 py-1 max-h-48 overflow-y-auto">
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 py-1 max-h-48 overflow-y-auto animate-pop-in">
                       {accounts.map((a) => (
                         <button
                           key={a.id}
@@ -262,9 +263,7 @@ export function CloneDialog({
                     disabled={!selectedAccountId || isCloning}
                     className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50"
                   />
-                  {isSearching && (
-                    <Loader2 className="w-4 h-4 text-muted-foreground animate-spin shrink-0" />
-                  )}
+                  {isSearching && <Spinner className="text-muted-foreground" label={t("common.loading")} />}
                 </div>
 
                 {/* Search results list */}
@@ -379,16 +378,13 @@ export function CloneDialog({
           <button
             onClick={handleClone}
             disabled={!canClone}
+            aria-busy={isCloning}
             className={cn(
               "flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover text-primary-foreground rounded-lg transition-colors",
               !canClone && "opacity-50 cursor-not-allowed",
             )}
           >
-            {isCloning ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Download className="w-4 h-4" />
-            )}
+            <BusyIcon busy={isCloning} icon={<Download className="w-3.5 h-3.5" />} />
             {isCloning ? t("clone.cloning") : t("clone.clone")}
           </button>
           {activeClone?.progress && (

@@ -6,6 +6,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { cn } from "@/lib/utils";
 import { overlapWorktreeName, WorktreeTag, type OverlapSibling } from "./OverlapBadge";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 export interface SideBySideSide {
   path: string;
@@ -47,9 +48,7 @@ function DiffColumn({ side, filePath, label }: { side: SideBySideSide; filePath:
         {isError ? (
           <div className="flex-1 flex items-center justify-center text-sm text-danger">{t("diff.failedToLoad")}</div>
         ) : isLoading && !data ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            {t("diff.loadingDiff")}
-          </div>
+          <LoadingState label={t("diff.loadingDiff")} />
         ) : (
           <DiffViewer diff={data ?? null} staged={side.staged} />
         )}

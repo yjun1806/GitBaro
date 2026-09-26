@@ -112,7 +112,7 @@ export function AnchoredPanel({
           left: position?.left ?? 0,
           maxHeight: position ? position.maxHeight : undefined,
         }}
-        className={cn("outline-none", className)}
+        className={cn("outline-none animate-pop-in", className)}
       >
         {children}
       </div>

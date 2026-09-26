@@ -84,7 +84,7 @@ export function SplitHandle({
         <span
           aria-hidden="true"
           data-header-rule
-          className="absolute inset-x-0 h-px bg-(--line2) pointer-events-none"
+          className="absolute inset-x-0 h-px bg-(--line) pointer-events-none"
           style={{ top: headerRulePx - 1 }}
         />
       )}

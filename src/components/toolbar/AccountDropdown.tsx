@@ -23,7 +23,7 @@ export function AccountDropdown({
   const assignAccount = useAssignRepoAccount();
   return (
     <div
-      className={cn("absolute right-0 top-full mt-2 w-56 rounded-lg z-50 py-1", FLOATING_SURFACE)}
+      className={cn("absolute right-0 top-full mt-2 w-56 rounded-lg z-50 py-1 animate-pop-in", FLOATING_SURFACE)}
     >
       {accounts.length === 0 ? (
         <div className="px-3 py-2">

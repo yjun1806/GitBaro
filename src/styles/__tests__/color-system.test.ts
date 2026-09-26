@@ -95,8 +95,9 @@ describe("브랜드 색", () => {
 });
 
 describe("층", () => {
-  it("0 창 틀 #e9e9e7, 1 본문 바탕 #f1f1ef, 2 패널·3 떠 있는 요소 흰색", () => {
-    expect(resolveHex(lightTokens, "--frame")).toBe("#e9e9e7");
+  it("0 창 틀과 1 본문 바탕은 같은 #f1f1ef(한 바탕), 2 패널·3 떠 있는 요소 흰색", () => {
+    // 사용자 결정(2026-09-26): 사이드바·머리 줄(창 틀)이 본문 바탕과 같은 색을 쓴다.
+    expect(resolveHex(lightTokens, "--frame")).toBe("#f1f1ef");
     expect(resolveHex(lightTokens, "--canvas")).toBe("#f1f1ef");
     expect(resolveHex(lightTokens, "--panel")).toBe("#ffffff");
     expect(resolveHex(lightTokens, "--float")).toBe("#ffffff");
@@ -104,11 +105,11 @@ describe("층", () => {
     expect(resolveHex(lightTokens, "--popover")).toBe("#ffffff");
   });
 
-  it("사이드바 선택 채움은 #dededc이고 hover 채움은 그보다 옅다", () => {
-    expect(resolveHex(lightTokens, "--frame-sel")).toBe("#dededc");
+  it("사이드바 선택 채움은 #e6e6e4이고 hover 채움은 그보다 옅다", () => {
+    expect(resolveHex(lightTokens, "--frame-sel")).toBe("#e6e6e4");
     const hover = resolveHex(lightTokens, "--frame-hover");
-    expect(contrast(hover, "#ffffff")).toBeLessThan(contrast("#dededc", "#ffffff"));
-    expect(contrast(hover, "#ffffff")).toBeGreaterThan(contrast("#e9e9e7", "#ffffff"));
+    expect(contrast(hover, "#ffffff")).toBeLessThan(contrast("#e6e6e4", "#ffffff"));
+    expect(contrast(hover, "#ffffff")).toBeGreaterThan(contrast(resolveHex(lightTokens, "--frame"), "#ffffff"));
   });
 
   it("사이드바 흰 섬 안 선택 채움(--panel-sel)은 흰 바탕과 구분되고 --frame-sel보다 옅으며, hover는 그 사이다", () => {

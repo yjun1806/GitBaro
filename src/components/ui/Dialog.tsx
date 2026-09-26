@@ -43,7 +43,7 @@ export function Dialog({
 
   return (
     <div
-      className={cn("fixed inset-0 flex items-center justify-center", overlayClassName)}
+      className={cn("fixed inset-0 flex items-center justify-center animate-overlay-in", overlayClassName)}
       onClick={closeOnBackdrop ? () => onClose?.() : undefined}
     >
       <div
@@ -55,7 +55,7 @@ export function Dialog({
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         onClick={closeOnBackdrop ? (e) => e.stopPropagation() : undefined}
-        className={cn("outline-none", className)}
+        className={cn("outline-none animate-dialog-in", className)}
       >
         {children}
       </div>

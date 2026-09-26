@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { X, Trash2, CheckCircle, XCircle, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { X, Trash2, CheckCircle, XCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useActivityStore } from "@/stores/activity";
 import { useUIStore } from "@/stores/ui";
 import { formatRelativeTime, cn } from "@/lib/utils";
 import type { GitCommandEntry } from "@/types";
+import { Spinner } from "@/components/ui/Spinner";
 
 function ResultSummaryRow({ entry }: { entry: GitCommandEntry }) {
   const { t } = useTranslation();
@@ -29,6 +30,7 @@ function ResultSummaryRow({ entry }: { entry: GitCommandEntry }) {
 }
 
 function EntryRow({ entry }: { entry: GitCommandEntry }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const isActive = entry.completedAt === undefined;
   const hasOutput = (entry.stdout && entry.stdout.length > 0) || (entry.stderr && entry.stderr.length > 0);
@@ -42,7 +44,7 @@ function EntryRow({ entry }: { entry: GitCommandEntry }) {
       >
         <span className="shrink-0">
           {isActive ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+            <Spinner className="text-muted-foreground" label={t("activity.running")} />
           ) : entry.success ? (
             <CheckCircle className="w-3.5 h-3.5 text-success" />
           ) : (
@@ -113,7 +115,7 @@ export function ActivityLogPanel() {
   const hasMore = entries.length > visibleCount;
 
   return (
-    <div className="h-[280px] border-t border-border bg-card flex flex-col">
+    <div className="h-[280px] border-t border-border bg-card flex flex-col animate-fade-in">
       <div className="flex items-center justify-between px-3 h-8 shrink-0 border-b border-border">
         <span className="text-xs font-semibold text-foreground">
           {t("activity.title")}

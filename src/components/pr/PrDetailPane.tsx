@@ -91,6 +91,7 @@ function PrDetail({ pr, repoPath, accountId }: { pr: PullRequestDetail; repoPath
   return (
     <ListDiffSplit
       variant="cards"
+      className="animate-content-in"
       files={{
         items: fileList.map((f) => ({
           key: f.path,

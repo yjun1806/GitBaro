@@ -1,9 +1,16 @@
 import { useTranslation } from "react-i18next";
-import { History, Loader2, WifiOff } from "lucide-react";
+import { History, WifiOff } from "lucide-react";
 import { useActivityStore } from "@/stores/activity";
 import { useUIStore } from "@/stores/ui";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useSteadyValue } from "@/hooks/useSteadyValue";
+import { Spinner } from "@/components/ui/Spinner";
 import { cn } from "@/lib/utils";
+
+/** 이보다 짧게 끝나는 명령은 표시하지 않는다. 사이드바 fetch 표시의 박자(`BUSY_TIMING`)와 같다. */
+export const SHOW_AFTER_MS = 300;
+/** 명령이 끝난 뒤 표시를 남겨 두는 시간. 워크스페이스의 저장소를 차례로 fetch할 때 사이사이 깜박이지 않게 한다. */
+export const HOLD_MS = 800;
 
 /**
  * git 상태 줄 오른쪽 끝: 오프라인 표시(오프라인일 때만)와 작업 기록 버튼. git 명령이 도는 동안에는
@@ -14,7 +21,11 @@ export function StatusActivity() {
   const { isOnline } = useOnlineStatus();
   const isLogOpen = useUIStore((s) => s.isActivityLogOpen);
   const setLogOpen = useUIStore((s) => s.setActivityLogOpen);
-  const running = useActivityStore((s) => Object.values(s.activeOperations)[0] ?? null);
+  // 새로 시작한 명령은 SHOW_AFTER_MS가 지나야 보이고, 보이는 중이면 다음 명령으로 바로 바뀌며, 모두 끝나도 HOLD_MS 동안 남는다.
+  const running = useSteadyValue(
+    useActivityStore((s) => Object.values(s.activeOperations)[0] ?? null),
+    { showAfterMs: SHOW_AFTER_MS, holdMs: HOLD_MS },
+  );
   const label = t("activity.title");
 
   return (
@@ -29,6 +40,7 @@ export function StatusActivity() {
         type="button"
         onClick={() => setLogOpen(!isLogOpen)}
         aria-pressed={isLogOpen}
+        aria-busy={running !== null}
         aria-label={label}
         title={label}
         className={cn(
@@ -39,13 +51,14 @@ export function StatusActivity() {
       >
         {running ? (
           <>
-            <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" aria-hidden="true" />
-            <span className="font-mono truncate max-w-[220px]" data-testid="running-op">
-              {running.operation}
+            <Spinner />
+            {/* 폭을 고정해 명령이 바뀌어도(fetch → pull) 옆 요소가 밀리지 않는다. */}
+            <span className="w-[7.5rem] truncate text-left" data-testid="running-op">
+              {t(`activity.op.${running.operation}`)}
+              {running.progress?.percent !== undefined && (
+                <span className="tabular-nums"> {t("activity.progress", { percent: running.progress.percent })}</span>
+              )}
             </span>
-            {running.progress?.percent !== undefined && (
-              <span className="shrink-0 tabular-nums">{running.progress.percent}%</span>
-            )}
           </>
         ) : (
           <History className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />

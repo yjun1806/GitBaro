@@ -107,7 +107,7 @@ export function BranchCombobox({
 
       {/* Dropdown */}
       {open && (
-        <div className={cn("absolute left-0 right-0 top-full mt-1 rounded-lg z-50 overflow-hidden", FLOATING_SURFACE)}>
+        <div className={cn("absolute left-0 right-0 top-full mt-1 rounded-lg z-50 overflow-hidden animate-pop-in", FLOATING_SURFACE)}>
           {/* Search input */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
             <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
