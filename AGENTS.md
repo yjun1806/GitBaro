@@ -248,6 +248,7 @@ cd src-tauri && cargo build          # Build
 ### Review model
 
 - The purpose is watching what agents change, not approving it. Never add approval, "viewed", "reviewed", or "N left to review" concepts; words describe what changed or what is happening now.
+- The workspace, repository, and branch screens are one screen with three scope steps (workspace ⊃ repository ⊃ branch): only the lane changes per step (repository, worktree, or branch). Contract table, the sidebar's working-branch rows, and the footer status bar: `docs/design-system.md` § 범위 계약.
 - The basis is **commits not on any remote** (`git rev-list HEAD --not --remotes`, `git/unpushed.rs`), counted even when the branch has no upstream yet.
 - The unpushed range (remote boundary → HEAD, committed changes only) can be shown as one combined diff: `get_range_changed_files` / `get_range_file_diff` (`commands/range_changes.rs`) compare two commits' trees. The fork point from the default branch comes from `get_divergence_point`.
 - Viewing a branch in the graph does not check it out (`stores/history-view.ts`).
@@ -256,6 +257,7 @@ cd src-tauri && cargo build          # Build
 ### UI
 
 - One owner per number: each count (uncommitted files, commits to push, ...) is computed from one source. Show it at most once per level: the sidebar signal (navigation) and the one place where you act on it (e.g. the graph WIP row / WorkSwitcher tab for uncommitted files, the Push button for commits to push). Status lines and tab badges state the condition in words, without repeating the number.
+- A tab's list can be narrowed by a filter bar under the tabs (`docs/design-system.md` § 3.14): filter chips, then a dropdown filter, then view-mode `Segmented` and search on the right. Hide the row when there is nothing to filter. `Segmented` is for view modes (same data, different rendering) only, never for narrowing a list.
 - Colors come from tokens in `src/styles/globals.css`, never raw hex or Tailwind palette colors.
 - Layers: 0 window frame (`--frame`) and 1 canvas (`--canvas`) share one ground color, so the sidebar, header, and content read as one surface; 2 card/panel (`PANEL_SURFACE`), 3 floating menus, popovers, dialogs, tooltips (`FLOATING_SURFACE`). Both surfaces are in `components/ui/layers.ts`.
 - The brand color (`--acc`, `primary`) is for emphasis only: selection, the main button, active tab underline, focus ring, links. Everything else is grays. Status colors (live, diff, CI) are separate from the brand color.
