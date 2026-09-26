@@ -1,13 +1,15 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, RotateCcw } from "lucide-react";
 import type { AppSettings } from "@/types";
+import { workingBranchRecentDays } from "@/lib/working-branches";
 import { QUIET_MINUTES_OPTIONS, usePreferencesStore } from "@/stores/preferences";
 import { useUIStore } from "@/stores/ui";
 import { SettingsSection } from "../ui/SettingsSection";
 import { SettingsRow } from "../ui/SettingsRow";
 import { Switch } from "../ui/Switch";
-import { SettingsSelect } from "../ui/controls";
+import { SettingsSelect, SettingsTextInput } from "../ui/controls";
 import { Button } from "@/components/ui/Button";
 import { Code } from "@/components/ui/marks";
 
@@ -16,7 +18,7 @@ interface GeneralSectionProps {
   onUpdateSettings: (patch: Partial<AppSettings>) => void;
 }
 
-/** 「일반」 칸: 언어, 사이드바 숨기기와 조용한 저장소, 새 워크트리 위치. */
+/** 「일반」 칸: 언어, 사이드바 숨기기와 조용한 저장소·작업 중인 브랜치 기간, 새 워크트리 위치. */
 export function GeneralSection({ settings, onUpdateSettings }: GeneralSectionProps) {
   const { t } = useTranslation();
   const collapseQuietRepos = usePreferencesStore((s) => s.collapseQuietRepos);
@@ -29,6 +31,22 @@ export function GeneralSection({ settings, onUpdateSettings }: GeneralSectionPro
   const handlePickWorktreeDir = async () => {
     const picked = await open({ directory: true, multiple: false, defaultPath: worktreeParentDir ?? undefined });
     if (typeof picked === "string") setPreferences({ worktreeParentDir: picked });
+  };
+
+  // 자유 숫자 입력이라 누를 때마다 저장하지 않고, 칸을 벗어나거나 Enter를 누를 때 1~365로 다듬어 저장한다.
+  // 저장된 값이 바뀌면(다듬어진 값이 되돌아오거나, 다른 창에서 바뀌면) 다음 렌더에서 칸을 그 값으로 맞춘다.
+  const recentDays = workingBranchRecentDays(settings);
+  const [recentDaysDraft, setRecentDaysDraft] = useState(String(recentDays));
+  const [syncedRecentDays, setSyncedRecentDays] = useState(recentDays);
+  if (recentDays !== syncedRecentDays) {
+    setSyncedRecentDays(recentDays);
+    setRecentDaysDraft(String(recentDays));
+  }
+  const commitRecentDays = () => {
+    const parsed = Math.round(Number(recentDaysDraft));
+    const clamped = Number.isFinite(parsed) ? Math.min(365, Math.max(1, parsed)) : recentDays;
+    setRecentDaysDraft(String(clamped));
+    if (clamped !== recentDays) onUpdateSettings({ workingBranchRecentDays: clamped });
   };
 
   return (
@@ -72,6 +90,26 @@ export function GeneralSection({ settings, onUpdateSettings }: GeneralSectionPro
             }))}
             onChange={(value) => setPreferences({ quietMinutes: Number(value) })}
           />
+        </SettingsRow>
+        <SettingsRow
+          label={t("settingsPanel.general.workingBranchRecentDays")}
+          description={t("settingsPanel.general.workingBranchRecentDaysDescription")}
+        >
+          <div className="flex items-center gap-2">
+            <SettingsTextInput
+              type="number"
+              min={1}
+              max={365}
+              className="max-w-16"
+              value={recentDaysDraft}
+              onChange={(e) => setRecentDaysDraft(e.target.value)}
+              onBlur={commitRecentDays}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitRecentDays();
+              }}
+            />
+            <span className="text-[11.5px] text-(--fg2)">{t("settingsPanel.general.days")}</span>
+          </div>
         </SettingsRow>
       </SettingsSection>
 

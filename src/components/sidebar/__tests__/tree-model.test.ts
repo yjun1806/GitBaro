@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildRepoTree, type Workspace } from "@/lib/repo-tree";
-import type { RepoInfo, RepoSyncStatus } from "@/types";
+import type { RepoInfo, RepoSyncStatus, RepoWorkingBranches, WorkingBranch } from "@/types";
 import type { WorktreeReviewStatus } from "@/hooks/useReviewStatus";
 import {
   buildSignals,
@@ -9,6 +9,7 @@ import {
   filterTree,
   isWatchedPath,
   sumDedupedByRepo,
+  workingBranchRows,
   workspaceRepoKey,
   worktreesByRepoFrom,
 } from "../tree-model";
@@ -212,5 +213,78 @@ describe("isWatchedPath", () => {
 
   it("assumes watched before the backend has answered once", () => {
     expect(isWatchedPath(WT, [], [])).toBe(true);
+  });
+});
+
+describe("workingBranchRows", () => {
+  const NOW = 2_000_000_000_000; // ms
+  const DAY_S = 24 * 60 * 60;
+  const ctx = { recentDays: 7, now: NOW };
+
+  function wb(name: string, over: Partial<WorkingBranch> = {}): WorkingBranch {
+    return {
+      name,
+      isDefault: false,
+      worktreePath: null,
+      upstream: null,
+      behind: 0,
+      unpushed: 0,
+      lastCommitTime: NOW / 1000 - 30 * DAY_S,
+      mergedIntoDefault: true,
+      ...over,
+    };
+  }
+  function repoWorking(branches: WorkingBranch[]): RepoWorkingBranches {
+    return { path: API, defaultBranch: "main", branches, error: null };
+  }
+
+  it("returns nothing for a repository whose branches haven't loaded", () => {
+    expect(workingBranchRows(undefined, ctx, new Map())).toEqual([]);
+  });
+
+  it("never gives the default branch a row, even with unpushed commits", () => {
+    const rows = workingBranchRows(repoWorking([wb("main", { isDefault: true, unpushed: 3 })]), ctx, new Map());
+    expect(rows).toEqual([]);
+  });
+
+  it("skips a branch already checked out in a worktree — the folder row covers it", () => {
+    const rows = workingBranchRows(repoWorking([wb("feat/x", { worktreePath: WT, unpushed: 2 })]), ctx, new Map());
+    expect(rows).toEqual([]);
+  });
+
+  it("gives a row to a branch with commits on no remote", () => {
+    const rows = workingBranchRows(repoWorking([wb("feat/x", { unpushed: 3 })]), ctx, new Map());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ reasons: ["unpushed"], prNumber: null });
+    expect(rows[0].branch.name).toBe("feat/x");
+  });
+
+  it("gives a row to a branch with an open PR, and reports its number", () => {
+    const rows = workingBranchRows(repoWorking([wb("feat/x")]), ctx, new Map([["feat/x", 58]]));
+    expect(rows).toEqual([expect.objectContaining({ reasons: ["openPr"], prNumber: 58 })]);
+  });
+
+  it("gives a row to a branch committed recently and not yet merged", () => {
+    const rows = workingBranchRows(
+      repoWorking([wb("feat/x", { lastCommitTime: NOW / 1000 - 2 * DAY_S, mergedIntoDefault: false })]),
+      ctx,
+      new Map(),
+    );
+    expect(rows.map((r) => r.reasons)).toEqual([["recent"]]);
+  });
+
+  it("gives no row to an old, merged branch with nothing to push and no PR", () => {
+    expect(workingBranchRows(repoWorking([wb("feat/old")]), ctx, new Map())).toEqual([]);
+  });
+
+  it("keeps the branch order it was given and combines every matching reason", () => {
+    const branches = [
+      wb("feat/a", { unpushed: 1 }),
+      wb("feat/b", { lastCommitTime: NOW / 1000 - DAY_S, mergedIntoDefault: false, unpushed: 2 }),
+    ];
+    const rows = workingBranchRows(repoWorking(branches), ctx, new Map([["feat/b", 9]]));
+    expect(rows.map((r) => r.branch.name)).toEqual(["feat/a", "feat/b"]);
+    expect(rows[1].reasons).toEqual(["unpushed", "openPr", "recent"]);
+    expect(rows[1].prNumber).toBe(9);
   });
 });

@@ -9,7 +9,12 @@ import {
   type WorktreeInput,
 } from "@/lib/repo-tree";
 import type { WorktreeReviewStatus } from "@/hooks/useReviewStatus";
-import type { RepoReviewStatus, RepoSyncStatus } from "@/types";
+import type { RepoReviewStatus, RepoSyncStatus, RepoWorkingBranches, WorkingBranch } from "@/types";
+import {
+  workingBranchReasons,
+  type WorkingBranchContext,
+  type WorkingBranchReason,
+} from "@/lib/working-branches";
 
 /**
  * 사이드바 트리 화면에 쓰는 순수 계산. 트리 모양 자체는 `buildRepoTree`
@@ -201,4 +206,35 @@ export function expandedWorktreePaths(
 export function isWatchedPath(path: string, watched: readonly string[], overflow: readonly string[]): boolean {
   if (watched.includes(path)) return true;
   return watched.length === 0 && overflow.length === 0;
+}
+
+/** 사이드바 저장소 카드 안, 작업 폴더 줄과 별도로 보일 브랜치 줄 하나. */
+export interface WorkingBranchRow {
+  branch: WorkingBranch;
+  /** 이 줄이 생긴 이유(하나 이상, `workingBranchReasons`가 준 순서). */
+  reasons: WorkingBranchReason[];
+  /** 열린 PR 번호. `openPr` 이유가 없거나 번호를 모르면 null. */
+  prNumber: number | null;
+}
+
+/**
+ * 저장소 카드에 작업 폴더 줄 다음으로 보일 「작업 중인 브랜치」 줄. 워크트리에 체크아웃된 브랜치는
+ * 이미 작업 폴더 줄(`RepoFolderRows`)이 그 자리를 대신하므로 뺀다. 나머지 로컬 브랜치 중
+ * `workingBranchReasons`가 이유를 하나라도 주는 것만, 받은 목록의 순서(마지막 커밋이 늦은 순)를 그대로 따른다.
+ */
+export function workingBranchRows(
+  repoWorking: RepoWorkingBranches | undefined,
+  ctx: { recentDays: number; now: number },
+  openPrNumbers: ReadonlyMap<string, number>,
+): WorkingBranchRow[] {
+  if (!repoWorking) return [];
+  const fullCtx: WorkingBranchContext = { ...ctx, openPrHeads: new Set(openPrNumbers.keys()) };
+  const rows: WorkingBranchRow[] = [];
+  for (const branch of repoWorking.branches) {
+    if (branch.worktreePath !== null) continue;
+    const reasons = workingBranchReasons(branch, fullCtx);
+    if (reasons.length === 0) continue;
+    rows.push({ branch, reasons, prNumber: openPrNumbers.get(branch.name) ?? null });
+  }
+  return rows;
 }

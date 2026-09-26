@@ -5,10 +5,10 @@ import "@testing-library/jest-dom/vitest";
 import i18n from "@/i18n/config";
 import type { WorktreeReviewStatus } from "@/hooks/useReviewStatus";
 import type { SidebarTreeData } from "../useSidebarTreeData";
-import { formatAgo, liveDotLabel } from "../row-meta";
+import { formatAgo, liveDotLabel, workingBranchReasonText } from "../row-meta";
 import { RowSignals, pulseBucket, type RowSignalValues } from "../RowSignals";
 import { changedAgoText } from "../SidebarHoverCard";
-import { signalValues, viewOnlyDefaultBranch } from "../RepoCard";
+import { signalValues } from "../RepoCard";
 
 afterEach(cleanup);
 
@@ -124,7 +124,7 @@ describe("signalValues", () => {
       overflow: [],
       now: NOW,
       branchOf: () => null,
-      defaultBranchOf: () => undefined,
+      workingBranchRowsOf: () => [],
       ...over,
     };
   }
@@ -148,34 +148,16 @@ describe("signalValues", () => {
   });
 });
 
-describe("viewOnlyDefaultBranch", () => {
-  const def = (hasLocal: boolean, remoteRef: string | null = "origin/main") => ({
-    path: "/r/app",
-    name: "main",
-    hasLocal,
-    remoteRef,
+describe("workingBranchReasonText", () => {
+  it("names each reason and joins more than one with a middle dot", () => {
+    expect(workingBranchReasonText(en, ["unpushed"], null)).toBe("Has commits not on any remote");
+    expect(workingBranchReasonText(en, ["unpushed", "recent"], null)).toBe(
+      "Has commits not on any remote · Committed recently, not yet merged into the default branch",
+    );
   });
 
-  it("offers the local default branch when no working folder has it checked out", () => {
-    expect(viewOnlyDefaultBranch(def(true), ["feat/x"])).toEqual({ kind: "ref", name: "main", isRemote: false });
-  });
-
-  it("offers nothing when a working folder already has it checked out", () => {
-    expect(viewOnlyDefaultBranch(def(true), ["feat/x", "main"])).toBeNull();
-  });
-
-  it("offers the remote copy when only the remote default branch exists", () => {
-    expect(viewOnlyDefaultBranch(def(false), ["feat/x"])).toEqual({
-      kind: "ref",
-      name: "origin/main",
-      isRemote: true,
-    });
-    expect(viewOnlyDefaultBranch(def(false), ["main"])).toBeNull();
-  });
-
-  it("offers nothing before the default branch is known or when the repository cannot be read", () => {
-    expect(viewOnlyDefaultBranch(undefined, [])).toBeNull();
-    expect(viewOnlyDefaultBranch({ path: "/r/app", name: null, hasLocal: false, remoteRef: null }, [])).toBeNull();
-    expect(viewOnlyDefaultBranch(def(false, null), [])).toBeNull();
+  it("names the PR number when it's known, and falls back when it isn't", () => {
+    expect(workingBranchReasonText(en, ["openPr"], 58)).toBe("Open PR #58");
+    expect(workingBranchReasonText(en, ["openPr"], null)).toBe("Has an open PR");
   });
 });

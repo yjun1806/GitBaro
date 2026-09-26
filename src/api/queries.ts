@@ -1045,6 +1045,27 @@ export function useRefreshPullRequests() {
   );
 }
 
+/**
+ * 저장소별로 이미 캐시에 있는 열린 PR의 head 브랜치 → 번호. `enabled: false`라 새 GitHub 호출을 만들지
+ * 않고, PR 탭(`usePullRequests`)이 그 저장소·계정으로 채운 캐시만 구독한다 — PR 탭을 연 적 없는
+ * 저장소는 빈 맵이다. 사이드바의 「열린 PR이 있음」 줄 조건(`workingBranchReasons`)이 쓴다.
+ */
+export function useCachedOpenPrsByRepo(
+  repos: readonly { path: string; accountId: string | null }[],
+): Record<string, ReadonlyMap<string, number>> {
+  return useQueries({
+    queries: repos.map(({ path, accountId }) => ({
+      queryKey: pullRequestsKey(path, accountId, "open"),
+      queryFn: () => listPullRequests(path, accountId!, "open"),
+      enabled: false,
+    })),
+    combine: (results) =>
+      Object.fromEntries(
+        repos.map(({ path }, i) => [path, new Map((results[i].data ?? []).map((pr) => [pr.headRef, pr.number]))]),
+      ),
+  });
+}
+
 // 범위 하나로 보기 — 커밋 줄의 「변경」 칸과 사이드바의 작업 중인 브랜치
 import { getCommitStats, getWorkingBranches } from "@/api/commands";
 import type { CommitStats, RepoWorkingBranches } from "@/types";
