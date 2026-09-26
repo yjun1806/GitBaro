@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeftRight, GitCompare, X } from "lucide-react";
-import { useBranchComparison, useBranches, useStatus } from "@/api/queries";
+import { useBranchComparison, useBranches, useCommitStats, useStatus } from "@/api/queries";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
@@ -64,6 +64,11 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
     };
   }, [data]);
   const colorOf = useCallback((chain: number) => laneColor(colorSeed, chain), [colorSeed]);
+  // 커밋 줄 「변경」 칸(3.15). CI 칸은 이 화면에서는 비운다(비교 대상은 체크아웃한 이력이 아닐 수 있다).
+  const commitStats = useCommitStats(
+    range.repoPath,
+    useMemo(() => commits.map((c) => c.id), [commits]),
+  );
 
   const selectedIdx = commits.findIndex((c) => c.id === selectedCommitId);
   const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
@@ -75,7 +80,7 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
   const canMerge = currentBranch !== null && range.base === currentBranch && range.target !== currentBranch;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden" data-testid="branch-range-graph">
+    <div className="@container/graph flex flex-col flex-1 min-h-0 overflow-hidden" data-testid="branch-range-graph">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-(--line) shrink-0 text-[11.5px]">
         <GitCompare className="w-3.5 h-3.5 text-(--muted) shrink-0" aria-hidden="true" />
         <span className="font-semibold text-(--fg2) shrink-0">{t("branchPanel.rangeTitle")}</span>
@@ -121,9 +126,10 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
         aria-hidden="true"
       >
         <span className="pl-3.5">{t("graph.colDescription")}</span>
+        <span>{t("graph.colChange")}</span>
+        <span title={t("graph.colCi")}>{t("graph.colCi")}</span>
         <span>{t("graph.colAuthor")}</span>
         <span>{t("graph.colTime")}</span>
-        <span>{t("graph.colCommit")}</span>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
@@ -149,6 +155,7 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
                 graphWidth={graphWidth}
                 colorOf={colorOf}
                 remoteTags={null}
+                stats={commitStats.get(commit.id)}
                 isSelected={selectedCommitId === commit.id}
                 isHighlighted={activeIndex === index}
                 wipAbove={false}

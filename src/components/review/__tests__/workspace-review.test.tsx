@@ -124,6 +124,9 @@ vi.mock("@/api/queries", () => ({
     })),
   unpushedFileTouchesKey: (repoPath: string, path: string) => ["unpushedFileTouches", repoPath, path],
   useRangeFileDiff: () => ({ data: null, isLoading: false, isError: false }),
+  // 저장소별 레인 그래프의 「변경」 칸(3.15)
+  useCommitStatsAcrossRepos: () => new Map(),
+  commitStatsAcrossReposKey: (path: string, oid: string) => `${path}\u0000${oid}`,
 }));
 
 vi.mock("@/components/history/CommitDetail", () => ({

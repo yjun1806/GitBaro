@@ -918,9 +918,11 @@
   },
   "graph": {
     "colDescription": "설명",
+    "colChange": "변경",
+    "colCi": "CI",
     "colAuthor": "작성자",
     "colTime": "시각",
-    "colCommit": "커밋",
+    "mergeCommit": "병합",
     "agent": "코딩 에이전트",
     "agentGuess": "{{name}}와 함께 쓴 커밋으로 추정 (Co-Authored-By 트레일러 기준)",
     "worktree": "워크트리",

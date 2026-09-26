@@ -202,6 +202,7 @@ export function GraphPanel() {
               wips={viewing ? NO_WIPS : worktreeFilter.wips}
               worktreeHeads={viewing ? NO_HEADS : worktreeFilter.heads}
               historyTarget={historyTarget}
+              ciRuns={workflowRuns}
             />
           ) : tab === "stash" ? (
             <StashView />

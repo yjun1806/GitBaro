@@ -12,8 +12,11 @@ import { useFollowStore, type FollowMode } from "@/stores/follow";
 import { WorkingChangesButton } from "@/components/commit/WorkingChangesButton";
 import { useNow } from "@/hooks/useNow";
 import {
+  commitStatsAcrossReposKey,
   useBranches,
   useCommitAvatars,
+  useCommitStats,
+  useCommitStatsAcrossRepos,
   useDivergencePoint,
   useCommitHistoryInfinite,
   useRemoteTags,
@@ -26,13 +29,14 @@ import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { computeGraphLanes } from "@/lib/graph-lanes";
 import { formatRelativeTime, getErrorMessage, gitHubRepoUrl, trimTrailingSlash } from "@/lib/utils";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
+import { summarizeCi, type CiSummary } from "@/components/history/CommitDetail";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { useWipRowMenu } from "./useWipRowMenu";
 import { useRefLabelMenu } from "./useRefLabelMenu";
 import { useNewCommits } from "./useNewCommits";
 import { ResetCommitDialog } from "@/components/history/ResetCommitDialog";
 import { CommitBranchDialog } from "@/components/history/CommitBranchDialog";
-import type { CommitInfo, HistoryTarget, RefLabel } from "@/types";
+import type { CommitInfo, CommitStats, HistoryTarget, RefLabel, WorkflowRun } from "@/types";
 import type { GraphRowLayout } from "@/lib/graph-lanes";
 import {
   BaseHeaderRow,
@@ -94,6 +98,11 @@ export interface CommitGraphProps {
    * 커밋 메뉴의 reset·revert(체크아웃한 브랜치를 바꾸는 일)를 막는다.
    */
   historyTarget?: HistoryTarget;
+  /**
+   * 커밋 줄 「CI」 칸(3.15)의 재료. 이미 불러온 워크플로 실행 목록을 그대로 받는다 — 이 컴포넌트는
+   * 새로 조회하지 않는다(`GraphPanel`이 Actions 탭과 같은 조회를 공유한다). 없으면 CI 칸은 비운다.
+   */
+  ciRuns?: readonly WorkflowRun[];
 }
 
 /** 그래프에 함께 그릴 다른 워크트리. */
@@ -104,6 +113,7 @@ export interface WorktreeHead {
 }
 
 const NO_WORKTREE_HEADS: readonly WorktreeHead[] = [];
+const NO_CI_RUNS: readonly WorkflowRun[] = [];
 
 /**
  * 위 패널의 커밋 그래프(단일 저장소). 전체 폭 레인 그래프로 HEAD의 이력을 그리고,
@@ -254,6 +264,7 @@ function CommitGraphList({
   shownWips,
   worktreeHeads = NO_WORKTREE_HEADS,
   historyTarget,
+  ciRuns = NO_CI_RUNS,
   selection,
 }: CommitGraphListProps) {
   const { t } = useTranslation();
@@ -490,6 +501,14 @@ function CommitGraphList({
   // 바뀌어 그 워크트리의 이력을 다시 읽는 것은 「새 커밋」이다).
   const followTarget = useFollowStore((s) => s.target);
   const commitIds = useMemo(() => commits.map((c) => c.id), [commits]);
+  // 커밋 줄 「변경」 칸(3.15). 보이는(불러온) 커밋의 oid만 넘긴다 — 아직 모르는 커밋은 빠지고, 그
+  // 자리는 `ChangeCell`이 빈 칸으로 둔다.
+  const commitStats = useCommitStats(activeRepoPath, commitIds);
+  // 「CI」 칸. 이미 불러온 실행 목록에서 커밋마다 최신 상태만 뽑는다(`CommitDetail`과 같은 규칙).
+  const ciByCommit = useMemo(() => {
+    if (ciRuns.length === 0) return new Map<string, CiSummary | null>();
+    return new Map(commitIds.map((id) => [id, summarizeCi(ciRuns as WorkflowRun[], id)]));
+  }, [commitIds, ciRuns]);
   const shownPathsKey = worktreeHeads
     .map((h) => h.path)
     .sort()
@@ -548,16 +567,17 @@ function CommitGraphList({
   );
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+    <div className="@container/graph flex flex-col flex-1 min-h-0 overflow-hidden">
       <div
         className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
         style={{ paddingLeft: graphWidth + 8 }}
         aria-hidden="true"
       >
         <span className="pl-3.5">{t("graph.colDescription")}</span>
+        <span>{t("graph.colChange")}</span>
+        <span title={t("graph.colCi")}>{t("graph.colCi")}</span>
         <span>{t("graph.colAuthor")}</span>
         <span>{t("graph.colTime")}</span>
-        <span>{t("graph.colCommit")}</span>
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
@@ -624,6 +644,8 @@ function CommitGraphList({
                   colorOf={colorOf}
                   remoteTags={remoteTags}
                   avatarUrl={accountAvatarMap.get(emailKey) || githubAvatarMap?.[emailKey] || undefined}
+                  stats={commitStats.get(commit.id)}
+                  ci={ciByCommit.get(commit.id) ?? null}
                   isSelected={selectedCommitId === commit.id}
                   isHighlighted={activeIndex === index}
                   dot={dotOf(commit)}
@@ -790,6 +812,10 @@ interface HistoryGraphRowProps {
   colorOf: (chain: number) => string;
   remoteTags: Set<string> | null;
   avatarUrl: string | undefined;
+  /** 「변경」 칸(3.15). 아직 모르면 비워 둔다. */
+  stats: CommitStats | undefined;
+  /** 「CI」 칸. 실행 기록이 없으면 null. */
+  ci: CiSummary | null;
   isSelected: boolean;
   isHighlighted: boolean;
   dot: CommitDot;
@@ -906,6 +932,11 @@ export function RepoLaneCommitGraph({
     () => graph.rows.filter((r) => r.kind === "commit"),
     [graph.rows],
   );
+  // 커밋 줄 「변경」 칸(3.15). 저장소마다 다른 경로라 `useCommitStats`(단일 경로) 대신 경로+oid
+  // 쌍으로 묻는 변형을 쓴다. CI 칸은 저장소마다 계정이 다를 수 있어 이 화면에서는 비워 둔다.
+  const commitStats = useCommitStatsAcrossRepos(
+    useMemo(() => commitRows.map((r) => ({ path: r.repoPath, oid: r.commit.id })), [commitRows]),
+  );
   const selectedIdx = commitRows.findIndex((r) => r.key === selectedKey);
   const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
     items: commitRows,
@@ -925,16 +956,17 @@ export function RepoLaneCommitGraph({
   );
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+    <div className="@container/graph flex flex-col flex-1 min-h-0 overflow-hidden">
       <div
         className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
         style={{ paddingLeft: graphWidth + 8 }}
         aria-hidden="true"
       >
         <span className="pl-3.5">{t("graph.colDescription")}</span>
+        <span>{t("graph.colChange")}</span>
+        <span title={t("graph.colCi")}>{t("graph.colCi")}</span>
         <span>{t("graph.colAuthor")}</span>
         <span>{t("graph.colTime")}</span>
-        <span>{t("graph.colCommit")}</span>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
         {isLoading && graph.rows.length === 0 ? (
@@ -982,6 +1014,7 @@ export function RepoLaneCommitGraph({
                     graphWidth={graphWidth}
                     colorOf={colorOf}
                     avatarUrl={accountAvatarMap.get(emailKey) || undefined}
+                    stats={commitStats.get(commitStatsAcrossReposKey(row.repoPath, row.commit.id))}
                     isSelected={selectedKey === row.key}
                     isHighlighted={activeIndex === idx}
                     repoLabel={repoLabel}
@@ -1072,6 +1105,8 @@ interface RepoLaneCommitRowProps {
   graphWidth: number;
   colorOf: (chain: number) => string;
   avatarUrl: string | undefined;
+  /** 「변경」 칸(3.15). 아직 모르면 비워 둔다. CI 칸은 이 화면에서는 늘 비운다(저장소마다 계정이 다를 수 있다). */
+  stats: CommitStats | undefined;
   isSelected: boolean;
   isHighlighted: boolean;
   repoLabel: (repoPath: string) => string;
@@ -1090,6 +1125,7 @@ const RepoLaneCommitRow = memo(function RepoLaneCommitRow({
   graphWidth,
   colorOf,
   avatarUrl,
+  stats,
   isSelected,
   isHighlighted,
   repoLabel,
@@ -1106,6 +1142,7 @@ const RepoLaneCommitRow = memo(function RepoLaneCommitRow({
       colorOf={colorOf}
       remoteTags={null}
       avatarUrl={avatarUrl}
+      stats={stats}
       isSelected={isSelected}
       isHighlighted={isHighlighted}
       wipAbove={false}

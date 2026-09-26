@@ -30,3 +30,17 @@ export function ticketKeysOf(subject: string): string[] {
 export function distinctTicketKeys(subjects: readonly string[]): string[] {
   return [...new Set(subjects.flatMap(ticketKeysOf))];
 }
+
+// 제목 맨 앞의 이슈 키만 본다(커밋 그래프 행의 이슈 키 배지, 디자인 시스템 3.15). `ticketKeysOf`와
+// 달리 제목 어디든의 키가 아니라 맨 앞(`[ABC-123] 제목`·`ABC-123 제목`)만 골라 배지로 떼어 낸다.
+// `[ABC-123/456]`처럼 이어진 번호가 앞에 와도(같은 프로젝트) 배지에는 첫 번째 키만 쓴다.
+const LEADING_TICKET = /^\[?([A-Z][A-Z0-9]{1,9})-(\d+)(?:\/\d+)*\]?\s+/;
+
+/** 제목 맨 앞의 이슈 키(있으면)와, 그 키를 뗀 나머지 제목. 앞에 없으면 null(제목 그대로 쓴다). */
+export function leadingTicketKey(subject: string): { key: string; rest: string } | null {
+  const m = LEADING_TICKET.exec(subject);
+  if (!m) return null;
+  const [, project, number] = m;
+  if (NOT_TICKETS.has(project)) return null;
+  return { key: `${project}-${number}`, rest: subject.slice(m[0].length) };
+}

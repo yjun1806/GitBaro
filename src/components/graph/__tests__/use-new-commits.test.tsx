@@ -53,6 +53,7 @@ vi.mock("@/api/queries", () => ({
   useRemoteTags: () => ({ data: undefined }),
   useCommitAvatars: () => ({ data: undefined }),
   useWorktreeHeadHistories: () => otherHistoryState.queries,
+  useCommitStats: () => new Map(),
 }));
 
 const { CommitGraph } = await import("../CommitGraph");

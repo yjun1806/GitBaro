@@ -3,13 +3,16 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Bot } from "lucide-react";
 import { RefBadge } from "@/components/history/CommitItem";
+import { CiStateIcon, type CiSummary } from "@/components/history/CommitDetail";
 import { FocusFlash } from "@/components/ui/FocusFlash";
 import { RefLabel as RefLabelMark, StatusChip } from "@/components/ui/marks";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { leadingTicketKey } from "@/lib/ticket-keys";
 import type { GraphEdge, GraphRowLayout } from "@/lib/graph-lanes";
-import type { CommitInfo, RefLabel } from "@/types";
+import type { CommitInfo, CommitStats, RefLabel } from "@/types";
 import { GRAPH_ROW_HEIGHT, laneX, type WipTarget } from "./graph-model";
 import { chainDotStyle, chainEdgeStyle } from "./graph-paint";
+import { changeBarWidths } from "./change-cell";
 
 const H = GRAPH_ROW_HEIGHT;
 const MID = H / 2;
@@ -20,8 +23,78 @@ const WIP_R = 5;
 /** 영역 머리 행의 높이(디자인 시스템 카드 머리와 같은 32px). 커밋 행(30px)보다 조금 크다. */
 export const REGION_HEADER_HEIGHT = 32;
 
-/** 설명 / 작성자 / 시각 / 커밋 칸. 시안 `gen_d.py`의 `1fr 110px 80px 70px`. */
-export const GRAPH_COLUMNS = "grid grid-cols-[minmax(0,1fr)_110px_80px_70px] gap-3 items-center";
+/**
+ * 설명 / 변경 / CI / 작성자 / 시각 칸(디자인 시스템 3.15, 시안 `scope-unify.html`). 컨테이너
+ * (`@container/graph`, 그래프 카드 전체)가 좁아지면 칸이 단계별로 줄어든다 — SHA 칸은 없다(D45).
+ *
+ * - 820px 이하: 작성자 칸을 줄이고(112→36px) 이름을 뺀다(아바타만 남는다).
+ * - 680px 이하: 변경 칸을 줄이고(128→64px) 파일 수·크기 막대를 빼고 `+ −` 숫자만 남긴다.
+ * - 560px 이하: 변경 칸을 뺀다(0px, 내용도 감춘다).
+ *
+ * CI(16px)·시각(64px)·설명(`1fr`)은 좁아져도 그대로다.
+ */
+export const GRAPH_COLUMNS = cn(
+  "grid items-center gap-3",
+  "grid-cols-[minmax(0,1fr)_128px_16px_112px_64px]",
+  "@max-[820px]/graph:grid-cols-[minmax(0,1fr)_128px_16px_36px_64px]",
+  "@max-[680px]/graph:grid-cols-[minmax(0,1fr)_64px_16px_36px_64px]",
+  "@max-[560px]/graph:grid-cols-[minmax(0,1fr)_0px_16px_36px_64px]",
+);
+
+/** 「변경」 칸을 좁아짐 둘째 단계에서 줄이는 표시(파일 수·크기 막대를 감춘다, `+ −` 숫자만 남긴다). */
+const CHANGE_DETAIL_CLASS = "@max-[680px]/graph:hidden";
+/** 「변경」 칸을 좁아짐 셋째 단계에서 통째로 감추는 표시(그리드 칸은 이미 0px, 내용도 겹치지 않게 감춘다). */
+const CHANGE_CELL_HIDDEN_CLASS = "@max-[560px]/graph:hidden";
+/** 「작성자」 칸의 이름을 좁아짐 첫 단계에서 감추는 표시(아바타만 남는다). */
+const AUTHOR_NAME_HIDDEN_CLASS = "@max-[820px]/graph:hidden";
+
+/** 커밋 줄 「변경」 칸(3.15). 병합 커밋은 「병합」 글자 하나, 그 외는 파일 수·크기 막대·`+N −N`. */
+function ChangeCell({ stats }: { stats: CommitStats | undefined }) {
+  const { t } = useTranslation();
+  if (!stats) return <span aria-hidden="true" />;
+  if (stats.merge) {
+    return (
+      <span className={cn("truncate text-[11.5px] text-muted-foreground", CHANGE_CELL_HIDDEN_CLASS)}>
+        {t("graph.mergeCommit")}
+      </span>
+    );
+  }
+  const { filesChanged, additions, deletions } = stats;
+  if (filesChanged === null) return <span aria-hidden="true" />;
+  const hasLines = additions !== null && deletions !== null;
+  const bar = hasLines ? changeBarWidths(additions, deletions) : null;
+  return (
+    <span className={cn("flex items-center gap-1.5 min-w-0 whitespace-nowrap", CHANGE_CELL_HIDDEN_CLASS)}>
+      <span className={cn("shrink-0 text-[11.5px] text-muted-foreground", CHANGE_DETAIL_CLASS)}>
+        {t("graph.fileCount", { count: filesChanged })}
+      </span>
+      {bar && (
+        <span
+          className={cn("shrink-0 flex h-1.5 rounded-[3px] overflow-hidden bg-(--chip)", CHANGE_DETAIL_CLASS)}
+          style={{ width: bar.barWidth }}
+        >
+          <i className="block h-full bg-success" style={{ width: bar.addWidth }} />
+          <i className="block h-full bg-danger" style={{ width: bar.delWidth }} />
+        </span>
+      )}
+      {hasLines && (
+        <span className="shrink-0 font-mono text-[11.5px]">
+          <span className="text-(--diff-add-fg)">+{additions}</span> <span className="text-(--diff-del-fg)">−{deletions}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** 커밋 줄 「CI」 칸(3.15). 실행 기록이 있을 때만 아이콘 하나(`CommitDetail`의 접힌 요약 줄과 같은 부품). */
+function CiCell({ ci }: { ci: CiSummary | null | undefined }) {
+  if (!ci) return <span aria-hidden="true" />;
+  return (
+    <span className="flex items-center justify-center">
+      <CiStateIcon ci={ci} />
+    </span>
+  );
+}
 
 /** 한 선의 SVG 경로. 레인이 바뀌는 선은 행 가운데 높이를 지나는 곡선으로 그린다. */
 export function edgePath(edge: GraphEdge, dotLane: number): string {
@@ -132,6 +205,10 @@ interface GraphRowProps {
   refColor?: (label: RefLabel) => string | null;
   /** 설명 칸 맨 앞(ref 라벨 앞)에 둘 것. 저장소별 레인 모드의 저장소 표시에 쓴다. */
   leading?: ReactNode;
+  /** 「변경」 칸(3.15). 아직 모르면(조회 전) 비워 둔다 — 줄 높이·정렬은 그대로다. */
+  stats?: CommitStats;
+  /** 「CI」 칸(3.15). 이 커밋의 실행 기록이 없으면(조회 전 포함) null. */
+  ci?: CiSummary | null;
   /**
    * 따라가는 중에 새로 나타난 커밋(`useNewCommits`). 행을 한 번 비춘다(`FocusFlash`). 행이 다시 마운트되지
    * 않는 한 다시 그려도 다시 비추지 않는다.
@@ -153,7 +230,7 @@ interface GraphRowProps {
 }
 
 /**
- * 커밋 그래프의 커밋 행. 그래프 칸 + [설명(ref 라벨, 제목) / 작성자 / 시각 / 커밋].
+ * 커밋 그래프의 커밋 행. 그래프 칸 + [설명(ref 라벨, 이슈 키, 제목) / 변경 / CI / 작성자 / 시각](3.15).
  * 에이전트가 쓴 커밋(트레일러로 추정)은 작성자 칸에 흐린 표시와 「추정」 툴팁을 붙인다.
  */
 export const GraphRow = memo(function GraphRow({
@@ -170,6 +247,8 @@ export const GraphRow = memo(function GraphRow({
   laneTitle,
   refColor,
   leading,
+  stats,
+  ci,
   flash = false,
   highlightChain = null,
   chainLabel,
@@ -185,6 +264,8 @@ export const GraphRow = memo(function GraphRow({
   const resolvedAvatar = avatarUrl ?? commit.author.avatarUrl;
   const authorName = commit.author.name || commit.author.email;
   const agentName = commit.isAgentAuthored ? commit.coAuthors[0]?.name : undefined;
+  // 제목 맨 앞의 이슈 키만 배지로 뗀다(3.15) — 제목 어디든의 키를 찾는 `ticketKeysOf`와 다르다.
+  const ticket = leadingTicketKey(commit.summary);
 
   return (
     <button
@@ -196,6 +277,8 @@ export const GraphRow = memo(function GraphRow({
       onMouseLeave={onMouseLeave}
       aria-current={isSelected ? "true" : undefined}
       data-commit-id={commit.id}
+      // SHA는 칸에 없다(D45) — hover로만 닿는다. 아래 칸의 「복사」, 우클릭 「SHA 복사」가 나머지 두 길이다.
+      title={`${commit.id} · ${commit.summary}`}
       className={cn(
         "relative isolate flex items-center w-full text-left border-b border-(--line) select-none transition-colors",
         isSelected
@@ -238,8 +321,13 @@ export const GraphRow = memo(function GraphRow({
               <RefBadge label={label} remoteTags={remoteTags} laneColor={refColor?.(label)} />
             </span>
           ))}
+          {ticket && (
+            <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-(--radius-chip) bg-(--chip) text-(--fg2) font-mono text-[10.5px] font-semibold">
+              {ticket.key}
+            </span>
+          )}
           <span className={cn("truncate text-foreground", isSelected ? "font-bold" : "font-medium")}>
-            {commit.summary}
+            {ticket ? ticket.rest : commit.summary}
           </span>
           {chainLabelHere && highlightChain !== null && chainLabel && (
             <span
@@ -250,6 +338,8 @@ export const GraphRow = memo(function GraphRow({
             </span>
           )}
         </span>
+        <ChangeCell stats={stats} />
+        <CiCell ci={ci} />
         <span className="flex items-center gap-1.5 min-w-0 text-[12.5px] text-(--fg2)">
           {resolvedAvatar ? (
             <img src={resolvedAvatar} alt="" className="w-[18px] h-[18px] rounded-full shrink-0 object-cover" />
@@ -261,7 +351,7 @@ export const GraphRow = memo(function GraphRow({
               {(authorName || "?")[0].toUpperCase()}
             </span>
           )}
-          <span className="truncate">{authorName}</span>
+          <span className={cn("truncate", AUTHOR_NAME_HIDDEN_CLASS)}>{authorName}</span>
           {commit.isAgentAuthored && (
             <span
               className="flex items-center gap-0.5 shrink-0 opacity-50"
@@ -275,7 +365,6 @@ export const GraphRow = memo(function GraphRow({
         <span className="truncate text-[11.5px] text-muted-foreground">
           {formatRelativeTime(commit.timestamp)}
         </span>
-        <span className="flex items-center gap-1 font-mono text-[11.5px] text-muted-foreground">{commit.shortId}</span>
       </span>
     </button>
   );
@@ -458,13 +547,15 @@ export function GraphWipRow({
           <span className="text-[11.5px] text-muted-foreground shrink-0">{countText}</span>
           {trailing}
         </span>
-        <span />
+        {/* 변경 · CI · 작성자 칸은 커밋하지 않은 변경에는 없다(3.15는 커밋 줄만 다룬다) — 그리드 정렬만 맞춘다. */}
+        <span aria-hidden="true" />
+        <span aria-hidden="true" />
+        <span aria-hidden="true" />
         <span className="truncate text-[11.5px] text-muted-foreground">
           {changedAt !== null && (count ?? 0) > 0
             ? t("graph.modifiedAgo", { time: formatRelativeTime(changedAt / 1000) })
             : null}
         </span>
-        <span />
       </span>
     </button>
     {action && <span className="shrink-0 pr-3 pl-1 flex items-center gap-1.5">{action}</span>}
