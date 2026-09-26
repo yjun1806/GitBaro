@@ -1,9 +1,11 @@
-import { useState, useId } from "react";
-import { X, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { ResetMode } from "@/api/commands";
-import { Dialog } from "@/components/ui/Dialog";
+import { DialogFrame } from "@/components/ui/DialogFrame";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
 
 interface ResetCommitDialogProps {
   shortId: string;
@@ -19,87 +21,61 @@ const MODES: ResetMode[] = ["soft", "mixed", "hard"];
  */
 export function ResetCommitDialog({ shortId, onConfirm, onClose }: ResetCommitDialogProps) {
   const { t } = useTranslation();
-  const titleId = useId();
   const [mode, setMode] = useState<ResetMode>("mixed");
 
   return (
-    <Dialog
+    <DialogFrame
+      title={t("history.reset.title", { shortId })}
       onClose={onClose}
-      labelledBy={titleId}
-      className="bg-card rounded-xl shadow-2xl w-full max-w-md"
-    >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 id={titleId} className="text-base font-semibold text-foreground">
-            {t("history.reset.title", { shortId })}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="px-5 py-5 flex flex-col gap-2">
-          <div className="border border-border rounded-lg overflow-hidden">
-            {MODES.map((m, i) => (
-              <label
-                key={m}
-                className={cn(
-                  "flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors",
-                  i > 0 && "border-t border-border",
-                  mode === m ? "bg-primary/5" : "hover:bg-accent",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="resetMode"
-                  value={m}
-                  checked={mode === m}
-                  onChange={() => setMode(m)}
-                  className="mt-1 accent-primary"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground">
-                    {t(`history.reset.${m}`)}
-                  </p>
-                  <p className="text-[13px] text-muted-foreground mt-0.5 leading-relaxed">
-                    {t(`history.reset.${m}Desc`)}
-                  </p>
-                </div>
-              </label>
-            ))}
-          </div>
-
-          {mode === "hard" && (
-            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-warning/10 border border-warning/20">
-              <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-              <p className="text-xs text-warning leading-relaxed">
-                {t("history.reset.hardWarning")}
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-3 px-5 py-4 border-t border-border">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
+      size="md"
+      footer={
+        <>
+          <Button variant="ghost" size="md" onClick={onClose}>
             {t("common.cancel")}
-          </button>
-          <button
-            onClick={() => onConfirm(mode)}
-            className={cn(
-              "px-4 py-2 text-sm font-medium rounded-lg transition-colors text-primary-foreground",
-              mode === "hard"
-                ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                : "bg-primary hover:bg-primary-hover",
-            )}
-          >
+          </Button>
+          <Button variant={mode === "hard" ? "danger" : "primary"} size="md" onClick={() => onConfirm(mode)}>
             {t("history.reset.confirm")}
-          </button>
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-2">
+        <div className="border border-border rounded-(--radius-item) overflow-hidden">
+          {MODES.map((m, i) => (
+            <label
+              key={m}
+              className={cn(
+                "flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors",
+                i > 0 && "border-t border-border",
+                mode === m ? "bg-(--acc-sel)" : "hover:bg-accent",
+              )}
+            >
+              <input
+                type="radio"
+                name="resetMode"
+                value={m}
+                checked={mode === m}
+                onChange={() => setMode(m)}
+                className="mt-1 accent-primary"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12.5px] font-medium text-foreground">
+                  {t(`history.reset.${m}`)}
+                </p>
+                <p className="text-[11.5px] text-muted-foreground mt-0.5">
+                  {t(`history.reset.${m}Desc`)}
+                </p>
+              </div>
+            </label>
+          ))}
         </div>
-    </Dialog>
+
+        {mode === "hard" && (
+          <Notice tone="warning" icon={AlertTriangle}>
+            {t("history.reset.hardWarning")}
+          </Notice>
+        )}
+      </div>
+    </DialogFrame>
   );
 }

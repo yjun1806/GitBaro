@@ -1,8 +1,9 @@
-import { useCallback, useId, useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { addToGitignore, discardChanges, findConflictMarkers, stageFiles, unstageFiles } from "@/api/commands";
-import { Dialog } from "@/components/ui/Dialog";
+import { DialogFrame } from "@/components/ui/DialogFrame";
+import { Button } from "@/components/ui/Button";
 import { entryPaths } from "@/lib/file-selection";
 import { getErrorMessage } from "@/lib/utils";
 import { useToastStore } from "@/stores/toast";
@@ -40,8 +41,6 @@ export interface WorkingFileMenu {
  */
 export function useWorkingFileMenu(repoPath: string | null): WorkingFileMenu {
   const { t } = useTranslation();
-  const discardTitleId = useId();
-  const conflictStageTitleId = useId();
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
   const [discardTarget, setDiscardTarget] = useState<StatusEntry | null>(null);
@@ -148,63 +147,47 @@ export function useWorkingFileMenu(repoPath: string | null): WorkingFileMenu {
       )}
 
       {discardTarget && (
-        <Dialog
+        <DialogFrame
+          title={t("changes.discardConfirmTitle")}
           onClose={() => setDiscardTarget(null)}
-          closeOnBackdrop
-          labelledBy={discardTitleId}
-          className="w-[380px] max-w-[90vw] rounded-xl border border-border bg-card p-5 shadow-xl"
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" size="md" onClick={() => setDiscardTarget(null)}>
+                {t("changes.cancel")}
+              </Button>
+              <Button variant="danger" size="md" onClick={handleConfirmDiscard}>
+                {t("changes.discardConfirm")}
+              </Button>
+            </>
+          }
         >
-          <h3 id={discardTitleId} className="text-sm font-semibold text-foreground">
-            {t("changes.discardConfirmTitle")}
-          </h3>
-          <p className="mt-2 text-xs text-muted-foreground break-all">
+          <p className="text-[12.5px] text-muted-foreground break-all">
             {t(discardMessageKey(discardTarget), { file: discardTarget.path })}
           </p>
-          <div className="mt-4 flex justify-end gap-2">
-            <button
-              onClick={() => setDiscardTarget(null)}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
-            >
-              {t("changes.cancel")}
-            </button>
-            <button
-              onClick={handleConfirmDiscard}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
-            >
-              {t("changes.discardConfirm")}
-            </button>
-          </div>
-        </Dialog>
+        </DialogFrame>
       )}
 
       {conflictStageTarget && (
-        <Dialog
+        <DialogFrame
+          title={t("changes.conflictMarkersTitle")}
           onClose={() => setConflictStageTarget(null)}
-          closeOnBackdrop
-          labelledBy={conflictStageTitleId}
-          className="w-[380px] max-w-[90vw] rounded-xl border border-border bg-card p-5 shadow-xl"
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" size="md" onClick={() => setConflictStageTarget(null)}>
+                {t("changes.cancel")}
+              </Button>
+              <Button variant="primary" size="md" onClick={handleConfirmConflictStage}>
+                {t("changes.conflictMarkersConfirm")}
+              </Button>
+            </>
+          }
         >
-          <h3 id={conflictStageTitleId} className="text-sm font-semibold text-foreground">
-            {t("changes.conflictMarkersTitle")}
-          </h3>
-          <p className="mt-2 text-xs text-muted-foreground break-all">
+          <p className="text-[12.5px] text-muted-foreground break-all">
             {t("changes.conflictMarkersMessage", { file: conflictStageTarget.path })}
           </p>
-          <div className="mt-4 flex justify-end gap-2">
-            <button
-              onClick={() => setConflictStageTarget(null)}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border hover:bg-accent transition-colors"
-            >
-              {t("changes.cancel")}
-            </button>
-            <button
-              onClick={handleConfirmConflictStage}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
-            >
-              {t("changes.conflictMarkersConfirm")}
-            </button>
-          </div>
-        </Dialog>
+        </DialogFrame>
       )}
     </>
   );

@@ -2,7 +2,8 @@ import { useState, useEffect, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Clock, Copy, Check, ChevronDown } from "lucide-react";
 import { cn, formatDate, formatRelativeTime } from "@/lib/utils";
-import { FileStatusBadge } from "@/lib/file-status";
+import { FileStatusLetter } from "@/components/ui/marks";
+import { SectionLabel } from "@/components/ui/PanelHeader";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useRepositoryStore, findOwnerRepo } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
@@ -144,7 +145,7 @@ const CI_TONE: Record<CiState, string> = {
 function MetaRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[56px_1fr] gap-x-1 text-[11.5px] leading-[18px]">
-      <dt className="text-(--faint)">{label}</dt>
+      <dt className="text-muted-foreground">{label}</dt>
       <dd className="min-w-0 text-(--fg2) break-words">{children}</dd>
     </div>
   );
@@ -286,13 +287,13 @@ export function CommitDetail({
           className="flex items-start gap-1 text-left w-full group"
         >
           <ChevronDown className={cn(
-            "w-3.5 h-3.5 shrink-0 mt-0.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-all",
+            "w-3.5 h-3.5 shrink-0 mt-0.5 text-muted-foreground group-hover:text-foreground transition-colors",
             !bodyExpanded && "-rotate-90",
           )} />
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-bold text-foreground leading-[18px]">{commit.summary}</p>
             {bodyExpanded && (
-              <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
+              <p className="mt-1 text-[11.5px] text-muted-foreground whitespace-pre-wrap leading-relaxed">
                 {commit.message.slice(commit.summary.length).trim()}
               </p>
             )}
@@ -349,7 +350,7 @@ export function CommitDetail({
               ))}
             </span>
             {commit.isAgentAuthored && (
-              <span className="ml-1.5 text-(--faint)">{t("commitDetail2.agentGuess")}</span>
+              <span className="ml-1.5 text-muted-foreground">{t("commitDetail2.agentGuess")}</span>
             )}
           </MetaRow>
         )}
@@ -364,7 +365,7 @@ export function CommitDetail({
                 {ci.names.join(", ")}
               </span>
             ) : (
-              <span className="text-(--faint)">
+              <span className="text-muted-foreground">
                 {/* The list holds only the newest runs of the whole repository,
                     so a miss means "not among them", not "never ran". */}
                 {runs && runs.length > 0
@@ -395,9 +396,7 @@ export function CommitDetail({
         <>
           {switcher === undefined ? <RepoWorkSwitcher mode="commit" /> : switcher}
           {commitInfo}
-          <div className="px-3 pt-2 pb-1 text-[11px] font-semibold text-(--faint) shrink-0">
-            {t("commitDetail2.changedFiles", { count: changedFiles.length })}
-          </div>
+          <SectionLabel title={t("commitDetail2.changedFiles", { count: changedFiles.length })} className="shrink-0" />
           <div className="flex-1 overflow-y-auto" {...containerProps}>
             {changedFiles.map((f, index) => {
               const isSelected = selectedPath === f.path;
@@ -415,27 +414,18 @@ export function CommitDetail({
                   onClick={() => handleFileClick(f.path)}
                   onContextMenu={(e) => openFileMenu(f.path, e)}
                   className={cn(
-                    "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors",
+                    "w-full flex items-center gap-2 h-7 px-3 text-left transition-colors",
                     isSelected
                       ? "bg-(--acc-sel)"
                       : !isSelected && isHighlighted
-                        ? "bg-accent ring-1 ring-primary/30"
+                        ? "bg-accent ring-1 ring-inset ring-primary/30"
                         : "hover:bg-accent",
                   )}
                 >
-                  <FileStatusBadge status={f.status} />
-                  <span className="flex-1 min-w-0 flex flex-col">
-                    <span className={cn(
-                      "text-xs font-medium truncate",
-                      "text-foreground",
-                    )}>
-                      {filename}
-                    </span>
-                    {dir && (
-                      <span className="text-[10px] leading-tight text-muted-foreground/50 truncate">
-                        {dir}
-                      </span>
-                    )}
+                  <FileStatusLetter status={f.status} />
+                  <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
+                    <span className="text-[12.5px] font-medium text-foreground truncate">{filename}</span>
+                    {dir && <span className="text-[11.5px] text-muted-foreground truncate">{dir}</span>}
                   </span>
                 </button>
               );

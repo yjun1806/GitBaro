@@ -1,4 +1,5 @@
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { RefLabel } from "@/components/ui/marks";
 import type { StashEntry } from "@/types";
 
 interface StashItemProps {
@@ -35,55 +36,27 @@ export function StashItem({
       onClick={onClick}
       onContextMenu={onContextMenu}
       className={cn(
-        "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors border-b border-border select-none",
+        "w-full flex items-center gap-3 min-h-11 px-3 text-left transition-colors border-b border-(--line) select-none",
         isSelected
-          ? "bg-primary/10 text-primary font-semibold"
+          ? "bg-(--acc-sel) font-semibold"
           : !isSelected && isHighlighted
-            ? "bg-accent ring-1 ring-primary/30"
+            ? "bg-accent ring-1 ring-inset ring-primary/30"
             : "hover:bg-accent",
       )}
     >
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium truncate">
+      <div className="flex-1 min-w-0 py-1.5">
+        <p className="text-[12.5px] font-semibold truncate">
           {shortMessage(entry.message)}
         </p>
         <div className="flex items-center gap-1 mt-0.5">
-          <span
-            className={cn(
-              "text-[10px] px-1.5 py-0.5 rounded-full",
-              isSelected
-                ? "bg-primary/20 text-primary"
-                : "bg-muted text-muted-foreground",
-            )}
-          >
+          <span className="text-[11.5px] text-muted-foreground shrink-0">
             stash@{"{"}
             {entry.index}
             {"}"}
           </span>
-          {entry.branchName && (
-            <span
-              className={cn(
-                "text-xs truncate",
-                isSelected ? "text-primary/70" : "text-muted-foreground",
-              )}
-            >
-              {entry.branchName}
-            </span>
-          )}
-          <span
-            className={cn(
-              "text-xs shrink-0",
-              isSelected ? "text-primary/50" : "text-muted-foreground",
-            )}
-          >
-            {"\u00B7"}
-          </span>
-          <span
-            className={cn(
-              "text-xs shrink-0",
-              isSelected ? "text-primary/70" : "text-muted-foreground",
-            )}
-          >
+          {entry.branchName && <RefLabel name={entry.branchName} kind="local" className="max-w-[140px]" />}
+          <span className="text-[11.5px] text-muted-foreground shrink-0">{"\u00B7"}</span>
+          <span className="text-[11.5px] text-muted-foreground shrink-0">
             {formatRelativeTime(entry.timestamp)}
           </span>
         </div>

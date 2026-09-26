@@ -1,12 +1,16 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDownUp, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowDownUp } from "lucide-react";
 import { useBranchBases, useRecentBranches } from "@/api/queries";
+import { cn } from "@/lib/utils";
 import { isImeComposing } from "@/lib/keyboard";
 import type { BranchInfo, WorktreeInfo } from "@/types";
 import { AnchoredPanel } from "@/components/ui/AnchoredPanel";
-import { PanelEmptyState, PanelHeader, PanelSearch } from "@/components/ui/PanelHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PanelHeader, PanelSearch, SectionLabel } from "@/components/ui/PanelHeader";
+import { Button } from "@/components/ui/Button";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
 import { BranchContextMenu } from "./BranchContextMenu";
 import { BranchPanelRowView } from "./BranchPanelRow";
 import {
@@ -186,35 +190,28 @@ export function BranchPanel({
     const isCollapsed = collapsed.has(section);
     return (
       <section aria-label={title}>
-        <h3 className="flex items-center gap-1 pl-2 pr-3.5 pt-1.5 pb-0.5 text-[11px] font-bold text-(--muted) bg-(--acc-faint) border-b border-(--line)">
-          <button
-            type="button"
-            onClick={() => toggleSection(section)}
-            aria-expanded={!isCollapsed}
-            aria-label={t(isCollapsed ? "branchPanel.expand" : "branchPanel.collapse", { section: title })}
-            className="flex items-center gap-1 h-6 px-1.5 rounded-[6px] hover:bg-accent transition-colors"
-          >
-            {isCollapsed ? (
-              <ChevronRight className="w-3 h-3" aria-hidden="true" />
-            ) : (
-              <ChevronDown className="w-3 h-3" aria-hidden="true" />
-            )}
-            {title}
-            {isCollapsed && <span className="font-medium text-(--faint) tabular-nums">{sectionRows.length}</span>}
-          </button>
-          <span className="flex-1" />
-          {section === "local" && !isCollapsed && (
-            <button
-              type="button"
-              onClick={() => setSortBy((s) => (s === "recent" ? "name" : "recent"))}
-              title={t("branchPanel.sortHint")}
-              className="flex items-center gap-1 h-5 px-1.5 rounded-[5px] bg-(--chip) text-[10.5px] font-medium text-(--muted) hover:bg-accent transition-colors"
-            >
-              <ArrowDownUp className="w-3 h-3" aria-hidden="true" />
-              {t(sortBy === "recent" ? "branchPanel.sortRecent" : "branchPanel.sortName")}
-            </button>
-          )}
-        </h3>
+        <SectionLabel
+          title={title}
+          count={sectionRows.length}
+          collapsed={isCollapsed}
+          onToggle={() => toggleSection(section)}
+          expandLabel={t("branchPanel.expand", { section: title })}
+          collapseLabel={t("branchPanel.collapse", { section: title })}
+          banner
+          trailing={
+            section === "local" && !isCollapsed ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSortBy((s) => (s === "recent" ? "name" : "recent"))}
+                title={t("branchPanel.sortHint")}
+                icon={<ArrowDownUp className="w-3 h-3" aria-hidden="true" />}
+              >
+                {t(sortBy === "recent" ? "branchPanel.sortRecent" : "branchPanel.sortName")}
+              </Button>
+            ) : undefined
+          }
+        />
         {!isCollapsed && sectionRows.map((row) => (
           <BranchPanelRowView
             key={row.branch.name}
@@ -250,7 +247,10 @@ export function BranchPanel({
       anchorRef={anchorRef}
       onClose={onClose}
       labelledBy={titleId}
-      className="w-[420px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] flex flex-col overflow-hidden bg-card rounded-(--radius-panel) shadow-[0_24px_60px_rgba(0,0,0,0.18)] ring-1 ring-(--line)"
+      className={cn(
+        FLOATING_SURFACE,
+        "w-[420px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] flex flex-col overflow-hidden rounded-(--radius-panel)",
+      )}
     >
       <div onKeyDown={handleKeyDown} className="flex flex-col min-h-0 flex-1">
         <PanelHeader
@@ -277,7 +277,7 @@ export function BranchPanel({
 
         <div ref={rootRef} className="flex-1 min-h-0 overflow-y-auto border-t border-(--line)">
           {flattenSections(sections).length === 0 ? (
-            <PanelEmptyState message={query ? t("branchPanel.noMatch") : t("branch.noBranches")} />
+            <EmptyState layout="row" title={query ? t("branchPanel.noMatch") : t("branch.noBranches")} />
           ) : (
             <>
               {renderSection("inWorktree", t("branchPanel.inWorktree"))}
@@ -287,7 +287,7 @@ export function BranchPanel({
           )}
         </div>
 
-        <p className="px-3.5 py-2.5 border-t border-(--line) text-[11.5px] leading-[18px] text-(--muted) shrink-0">
+        <p className="px-3.5 py-2.5 border-t border-(--line) text-[11.5px] leading-[18px] text-muted-foreground shrink-0">
           {t("branchPanel.hint")}
         </p>
       </div>

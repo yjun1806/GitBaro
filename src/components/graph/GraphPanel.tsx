@@ -34,6 +34,7 @@ import { ViewBranchPicker } from "./ViewBranchPicker";
 import { useHistoryView } from "./useHistoryView";
 import { GitStatusLine } from "@/components/review/GitStatusLine";
 import { trimTrailingSlash } from "@/lib/utils";
+import { Card } from "@/components/ui/Card";
 
 /** Which graph-panel tab a `ui.activeTab` value belongs to. */
 export type GraphPanelTab = "graph" | "stash" | "actions";
@@ -139,84 +140,83 @@ export function GraphPanel() {
   };
 
   return (
-    <section
-      aria-label={t("shell.panelTabs")}
-      className="relative flex flex-col shrink-0 flex-1 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
-    >
-      {/* 메인 칸 맨 위의 git 상태 줄. 보는 중이면 이 줄이 「보는 중」 띠가 된다. */}
-      <GitStatusLine />
-      <div className="flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)">
-        <TabGroup aria-label={t("shell.panelTabs")} className="flex-1 min-w-0 gap-2 px-3 border-b-0">
-          <Tab
-            variant="inline"
-            active={tab === "graph"}
-            onClick={openGraphTab}
-            icon={<GitCommitVertical className="w-3.5 h-3.5" />}
-          >
-            {t("shell.graphTab")}
-          </Tab>
-          <Tab
-            variant="inline"
-            active={tab === "stash"}
-            onClick={() => openStoredTab("stash")}
-            icon={<Archive className="w-3.5 h-3.5" />}
-            count={badgeCount(stashes.length)}
-          >
-            {t("shell.stashTab")}
-          </Tab>
-          <Tab
-            variant="inline"
-            active={tab === "actions"}
-            onClick={() => openStoredTab("actions")}
-            icon={<Play className="w-3.5 h-3.5" />}
-            count={badgeCount(runningCount)}
-          >
-            {t("actions.title")}
-          </Tab>
-          {hasRemote && (
+    <div role="region" aria-label={t("shell.panelTabs")} className="flex flex-col shrink-0 flex-1 min-h-0">
+      <Card className="relative flex-1 min-h-0">
+        {/* 메인 칸 맨 위의 git 상태 줄. 보는 중이면 이 줄이 「보는 중」 띠가 된다. */}
+        <GitStatusLine />
+        <div className="flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)">
+          <TabGroup aria-label={t("shell.panelTabs")} className="flex-1 min-w-0 gap-2 px-3 border-b-0">
             <Tab
               variant="inline"
-              active={tab === "pr"}
-              onClick={openPrTab}
-              icon={<GitPullRequest className="w-3.5 h-3.5" />}
+              active={tab === "graph"}
+              onClick={openGraphTab}
+              icon={<GitCommitVertical className="w-3.5 h-3.5" />}
             >
-              {t("pr.tab")}
+              {t("shell.graphTab")}
             </Tab>
-          )}
-        </TabGroup>
-        {tab === "graph" && <ViewBranchPicker />}
-        {tab === "graph" && <CompareChip />}
-        {/* 「작업 중인 변경 N」은 위 git 상태 줄에 있다. */}
-      </div>
+            <Tab
+              variant="inline"
+              active={tab === "stash"}
+              onClick={() => openStoredTab("stash")}
+              icon={<Archive className="w-3.5 h-3.5" />}
+              count={badgeCount(stashes.length)}
+            >
+              {t("shell.stashTab")}
+            </Tab>
+            <Tab
+              variant="inline"
+              active={tab === "actions"}
+              onClick={() => openStoredTab("actions")}
+              icon={<Play className="w-3.5 h-3.5" />}
+              count={badgeCount(runningCount)}
+            >
+              {t("actions.title")}
+            </Tab>
+            {hasRemote && (
+              <Tab
+                variant="inline"
+                active={tab === "pr"}
+                onClick={openPrTab}
+                icon={<GitPullRequest className="w-3.5 h-3.5" />}
+              >
+                {t("pr.tab")}
+              </Tab>
+            )}
+          </TabGroup>
+          {tab === "graph" && <ViewBranchPicker />}
+          {tab === "graph" && <CompareChip />}
+          {/* 「작업 중인 변경 N」은 위 git 상태 줄에 있다. */}
+        </div>
 
-      {tab === "graph" && graphListShown && !viewing && worktreeFilter.chips.length > 1 && (
-        <WorktreeChips
-          chips={worktreeFilter.chips}
-          visible={worktreeFilter.visible}
-          onToggle={worktreeFilter.toggle}
-          onShowAll={worktreeFilter.showAll}
-          onShowCurrentOnly={worktreeFilter.showCurrentOnly}
-          onContextMenu={(chip, e) => chipMenu.open(chip, contextMenuPoint(e))}
-        />
-      )}
-      {chipMenu.element}
-      <div role="tabpanel" className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-        {tab === "graph" ? (
-          <CommitGraph
-            wips={viewing ? NO_WIPS : worktreeFilter.wips}
-            worktreeHeads={viewing ? NO_HEADS : worktreeFilter.heads}
-            historyTarget={historyTarget}
+        {tab === "graph" && graphListShown && !viewing && worktreeFilter.chips.length > 1 && (
+          <WorktreeChips
+            chips={worktreeFilter.chips}
+            visible={worktreeFilter.visible}
+            onToggle={worktreeFilter.toggle}
+            onShowAll={worktreeFilter.showAll}
+            onShowCurrentOnly={worktreeFilter.showCurrentOnly}
+            onContextMenu={(chip, e) => chipMenu.open(chip, contextMenuPoint(e))}
           />
-        ) : tab === "stash" ? (
-          <StashView />
-        ) : tab === "pr" ? (
-          <PrListView />
-        ) : (
-          <ActionsView />
         )}
-        <SwitchingOverlay />
-      </div>
-    </section>
+        {chipMenu.element}
+        <div role="tabpanel" className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+          {tab === "graph" ? (
+            <CommitGraph
+              wips={viewing ? NO_WIPS : worktreeFilter.wips}
+              worktreeHeads={viewing ? NO_HEADS : worktreeFilter.heads}
+              historyTarget={historyTarget}
+            />
+          ) : tab === "stash" ? (
+            <StashView />
+          ) : tab === "pr" ? (
+            <PrListView />
+          ) : (
+            <ActionsView />
+          )}
+          <SwitchingOverlay />
+        </div>
+      </Card>
+    </div>
   );
 }
 

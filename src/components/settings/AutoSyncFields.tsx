@@ -29,7 +29,7 @@ export function AutoSyncFields({ value, onChange, disabled = false }: AutoSyncFi
         />
       </SettingsRow>
       {value.mode === "pull" && (
-        <div className="flex items-start gap-2 px-4 py-2.5 text-[12px] leading-[17px] text-muted-foreground bg-(--acc-faint)">
+        <div className="flex items-start gap-2 px-4 py-2.5 text-[11.5px] text-muted-foreground bg-(--acc-faint)">
           <ShieldCheck className="w-3.5 h-3.5 mt-px shrink-0 text-success" aria-hidden="true" />
           <span>{t("autoSync.pullSafety")}</span>
         </div>

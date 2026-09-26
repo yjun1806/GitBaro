@@ -1,6 +1,8 @@
 import { FolderGit2, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { Button, buttonClass } from "@/components/ui/Button";
+import { Count, Dot } from "@/components/ui/marks";
 import type { WorktreeBase } from "@/types";
 
 /** 칩 하나가 나타내는 워크트리. */
@@ -82,12 +84,10 @@ export function WorktreeChips({
                 : undefined
             }
             className={cn(
-              "flex items-center gap-2 shrink-0 h-[30px] px-2.5 rounded-(--radius-item) border text-[12px] transition-colors",
-              chip.isCurrent
-                ? "border-(--acc) bg-card"
-                : on
-                  ? "border-(--line2) bg-card hover:bg-accent"
-                  : "border-dashed border-(--line2) bg-transparent opacity-60 hover:opacity-100",
+              buttonClass({ size: "sm", variant: "secondary" }),
+              "justify-start gap-2",
+              chip.isCurrent && "ring-1 ring-(--acc)",
+              !on && "border border-dashed border-(--line2) bg-transparent opacity-60 hover:opacity-100",
             )}
           >
             <span
@@ -101,7 +101,7 @@ export function WorktreeChips({
               {name}
             </span>
             <span
-              className="text-[11px] text-(--faint)"
+              className="text-[10.5px] text-muted-foreground"
               title={chip.isMain ? t("worktree.primaryFolderHint") : undefined}
             >
               {chip.isMain
@@ -113,10 +113,10 @@ export function WorktreeChips({
             {chip.dirtyCount !== null && chip.dirtyCount > 0 && (
               <span
                 title={t("overlap.chipDirty", { count: chip.dirtyCount })}
-                className="flex items-center gap-[3px] text-[11px] font-bold text-(--live)"
+                className="flex items-center gap-[3px]"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-(--live)" aria-hidden="true" />
-                {chip.dirtyCount}
+                <Dot on live={false} />
+                <Count value={chip.dirtyCount} prefix="" tone="live" />
               </span>
             )}
           </button>
@@ -124,21 +124,13 @@ export function WorktreeChips({
       })}
       <span className="flex-1" />
       {hiddenCount > 0 && onShowAll ? (
-        <button
-          type="button"
-          onClick={onShowAll}
-          className="shrink-0 h-6 px-2.5 rounded-(--radius-chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
-        >
+        <Button size="sm" variant="ghost" onClick={onShowAll}>
           {t("overlap.showMore", { count: hiddenCount })}
-        </button>
+        </Button>
       ) : othersShown && onShowCurrentOnly ? (
-        <button
-          type="button"
-          onClick={onShowCurrentOnly}
-          className="shrink-0 h-6 px-2.5 rounded-(--radius-chip) text-[11.5px] font-semibold text-muted-foreground hover:bg-accent transition-colors"
-        >
+        <Button size="sm" variant="ghost" onClick={onShowCurrentOnly}>
           {t("overlap.showCurrentOnly")}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

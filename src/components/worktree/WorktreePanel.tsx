@@ -3,9 +3,13 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import { useTranslation } from "react-i18next";
 import { isImeComposing } from "@/lib/keyboard";
 import { useMenuActions } from "@/hooks/useMenuActions";
+import { cn } from "@/lib/utils";
 import type { WorktreeInfo } from "@/types";
 import { AnchoredPanel } from "@/components/ui/AnchoredPanel";
-import { PanelEmptyState, PanelHeader, PanelSearch, PanelSectionHeader } from "@/components/ui/PanelHeader";
+import { PanelHeader, PanelSearch, SectionLabel } from "@/components/ui/PanelHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ConfirmCommandDialog } from "@/components/ui/ConfirmCommandDialog";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
 import { WorktreeContextMenu } from "./WorktreeContextMenu";
 import { WorktreePanelRow } from "./WorktreePanelRow";
 import {
@@ -107,7 +111,7 @@ export function WorktreePanel({
       <section aria-label={title}>
         {/* 「기본 폴더」는 브랜치 main과 헷갈리기 쉬워 뜻을 툴팁으로 덧붙인다. */}
         <div title={section === "main" ? t("worktree.primaryFolderHint") : undefined}>
-          <PanelSectionHeader title={title} />
+          <SectionLabel title={title} />
         </div>
         {sectionRows.map(({ worktree }) => (
           <WorktreePanelRow
@@ -141,7 +145,10 @@ export function WorktreePanel({
       anchorRef={anchorRef}
       onClose={onClose}
       labelledBy={titleId}
-      className="w-[380px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] flex flex-col overflow-hidden bg-card rounded-(--radius-panel) shadow-[0_24px_60px_rgba(0,0,0,0.18)] ring-1 ring-(--line)"
+      className={cn(
+        "w-[380px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] flex flex-col overflow-hidden rounded-(--radius-panel)",
+        FLOATING_SURFACE,
+      )}
     >
       <div onKeyDown={handleKeyDown} className="flex flex-col min-h-0 flex-1">
         <PanelHeader
@@ -161,7 +168,7 @@ export function WorktreePanel({
 
         <div className="flex-1 min-h-0 overflow-y-auto border-t border-(--line)">
           {rows.length === 0 ? (
-            <PanelEmptyState message={query ? t("branchPanel.noMatch") : t("worktree.noWorktrees")} />
+            <EmptyState layout="row" title={query ? t("branchPanel.noMatch") : t("worktree.noWorktrees")} />
           ) : (
             <>
               {renderSection("main", sectionTitle.main)}
@@ -194,30 +201,15 @@ export function WorktreePanel({
       )}
 
       {confirmRemove && (
-        <div className="absolute inset-x-3.5 bottom-3.5 bg-card border border-border rounded-lg shadow-lg p-3 z-10 animate-toast-in">
-          <p className="text-sm text-foreground mb-2">
-            {t("worktree.removeConfirm", { path: confirmRemove.split("/").filter(Boolean).pop() })}
-          </p>
-          <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              onClick={() => setConfirmRemove(null)}
-              className="px-3 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onRemoveWorktree(confirmRemove);
-                setConfirmRemove(null);
-              }}
-              className="px-3 py-1 text-xs bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded transition-colors"
-            >
-              {t("common.delete")}
-            </button>
-          </div>
-        </div>
+        <ConfirmCommandDialog
+          title={t("worktree.remove")}
+          description={t("worktree.removeConfirm", { path: confirmRemove.split("/").filter(Boolean).pop() })}
+          command={`git worktree remove ${confirmRemove}`}
+          confirmLabel={t("common.delete")}
+          confirmVariant="destructive"
+          onConfirm={() => onRemoveWorktree(confirmRemove)}
+          onClose={() => setConfirmRemove(null)}
+        />
       )}
     </AnchoredPanel>
   );

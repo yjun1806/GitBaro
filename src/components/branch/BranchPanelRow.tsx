@@ -2,7 +2,8 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Check, Eye } from "lucide-react";
-import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
+import { Button } from "@/components/ui/Button";
+import { Count, RefLabel } from "@/components/ui/marks";
 import { laneColor } from "@/components/graph/graph-model";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { worktreeBaseTitle } from "@/lib/worktree-base";
@@ -27,10 +28,6 @@ interface BranchPanelRowViewProps {
   onMerge: () => void;
   onContextMenu: (e: ReactMouseEvent) => void;
 }
-
-// 시안 D6 `chip_btn`: 높이 24px, 좌우 10px, 테두리 없음, --chip 배경, 11.5px/600, 모서리 6px.
-const CHIP_BUTTON =
-  "h-6 px-2.5 rounded-[6px] bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-(--chip)";
 
 /**
  * 행 둘째 줄(시안 D6). 칸마다 보이는 것이 다르다.
@@ -117,22 +114,20 @@ export function BranchPanelRowView({
       </span>
       <span className="flex-1 min-w-0 flex flex-col gap-0.5">
         <span className="flex items-center gap-1.5 min-w-0">
-          <span className={cn("font-mono text-xs text-(--fg) truncate", isCurrent ? "font-bold" : "font-medium")}>
+          <span className={cn("font-mono text-[11.5px] text-(--fg) truncate", isCurrent ? "font-bold" : "font-medium")}>
             {branch.name}
           </span>
           <BranchStatusBadge branch={branch} />
           {worktreeLabel && worktree && (
-            <span
-              className="inline-flex items-center gap-1 shrink-0 max-w-[140px] px-[7px] py-px rounded-(--radius-chip) bg-card border text-[10.5px] font-bold text-(--fg2)"
-              style={{ borderColor: laneColor(worktree.path, 0) }}
-              title={worktree.isMain ? `${worktree.path}\n${t("worktree.primaryFolderHint")}` : worktree.path}
-            >
-              <WorktreeIcon className="w-2.5 h-2.5" />
-              <span className="truncate">{worktreeLabel}</span>
-            </span>
+            <RefLabel
+              name={worktreeLabel}
+              kind="worktree"
+              laneColor={laneColor(worktree.path, 0)}
+              className="max-w-[140px]"
+            />
           )}
         </span>
-        <span className="text-[11px] text-(--faint) truncate" title={base ? worktreeBaseTitle(base, t) : undefined}>
+        <span className="text-[11.5px] text-muted-foreground truncate" title={base ? worktreeBaseTitle(base, t) : undefined}>
           {branchSubtitle(row, baseInfo, t)}
         </span>
       </span>
@@ -142,12 +137,12 @@ export function BranchPanelRowView({
       <span className="grid shrink-0 items-center justify-items-end">
         <span
           className={cn(
-            "[grid-area:1/1] text-[11px] text-(--faint) tabular-nums transition-opacity group-hover:opacity-0 group-focus-within:opacity-0",
+            "[grid-area:1/1] transition-opacity group-hover:opacity-0 group-focus-within:opacity-0",
             isActive && "opacity-0",
           )}
           title={base ? worktreeBaseTitle(base, t) : undefined}
         >
-          {ahead > 0 ? `↑${ahead}` : ""}
+          {ahead > 0 && <Count value={ahead} prefix="↑" tone="sync" />}
         </span>
         <span
           className={cn(
@@ -156,10 +151,10 @@ export function BranchPanelRowView({
           )}
         >
           {!isCurrent && (
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant="secondary"
               onClick={onPrimary}
-              className={CHIP_BUTTON}
               title={
                 action === "openWorktree" && worktreeLabel
                   ? t("branchPanel.openHint", { name: worktreeLabel })
@@ -167,14 +162,14 @@ export function BranchPanelRowView({
               }
             >
               {action === "openWorktree" ? t("branchPanel.open") : t("branchPanel.switch")}
-            </button>
+            </Button>
           )}
-          <button type="button" onClick={onCompare} disabled={!canCompare} className={CHIP_BUTTON}>
+          <Button size="sm" variant="secondary" onClick={onCompare} disabled={!canCompare}>
             {t("branchPanel.compare")}
-          </button>
-          <button type="button" onClick={onMerge} disabled={!canCompare} className={CHIP_BUTTON}>
+          </Button>
+          <Button size="sm" variant="secondary" onClick={onMerge} disabled={!canCompare}>
             {t("branchPanel.merge")}
-          </button>
+          </Button>
         </span>
       </span>
     </div>

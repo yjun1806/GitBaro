@@ -8,6 +8,7 @@ import { useStashList, useStashMutations } from "@/api/queries";
 import { getErrorMessage } from "@/lib/utils";
 import { StashList } from "./StashList";
 import { StashSaveDialog } from "./StashSaveDialog";
+import { Button } from "@/components/ui/Button";
 
 export function StashView() {
   const { t } = useTranslation();
@@ -68,15 +69,11 @@ export function StashView() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="text-xs font-medium">{t("stash.title")}</span>
-        <button
-          onClick={() => setShowSaveDialog(true)}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-md hover:bg-accent transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
+      <div className="flex items-center justify-between h-8 px-3 border-b border-(--line)">
+        <span className="text-[12.5px] font-bold">{t("stash.title")}</span>
+        <Button size="sm" variant="ghost" icon={<Plus className="w-3 h-3" />} onClick={() => setShowSaveDialog(true)}>
           {t("stash.save")}
-        </button>
+        </Button>
       </div>
 
       {/* Stash List */}

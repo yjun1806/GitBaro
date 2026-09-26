@@ -1,11 +1,10 @@
 import { useState, useId, useRef } from "react";
-import { X, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { cn } from "@/lib/utils";
 import type { BranchInfo } from "@/types";
-import { Dialog } from "@/components/ui/Dialog";
+import { DialogFrame } from "@/components/ui/DialogFrame";
+import { Button } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/TextInput";
 import { checkNewBranchName } from "./branch-name";
-import { Spinner } from "@/components/ui/Spinner";
 
 interface RenameBranchDialogProps {
   branchName: string;
@@ -51,73 +50,49 @@ export function RenameBranchDialog({
   };
 
   return (
-    <Dialog
+    <DialogFrame
+      title={t("branch.renameTitle")}
       onClose={onClose}
       dismissible={!isRenaming}
-      labelledBy={titleId}
-      className="bg-card rounded-xl shadow-2xl w-full max-w-md"
+      size="md"
+      footer={
+        <>
+          <Button variant="ghost" size="md" onClick={onClose} disabled={isRenaming}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => void handleRename()}
+            disabled={!valid || isRenaming}
+            busy={isRenaming}
+          >
+            {t("branch.contextMenu.rename")}
+          </Button>
+        </>
+      }
     >
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-        <h2 id={titleId} className="text-base font-semibold text-foreground">
-          {t("branch.renameTitle")}
-        </h2>
-        <button
-          onClick={onClose}
-          disabled={isRenaming}
-          className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors disabled:opacity-40"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div className="px-5 py-5 flex flex-col gap-1.5">
-        <label htmlFor={`${titleId}-name`} className="text-xs font-medium text-muted-foreground">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={`${titleId}-name`} className="text-[11.5px] font-semibold text-(--fg2)">
           {t("branch.name")}
         </label>
-        <div
-          className={cn(
-            "flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors",
-            error
-              ? "border-destructive focus-within:ring-2 focus-within:ring-destructive/30"
-              : "border-border focus-within:ring-2 focus-within:ring-ring focus-within:border-primary",
-          )}
-        >
-          <GitBranch className="w-4 h-4 text-muted-foreground shrink-0" />
-          <input
-            id={`${titleId}-name`}
-            autoFocus
-            onFocus={(e) => e.currentTarget.select()}
-            type="text"
-            value={name}
-            readOnly={isRenaming}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) void handleRename();
-            }}
-            className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
-          />
-        </div>
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        <TextInput
+          id={`${titleId}-name`}
+          autoFocus
+          onFocus={(e) => e.currentTarget.select()}
+          value={name}
+          readOnly={isRenaming}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) void handleRename();
+          }}
+        />
+        {error && (
+          <p className="text-[11.5px] text-danger" role="alert">
+            {error}
+          </p>
+        )}
       </div>
-
-      <div className="flex justify-end gap-3 px-5 py-4 border-t border-border">
-        <button
-          onClick={onClose}
-          disabled={isRenaming}
-          className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-        >
-          {t("common.cancel")}
-        </button>
-        <button
-          onClick={() => void handleRename()}
-          disabled={!valid || isRenaming}
-            aria-busy={isRenaming}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors"
-        >
-          {isRenaming && <Spinner />}
-          {t("branch.contextMenu.rename")}
-        </button>
-      </div>
-    </Dialog>
+    </DialogFrame>
   );
 }

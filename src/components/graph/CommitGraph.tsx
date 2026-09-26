@@ -69,6 +69,8 @@ import { branchColorOf, MUTED_LANE } from "./lane-style";
 import { BranchRangeGraph } from "@/components/branch/BranchRangeGraph";
 import { activeRange, isStaleRange, useBranchRangeStore } from "@/components/branch/branch-range";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { RefLabel as RefLabelMark, StatusChip } from "@/components/ui/marks";
 import {
   activeUnpushedRange,
   useUnpushedRangeViewStore,
@@ -547,7 +549,7 @@ function CommitGraphList({
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       <div
-        className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11px] font-semibold text-(--faint)"}
+        className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
         style={{ paddingLeft: graphWidth + 8 }}
         aria-hidden="true"
       >
@@ -574,7 +576,7 @@ function CommitGraphList({
         {isLoading ? (
           <LoadingState label={t("history.loadingHistory")} />
         ) : commits.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t("history.noCommits")}</p>
+          <EmptyState layout="row" title={t("history.noCommits")} />
         ) : (
           commits.map((commit, index) => {
             const layout = layouts.get(commit.id);
@@ -652,11 +654,17 @@ function CommitGraphList({
 }
 
 
-/** 보는 중에 WIP 행 자리에 두는 안내. 커밋 안 한 변경은 체크아웃한 작업 트리의 것이다. */
+/**
+ * 보는 중에 WIP 행 자리에 두는 안내. 커밋 안 한 변경은 체크아웃한 작업 트리의 것이다.
+ * `Notice`(3.7)의 `neutral banner` 모양을 그대로 쓰되, `Notice`는 항상 `role="status"`를
+ * 붙인다 — 이 줄 위의 `GitStatusLine`이 이미 그 role을 쓰고 있어(보는 중 띠) 겹치면 화면
+ * 읽기 프로그램과 테스트의 `getByRole("status")`가 둘을 구분하지 못한다. 그래서 컴포넌트
+ * 대신 같은 모양만 손으로 그린다.
+ */
 function ViewingNote() {
   const { t } = useTranslation();
   return (
-    <p className="flex items-center h-7 px-3.5 border-b border-(--line) text-[11.5px] text-muted-foreground bg-(--acc-faint)">
+    <p className="flex items-center gap-2 px-3 py-2 border-b border-(--line) bg-(--chip) text-[11.5px] text-(--fg2)">
       {t("historyView.wipHidden")}
     </p>
   );
@@ -850,18 +858,10 @@ export interface RepoLaneCommitGraphProps {
   onSelectWip: (wip: LaneWip, key: string) => void;
 }
 
-/** 저장소 이름 표시. 레인 색의 옅은 배경에 레인 색 글자. */
+/** 저장소 이름 표시. 레인 색의 옅은 배경에 레인 색 글자(`RefLabel`의 레인 색 채움을 그대로 쓴다). */
 export function RepoLaneTag({ repoPath, label }: { repoPath: string; label: string }) {
   const color = repoLaneColor(repoPath);
-  return (
-    <span
-      className="shrink-0 max-w-[140px] truncate px-[7px] py-px rounded-[6px] text-[10.5px] font-bold"
-      style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}
-      title={repoPath}
-    >
-      {label}
-    </span>
-  );
+  return <RefLabelMark name={label} kind="worktree" laneColor={color} className="max-w-[140px]" />;
 }
 
 /**
@@ -891,7 +891,7 @@ export function RepoLaneCommitGraph({
   );
   const graphWidth = graphColumnWidth(graph.laneCount);
   const colorOf = useCallback(
-    (chain: number) => (lanePaths[chain] ? repoLaneColor(lanePaths[chain]) : "var(--faint)"),
+    (chain: number) => (lanePaths[chain] ? repoLaneColor(lanePaths[chain]) : "var(--muted)"),
     [lanePaths],
   );
   // 커밋 우클릭: 복사·GitHub 보기만 있는 메뉴. 여러 저장소의 커밋이라 체크아웃·reset 같은 동작은
@@ -926,7 +926,7 @@ export function RepoLaneCommitGraph({
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       <div
-        className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11px] font-semibold text-(--faint)"}
+        className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
         style={{ paddingLeft: graphWidth + 8 }}
         aria-hidden="true"
       >
@@ -939,7 +939,7 @@ export function RepoLaneCommitGraph({
         {isLoading && graph.rows.length === 0 ? (
           <LoadingState label={t("history.loadingHistory")} />
         ) : graph.rows.length === 0 ? (
-          <p className="py-6 px-4 text-center text-sm text-muted-foreground">{emptyMessage ?? t("review.noCommits")}</p>
+          <EmptyState layout="row" title={emptyMessage ?? t("review.noCommits")} />
         ) : (
           graph.rows.map((row) => {
             switch (row.kind) {
@@ -1151,13 +1151,11 @@ function BaseRow({
       </svg>
       <span className={GRAPH_COLUMNS + " flex-1 min-w-0 pl-2 pr-3 text-[12.5px]"}>
         <span className="flex items-center gap-2 min-w-0">
-          <span className="shrink-0 px-[7px] py-px rounded-[6px] bg-(--chip) text-[10.5px] font-bold text-(--fg2)">
-            {branchLabel}
-          </span>
+          <StatusChip tone="neutral">{branchLabel}</StatusChip>
           <span className="truncate text-(--fg2)">{t("review.baseRow")}</span>
         </span>
         <span />
-        <span className="truncate text-[12px] text-muted-foreground">
+        <span className="truncate text-[11.5px] text-muted-foreground">
           {baseTime !== null ? formatRelativeTime(baseTime) : null}
         </span>
         <span />

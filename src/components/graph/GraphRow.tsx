@@ -1,15 +1,15 @@
 import { memo, type MouseEvent, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Bot, FolderGit2, GitBranch } from "lucide-react";
+import { Bot } from "lucide-react";
 import { RefBadge } from "@/components/history/CommitItem";
 import { FocusFlash } from "@/components/ui/FocusFlash";
+import { RefLabel as RefLabelMark, StatusChip } from "@/components/ui/marks";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { GraphEdge, GraphRowLayout } from "@/lib/graph-lanes";
 import type { CommitInfo, RefLabel } from "@/types";
 import { GRAPH_ROW_HEIGHT, laneX, type WipTarget } from "./graph-model";
 import { chainDotStyle, chainEdgeStyle } from "./graph-paint";
-import { LANE_LABEL_CLASS, laneLabelStyle } from "./lane-style";
 
 const H = GRAPH_ROW_HEIGHT;
 const MID = H / 2;
@@ -250,7 +250,7 @@ export const GraphRow = memo(function GraphRow({
             </span>
           )}
         </span>
-        <span className="flex items-center gap-1.5 min-w-0 text-[12px] text-(--fg2)">
+        <span className="flex items-center gap-1.5 min-w-0 text-[12.5px] text-(--fg2)">
           {resolvedAvatar ? (
             <img src={resolvedAvatar} alt="" className="w-[18px] h-[18px] rounded-full shrink-0 object-cover" />
           ) : (
@@ -272,10 +272,10 @@ export const GraphRow = memo(function GraphRow({
             </span>
           )}
         </span>
-        <span className="truncate text-[12px] text-muted-foreground">
+        <span className="truncate text-[11.5px] text-muted-foreground">
           {formatRelativeTime(commit.timestamp)}
         </span>
-        <span className="flex items-center gap-1 font-mono text-[11.5px] text-(--faint)">{commit.shortId}</span>
+        <span className="flex items-center gap-1 font-mono text-[11.5px] text-muted-foreground">{commit.shortId}</span>
       </span>
     </button>
   );
@@ -396,33 +396,21 @@ export function GraphWipRow({
           {leading}
           <span className="italic text-(--fg2) truncate">{wipLabel}</span>
           {/* 이 변경이 쌓인 브랜치(그 브랜치 최신 커밋 위)와 워크트리. */}
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 max-w-[200px] shrink-0 px-[7px] py-px rounded-[6px] text-[10.5px] font-bold",
-              target.branch === null ? "bg-(--chip) text-muted-foreground" : LANE_LABEL_CLASS,
-            )}
-            style={target.branch === null ? undefined : laneLabelStyle(color)}
-            title={branchText}
-          >
-            <GitBranch className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
-            <span className="truncate font-mono">{branchText}</span>
-          </span>
-          {target.worktree !== null ? (
-            <span
-              className="inline-flex items-center gap-1 max-w-[180px] shrink-0 px-[7px] py-px rounded-[6px] border border-(--line2) text-[10.5px] font-bold text-(--fg2)"
-              title={t("graph.worktree")}
-            >
-              <FolderGit2 className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
-              <span className="truncate font-mono">{target.worktree}</span>
-            </span>
+          {target.branch !== null ? (
+            <RefLabelMark name={branchText} kind="worktree" laneColor={color} className="max-w-[200px]" />
           ) : (
-            <span className="shrink-0 text-[11px] text-muted-foreground">{worktreeText}</span>
+            <RefLabelMark name={branchText} kind="local" className="max-w-[200px]" />
+          )}
+          {target.worktree !== null ? (
+            <RefLabelMark name={target.worktree} kind="worktree" laneColor={color} className="max-w-[180px]" />
+          ) : (
+            <span className="shrink-0 text-[11.5px] text-muted-foreground">{worktreeText}</span>
           )}
           <span className="text-[11.5px] text-muted-foreground shrink-0">{countText}</span>
           {trailing}
         </span>
         <span />
-        <span className="truncate text-[12px] text-muted-foreground">
+        <span className="truncate text-[11.5px] text-muted-foreground">
           {changedAt !== null && (count ?? 0) > 0
             ? t("graph.modifiedAgo", { time: formatRelativeTime(changedAt / 1000) })
             : null}
@@ -561,15 +549,15 @@ function RegionHeaderRow({ name, desc, tinted = false, action, graphWidth, throu
         ))}
       </svg>
       <span className="flex items-center gap-2 flex-1 min-w-0 pl-2 pr-3">
-        <span className="shrink-0 text-[12px] font-bold text-foreground">{name}</span>
-        {desc && <span className="flex-1 min-w-0 truncate text-[12px] text-muted-foreground">{desc}</span>}
+        <StatusChip tone="neutral">{name}</StatusChip>
+        {desc && <span className="flex-1 min-w-0 truncate text-[11.5px] text-muted-foreground">{desc}</span>}
         {action && (
           <button
             type="button"
             onClick={action.onClick}
             aria-pressed={action.pressed}
             className={cn(
-              "shrink-0 h-6 px-2 rounded-(--radius-chip) text-[12px] font-semibold text-primary transition-colors",
+              "shrink-0 h-6 px-2 rounded-(--radius-chip) text-[11.5px] font-semibold text-primary transition-colors",
               action.pressed ? "bg-(--acc-sel)" : "hover:bg-accent",
             )}
           >

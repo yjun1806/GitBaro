@@ -7,6 +7,10 @@ import { DiffViewer } from "@/components/diff/DiffViewer";
 import { cn } from "@/lib/utils";
 import { overlapWorktreeName, WorktreeTag, type OverlapSibling } from "./OverlapBadge";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Segmented } from "@/components/ui/Segmented";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
 
 export interface SideBySideSide {
   path: string;
@@ -34,25 +38,24 @@ function DiffColumn({ side, filePath, label }: { side: SideBySideSide; filePath:
   const { t } = useTranslation();
   const { data, isLoading, isError } = useFileDiff(side.path, filePath, side.staged);
   return (
-    <section
-      aria-label={label}
-      className="flex flex-col flex-1 min-w-0 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
-    >
-      <div className="flex items-center gap-2 h-9 px-3 shrink-0 border-b border-(--line)">
-        <WorktreeTag name={overlapWorktreeName(side)} path={side.path} />
-        <span className="truncate text-[11px] text-(--faint)" title={side.path}>
-          {side.path}
-        </span>
-      </div>
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        {isError ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-danger">{t("diff.failedToLoad")}</div>
-        ) : isLoading && !data ? (
-          <LoadingState label={t("diff.loadingDiff")} />
-        ) : (
-          <DiffViewer diff={data ?? null} staged={side.staged} />
-        )}
-      </div>
+    <section aria-label={label} className="flex flex-col flex-1 min-w-0 min-h-0">
+      <Card className="flex-1 min-h-0">
+        <div className="flex items-center gap-2 h-8 px-3 shrink-0 border-b border-(--line)">
+          <WorktreeTag name={overlapWorktreeName(side)} path={side.path} />
+          <span className="truncate text-[11.5px] text-muted-foreground" title={side.path}>
+            {side.path}
+          </span>
+        </div>
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          {isError ? (
+            <div className="flex-1 flex items-center justify-center text-[12.5px] text-danger">{t("diff.failedToLoad")}</div>
+          ) : isLoading && !data ? (
+            <LoadingState label={t("diff.loadingDiff")} />
+          ) : (
+            <DiffViewer diff={data ?? null} staged={side.staged} />
+          )}
+        </div>
+      </Card>
     </section>
   );
 }
@@ -71,42 +74,31 @@ export function SideBySideDiff({ filePath, theirFilePath, mine, siblings, onClos
     <Dialog
       onClose={onClose}
       labelledBy={titleId}
-      className="flex flex-col w-[94vw] h-[88vh] p-(--g) gap-(--g) bg-background rounded-(--radius-panel) shadow-2xl"
+      className={cn("flex flex-col w-[94vw] h-[88vh] p-(--g) gap-(--g) rounded-(--radius-panel)", FLOATING_SURFACE)}
     >
       <div className="flex items-center gap-2 shrink-0 px-1">
-        <h2 id={titleId} className="text-[13px] font-bold text-foreground">
+        <h2 id={titleId} className="text-[14px] font-semibold text-foreground">
           ⧉ {t("overlap.sideBySideTitle")}
         </h2>
-        <span className="min-w-0 truncate font-mono text-[12px] text-muted-foreground" title={filePath}>
+        <span className="min-w-0 truncate font-mono text-[11.5px] text-muted-foreground" title={filePath}>
           {filePath}
         </span>
         <span className="flex-1" />
         {siblings.length > 1 && (
-          <div role="group" aria-label={t("overlap.pickWorktree")} className="flex p-0.5 rounded-[7px] bg-(--chip)">
-            {siblings.map((s, i) => (
-              <button
-                key={s.path}
-                type="button"
-                aria-pressed={s === other}
-                onClick={() => setPick(i)}
-                className={cn(
-                  "h-[22px] px-2 rounded-[5px] text-[11.5px] font-mono transition-colors",
-                  s === other ? "bg-card font-semibold text-foreground shadow-(--shadow-sm)" : "text-muted-foreground",
-                )}
-              >
-                {overlapWorktreeName(s)}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            size="sm"
+            ariaLabel={t("overlap.pickWorktree")}
+            value={other?.path ?? ""}
+            onChange={(path) => {
+              const idx = siblings.findIndex((s) => s.path === path);
+              if (idx >= 0) setPick(idx);
+            }}
+            options={siblings.map((s) => ({ value: s.path, label: overlapWorktreeName(s) }))}
+          />
         )}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={t("overlap.close")}
-          className="p-1 rounded-(--radius-chip) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-        >
+        <Button iconOnly size="md" variant="ghost" onClick={onClose} aria-label={t("overlap.close")} title={t("overlap.close")}>
           <X className="w-4 h-4" />
-        </button>
+        </Button>
       </div>
       <div className="flex flex-1 min-h-0 gap-(--g)">
         <DiffColumn side={mine} filePath={filePath} label={t("overlap.thisWorktree")} />

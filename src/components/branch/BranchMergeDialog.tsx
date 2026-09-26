@@ -1,11 +1,11 @@
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
-import { Dialog } from "@/components/ui/Dialog";
+import { DialogFrame } from "@/components/ui/DialogFrame";
 import { MergeActionPanel } from "@/components/history/MergeActionPanel";
 import { useBranchComparison } from "@/api/queries";
 import { getErrorMessage } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Notice } from "@/components/ui/Notice";
 
 interface BranchMergeDialogProps {
   repoPath: string;
@@ -27,29 +27,16 @@ export function BranchMergeDialog({ repoPath, currentBranch, source, isDirty, on
   const { data: comparison, isLoading, error } = useBranchComparison(repoPath, currentBranch, source);
 
   return (
-    <Dialog
+    <DialogFrame
+      title={t("gitActions.mergeTitle", { branch: currentBranch })}
+      titleId={titleId}
       onClose={onClose}
-      labelledBy={titleId}
-      closeOnBackdrop
-      className="bg-popover border border-border rounded-xl shadow-2xl w-[440px] max-h-[80vh] flex flex-col"
+      size="md"
     >
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-        <h2 id={titleId} className="text-sm font-semibold truncate">
-          {t("gitActions.mergeTitle", { branch: currentBranch })}
-        </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={t("gitActions.close")}
-          className="p-1 rounded-md hover:bg-accent transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
       {isLoading ? (
         <LoadingState label={t("compare.loading")} />
       ) : error ? (
-        <p className="px-5 py-4 text-sm text-danger">{getErrorMessage(error)}</p>
+        <Notice tone="danger">{getErrorMessage(error)}</Notice>
       ) : comparison ? (
         <MergeActionPanel
           repoPath={repoPath}
@@ -59,6 +46,6 @@ export function BranchMergeDialog({ repoPath, currentBranch, source, isDirty, on
           isDirty={isDirty}
         />
       ) : null}
-    </Dialog>
+    </DialogFrame>
   );
 }

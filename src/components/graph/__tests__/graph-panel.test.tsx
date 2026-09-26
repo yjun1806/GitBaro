@@ -38,6 +38,16 @@ vi.mock("@/hooks/useOpenWorktree", () => ({ useOpenWorktree: () => openWorktree 
 const REPO = "/work/app";
 const FEAT = "/work/app-feat";
 
+/**
+ * 「보는 중」 띠(GitStatusLine). 같은 화면에 「WIP 안내」(Notice)도 `role="status"`를 쓰므로
+ * 텍스트로 가려낸다.
+ */
+function viewingStrip(): HTMLElement {
+  const strip = screen.getAllByRole("status").find((el) => el.textContent?.includes("Viewing"));
+  if (!strip) throw new Error("viewing strip not found");
+  return strip;
+}
+
 function commit(id: string, parentIds: string[], extra: Partial<CommitInfo> = {}): CommitInfo {
   return {
     id,
@@ -441,7 +451,7 @@ describe("GraphPanel worktree chips (D5)", () => {
       // 지금 연 워크트리(main)의 줄기와 main 이름표는 칩 견본 색이다.
       const c1 = document.querySelector('[data-commit-id="c1"]') as HTMLElement;
       expect(c1.querySelector("circle")?.getAttribute("fill")).toBe(worktreeColor(REPO));
-      expect(c1.querySelector("[data-lane-label]")?.textContent).toBe("main");
+      expect(c1.querySelector('[style*="--lane-bg"]')?.textContent).toBe("main");
     } finally {
       history.pages.pop();
     }
@@ -582,7 +592,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     fireEvent.click(document.querySelector<HTMLElement>('[data-commit-id="c2"]')!);
     expect(useSelectionStore.getState().selectedCommitId).toBe("c2");
 
-    const strip = screen.getByRole("status");
+    const strip = viewingStrip();
     expect(strip.textContent).toContain("Viewing feat/x · not checked out");
     expect(within(strip).getByRole("button", { name: "Check out this branch" })).toBeTruthy();
     fireEvent.click(within(strip).getByRole("button", { name: "Back to current branch" }));
@@ -610,7 +620,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     expect(useHistoryViewStore.getState().target).toEqual({ kind: "all" });
     expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "all" });
     // 모든 브랜치는 체크아웃할 수 없다.
-    expect(within(screen.getByRole("status")).queryByRole("button", { name: "Check out this branch" })).toBeNull();
+    expect(within(viewingStrip()).queryByRole("button", { name: "Check out this branch" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Viewing\s*All branches/ }));
     fireEvent.click(screen.getByRole("option", { name: /Current checkout/ }));
@@ -620,7 +630,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
   it("ends viewing when another repository is opened", () => {
     useHistoryViewStore.getState().view(REPO, { kind: "all" });
     renderPanel();
-    expect(screen.getByRole("status").textContent).toContain("Viewing All branches");
+    expect(viewingStrip().textContent).toContain("Viewing All branches");
     act(() => useRepositoryStore.setState({ activeRepoPath: FEAT }));
     expect(useHistoryViewStore.getState().target).toBeNull();
   });

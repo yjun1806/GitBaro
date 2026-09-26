@@ -26,12 +26,16 @@ export interface WorkSwitcherProps {
 }
 
 const SEGMENT =
-  "inline-flex items-center gap-1.5 min-w-0 h-[26px] px-2.5 rounded-[6px] text-[11.5px] font-semibold transition-colors disabled:cursor-not-allowed";
+  "inline-flex items-center gap-1.5 min-w-0 h-6 px-2.5 rounded-(--radius-chip) text-[12.5px] font-semibold transition-colors disabled:cursor-not-allowed";
 
 /**
  * 아래 왼쪽 칸 맨 위의 두 칸 전환: [작업 중인 변경 N] [커밋 <sha>]. 지금 무엇을 보는지 늘 보이고,
  * 누르면 그쪽으로 간다. 커밋을 고르면 둘째 칸으로 옮겨지고, 첫 칸을 누르면 스테이징 목록과 커밋
  * 입력으로 돌아간다(커밋 선택은 풀린다).
+ *
+ * `Segmented`(공용 부품)는 그룹 전체를 한 번에 껐다 켰다 할 뿐 조각별 비활성·이유 풍선말은 지원하지
+ * 않는다. 이 칸은 두 조각을 서로 다른 이유로 독립적으로 끄므로(다른 브랜치를 보는 중이라 첫 칸만,
+ * 고른 커밋이 없어 둘째 칸만) 손으로 만든 채로 둔다 — 동작을 지키기 위한 의도적 예외.
  */
 export function WorkSwitcher({
   mode,

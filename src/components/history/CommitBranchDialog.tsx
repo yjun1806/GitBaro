@@ -1,8 +1,8 @@
 import { useState, useId } from "react";
-import { X, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { cn } from "@/lib/utils";
-import { Dialog } from "@/components/ui/Dialog";
+import { DialogFrame } from "@/components/ui/DialogFrame";
+import { Button } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/TextInput";
 import { isSubmitEnter } from "@/lib/keyboard";
 
 interface CommitBranchDialogProps {
@@ -21,7 +21,7 @@ function isValidBranchName(name: string): boolean {
  */
 export function CommitBranchDialog({ shortId, onCreate, onClose }: CommitBranchDialogProps) {
   const { t } = useTranslation();
-  const titleId = useId();
+  const inputId = useId();
   const [name, setName] = useState("");
 
   const valid = name.length > 0 && isValidBranchName(name);
@@ -32,64 +32,39 @@ export function CommitBranchDialog({ shortId, onCreate, onClose }: CommitBranchD
   };
 
   return (
-    <Dialog
+    <DialogFrame
+      title={t("history.createBranchFrom", { shortId })}
       onClose={onClose}
-      labelledBy={titleId}
-      className="bg-card rounded-xl shadow-2xl w-full max-w-md"
-    >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 id={titleId} className="text-base font-semibold text-foreground">
-            {t("history.createBranchFrom", { shortId })}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="px-5 py-5 flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            {t("branch.name")}
-          </label>
-          <div
-            className={cn(
-              "flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors",
-              error
-                ? "border-destructive focus-within:ring-2 focus-within:ring-destructive/30"
-                : "border-border focus-within:ring-2 focus-within:ring-ring focus-within:border-primary",
-            )}
-          >
-            <GitBranch className="w-4 h-4 text-muted-foreground shrink-0" />
-            <input
-              autoFocus
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
-              placeholder="feature/my-feature"
-              className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
-            />
-          </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
-        </div>
-
-        <div className="flex justify-end gap-3 px-5 py-4 border-t border-border">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
+      size="md"
+      footer={
+        <>
+          <Button variant="ghost" size="md" onClick={onClose}>
             {t("common.cancel")}
-          </button>
-          <button
-            onClick={handleCreate}
-            disabled={!valid}
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors"
-          >
+          </Button>
+          <Button variant="primary" size="md" onClick={handleCreate} disabled={!valid}>
             {t("branch.createBranch")}
-          </button>
-        </div>
-    </Dialog>
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={inputId} className="text-[11.5px] font-semibold text-(--fg2)">
+          {t("branch.name")}
+        </label>
+        <TextInput
+          id={inputId}
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
+          placeholder="feature/my-feature"
+        />
+        {error && (
+          <p className="text-[11.5px] text-danger" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+    </DialogFrame>
   );
 }

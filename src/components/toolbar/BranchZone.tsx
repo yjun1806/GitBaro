@@ -270,7 +270,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
             isOpen && "relative z-50",
           )}
         >
-          <span className="flex items-center gap-1 font-mono text-xs text-(--fg) min-w-0 shrink">
+          <span className="flex items-center gap-1 font-mono text-[11.5px] text-(--fg) min-w-0 shrink">
             {isSwitchingBranch ? (
               <Spinner />
             ) : (
@@ -279,7 +279,7 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
             <span className="truncate">{branchText}</span>
           </span>
           {isInWorktree && currentWorktree?.base ? (
-            <WorktreeBaseLabel base={currentWorktree.base} variant="compact" className="shrink-0 text-[11px]" />
+            <WorktreeBaseLabel base={currentWorktree.base} variant="compact" className="shrink-0 text-[11.5px]" />
           ) : null}
           {isOpen ? (
             <ChevronUp className="w-3 h-3 opacity-60 shrink-0" />

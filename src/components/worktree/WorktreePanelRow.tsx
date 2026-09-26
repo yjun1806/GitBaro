@@ -2,13 +2,11 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Lock } from "lucide-react";
 import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
+import { Button } from "@/components/ui/Button";
+import { StatusChip } from "@/components/ui/marks";
 import { cn } from "@/lib/utils";
 import type { WorktreeInfo } from "@/types";
 import { WorktreeBaseLabel } from "./WorktreeBaseLabel";
-
-// 시안 D6 chip_btn과 같은 값(BranchPanelRow.tsx의 CHIP_BUTTON): 24px 높이, --chip 배경, 11.5px/600.
-const CHIP_BUTTON =
-  "h-6 px-2.5 rounded-[6px] bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-(--chip)";
 
 interface WorktreePanelRowProps {
   worktree: WorktreeInfo;
@@ -57,12 +55,12 @@ export function WorktreePanelRow({
         {isCurrent ? (
           <Check className="w-[13px] h-[13px] text-(--fg)" strokeWidth={2.5} aria-label={t("branchPanel.current")} />
         ) : (
-          <WorktreeIcon className="w-3.5 h-3.5 text-(--faint)" />
+          <WorktreeIcon className="w-3.5 h-3.5 text-muted-foreground" />
         )}
       </span>
       <span className="flex-1 min-w-0 flex flex-col gap-0.5">
         <span className="flex items-center gap-1.5 min-w-0">
-          <span className={cn("font-mono text-xs text-(--fg) truncate", isCurrent ? "font-bold" : "font-medium")}>
+          <span className={cn("font-mono text-[11.5px] text-(--fg) truncate", isCurrent ? "font-bold" : "font-medium")}>
             {worktree.branch ?? t("worktree.detachedHead")}
           </span>
           {worktree.isLocked && (
@@ -70,15 +68,11 @@ export function WorktreePanelRow({
               <Lock className="w-3 h-3 text-warning shrink-0" />
             </span>
           )}
-          {isMissing && (
-            <span className="shrink-0 text-[10px] font-medium text-warning bg-warning/10 px-1.5 py-0.5 rounded">
-              {t("worktree.missing")}
-            </span>
-          )}
+          {isMissing && <StatusChip tone="warning">{t("worktree.missing")}</StatusChip>}
         </span>
-        <span className="flex items-center gap-1.5 min-w-0 text-[11px] text-(--faint) truncate">
+        <span className="flex items-center gap-1.5 min-w-0 text-[11.5px] text-muted-foreground truncate">
           {worktree.base ? (
-            <WorktreeBaseLabel base={worktree.base} className="text-(--faint)" />
+            <WorktreeBaseLabel base={worktree.base} className="text-muted-foreground" />
           ) : (
             <span className="truncate">{dirName}</span>
           )}
@@ -86,23 +80,18 @@ export function WorktreePanelRow({
       </span>
 
       <span className="flex gap-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-        <button type="button" onClick={onOpen} disabled={isMissing} className={CHIP_BUTTON}>
+        <Button size="sm" variant="secondary" onClick={onOpen} disabled={isMissing}>
           {t("worktreePanel.open")}
-        </button>
-        <button type="button" onClick={onOpenTerminal} disabled={isMissing} className={CHIP_BUTTON}>
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onOpenTerminal} disabled={isMissing}>
           {t("worktreePanel.terminal")}
-        </button>
-        <button type="button" onClick={onOpenEditor} disabled={isMissing} className={CHIP_BUTTON}>
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onOpenEditor} disabled={isMissing}>
           {t("worktreePanel.editor")}
-        </button>
-        <button
-          type="button"
-          onClick={onRemove}
-          disabled={!canRemove}
-          className={cn(CHIP_BUTTON, "hover:text-danger")}
-        >
+        </Button>
+        <Button size="sm" variant="secondary" tone="danger" onClick={onRemove} disabled={!canRemove}>
           {t("worktreePanel.remove")}
-        </button>
+        </Button>
       </span>
     </div>
   );

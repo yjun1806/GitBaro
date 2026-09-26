@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback, useMemo, useId } from "react";
-import { X, AlertCircle, FileWarning, GitBranch, ArrowLeftRight, Minus, Plus } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { AlertCircle, GitBranch, ArrowLeftRight, Minus, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { getConflictFileDiff } from "@/api/commands";
 import type { DiffOutput, DiffHunk } from "@/types";
-import { Dialog } from "@/components/ui/Dialog";
+import { DialogFrame } from "@/components/ui/DialogFrame";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Notice } from "@/components/ui/Notice";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Count } from "@/components/ui/marks";
 
 interface ConflictPreviewModalProps {
   repoPath: string;
@@ -129,11 +132,11 @@ function InlineConflictDiff({
                   )}
                 >
                   {/* Old line number */}
-                  <span className="w-12 shrink-0 text-right pr-1 text-muted-foreground/50 select-none text-[10px] border-r border-border/30">
+                  <span className="w-12 shrink-0 text-right pr-1 text-muted-foreground select-none text-[10px] border-r border-border/30">
                     {line.oldLineNo ?? ""}
                   </span>
                   {/* New line number */}
-                  <span className="w-12 shrink-0 text-right pr-1 text-muted-foreground/50 select-none text-[10px] border-r border-border/30">
+                  <span className="w-12 shrink-0 text-right pr-1 text-muted-foreground select-none text-[10px] border-r border-border/30">
                     {line.newLineNo ?? ""}
                   </span>
                   {/* Prefix */}
@@ -142,7 +145,7 @@ function InlineConflictDiff({
                       "w-5 shrink-0 text-center select-none font-bold",
                       isDelete && "text-diff-del-fg",
                       isAdd && "text-diff-add-fg",
-                      !isDelete && !isAdd && "text-muted-foreground/30",
+                      !isDelete && !isAdd && "text-muted-foreground",
                     )}
                   >
                     {prefix}
@@ -185,7 +188,6 @@ export function ConflictPreviewModal({
   onClose,
 }: ConflictPreviewModalProps) {
   const { t } = useTranslation();
-  const titleId = useId();
   const [selectedFile, setSelectedFile] = useState<string>(
     conflictFiles[0] ?? "",
   );
@@ -236,36 +238,17 @@ export function ConflictPreviewModal({
   };
 
   return (
-    <Dialog
-      onClose={onClose}
-      labelledBy={titleId}
-      className="bg-card rounded-xl shadow-2xl max-w-7xl w-full mx-4 h-[92vh] flex flex-col overflow-hidden border border-border"
-    >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-          <div className="flex items-center gap-2">
-            <FileWarning className="w-4 h-4 text-warning" />
-            <h2 id={titleId} className="text-sm font-semibold text-foreground">
-              {t("merge.preCheck.previewTitle")}
-            </h2>
-            <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-              {t("merge.preCheck.previewFiles", {
-                count: conflictFiles.length,
-              })}
-            </span>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
+    <DialogFrame title={t("merge.preCheck.previewTitle")} onClose={onClose} size="xl">
+      <div className="h-full -m-4 flex flex-col overflow-hidden">
         {/* Branch context + legend bar */}
-        <div className="flex items-center justify-between px-4 py-1.5 bg-muted/30 border-b border-border shrink-0">
+        <div className="flex items-center justify-between px-4 py-1.5 border-b border-(--line) shrink-0">
           {/* Branches */}
-          <div className="flex items-center gap-2 text-[11px]">
+          <div className="flex items-center gap-2 text-[11.5px]">
+            <Count
+              value={conflictFiles.length}
+              tone="muted"
+              label={t("merge.preCheck.previewFiles", { count: conflictFiles.length })}
+            />
             <div className="flex items-center gap-1 text-diff-del-fg">
               <GitBranch className="w-3 h-3" />
               <span className="font-semibold">{currentBranch}</span>
@@ -277,7 +260,7 @@ export function ConflictPreviewModal({
             </div>
           </div>
           {/* Legend */}
-          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-3 text-[11.5px] text-muted-foreground">
             <span className="flex items-center gap-1">
               <span className="inline-block w-3 h-2.5 rounded-sm bg-diff-del border border-diff-del-fg/40" />
               {t("merge.preCheck.previewOurs")}
@@ -292,24 +275,20 @@ export function ConflictPreviewModal({
         {/* Body */}
         <div className="flex flex-1 min-h-0">
           {/* Left — file list */}
-          <div className="w-52 shrink-0 border-r border-border overflow-y-auto bg-surface">
+          <div className="w-52 shrink-0 border-r border-(--line) overflow-y-auto">
             {conflictFiles.map((f) => (
               <button
                 key={f}
                 onClick={() => setSelectedFile(f)}
                 className={cn(
-                  "w-full text-left px-3 py-2 text-xs transition-colors border-b border-border/50",
+                  "w-full text-left px-3 h-7 flex items-baseline gap-1.5 text-[12.5px] transition-colors border-b border-border/50",
                   selectedFile === f
-                    ? "bg-primary/10 text-foreground"
-                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                    ? "bg-(--acc-sel)"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
-                <span className="block font-medium truncate">
-                  {fileName(f)}
-                </span>
-                <span className="block text-[10px] text-muted-foreground truncate">
-                  {dirName(f)}
-                </span>
+                <span className="min-w-0 truncate font-medium text-foreground">{fileName(f)}</span>
+                {dirName(f) && <span className="shrink-0 truncate text-[11.5px] text-muted-foreground">{dirName(f)}</span>}
               </button>
             ))}
           </div>
@@ -318,7 +297,7 @@ export function ConflictPreviewModal({
           <div className="flex-1 min-h-0 flex flex-col">
             {/* Stats bar */}
             {diff && diff.hunks.length > 0 && !isLoading && (
-              <div className="flex items-center gap-3 px-3 py-1 bg-muted/40 border-b border-border text-[10px] text-muted-foreground shrink-0">
+              <div className="flex items-center gap-3 px-3 py-1 border-b border-(--line) text-[11.5px] text-muted-foreground shrink-0">
                 <span className="font-semibold text-foreground">
                   {t("merge.preCheck.previewRegions", {
                     count: stats.regions,
@@ -339,9 +318,8 @@ export function ConflictPreviewModal({
               <LoadingState label={t("merge.preCheck.previewLoading")} />
             )}
             {error && !isLoading && (
-              <div className="flex items-center justify-center flex-1 gap-2 text-destructive">
-                <AlertCircle className="w-4 h-4" />
-                <span className="text-sm">{error}</span>
+              <div className="flex-1 flex items-center justify-center p-4">
+                <Notice tone="danger" icon={AlertCircle}>{error}</Notice>
               </div>
             )}
             {!isLoading && !error && diff && diff.hunks.length > 0 && (
@@ -353,18 +331,12 @@ export function ConflictPreviewModal({
                 />
               </div>
             )}
-            {!isLoading && !error && diff && diff.hunks.length === 0 && (
-              <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
-                {t("merge.preCheck.previewSelectFile")}
-              </div>
-            )}
-            {!isLoading && !error && !diff && (
-              <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
-                {t("merge.preCheck.previewSelectFile")}
-              </div>
+            {!isLoading && !error && (!diff || diff.hunks.length === 0) && (
+              <EmptyState title={t("merge.preCheck.previewSelectFile")} />
             )}
           </div>
         </div>
-    </Dialog>
+      </div>
+    </DialogFrame>
   );
 }

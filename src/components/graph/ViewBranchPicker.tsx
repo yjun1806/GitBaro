@@ -8,7 +8,10 @@ import { fuzzyFilter } from "@/lib/fuzzy-search";
 import { cn } from "@/lib/utils";
 import type { BranchInfo } from "@/types";
 import { AnchoredPanel } from "@/components/ui/AnchoredPanel";
-import { PanelSearch } from "@/components/ui/PanelHeader";
+import { PanelSearch, SectionLabel } from "@/components/ui/PanelHeader";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { FLOATING_SURFACE } from "@/components/ui/layers";
 import { useHistoryView, useSetHistoryView } from "./useHistoryView";
 
 /** 고를 수 있는 브랜치: 로컬 전부, 원격 전부(`origin/HEAD` 같은 별칭은 뺀다). */
@@ -44,7 +47,7 @@ function Option({
       aria-selected={selected}
       onClick={onSelect}
       className={cn(
-        "flex items-center gap-2 w-full h-8 px-3.5 text-left text-[12.5px] transition-colors",
+        "flex items-center gap-2 w-full h-7 px-3.5 text-left text-[12.5px] transition-colors",
         selected ? "bg-(--acc-sel) text-foreground" : "text-(--fg2) hover:bg-(--acc-sel)",
       )}
     >
@@ -52,15 +55,9 @@ function Option({
         {selected ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} aria-hidden="true" /> : null}
       </span>
       <span className="shrink-0 text-muted-foreground">{icon}</span>
-      <span className={cn("truncate", mono && "font-mono text-xs")}>{label}</span>
-      {hint && <span className="ml-auto shrink-0 text-[11px] text-(--faint)">{hint}</span>}
+      <span className={cn("truncate", mono && "font-mono text-[11.5px]")}>{label}</span>
+      {hint && <span className="ml-auto shrink-0 text-[11.5px] text-muted-foreground">{hint}</span>}
     </button>
-  );
-}
-
-function SectionTitle({ children }: { children: ReactNode }) {
-  return (
-    <p className="px-3.5 pt-2 pb-1 text-[11px] font-bold text-(--muted) border-t border-(--line)">{children}</p>
   );
 }
 
@@ -96,23 +93,21 @@ export function ViewBranchPicker() {
 
   return (
     <>
-      <button
+      <Button
         ref={triggerRef}
-        type="button"
+        size="sm"
+        variant="ghost"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
         title={t("historyView.pickerHint")}
-        className={cn(
-          "flex items-center gap-1 shrink-0 min-w-0 max-w-[260px] h-6 px-2 rounded-(--radius-chip) text-[11.5px] font-semibold transition-colors",
-          viewing ? "bg-info/15 text-foreground hover:bg-info/25" : "bg-(--chip) text-(--fg2) hover:bg-accent",
-        )}
+        className="min-w-0 max-w-[260px]"
       >
         <Eye className={cn("w-3 h-3 shrink-0", viewing && "text-info")} aria-hidden="true" />
         <span className="shrink-0 text-muted-foreground">{t("historyView.pickerLabel")}</span>
         <span className={cn("truncate", target?.kind === "ref" && "font-mono")}>{label}</span>
         <ChevronDown className="w-3 h-3 shrink-0 opacity-60" aria-hidden="true" />
-      </button>
+      </Button>
       {open && (
         <AnchoredPanel
           anchorRef={triggerRef}
@@ -121,9 +116,12 @@ export function ViewBranchPicker() {
             setQuery("");
           }}
           labelledBy={titleId}
-          className="w-[340px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] flex flex-col overflow-hidden bg-card rounded-(--radius-panel) shadow-[0_24px_60px_rgba(0,0,0,0.18)] ring-1 ring-(--line)"
+          className={cn(
+            "w-[340px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] flex flex-col overflow-hidden rounded-(--radius-panel)",
+            FLOATING_SURFACE,
+          )}
         >
-          <p id={titleId} className="px-3.5 pt-3 text-[12.5px] font-bold text-foreground">
+          <p id={titleId} className="px-3.5 pt-3 text-[13px] font-bold text-foreground">
             {t("historyView.pickerTitle")}
           </p>
           <PanelSearch value={query} onChange={setQuery} placeholder={t("branchPanel.search")} />
@@ -145,7 +143,9 @@ export function ViewBranchPicker() {
                 />
               </>
             )}
-            {lists.local.length > 0 && <SectionTitle>{t("branchPanel.local")}</SectionTitle>}
+            {lists.local.length > 0 && (
+              <SectionLabel title={t("branchPanel.local")} className="border-t border-(--line)" />
+            )}
             {lists.local.map((b) => {
               const next: ViewTarget = { kind: "ref", name: b.name, isRemote: false };
               return (
@@ -160,7 +160,9 @@ export function ViewBranchPicker() {
                 />
               );
             })}
-            {lists.remote.length > 0 && <SectionTitle>{t("branchPanel.remote")}</SectionTitle>}
+            {lists.remote.length > 0 && (
+              <SectionLabel title={t("branchPanel.remote")} className="border-t border-(--line)" />
+            )}
             {lists.remote.map((b) => {
               const next: ViewTarget = { kind: "ref", name: b.name, isRemote: true };
               return (
@@ -175,7 +177,7 @@ export function ViewBranchPicker() {
               );
             })}
             {query && lists.local.length === 0 && lists.remote.length === 0 && (
-              <p className="px-3.5 py-4 text-[12px] text-muted-foreground">{t("branchPanel.noMatch")}</p>
+              <EmptyState layout="row" title={t("branchPanel.noMatch")} />
             )}
           </div>
         </AnchoredPanel>

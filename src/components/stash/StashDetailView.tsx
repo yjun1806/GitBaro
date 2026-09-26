@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FileText, Plus, Minus } from "lucide-react";
+import { FileText } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useToastStore } from "@/stores/toast";
 import { useStashShow, useCommitFileDiff, useStashMutations } from "@/api/queries";
@@ -12,6 +12,10 @@ import { useFileMenu } from "@/components/commit/useFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import type { FileStatus, StashFileSummary } from "@/types";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Button } from "@/components/ui/Button";
+import { Count, FileStatusLetter } from "@/components/ui/marks";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SectionLabel } from "@/components/ui/PanelHeader";
 
 const FILE_STATUSES: readonly string[] = ["modified", "added", "deleted", "renamed", "copied", "untracked", "ignored", "conflicted"];
 
@@ -22,23 +26,6 @@ function toFileStatus(status: string): FileStatus {
 
 interface StashDetailViewProps {
   stashIndex: number;
-}
-
-function FileStatusBadge({ status }: { status: string }) {
-  const { t } = useTranslation();
-  const colors: Record<string, string> = {
-    added: "text-success bg-success/10",
-    deleted: "text-danger bg-danger/10",
-    modified: "text-warning bg-warning/10",
-    renamed: "text-info bg-info/10",
-  };
-  return (
-    <span
-      className={`text-[10px] px-1.5 py-0.5 rounded ${colors[status] ?? "text-muted-foreground bg-muted"}`}
-    >
-      {t(`fileStatus.${status}`, { defaultValue: status })}
-    </span>
-  );
 }
 
 function FileSummaryRow({
@@ -62,33 +49,23 @@ function FileSummaryRow({
       onClick={onClick}
       onContextMenu={onContextMenu}
       title={file.path}
-      className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
+      className={`w-full flex items-center gap-2 h-7 px-3 text-left transition-colors ${
         isSelected
-          ? "bg-primary/10 text-primary"
+          ? "bg-(--acc-sel)"
           : !isSelected && isHighlighted
-            ? "bg-accent ring-1 ring-primary/30"
+            ? "bg-accent ring-1 ring-inset ring-primary/30"
             : "hover:bg-accent"
       }`}
     >
       <FileText className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-      <span className="text-xs truncate flex-1">
+      <span className="text-[12.5px] truncate flex-1">
         {file.path.split("/").pop()}
       </span>
-      <FileStatusBadge status={file.status} />
+      <FileStatusLetter status={toFileStatus(file.status)} />
       {(file.insertions > 0 || file.deletions > 0) && (
-        <span className="flex items-center gap-1 text-[10px] shrink-0">
-          {file.insertions > 0 && (
-            <span className="flex items-center text-success">
-              <Plus className="w-2.5 h-2.5" />
-              {file.insertions}
-            </span>
-          )}
-          {file.deletions > 0 && (
-            <span className="flex items-center text-danger">
-              <Minus className="w-2.5 h-2.5" />
-              {file.deletions}
-            </span>
-          )}
+        <span className="flex items-center gap-1.5 font-mono text-[11.5px] shrink-0">
+          {file.insertions > 0 && <span className="text-diff-add-fg">+{file.insertions}</span>}
+          {file.deletions > 0 && <span className="text-diff-del-fg">{"−"}{file.deletions}</span>}
         </span>
       )}
     </button>
@@ -168,11 +145,11 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
   return (
     <div className="flex flex-col h-full animate-content-in">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border space-y-2">
+      <div className="px-4 py-3 border-b border-(--line) space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{entry.message}</p>
-            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+            <p className="text-[13px] font-bold truncate">{entry.message}</p>
+            <div className="flex items-center gap-2 mt-1 text-[11.5px] text-muted-foreground">
               {entry.branchName && (
                 <span>{t("stash.onBranch", { branch: entry.branchName })}</span>
               )}
@@ -181,32 +158,23 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
                 {files.length} {files.length === 1 ? "file" : "files"}
               </span>
               {totalInsertions > 0 && (
-                <span className="text-success">+{totalInsertions}</span>
+                <span className="font-mono text-diff-add-fg">+{totalInsertions}</span>
               )}
               {totalDeletions > 0 && (
-                <span className="text-danger">-{totalDeletions}</span>
+                <span className="font-mono text-diff-del-fg">{"−"}{totalDeletions}</span>
               )}
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={handleApply}
-              className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-accent transition-colors"
-            >
+            <Button size="sm" variant="secondary" onClick={handleApply}>
               {t("stash.apply")}
-            </button>
-            <button
-              onClick={handlePop}
-              className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
-            >
+            </Button>
+            <Button size="sm" variant="primary" onClick={handlePop}>
               {t("stash.pop")}
-            </button>
-            <button
-              onClick={handleDrop}
-              className="px-3 py-1.5 text-xs rounded-md border border-danger/30 text-danger hover:bg-danger/10 transition-colors"
-            >
+            </Button>
+            <Button size="sm" variant="secondary" tone="danger" onClick={handleDrop}>
               {t("stash.drop")}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -228,13 +196,9 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
         }}
         list={
           <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
-          <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
-            {t("stash.detail.files")} ({files.length})
-          </div>
+          <SectionLabel title={t("stash.detail.files")} trailing={<Count value={files.length} tone="muted" />} />
           {files.length === 0 ? (
-            <p className="px-3 py-4 text-xs text-muted-foreground text-center">
-              {t("stash.detail.noFiles")}
-            </p>
+            <EmptyState layout="row" title={t("stash.detail.noFiles")} />
           ) : (
             files.map((file, index) => (
               <FileSummaryRow
@@ -255,10 +219,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
           {selectedFilePath && fileDiff ? (
             <DiffViewer diff={fileDiff} status="modified" maximizable repoPath={activeRepoPath} />
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
-              <FileText className="w-8 h-8" />
-              <p className="text-xs">{t("stash.selectStash")}</p>
-            </div>
+            <EmptyState icon={FileText} title={t("stash.selectStash")} />
           )}
           </>
         }

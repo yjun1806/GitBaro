@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { FileDiff } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { useOpenWorkingChanges } from "./useOpenWorkingChanges";
 
 /**
@@ -10,14 +11,14 @@ export function WorkingChangesButton() {
   const { t } = useTranslation();
   const open = useOpenWorkingChanges();
   return (
-    <button
-      type="button"
+    <Button
+      variant="secondary"
+      size="sm"
+      icon={<FileDiff className="w-3 h-3" aria-hidden="true" />}
       onClick={open}
       data-working-changes=""
-      className="inline-flex items-center gap-1 shrink-0 h-[22px] px-2 rounded-(--radius-chip) text-[11px] font-semibold bg-(--chip) text-(--fg2) hover:bg-accent transition-colors"
     >
-      <FileDiff className="w-3 h-3" aria-hidden="true" />
       {t("commit.workingChanges")}
-    </button>
+    </Button>
   );
 }

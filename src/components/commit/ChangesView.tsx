@@ -2,6 +2,10 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistoryView, useSetHistoryView } from "@/components/graph/useHistoryView";
 import { CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
+import { Count } from "@/components/ui/marks";
+import { SectionLabel } from "@/components/ui/PanelHeader";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useSelectionStore } from "@/stores/selection";
@@ -50,16 +54,14 @@ function ViewingComposerNote() {
   return (
     <div className="flex flex-col h-full">
       <RepoWorkSwitcher mode="working" />
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
-      <p className="text-[12.5px] leading-[19px] text-muted-foreground">{t("historyView.composerHidden")}</p>
-      <button
-        type="button"
-        onClick={() => setView(null)}
-        className="h-7 px-3 rounded-(--radius-chip) bg-(--chip) text-[12px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
-      >
-        {t("historyView.backToCurrent")}
-      </button>
-      </div>
+      <EmptyState
+        title={t("historyView.composerHidden")}
+        action={
+          <Button size="sm" variant="secondary" onClick={() => setView(null)}>
+            {t("historyView.backToCurrent")}
+          </Button>
+        }
+      />
     </div>
   );
 }
@@ -275,27 +277,22 @@ function ChangesViewBody() {
       <MergeConflictBanner repoPath={activeRepoPath} conflictCount={conflictCount} />
       {collapsed ? (
         // 변경이 없으면 목록과 커밋 입력 대신 짧은 「변경 없음」만 둔다. 파일이 바뀌면 다시 나타난다.
-        <div
-          className="flex-1 flex flex-col items-center justify-center gap-1.5 px-4 text-center text-muted-foreground"
-          data-testid="changes-empty"
-        >
-          <CheckCircle2 className="w-5 h-5 text-(--faint)" aria-hidden="true" />
-          <p className="text-[12.5px] font-semibold text-(--fg2)">{t("changes.noChangesShort")}</p>
-          <p className="text-[11.5px]">{t("changes.noChangesHint")}</p>
+        <div className="flex-1 flex flex-col min-h-0" data-testid="changes-empty">
+          <EmptyState icon={CheckCircle2} title={t("changes.noChangesShort")} description={t("changes.noChangesHint")} />
         </div>
       ) : (
       <>
       {/* File list */}
       <div ref={listRef} data-testid="changes-file-list" className="flex-1 overflow-y-auto" {...containerProps}>
         {statusEntries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
-            <p className="text-sm">{t("changes.noChanges")}</p>
+          <div className="h-full flex flex-col">
+            <EmptyState title={t("changes.noChanges")} />
           </div>
         ) : (
           <>
             {/* Staged Changes header */}
             {stagedFiles.length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-muted border-b border-border sticky top-0 z-10">
+              <div className="flex items-center gap-2 pl-3 h-8 sticky top-0 z-10 bg-(--acc-faint) border-b border-(--line)">
                 <input
                   type="checkbox"
                   className="w-3.5 h-3.5 shrink-0 cursor-pointer"
@@ -303,10 +300,11 @@ function ChangesViewBody() {
                   aria-label={t("changes.checkbox.unstageAll")}
                   onChange={handleUnstageAll}
                 />
-                <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex-1">
-                  {t("commit.stagedChanges")}
-                </span>
-                <span className="text-[10px] font-medium text-muted-foreground bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{stagedFiles.length}</span>
+                <SectionLabel
+                  title={t("commit.stagedChanges")}
+                  trailing={<Count value={stagedFiles.length} tone="muted" />}
+                  className="flex-1"
+                />
               </div>
             )}
             {/* Staged file entries (grouped by directory) */}
@@ -318,17 +316,17 @@ function ChangesViewBody() {
                   {stagedGroups.length > 1 && (
                     <div
                       onClick={() => toggleDirCollapse(dirKey)}
-                      className="flex items-center gap-1.5 pl-6 pr-3 py-1 border-b border-border/50 cursor-pointer select-none hover:bg-accent/50 transition-colors"
+                      className="flex items-center gap-1.5 pl-6 pr-3 h-7 border-b border-border/50 cursor-pointer select-none hover:bg-accent/50 transition-colors"
                     >
                       {isCollapsed ? (
                         <ChevronRight className="w-3 h-3 shrink-0 text-muted-foreground" />
                       ) : (
                         <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
                       )}
-                      <span className="text-[11px] font-medium text-muted-foreground flex-1 truncate">
+                      <span className="text-[11.5px] font-medium text-muted-foreground flex-1 truncate">
                         {group.directory || t("changes.rootFiles")}
                       </span>
-                      <span className="text-[10px] text-muted-foreground/70">{group.files.length}</span>
+                      <Count value={group.files.length} tone="muted" />
                     </div>
                   )}
                   {!isCollapsed && group.files.map((entry) => {
@@ -359,8 +357,8 @@ function ChangesViewBody() {
             {/* Changes header */}
             {unstagedFiles.length > 0 && (
               <div className={cn(
-                "flex items-center gap-2 px-3 py-2 bg-muted border-b border-border sticky z-10",
-                stagedFiles.length > 0 ? "top-[33px] border-t border-t-border" : "top-0",
+                "flex items-center gap-2 pl-3 h-8 sticky z-10 bg-(--acc-faint) border-b border-(--line)",
+                stagedFiles.length > 0 ? "top-8 border-t border-t-(--line)" : "top-0",
               )}>
                 <input
                   type="checkbox"
@@ -370,10 +368,11 @@ function ChangesViewBody() {
                   aria-label={t("changes.checkbox.stageAll")}
                   onChange={handleStageAll}
                 />
-                <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex-1">
-                  {t("commit.unstaged")}
-                </span>
-                <span className="text-[10px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">{unstagedFiles.length}</span>
+                <SectionLabel
+                  title={t("commit.unstaged")}
+                  trailing={<Count value={unstagedFiles.length} tone="muted" />}
+                  className="flex-1"
+                />
               </div>
             )}
             {/* Unstaged file entries (grouped by directory) */}
@@ -385,17 +384,17 @@ function ChangesViewBody() {
                   {unstagedGroups.length > 1 && (
                     <div
                       onClick={() => toggleDirCollapse(dirKey)}
-                      className="flex items-center gap-1.5 pl-6 pr-3 py-1 border-b border-border/50 cursor-pointer select-none hover:bg-accent/50 transition-colors"
+                      className="flex items-center gap-1.5 pl-6 pr-3 h-7 border-b border-border/50 cursor-pointer select-none hover:bg-accent/50 transition-colors"
                     >
                       {isCollapsed ? (
                         <ChevronRight className="w-3 h-3 shrink-0 text-muted-foreground" />
                       ) : (
                         <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
                       )}
-                      <span className="text-[11px] font-medium text-muted-foreground flex-1 truncate">
+                      <span className="text-[11.5px] font-medium text-muted-foreground flex-1 truncate">
                         {group.directory || t("changes.rootFiles")}
                       </span>
-                      <span className="text-[10px] text-muted-foreground/70">{group.files.length}</span>
+                      <Count value={group.files.length} tone="muted" />
                     </div>
                   )}
                   {!isCollapsed && group.files.map((entry) => {

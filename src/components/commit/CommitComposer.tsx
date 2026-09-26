@@ -2,7 +2,8 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Spinner } from "@/components/ui/Spinner";
+import { Button } from "@/components/ui/Button";
+import { TextInput, Textarea } from "@/components/ui/TextInput";
 
 /** 요약 글자 수를 보이기 시작하는 길이와, 넘으면 경고하는 길이(git 관례의 한 줄 72자). */
 export const SUMMARY_COUNTER_FROM = 60;
@@ -61,23 +62,18 @@ export function CommitComposer({
   return (
     <div className="flex flex-col gap-1.5 px-2 py-1.5 border-t border-border shrink-0" data-testid="commit-composer">
       <div className="relative">
-        <input
-          type="text"
+        <TextInput
           placeholder={t("commit.summary")}
           aria-label={t("commit.summary")}
           value={summary}
           onChange={(e) => onSummaryChange(e.target.value)}
-          className={cn(
-            "w-full h-8 pl-2.5 text-[12.5px] rounded-(--radius-item) border border-border bg-card outline-none",
-            "focus:border-primary transition-colors",
-            showCounter ? "pr-12" : "pr-2.5",
-          )}
+          className={cn(showCounter && "pr-12")}
         />
         {showCounter && (
           <span
             className={cn(
               "absolute right-2 top-1/2 -translate-y-1/2 text-[10.5px] tabular-nums pointer-events-none",
-              overLimit ? "text-warning" : "text-(--faint)",
+              overLimit ? "text-warning" : "text-muted-foreground",
             )}
             title={overLimit ? t("commit.subjectTooLong", { max: SUMMARY_LIMIT }) : undefined}
             data-testid="summary-counter"
@@ -87,7 +83,7 @@ export function CommitComposer({
         )}
       </div>
       {showDescription && (
-        <textarea
+        <Textarea
           ref={descRef}
           autoFocus={descOpen && description.length === 0}
           placeholder={t("commit.description")}
@@ -98,46 +94,28 @@ export function CommitComposer({
           onBlur={() => {
             if (description.length === 0) setDescOpen(false);
           }}
-          className={cn(
-            "w-full px-2.5 py-1.5 text-[12.5px] leading-[18px] rounded-(--radius-item) border border-border bg-card outline-none resize-none",
-            "focus:border-primary transition-colors",
-          )}
+          className="resize-none"
         />
       )}
       <div className="flex items-center gap-2">
         {!showDescription && (
-          <button
-            type="button"
-            onClick={() => setDescOpen(true)}
-            className="inline-flex items-center gap-1 h-7 px-1.5 -ml-0.5 rounded-(--radius-chip) text-[11.5px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          >
-            <Plus className="w-3 h-3" aria-hidden="true" />
+          <Button variant="ghost" size="sm" icon={<Plus className="w-3 h-3" aria-hidden="true" />} onClick={() => setDescOpen(true)}>
             {t("commit.addDescription")}
-          </button>
+          </Button>
         )}
         <span className="flex-1" />
-        <button
-          type="button"
-          onClick={onCommit}
-          disabled={!canCommit || isCommitting}
-          aria-busy={isCommitting}
+        <Button
+          variant="primary"
+          size="md"
+          busy={isCommitting}
+          disabled={!canCommit}
           title={targetTitle}
           data-testid="commit-target"
-          className={cn(
-            "inline-flex items-center justify-center gap-1.5 h-7 max-w-full min-w-0 px-3 rounded-(--radius-chip) text-[12px] font-semibold",
-            "bg-primary text-primary-foreground hover:bg-primary-hover transition-colors",
-            "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary",
-          )}
+          className="max-w-full min-w-0"
+          onClick={onCommit}
         >
-          {isCommitting ? (
-            <>
-              <Spinner />
-              {t("commit.committing")}
-            </>
-          ) : (
-            <span className="truncate">{t("commit.submit", { branch: branchLabel })}</span>
-          )}
-        </button>
+          {isCommitting ? t("commit.committing") : <span className="truncate">{t("commit.submit", { branch: branchLabel })}</span>}
+        </Button>
       </div>
     </div>
   );

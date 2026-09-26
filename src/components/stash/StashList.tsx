@@ -1,12 +1,13 @@
-import { useState, useId } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Archive, ArchiveRestore, PackageOpen, Trash2 } from "lucide-react";
 import { StashItem } from "./StashItem";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useMenuActions } from "@/hooks/useMenuActions";
-import { Dialog } from "@/components/ui/Dialog";
 import { ContextMenu, contextMenuPoint, type ContextMenuSection } from "@/components/ui/ContextMenu";
 import { copyMenuItem } from "@/components/ui/menu-items";
+import { ConfirmCommandDialog } from "@/components/ui/ConfirmCommandDialog";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 const ICON = "w-3.5 h-3.5";
 import type { StashEntry } from "@/types";
@@ -48,20 +49,9 @@ export function StashList({
   // 가리키던 스태시가 목록에서 사라지면 메뉴와 확인 창을 그리지 않는다.
   const menuEntry = contextMenu ? stashes.find((s) => s.commitId === contextMenu.commitId) : undefined;
   const dropEntry = confirmDrop !== null ? stashes.find((s) => s.commitId === confirmDrop) : undefined;
-  const dropTitleId = useId();
 
   if (stashes.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-12">
-        <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center">
-          <Archive className="w-6 h-6" />
-        </div>
-        <div className="text-center">
-          <p className="text-sm font-medium">{t("stash.noStashes")}</p>
-          <p className="text-xs mt-1">{t("stash.noStashesDescription")}</p>
-        </div>
-      </div>
-    );
+    return <EmptyState icon={Archive} title={t("stash.noStashes")} description={t("stash.noStashesDescription")} />;
   }
 
   return (
@@ -95,33 +85,15 @@ export function StashList({
 
       {/* Drop Confirmation Dialog */}
       {dropEntry && (
-        <Dialog
+        <ConfirmCommandDialog
+          title={t("stash.dropConfirm")}
+          description={t("stash.dropConfirmDescription")}
+          command={`git stash drop "stash@{${dropEntry.index}}"`}
+          confirmLabel={t("stash.drop")}
+          confirmVariant="destructive"
+          onConfirm={() => onDrop(dropEntry.index)}
           onClose={() => setConfirmDrop(null)}
-          labelledBy={dropTitleId}
-          className="bg-popover border border-border rounded-xl shadow-2xl p-6 w-[360px]"
-        >
-            <h3 id={dropTitleId} className="text-sm font-semibold">{t("stash.dropConfirm")}</h3>
-            <p className="text-xs text-muted-foreground mt-2">
-              {t("stash.dropConfirmDescription")}
-            </p>
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                className="px-3 py-1.5 text-xs rounded-md hover:bg-accent transition-colors"
-                onClick={() => setConfirmDrop(null)}
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                className="px-3 py-1.5 text-xs rounded-md bg-danger text-danger-foreground hover:bg-danger/90 transition-colors"
-                onClick={() => {
-                  onDrop(dropEntry.index);
-                  setConfirmDrop(null);
-                }}
-              >
-                {t("stash.drop")}
-              </button>
-            </div>
-        </Dialog>
+        />
       )}
     </div>
   );

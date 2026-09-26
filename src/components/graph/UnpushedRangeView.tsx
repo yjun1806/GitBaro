@@ -2,9 +2,11 @@ import { useTranslation } from "react-i18next";
 import { FileText, X } from "lucide-react";
 import { useRangeChangedFiles, useRangeFileDiff } from "@/api/queries";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
-import { EmptyState } from "@/components/layout/ContentArea";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Notice } from "@/components/ui/Notice";
+import { Button } from "@/components/ui/Button";
+import { FileStatusLetter } from "@/components/ui/marks";
 import { DiffViewer } from "@/components/diff/DiffViewer";
-import { FileStatusBadge } from "@/lib/file-status";
 import { cn } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useUnpushedRangeViewStore } from "./unpushed-range-view";
@@ -94,17 +96,18 @@ function UnpushedRangeFileList({
         <span className="flex-1 min-w-0 truncate text-[12.5px] font-bold text-foreground">
           {t("graph.unpushedRangeTitle")}
         </span>
-        <button
-          type="button"
+        <Button
+          iconOnly
+          size="sm"
+          variant="ghost"
           onClick={onClose}
           title={t("common.close")}
           aria-label={t("common.close")}
-          className="flex items-center justify-center w-6 h-6 rounded-(--radius-item) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
         >
           <X className="w-3.5 h-3.5" />
-        </button>
+        </Button>
       </header>
-      <div className="px-3 pt-2 pb-1 flex items-center gap-1.5 text-[11px] font-semibold text-(--faint) shrink-0">
+      <div className="px-3 pt-2 pb-1 flex items-center gap-1.5 text-[11.5px] font-semibold text-muted-foreground shrink-0">
         <span>{t("pr.changedFiles", { count: files.length })}</span>
         <span className="text-diff-add-fg font-mono">+{totals.additions}</span>
         <span className="text-diff-del-fg font-mono">−{totals.deletions}</span>
@@ -112,9 +115,9 @@ function UnpushedRangeFileList({
       {loading ? (
         <LoadingState layout="row" />
       ) : error ? (
-        <p className="px-3 py-2 text-xs text-danger">{t("diff.failedToLoad")}</p>
+        <Notice tone="danger">{t("diff.failedToLoad")}</Notice>
       ) : files.length === 0 ? (
-        <p className="px-3 py-2 text-xs text-muted-foreground">{t("graph.unpushedRangeEmpty")}</p>
+        <EmptyState layout="row" title={t("graph.unpushedRangeEmpty")} />
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto">
           {files.map((f) => {
@@ -126,16 +129,16 @@ function UnpushedRangeFileList({
                 title={f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
                 onClick={() => onSelectFile(f.path)}
                 className={cn(
-                  "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors",
+                  "w-full flex items-center gap-2 h-7 px-3 text-left transition-colors",
                   selectedFile === f.path ? "bg-(--acc-sel)" : "hover:bg-accent",
                 )}
               >
-                <FileStatusBadge status={f.status} />
-                <span className="flex-1 min-w-0 flex flex-col">
-                  <span className="text-xs font-medium truncate text-foreground">{name}</span>
-                  {dir && <span className="text-[10px] leading-tight text-muted-foreground/50 truncate">{dir}</span>}
+                <FileStatusLetter status={f.status} />
+                <span className="flex-1 min-w-0 flex items-baseline gap-1.5">
+                  <span className="min-w-0 truncate text-[12.5px] font-medium text-foreground">{name}</span>
+                  {dir && <span className="shrink-0 truncate text-[11.5px] text-muted-foreground">{dir}</span>}
                 </span>
-                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                <span className="shrink-0 font-mono text-[11.5px] text-muted-foreground">
                   <span className="text-diff-add-fg">+{f.additions}</span> <span className="text-diff-del-fg">−{f.deletions}</span>
                 </span>
               </button>

@@ -17,6 +17,10 @@ import { gitHubRepoUrl } from "@/lib/utils";
 import type { CommitInfo } from "@/types";
 import { rangeLabel, rangeLaneInput, useBranchRangeStore, type BranchRange } from "./branch-range";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Button } from "@/components/ui/Button";
+import { Code } from "@/components/ui/marks";
+import { Notice } from "@/components/ui/Notice";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface BranchRangeGraphProps {
   range: BranchRange;
@@ -72,51 +76,47 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" data-testid="branch-range-graph">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-(--line) shrink-0 text-[12px]">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-(--line) shrink-0 text-[11.5px]">
         <GitCompare className="w-3.5 h-3.5 text-(--muted) shrink-0" aria-hidden="true" />
         <span className="font-semibold text-(--fg2) shrink-0">{t("branchPanel.rangeTitle")}</span>
-        <code className="font-mono text-[11.5px] px-1.5 py-px rounded-(--radius-chip) bg-(--chip) text-(--fg) truncate min-w-0">
-          {rangeLabel(range)}
-        </code>
+        <Code className="truncate min-w-0">{rangeLabel(range)}</Code>
         {data && (
-          <span className="text-(--faint) shrink-0">
+          <span className="text-muted-foreground shrink-0">
             {t("branchPanel.rangeCount", { count: data.behindCount })}
           </span>
         )}
         <span className="flex-1" />
         {canSwap && (
-          <button
-            type="button"
+          <Button
+            iconOnly
+            size="sm"
+            variant="ghost"
             onClick={swap}
             title={t("branchPanel.rangeSwap")}
             aria-label={t("branchPanel.rangeSwap")}
-            className="w-6 h-6 flex items-center justify-center rounded-(--radius-chip) text-(--muted) hover:bg-accent transition-colors shrink-0"
           >
             <ArrowLeftRight className="w-3.5 h-3.5" />
-          </button>
+          </Button>
         )}
         {canMerge && (
-          <button
-            type="button"
-            onClick={() => setShowMerge(true)}
-            className="h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors shrink-0"
-          >
+          <Button size="sm" variant="secondary" onClick={() => setShowMerge(true)}>
             {t("branchPanel.merge")}
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
+        <Button
+          iconOnly
+          size="sm"
+          variant="ghost"
           onClick={clear}
           title={t("branchPanel.rangeClose")}
           aria-label={t("branchPanel.rangeClose")}
-          className="w-6 h-6 flex items-center justify-center rounded-(--radius-chip) text-(--muted) hover:bg-accent transition-colors shrink-0"
         >
           <X className="w-3.5 h-3.5" />
-        </button>
+        </Button>
       </div>
 
       <div
-        className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11px] font-semibold text-(--faint)"}
+        className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
         style={{ paddingLeft: graphWidth + 8 }}
         aria-hidden="true"
       >
@@ -131,11 +131,11 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
         {isLoading ? (
           <LoadingState label={t("compare.loading")} />
         ) : error ? (
-          <p className="py-6 px-4 text-center text-sm text-danger">{getErrorMessage(error)}</p>
+          <div className="p-3">
+            <Notice tone="danger">{getErrorMessage(error)}</Notice>
+          </div>
         ) : commits.length === 0 ? (
-          <p className="py-6 px-4 text-center text-sm text-muted-foreground">
-            {t("branchPanel.rangeEmpty", { base: range.base, target: range.target })}
-          </p>
+          <EmptyState layout="row" title={t("branchPanel.rangeEmpty", { base: range.base, target: range.target })} />
         ) : (
           commits.map((commit, index) => {
             const layout = layouts.get(commit.id);

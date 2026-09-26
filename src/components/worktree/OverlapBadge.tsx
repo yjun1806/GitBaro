@@ -1,9 +1,11 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderGit2 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useReviewStatusQuery, useSiblingFileDiffs, useWipFilesMany } from "@/api/queries";
 import { worktreeColor } from "@/components/graph/worktree-history";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { RefLabel } from "@/components/ui/marks";
 import {
   compareLineRanges,
   findSameFileWorktrees,
@@ -107,7 +109,7 @@ export function OverlapMark({ siblings }: { siblings: readonly OverlapSibling[] 
       data-testid="overlap-mark"
       title={t("overlap.markTitle", { names })}
       aria-label={t("overlap.markTitle", { names })}
-      className="shrink-0 text-[11px] font-extrabold text-danger"
+      className="shrink-0 text-[10.5px] font-extrabold text-danger"
     >
       ⧉
     </span>
@@ -119,16 +121,7 @@ export function OverlapMark({ siblings }: { siblings: readonly OverlapSibling[] 
  * 그래프의 칩·WIP 행과 짝지어 볼 수 있다.
  */
 export function WorktreeTag({ name, path }: { name: string; path: string }) {
-  const color = worktreeColor(path);
-  return (
-    <span
-      className="inline-flex items-center gap-1 shrink-0 max-w-[220px] px-[7px] py-px rounded-[6px] border bg-card text-[10.5px] font-bold text-(--fg2)"
-      style={{ borderColor: color }}
-    >
-      <FolderGit2 className="w-2.5 h-2.5 shrink-0" style={{ color }} aria-hidden="true" />
-      <span className="truncate font-mono">{name}</span>
-    </span>
-  );
+  return <RefLabel name={name} kind="worktree" laneColor={worktreeColor(path)} className="max-w-[220px]" />;
 }
 
 export interface OverlapBannerProps {
@@ -173,26 +166,25 @@ export function OverlapBanner({ filePath, mine, siblings, onSideBySide }: Overla
   }
 
   return (
-    <div
-      role="status"
-      data-testid="overlap-banner"
-      className="flex items-center gap-2.5 px-3 py-2 shrink-0 border-b border-danger/25 bg-danger/8 text-[12px] text-danger"
-    >
-      <strong className="shrink-0">⧉ {t("overlap.sameFile")}</strong>
-      <span className="flex flex-wrap items-center gap-1.5 min-w-0">
-        <WorktreeTag name={overlapWorktreeName(first)} path={first.path} />
-        {more > 0 && <span>{t("overlap.andMore", { count: more })}</span>}
-        <span>{t("overlap.bannerAlsoEditing", { count: siblings.length })}</span>
-        <span>{detail}</span>
-      </span>
-      <span className="flex-1" />
-      <button
-        type="button"
-        onClick={onSideBySide}
-        className="shrink-0 h-6 px-2.5 rounded-(--radius-chip) bg-(--chip) text-[11.5px] font-semibold text-(--fg2) hover:bg-accent transition-colors"
+    <div data-testid="overlap-banner">
+      <Notice
+        tone="danger"
+        banner
+        role="status"
+        actions={
+          <Button size="sm" variant="secondary" onClick={onSideBySide}>
+            {t("overlap.sideBySide")}
+          </Button>
+        }
       >
-        {t("overlap.sideBySide")}
-      </button>
+        <span className="flex flex-wrap items-center gap-1.5 min-w-0">
+          <strong className="shrink-0">⧉ {t("overlap.sameFile")}</strong>
+          <WorktreeTag name={overlapWorktreeName(first)} path={first.path} />
+          {more > 0 && <span>{t("overlap.andMore", { count: more })}</span>}
+          <span>{t("overlap.bannerAlsoEditing", { count: siblings.length })}</span>
+          <span>{detail}</span>
+        </span>
+      </Notice>
     </div>
   );
 }

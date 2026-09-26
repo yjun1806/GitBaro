@@ -1,6 +1,4 @@
-import { useState, useEffect, useId } from "react";
-import { X } from "lucide-react";
-import { WorktreeIcon } from "@/components/ui/WorktreeIcon";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
@@ -12,9 +10,10 @@ import { suggestWorktreePath } from "./worktree-path";
 import { usePreferencesStore } from "@/stores/preferences";
 import { BranchCombobox } from "@/components/ui/BranchCombobox";
 import type { BranchInfo, WorktreeInfo } from "@/types";
-import { Dialog } from "@/components/ui/Dialog";
+import { DialogFrame } from "@/components/ui/DialogFrame";
+import { Button } from "@/components/ui/Button";
+import { TextInput } from "@/components/ui/TextInput";
 import { isSubmitEnter } from "@/lib/keyboard";
-import { Spinner } from "@/components/ui/Spinner";
 
 interface CreateWorktreeDialogProps {
   repoPath: string;
@@ -36,7 +35,6 @@ export function CreateWorktreeDialog({
   onClose,
 }: CreateWorktreeDialogProps) {
   const { t } = useTranslation();
-  const titleId = useId();
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
   const worktreeParentDir = usePreferencesStore((s) => s.worktreeParentDir);
@@ -128,179 +126,134 @@ export function CreateWorktreeDialog({
   };
 
   return (
-    <Dialog
+    <DialogFrame
+      title={t("worktree.create")}
       onClose={onClose}
       dismissible={!creating}
-      labelledBy={titleId}
-      className="bg-card rounded-xl shadow-2xl w-full max-w-md"
-    >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 id={titleId} className="text-base font-semibold text-foreground">
-            {t("worktree.create")}
-          </h2>
-          <button
-            onClick={onClose}
-            disabled={creating}
-            className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="px-5 py-5 flex flex-col gap-5">
-          {/* Branch mode selection (moved FIRST) */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t("worktree.branchOption")}
-            </label>
-            <div className="border border-border rounded-lg">
-              {/* Existing branch option */}
-              <label
-                className={cn(
-                  "flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors rounded-t-lg",
-                  branchMode === "existing" ? "bg-primary/5" : "hover:bg-accent",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="branchMode"
-                  value="existing"
-                  checked={branchMode === "existing"}
-                  onChange={() => setBranchMode("existing")}
-                  className="mt-1 accent-primary"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground">
-                    {t("worktree.existingBranch")}
-                  </p>
-                  {branchMode === "existing" && (
-                    <BranchCombobox
-                      value={selectedBranch}
-                      onChange={setSelectedBranch}
-                      branches={availableBranches}
-                      placeholder={t("worktree.selectBranch")}
-                      className="mt-2"
-                    />
-                  )}
-                </div>
-              </label>
-
-              <div className="border-t border-border" />
-
-              {/* New branch option */}
-              <label
-                className={cn(
-                  "flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors rounded-b-lg",
-                  branchMode === "new" ? "bg-primary/5" : "hover:bg-accent",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="branchMode"
-                  value="new"
-                  checked={branchMode === "new"}
-                  onChange={() => setBranchMode("new")}
-                  className="mt-1 accent-primary"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground">
-                    {t("worktree.newBranch")}
-                  </p>
-                  {branchMode === "new" && (
-                    <div className="mt-2 flex flex-col gap-3">
-                      <input
-                        type="text"
-                        value={newBranchName}
-                        onChange={(e) => setNewBranchName(e.target.value)}
-                        onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
-                        placeholder="feature/my-feature"
-                        className={cn(
-                          "w-full text-sm bg-background border rounded-md px-2 py-1.5 text-foreground outline-none focus:ring-1 focus:ring-ring",
-                          branchNameError ? "border-destructive" : "border-border",
-                        )}
-                      />
-                      {branchNameError && (
-                        <p className="text-xs text-destructive">{branchNameError}</p>
-                      )}
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-xs text-muted-foreground">
-                          {t("worktree.baseBranch")}
-                        </span>
-                        <BranchCombobox
-                          value={baseBranch}
-                          onChange={setBaseBranch}
-                          branches={allLocalBranches}
-                          placeholder={t("worktree.baseBranchPlaceholder")}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </label>
-            </div>
-          </div>
-
-          {/* Worktree path (moved SECOND, disabled until branch selected) */}
-          <div className={cn("flex flex-col gap-1.5 transition-opacity", !activeBranchName && "opacity-50 pointer-events-none")}>
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-muted-foreground">
-                {t("worktree.path")}
-              </label>
-              {!pathIsManual && worktreePath && (
-                <span className="text-[10px] text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded">
-                  {t("worktree.pathAutoGenerated")}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "flex-1 flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors",
-                  "border-border focus-within:ring-2 focus-within:ring-ring focus-within:border-primary",
-                )}
-              >
-                <WorktreeIcon className="w-4 h-4" />
-                <input
-                  type="text"
-                  value={worktreePath}
-                  onChange={(e) => handlePathChange(e.target.value)}
-                  onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
-                  placeholder={activeBranchName ? "/path/to/worktree" : t("worktree.selectBranch")}
-                  disabled={!activeBranchName}
-                  className="flex-1 text-sm bg-transparent text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed"
-                />
-              </div>
-              <button
-                onClick={handleSelectFolder}
-                disabled={!activeBranchName}
-                className="whitespace-nowrap shrink-0 px-3 py-2 text-sm border border-border rounded-lg hover:bg-accent transition-colors text-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {t("common.browse")}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 px-5 py-4 border-t border-border">
-          <button
-            onClick={onClose}
-            disabled={creating}
-            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+      size="md"
+      footer={
+        <>
+          <Button variant="ghost" size="md" onClick={onClose} disabled={creating}>
             {t("common.cancel")}
-          </button>
-          <button
-            onClick={handleCreate}
-            disabled={!isValid || creating}
-            aria-busy={creating}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground rounded-lg transition-colors"
-          >
-            {creating && <Spinner />}
+          </Button>
+          <Button variant="primary" size="md" onClick={handleCreate} disabled={!isValid || creating} busy={creating}>
             {t("worktree.create")}
-          </button>
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-5">
+        {/* Branch mode selection (moved FIRST) */}
+        <div className="flex flex-col gap-2">
+          <label className="text-[11.5px] font-semibold text-(--fg2)">{t("worktree.branchOption")}</label>
+          <div className="border border-border rounded-(--radius-item) overflow-hidden">
+            {/* Existing branch option */}
+            <label
+              className={cn(
+                "flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors",
+                branchMode === "existing" ? "bg-(--acc-sel)" : "hover:bg-accent",
+              )}
+            >
+              <input
+                type="radio"
+                name="branchMode"
+                value="existing"
+                checked={branchMode === "existing"}
+                onChange={() => setBranchMode("existing")}
+                className="mt-1 accent-primary"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12.5px] font-medium text-foreground">
+                  {t("worktree.existingBranch")}
+                </p>
+                {branchMode === "existing" && (
+                  <BranchCombobox
+                    value={selectedBranch}
+                    onChange={setSelectedBranch}
+                    branches={availableBranches}
+                    placeholder={t("worktree.selectBranch")}
+                    className="mt-2"
+                  />
+                )}
+              </div>
+            </label>
+
+            <div className="border-t border-border" />
+
+            {/* New branch option */}
+            <label
+              className={cn(
+                "flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors",
+                branchMode === "new" ? "bg-(--acc-sel)" : "hover:bg-accent",
+              )}
+            >
+              <input
+                type="radio"
+                name="branchMode"
+                value="new"
+                checked={branchMode === "new"}
+                onChange={() => setBranchMode("new")}
+                className="mt-1 accent-primary"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12.5px] font-medium text-foreground">
+                  {t("worktree.newBranch")}
+                </p>
+                {branchMode === "new" && (
+                  <div className="mt-2 flex flex-col gap-3">
+                    <TextInput
+                      value={newBranchName}
+                      onChange={(e) => setNewBranchName(e.target.value)}
+                      onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
+                      placeholder="feature/my-feature"
+                      className={branchNameError ? "border-danger" : undefined}
+                    />
+                    {branchNameError && (
+                      <p className="text-[11.5px] text-danger">{branchNameError}</p>
+                    )}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[11.5px] text-muted-foreground">
+                        {t("worktree.baseBranch")}
+                      </span>
+                      <BranchCombobox
+                        value={baseBranch}
+                        onChange={setBaseBranch}
+                        branches={allLocalBranches}
+                        placeholder={t("worktree.baseBranchPlaceholder")}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </label>
+          </div>
         </div>
-    </Dialog>
+
+        {/* Worktree path (moved SECOND, disabled until branch selected) */}
+        <div className={cn("flex flex-col gap-1.5 transition-opacity", !activeBranchName && "opacity-50 pointer-events-none")}>
+          <div className="flex items-center gap-2">
+            <label className="text-[11.5px] font-semibold text-(--fg2)">
+              {t("worktree.path")}
+            </label>
+            {!pathIsManual && worktreePath && (
+              <span className="text-[11.5px] text-muted-foreground">{t("worktree.pathAutoGenerated")}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <TextInput
+              value={worktreePath}
+              onChange={(e) => handlePathChange(e.target.value)}
+              onKeyDown={(e) => isSubmitEnter(e) && handleCreate()}
+              placeholder={activeBranchName ? "/path/to/worktree" : t("worktree.selectBranch")}
+              disabled={!activeBranchName}
+              className="flex-1"
+            />
+            <Button variant="secondary" size="md" onClick={handleSelectFolder} disabled={!activeBranchName}>
+              {t("common.browse")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </DialogFrame>
   );
 }

@@ -2,7 +2,8 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { Undo2 } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import { FileStatusBadge } from "@/lib/file-status";
+import { Button } from "@/components/ui/Button";
+import { FileStatusLetter } from "@/components/ui/marks";
 import type { FileStatus } from "@/types";
 
 export interface FileEntryProps {
@@ -67,11 +68,11 @@ function FileEntryComponent({
       }}
       onContextMenu={onContextMenu}
       className={cn(
-        "group flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors select-none border-b border-border",
+        "group flex items-center gap-2 px-3 h-7 cursor-pointer transition-colors select-none border-b border-border",
         isSelected
-          ? "bg-primary/10 text-primary font-semibold"
+          ? "bg-(--acc-sel)"
           : !isSelected && isHighlighted
-            ? "bg-accent ring-1 ring-primary/30"
+            ? "bg-accent ring-1 ring-inset ring-primary/30"
             : "hover:bg-accent",
       )}
     >
@@ -85,38 +86,41 @@ function FileEntryComponent({
           onToggleStage();
         }}
       />
-      <FileStatusBadge status={entry.status as FileStatus} />
+      <FileStatusLetter status={entry.status as FileStatus} />
       <span
-        className="text-xs font-medium text-foreground truncate"
+        className="text-[12.5px] font-medium text-foreground truncate"
         title={entry.origPath ? `${entry.origPath} → ${entry.path}` : undefined}
       >
         {previousName && <span className="text-muted-foreground">{previousName} → </span>}
         {filename}
       </span>
       {(entry.insertions != null || entry.deletions != null) && (
-        <span className="text-xs shrink-0">
-          {entry.insertions != null && <span className="text-success">+{entry.insertions}</span>}
+        <span className="font-mono text-[11.5px] shrink-0">
+          {entry.insertions != null && <span className="text-diff-add-fg">+{entry.insertions}</span>}
           {entry.insertions != null && entry.deletions != null && <span className="text-muted-foreground"> </span>}
-          {entry.deletions != null && <span className="text-danger">-{entry.deletions}</span>}
+          {entry.deletions != null && <span className="text-diff-del-fg">{"−"}{entry.deletions}</span>}
         </span>
       )}
       <span className="flex-1" />
       {entry.modifiedAt != null && (
-        <span className="text-xs text-muted-foreground shrink-0">{formatRelativeTime(entry.modifiedAt)}</span>
+        <span className="text-[11.5px] text-muted-foreground shrink-0">{formatRelativeTime(entry.modifiedAt)}</span>
       )}
       {onDiscard && (
-        <button
-          type="button"
+        <Button
+          iconOnly
+          size="sm"
+          variant="ghost"
+          tone="danger"
           title={t("changes.discard")}
           aria-label={t("changes.discard")}
           onClick={(e) => {
             e.stopPropagation();
             onDiscard();
           }}
-          className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+          className="opacity-0 group-hover:opacity-100"
         >
           <Undo2 className="w-3.5 h-3.5" />
-        </button>
+        </Button>
       )}
     </div>
   );

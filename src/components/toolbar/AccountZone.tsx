@@ -42,14 +42,14 @@ export function AccountZone({
       >
         {currentAccount ? (
           <>
-            <AccountAvatar account={currentAccount} size="sm" className="w-5! h-5! text-[10px]!" />
+            <AccountAvatar account={currentAccount} size="sm" className="w-5! h-5! text-[10.5px]!" />
             <span className="truncate max-w-[100px] hidden @min-[1100px]:inline">
               {currentAccount.username}
             </span>
           </>
         ) : (
           <span className="w-5 h-5 rounded-full bg-foreground/[0.07] flex items-center justify-center">
-            <span className="text-[10px] text-muted-foreground font-bold">?</span>
+            <span className="text-[10.5px] text-muted-foreground font-bold">?</span>
           </span>
         )}
       </button>

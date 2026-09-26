@@ -23,7 +23,7 @@ export function CompareChip() {
 
   return (
     <span
-      className="flex items-center gap-1 shrink-0 min-w-0 max-w-[320px] h-6 pl-2 pr-0.5 rounded-(--radius-chip) bg-(--acc-sel) text-[11.5px] font-semibold text-(--fg2)"
+      className="flex items-center gap-1 shrink-0 min-w-0 max-w-[320px] h-6 pl-2 pr-0.5 rounded-(--radius-chip) bg-info/10 text-[11.5px] font-semibold text-foreground"
       data-testid="compare-chip"
     >
       <GitCompare className="w-3 h-3 shrink-0" aria-hidden="true" />
@@ -35,7 +35,7 @@ export function CompareChip() {
         onClick={clearRange}
         aria-label={t("graph.endCompare")}
         title={t("graph.endCompare")}
-        className="flex items-center justify-center w-5 h-5 shrink-0 rounded-[4px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        className="flex items-center justify-center w-5 h-5 shrink-0 rounded-(--radius-chip) text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
       >
         <X className="w-3 h-3" />
       </button>
