@@ -22,9 +22,12 @@ export function StatusActivity() {
   const isLogOpen = useUIStore((s) => s.isActivityLogOpen);
   const setLogOpen = useUIStore((s) => s.setActivityLogOpen);
   // 새로 시작한 명령은 SHOW_AFTER_MS가 지나야 보이고, 보이는 중이면 다음 명령으로 바로 바뀌며, 모두 끝나도 HOLD_MS 동안 남는다.
+  // 진행률이 갱신될 때마다 새 객체로 오므로(activity.ts의 updateProgress), 명령 id로 정체성을 잡아
+  // 그 갱신이 SHOW_AFTER_MS 타이머를 되돌리지 않게 한다.
   const running = useSteadyValue(
     useActivityStore((s) => Object.values(s.activeOperations)[0] ?? null),
     { showAfterMs: SHOW_AFTER_MS, holdMs: HOLD_MS },
+    (op) => op.id,
   );
   const label = t("activity.title");
 

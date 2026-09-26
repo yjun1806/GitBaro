@@ -50,6 +50,49 @@ describe("useSteadyValue", () => {
     act(() => void vi.advanceTimersByTime(1));
     expect(result.current).toBeNull();
   });
+
+  interface Progress {
+    id: string;
+    percent: number;
+  }
+  const byId = (v: Progress) => v.id;
+
+  it("still shows after showAfterMs when the same work arrives as a new object every 100ms", () => {
+    // 진행률 갱신마다 새 객체가 온다(activity.ts의 updateProgress). id가 같은 한 타이머가
+    // 되돌아가면 안 된다 — 되돌아가면 300ms 문턱을 영영 못 넘는다.
+    const { result, rerender } = renderHook(({ v }) => useSteadyValue<Progress>(v, timing, byId), {
+      initialProps: { v: { id: "a", percent: 0 } as Progress | null },
+    });
+    for (let percent = 10; percent <= 100; percent += 10) {
+      act(() => void vi.advanceTimersByTime(100));
+      rerender({ v: { id: "a", percent } });
+    }
+    expect(result.current).not.toBeNull();
+    // 보이는 동안에는 늘 최신 객체(최신 진행률)를 돌려준다.
+    expect(result.current?.percent).toBe(100);
+  });
+
+  it("restarts the show timer when the key actually changes, even with a keyOf", () => {
+    const { result, rerender } = renderHook(({ v }) => useSteadyValue<Progress>(v, timing, byId), {
+      initialProps: { v: { id: "a", percent: 0 } as Progress | null },
+    });
+    act(() => void vi.advanceTimersByTime(timing.showAfterMs - 1));
+    rerender({ v: { id: "b", percent: 0 } });
+    // 다른 일로 바뀌었지만 이미 보이는 중이 아니었으니(아직 300ms 전) 곧바로 보이지 않는다.
+    expect(result.current).toBeNull();
+  });
+
+  it("does not leak timers across rapid toggles and an unmount", () => {
+    const { rerender, unmount } = renderHook(({ v }) => useSteadyValue<string>(v, timing), {
+      initialProps: { v: "fetch" as string | null },
+    });
+    rerender({ v: null });
+    rerender({ v: "pull" });
+    rerender({ v: null });
+    rerender({ v: "push" });
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
 
 describe("useSteadyFlag", () => {

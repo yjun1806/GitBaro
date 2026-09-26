@@ -16,7 +16,7 @@ import { useFollowStore, type FollowMode } from "@/stores/follow";
 import { FOLLOW_KEY, useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { diffDelta, type DiffDelta } from "@/lib/diff-delta";
-import { useJustChanged } from "./useJustChanged";
+import { useJustChanged, type JustChanged } from "./useJustChanged";
 import { FocusFlash } from "@/components/ui/FocusFlash";
 import { FileStatusBadge } from "@/lib/file-status";
 import { cn, formatRelativeTime, getErrorMessage, trimTrailingSlash } from "@/lib/utils";
@@ -263,6 +263,7 @@ function FollowFileList({
   files,
   selected,
   overlap,
+  justChanged,
   onPick,
   onContextMenu,
 }: {
@@ -270,14 +271,14 @@ function FollowFileList({
   selected: string | null;
   /** 다른 워크트리도 고치는 파일(⧉, 시안 D5). */
   overlap: WorktreeOverlap;
+  /** 방금 바뀐 파일들(한 번 비출 것). 목록이 비었다 다시 채워져도 기억이 이어지게 `FollowPanel`에서 받는다. */
+  justChanged: JustChanged | null;
   onPick: (path: string) => void;
   onContextMenu: (path: string, e: React.MouseEvent) => void;
 }) {
   const { t } = useTranslation();
   const now = useNow(1_000);
   const selectedIndex = selected === null ? -1 : files.findIndex((f) => f.path === selected);
-  // 방금 바뀐 파일의 행을 한 번 비춘다(diff의 새 줄과 같은 막). 「N초 전」 글자는 계속 세지만 비추기는 한 번뿐이다.
-  const justChanged = useJustChanged(files);
   // 위아래 화살표로 파일을 옮겨 고른다(고르면 따라가기가 멈춘다).
   const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
     items: files,
@@ -393,6 +394,12 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
   useFollowRefresh(path, polled);
   const { data: files, isLoading, isError } = useWipFiles(path);
   const list = useMemo(() => files ?? [], [files]);
+  // 방금 바뀐 파일의 행을 한 번 비춘다(diff의 새 줄과 같은 막). 「N초 전」 글자는 계속 세지만 비추기는
+  // 한 번뿐이다. 목록이 비어도(작업 트리가 깨끗해져도) `FollowPanel`은 그대로 떠 있으니, 여기서
+  // 기억해야 비었다가 파일이 다시 나타났을 때도 그 파일이 비춘다 — 목록이 빌 때 사라지는
+  // `FollowFileList` 안에 두면 다시 나타날 때 기억이 없어 비추지 못한다. `files`(로딩 중엔
+  // undefined)를 그대로 넘겨, 자리표시자 빈 배열을 「첫 목록」으로 착각하지 않게 한다.
+  const justChanged = useJustChanged(files);
 
   // 멈춘 동안 보던 파일이 목록에서 빠지면(커밋·되돌림) 다른 파일로 넘어가지 않는다 —
   // 넘어가면 「멈춤」인데도 가장 최근 파일을 따라가는 것과 같아진다.
@@ -520,6 +527,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
           files={list}
           selected={shown?.path ?? null}
           overlap={overlap}
+          justChanged={justChanged}
           onPick={pickFile}
           onContextMenu={openFileMenu}
         />

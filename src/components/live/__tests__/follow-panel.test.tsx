@@ -309,6 +309,21 @@ describe("FollowPanel — focus cues while following", () => {
     expect(screen.getByTestId("file-flash")).toBe(overlay);
   });
 
+  it("flashes the first file to appear once a clean worktree gets its first change", async () => {
+    // The file list unmounts while the worktree is clean (empty list). The "just changed" memory
+    // must survive that gap so the first file to show up afterwards still flashes.
+    backend.files = [];
+    renderFollow();
+    await screen.findByText("No uncommitted changes. Waiting for the next edit.");
+    expect(screen.queryByTestId("file-flash")).toBeNull();
+
+    backend.contents["src/a.ts"] = lines(30, { 2: ["new"] });
+    backend.files = [wipFile("src/a.ts", nowSecs())];
+    await emit(WT);
+
+    await waitFor(() => expect(flashedRows()).toEqual(["src/a.ts"]));
+  });
+
   it("tells the diff when the fresh lines arrived so it can flash them once", async () => {
     renderFollow();
     await waitFor(() => expect(diffText()).toContain("src/b.ts"));
