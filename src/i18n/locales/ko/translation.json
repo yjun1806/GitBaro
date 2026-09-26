@@ -961,7 +961,10 @@
     "remoteUnpushedUnnamed_one": "아직 push 안 함 (↑{{count}})",
     "remoteUnpushedUnnamed_other": "아직 push 안 함 (↑{{count}})",
     "changedFiles_one": "바뀐 파일 {{count}}",
-    "changedFiles_other": "바뀐 파일 {{count}}"
+    "changedFiles_other": "바뀐 파일 {{count}}",
+    "pushPending": "push 안 함",
+    "expand": "커밋 정보 펼치기",
+    "collapse": "커밋 정보 접기"
   },
   "activeScope": {
     "pickRepo": "저장소를 고르세요"

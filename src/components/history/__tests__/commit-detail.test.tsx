@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
+import { useUIStore } from "@/stores/ui";
 import type { BranchInfo, CommitInfo, RepoInfo, RepoSyncStatus, WorkflowRun } from "@/types";
 
 vi.mock("@/components/diff/DiffViewer", () => ({ DiffViewer: () => <div>diff-viewer</div> }));
@@ -104,6 +105,8 @@ const OLD = { updatedAt: Date.now() - 3_600_000 };
 // jsdom has no layout; the file list's keyboard nav scrolls the first row into view.
 Element.prototype.scrollIntoView = vi.fn();
 
+const writeText = vi.fn(async (_text: string) => {});
+
 let client: QueryClient;
 
 function renderDetail(commit: CommitInfo = makeCommit()) {
@@ -132,6 +135,7 @@ function expectNoFetch() {
 beforeEach(async () => {
   await i18n.changeLanguage("ko");
   vi.clearAllMocks();
+  Object.assign(navigator, { clipboard: { writeText } });
   ipc.listWorkflowRuns.mockResolvedValue([]);
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // The sidebar's query holds every repository; the view must find its path in it.
@@ -147,6 +151,9 @@ beforeEach(async () => {
     activeWorktrees: {},
   });
   useAccountStore.setState({ activeAccountId: null });
+  // 정보 칸 내용(저장소·CI·원격 줄)을 다루는 기존 테스트는 펼친 상태를 전제로 한다. 접힘·펼침 자체는
+  // 아래 "collapsible info" 묶음에서 따로 다룬다.
+  useUIStore.setState({ commitInfoExpanded: true });
 });
 
 afterEach(() => {
@@ -340,5 +347,87 @@ describe("upstreamRemoteOf", () => {
     expect(upstreamRemoteOf(null, ["origin"])).toBe("origin");
     expect(upstreamRemoteOf(null, ["origin", "upstream"])).toBeNull();
     expect(upstreamRemoteOf(undefined, ["origin", "upstream"])).toBeNull();
+  });
+});
+
+describe("CommitDetail collapsible info", () => {
+  it("collapses by default to the subject, author, time and sha, without the detail block", () => {
+    useUIStore.setState({ commitInfoExpanded: false });
+    renderDetail();
+    expect(screen.getByText("feat(api): add settings")).toBeTruthy();
+    expect(screen.getByText("Jun")).toBeTruthy();
+    expect(screen.getByText("a81c0e2")).toBeTruthy();
+    expect(screen.queryByText("저장소")).toBeNull();
+    expect(screen.getByRole("button", { name: "커밋 정보 펼치기", expanded: false })).toBeTruthy();
+  });
+
+  it("shows the push-pending word in the collapsed line only while the commit is not pushed", () => {
+    useUIStore.setState({ commitInfoExpanded: false });
+    cacheHistory([makeCommit({ isUnpushed: true })]);
+    renderDetail();
+    expect(screen.getByText("push 안 함")).toBeTruthy();
+  });
+
+  it("leaves out the push-pending word once the commit is pushed", () => {
+    useUIStore.setState({ commitInfoExpanded: false });
+    cacheHistory([makeCommit({ isUnpushed: false })]);
+    renderDetail();
+    expect(screen.queryByText("push 안 함")).toBeNull();
+  });
+
+  it("expands on click, shows the body only then, and remembers the choice", () => {
+    useUIStore.setState({ commitInfoExpanded: false });
+    const commit = makeCommit({
+      message: "feat(api): add settings\n\nLonger body explaining the change.",
+    });
+    renderDetail(commit);
+    expect(screen.queryByText("Longer body explaining the change.")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "커밋 정보 펼치기" }));
+
+    expect(screen.getByText("Longer body explaining the change.")).toBeTruthy();
+    expect(screen.getByText("저장소")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "커밋 정보 접기", expanded: true })).toBeTruthy();
+    expect(useUIStore.getState().commitInfoExpanded).toBe(true);
+  });
+
+  it("copies the hash from the collapsed line without toggling the summary", () => {
+    useUIStore.setState({ commitInfoExpanded: false });
+    renderDetail();
+    fireEvent.click(screen.getByTitle("커밋 해시 전체 복사"));
+    expect(writeText).toHaveBeenCalledWith(SHA);
+    // sha 클릭이 바깥의 펼치기 토글로 번지지 않아야 접힌 채로 남는다.
+    expect(useUIStore.getState().commitInfoExpanded).toBe(false);
+  });
+
+  it("scrolls the info block and the file list in one container, not two", () => {
+    const { container } = render(
+      <QueryClientProvider client={client}>
+        <CommitDetail
+          commit={makeCommit()}
+          changedFiles={[
+            { path: "a.ts", status: "modified" },
+            { path: "b.ts", status: "added" },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    expect(container.querySelectorAll(".overflow-y-auto").length).toBe(1);
+  });
+
+  it("keeps the file list's keyboard navigation working inside the merged scroll container", () => {
+    const onSelectFile = vi.fn();
+    const files = [
+      { path: "a.ts", status: "modified" as const },
+      { path: "b.ts", status: "added" as const },
+    ];
+    render(
+      <QueryClientProvider client={client}>
+        <CommitDetail commit={makeCommit()} changedFiles={files} onSelectFile={onSelectFile} />
+      </QueryClientProvider>,
+    );
+    onSelectFile.mockClear(); // auto-select of the first file on mount
+    fireEvent.keyDown(screen.getByTestId("commit-detail-scroll"), { key: "ArrowDown" });
+    expect(onSelectFile).toHaveBeenCalledWith("b.ts");
   });
 });

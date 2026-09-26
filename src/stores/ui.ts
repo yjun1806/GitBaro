@@ -44,6 +44,8 @@ interface UIState {
   workingFocusAt: number | null;
   /** 워크스페이스마다 마지막으로 고른 리뷰 보기(커밋 순서·파일별, 워크스페이스 id로 키). */
   reviewFileViewByWorkspace: Readonly<Record<string, ReviewFileView>>;
+  /** 커밋·스태시 상세의 정보 칸(제목 아래 요약/펼침)을 펼쳐 뒀는지. 기본은 접힘(저장). */
+  commitInfoExpanded: boolean;
   setTheme: (theme: Theme) => void;
   setActiveTab: (tab: "changes" | "history" | "stash" | "actions") => void;
   setSidebarWidth: (width: number) => void;
@@ -59,6 +61,7 @@ interface UIState {
   setMaximizedFileListOpen: (open: boolean) => void;
   setWorkingFocusAt: (at: number | null) => void;
   setReviewFileView: (workspaceId: string, view: ReviewFileView) => void;
+  setCommitInfoExpanded: (expanded: boolean) => void;
 }
 
 /** Sidebar width in the two-column shell's design (`gen_d.py` sidebar, 276px). */
@@ -76,6 +79,7 @@ type PersistedUI = Pick<
   | "fileListWidth"
   | "maximizedFileListOpen"
   | "reviewFileViewByWorkspace"
+  | "commitInfoExpanded"
 >;
 
 /**
@@ -98,6 +102,7 @@ type PersistedUI = Pick<
  * `sanitizePersistedUI`가 읽지 않고, 다음 저장 때 `partialize`가 빼서 사라진다.
  * `reviewFileViewByWorkspace`(워크스페이스 리뷰의 커밋 순서·파일별 선택)도 나중에 더한 선택 필드라 버전을
  * 올리지 않는다. 없으면 빈 객체이므로 모든 워크스페이스가 기본값(`commits`)으로 시작한다.
+ * `commitInfoExpanded`(커밋 상세의 정보 칸 펼침 여부)도 나중에 더한 선택 필드다. 없으면 기본값(접힘)을 쓴다.
  */
 export const UI_STORE_VERSION = 0;
 
@@ -138,6 +143,7 @@ export function sanitizePersistedUI(persisted: unknown): Partial<UIState> {
     }
     out.reviewFileViewByWorkspace = byWorkspace;
   }
+  if (typeof p.commitInfoExpanded === "boolean") out.commitInfoExpanded = p.commitInfoExpanded;
   return out;
 }
 
@@ -160,6 +166,7 @@ export const useUIStore = create<UIState>()(
       maximizedFileListOpen: true,
       workingFocusAt: null,
       reviewFileViewByWorkspace: {},
+      commitInfoExpanded: false,
 
       setTheme: (theme) => set({ theme }),
 
@@ -185,6 +192,7 @@ export const useUIStore = create<UIState>()(
         set((state) => ({
           reviewFileViewByWorkspace: { ...state.reviewFileViewByWorkspace, [workspaceId]: view },
         })),
+      setCommitInfoExpanded: (expanded) => set({ commitInfoExpanded: expanded }),
     }),
     {
       name: "gitbaro-ui",
@@ -205,6 +213,7 @@ export const useUIStore = create<UIState>()(
         fileListWidth: state.fileListWidth,
         maximizedFileListOpen: state.maximizedFileListOpen,
         reviewFileViewByWorkspace: state.reviewFileViewByWorkspace,
+        commitInfoExpanded: state.commitInfoExpanded,
       }),
       merge: (persisted, current) => ({ ...current, ...sanitizePersistedUI(persisted) }),
     },

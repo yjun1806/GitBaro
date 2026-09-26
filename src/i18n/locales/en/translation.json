@@ -963,7 +963,10 @@
     "remoteUnpushedUnnamed_one": "Not pushed yet (↑{{count}})",
     "remoteUnpushedUnnamed_other": "Not pushed yet (↑{{count}})",
     "changedFiles_one": "Changed files {{count}}",
-    "changedFiles_other": "Changed files {{count}}"
+    "changedFiles_other": "Changed files {{count}}",
+    "pushPending": "Not pushed",
+    "expand": "Show commit details",
+    "collapse": "Hide commit details"
   },
   "activeScope": {
     "pickRepo": "Pick a repository"

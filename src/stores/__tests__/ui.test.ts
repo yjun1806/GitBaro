@@ -78,6 +78,11 @@ describe("sanitizePersistedUI", () => {
     expect(sanitizePersistedUI(null)).toEqual({});
   });
 
+  it("keeps a saved commit-info expanded/collapsed choice, and ignores a malformed one", () => {
+    expect(sanitizePersistedUI({ commitInfoExpanded: true })).toEqual({ commitInfoExpanded: true });
+    expect(sanitizePersistedUI({ commitInfoExpanded: "yes" })).toEqual({});
+  });
+
   it("never restores the theme from local storage (backend settings own it)", () => {
     expect(sanitizePersistedUI({ theme: "dark" })).toEqual({});
   });
@@ -94,6 +99,7 @@ describe("ui store after the two-column shell", () => {
     const partialize = useUIStore.persist.getOptions().partialize;
     expect(partialize).toBeDefined();
     expect(Object.keys(partialize!(useUIStore.getState()) as object).sort()).toEqual([
+      "commitInfoExpanded",
       "diffLineMode",
       "fileListWidth",
       "graphPanelRatio",
