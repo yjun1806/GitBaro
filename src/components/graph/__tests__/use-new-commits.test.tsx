@@ -33,6 +33,10 @@ function commit(id: string, parentIds: string[]): CommitInfo {
 
 /** 커밋 목록 응답. 테스트가 새 객체로 바꾸고 다시 그리면 react-query가 새 데이터를 준 것과 같다. */
 const historyState = vi.hoisted(() => ({ data: { pages: [[]] as CommitInfo[][] }, hasNextPage: false }));
+/** 함께 그리는 다른 워크트리의 이력 조회 결과(`useWorktreeHeadHistories`). 기본은 빈 배열(다른 워크트리 없음). */
+const otherHistoryState = vi.hoisted(() => ({
+  queries: [] as { data: CommitInfo[] | undefined; isSuccess: boolean; dataUpdatedAt: number }[],
+}));
 
 vi.mock("@/api/queries", () => ({
   useChangesVsDefaultOnHead: (entries: readonly unknown[]) => entries.map(() => ({ data: undefined })),
@@ -48,7 +52,7 @@ vi.mock("@/api/queries", () => ({
   useWorktrees: () => ({ data: [] }),
   useRemoteTags: () => ({ data: undefined }),
   useCommitAvatars: () => ({ data: undefined }),
-  useWorktreeHeadHistories: () => [],
+  useWorktreeHeadHistories: () => otherHistoryState.queries,
 }));
 
 const { CommitGraph } = await import("../CommitGraph");
@@ -72,6 +76,7 @@ const flashed = () =>
 beforeEach(() => {
   historyState.data = { pages: [base()] };
   historyState.hasNextPage = false;
+  otherHistoryState.queries = [];
   useSelectionStore.getState().clearAll();
   useRepositoryStore.setState({ repos: [repo, other], activeRepo: repo, activeRepoPath: REPO });
   useFollowStore.getState().start(REPO);
@@ -148,5 +153,50 @@ describe("CommitGraph new-commit cue", () => {
     historyState.data = { pages: [[commit("o0", ["o1"]), commit("o1", ["o2"]), commit("o2", [])]] };
     rerender(view());
     expect(flashed()).toEqual(["o0"]);
+  });
+});
+
+describe("CommitGraph new-commit cue with another worktree drawn together (#5)", () => {
+  const FEAT = "/work/feat";
+  const at = (c: CommitInfo, timestamp: number): CommitInfo => ({ ...c, timestamp });
+  const viewWithFeat = () => (
+    <QueryClientProvider client={new QueryClient()}>
+      <CommitGraph wips={[]} worktreeHeads={[{ path: FEAT, head: "f1" }]} />
+    </QueryClientProvider>
+  );
+
+  beforeEach(() => {
+    // 자신의 이력: c1(최신) · c2 · c3(가장 오래됨). feat의 f1은 c2와 c3 사이에 낄 시각으로 나중에 온다.
+    historyState.data = { pages: [[at(commit("c1", ["c2"]), 300), at(commit("c2", ["c3"]), 200), at(commit("c3", []), 100)]] };
+    // 처음에는 feat의 이력을 아직 불러오지 못한 상태(isSuccess: false).
+    otherHistoryState.queries = [{ data: undefined, isSuccess: false, dataUpdatedAt: 0 }];
+  });
+
+  it("does not flash another worktree's commit that only arrives once its history finishes loading", () => {
+    const { rerender } = render(viewWithFeat());
+    expect(flashed()).toEqual([]);
+
+    // feat의 이력이 늦게 도착 — 시간순으로 c2와 c3 사이에 f1이 끼어든다.
+    otherHistoryState.queries = [{ data: [at(commit("f1", []), 150)], isSuccess: true, dataUpdatedAt: 1 }];
+    rerender(viewWithFeat());
+    expect(flashed()).toEqual([]);
+
+    // 그 뒤로는 평소처럼: 자신의 이력에 진짜 새 커밋(c0)이 생기면 그것만 비춘다.
+    historyState.data = {
+      pages: [[at(commit("c0", ["c1"]), 400), at(commit("c1", ["c2"]), 300), at(commit("c2", ["c3"]), 200), at(commit("c3", []), 100)]],
+    };
+    rerender(viewWithFeat());
+    expect(flashed()).toEqual(["c0"]);
+  });
+
+  it("records but does not flash while another worktree's history is still loading, across separate renders", () => {
+    const { rerender } = render(viewWithFeat());
+    // 아직 feat 이력을 불러오는 중 — 다시 그려도(예: 다른 상태 변화) 비추지 않는다.
+    rerender(viewWithFeat());
+    expect(flashed()).toEqual([]);
+
+    otherHistoryState.queries = [{ data: [at(commit("f1", []), 150)], isSuccess: true, dataUpdatedAt: 1 }];
+    rerender(viewWithFeat());
+    expect(flashed()).toEqual([]);
   });
 });

@@ -96,4 +96,48 @@ describe("remoteBoundaryIndex", () => {
   it("skips commits whose remote state is unknown", () => {
     expect(remoteBoundaryIndex([{ isUnpushed: true }, {}, { isUnpushed: false }])).toBe(2);
   });
+
+  // #3: 함께 그리는 다른 워크트리의 커밋(`isOwn: false`)은 경계 위치를 정하는 데 쓰지 않는다 —
+  // 자신과 상관없는 별도의 브랜치라, 그 워크트리의 오래된 커밋 하나 때문에 자신의 경계가 실제보다
+  // 아래로 밀리면 위에 낀 자신의(이미 올라간) 커밋들이 "아직 안 올라감"처럼 보인다.
+  it("ignores another worktree's commits when placing the boundary, even if that commit is unpushed", () => {
+    // main(자신)은 모두 이미 올라갔다. feat(다른 워크트리)의 오래된 커밋 하나만 안 올라갔다.
+    const list = [
+      { isOwn: true, isUnpushed: false }, // main의 최신 커밋
+      { isOwn: false, isUnpushed: true }, // feat의 2일 전 안 올라간 커밋
+      { isOwn: true, isUnpushed: false }, // main의 더 오래된 커밋
+    ];
+    // main 자신은 안 올라간 커밋이 없으므로 그릴 경계가 없다.
+    expect(remoteBoundaryIndex(list)).toBeNull();
+  });
+
+  it("draws nothing when another worktree's already-pushed commit would sit above the boundary", () => {
+    const list = [
+      { isOwn: false, isUnpushed: false }, // 다른 워크트리의 이미 올라간 커밋(경계 위에 낌)
+      { isOwn: true, isUnpushed: true }, // 자신의 안 올라간 커밋
+      { isOwn: true, isUnpushed: false }, // 자신의 다음 커밋(경계 후보)
+    ];
+    // 「경계 위는 아직 안 올라갔다」가 거짓이 되므로(다른 워크트리의 이미 올라간 커밋이 위에 있음) 그리지 않는다.
+    expect(remoteBoundaryIndex(list)).toBeNull();
+  });
+
+  it("still draws when only its own history has a merged-in remote commit above the boundary", () => {
+    // 자신의 이력 안에서 원격 커밋이 낀 것(merge)은 원래도 허용한다 — isOwn 기본값(true)만으로도 유지된다.
+    const list = [
+      { isUnpushed: true }, // u3: merge 커밋(안 올라감)
+      { isUnpushed: false }, // m9: merge로 들어온 원격 커밋
+      { isUnpushed: true }, // u1: 더 오래된 로컬 커밋(안 올라감)
+      { isUnpushed: false }, // m8
+    ];
+    expect(remoteBoundaryIndex(list)).toBe(3);
+  });
+
+  it("draws nothing yet while its own history hasn't reached a pushed commit (more pages may still load)", () => {
+    const list = [
+      { isOwn: true, isUnpushed: true },
+      { isOwn: false, isUnpushed: false },
+    ];
+    // 다른 워크트리에는 이미 올라간 커밋이 있어도, 자신의 이력이 아직 올라간 지점에 닿지 못했으면 기다린다.
+    expect(remoteBoundaryIndex(list)).toBeNull();
+  });
 });

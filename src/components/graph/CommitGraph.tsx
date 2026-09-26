@@ -341,7 +341,15 @@ function CommitGraphList({
   const markRemote = hasRemote;
   const dotOf = (commit: CommitInfo): CommitDot =>
     !markRemote || commit.isUnpushed === undefined ? "plain" : commit.isUnpushed ? "unpushed" : "pushed";
-  const boundaryIdx = useMemo(() => (markRemote ? remoteBoundaryIndex(commits) : null), [markRemote, commits]);
+  // 경계 위치는 지금 연 워크트리 자신의 이력만 보고 정한다(graph-paint.ts). `ownIds`로 어느 행이
+  // 자신의 커밋인지 표시한다.
+  const boundaryIdx = useMemo(
+    () =>
+      markRemote
+        ? remoteBoundaryIndex(commits.map((c) => ({ isUnpushed: c.isUnpushed, isOwn: ownIds.has(c.id) })))
+        : null,
+    [markRemote, commits, ownIds],
+  );
   // 경계 행의 이름표: 「원격에 없음」은 어느 원격에도 없다는 뜻이라, 원격이 여럿이면 이름을 고르지 않는다.
   const remotes = useRepositoryStore((s) => s.activeRepo?.remotes);
   const remoteLabel = remotes?.length === 1 ? remotes[0].name : t("graph.anyRemote");
@@ -365,10 +373,15 @@ function CommitGraphList({
     .map((h) => h.path)
     .sort()
     .join("\u0001");
+  // 자신의 이력은 먼저, 함께 그리는 다른 워크트리의 이력(`useWorktreeHeadHistories`)은 나중에 올 수
+  // 있다 — 그 사이에 목록에 끼어드는 커밋을 「방금 생긴 커밋」으로 잘못 비추지 않으려면, 다 불러올
+  // 때까지는 기록만 하게 한다(useNewCommits.ts).
+  const otherHistoriesReady = otherHistories.every((q) => q.isSuccess);
   const newCommits = useNewCommits(
     commitIds,
     `${activeRepoPath ?? ""}\u0000${JSON.stringify(historyTarget ?? null)}\u0000${shownPathsKey}`,
     followTarget !== null,
+    otherHistoriesReady,
   );
 
   // 무한 스크롤: 맨 아래 표시가 보이면 다음 페이지를 불러온다.

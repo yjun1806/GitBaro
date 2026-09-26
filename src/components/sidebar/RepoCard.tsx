@@ -20,7 +20,7 @@ import {
 import { DraggableRow, DropAfterLine } from "./TreeDnd";
 import { TreeRowFrame } from "./TreeRowFrame";
 import type { FolderRow } from "./useSidebarRowMenus";
-import { isLivePath, isWatchedPath, repoPaths } from "./tree-model";
+import { isLivePath, isWatchedPath, repoPaths, sumDedupedByRepo } from "./tree-model";
 import type { SidebarTreeData } from "./useSidebarTreeData";
 import { Spinner } from "@/components/ui/Spinner";
 import { useSteadyFlag } from "@/hooks/useSteadyValue";
@@ -47,16 +47,23 @@ export interface RepoActions {
   onViewContextMenu?: (repo: RepoInfo, target: Extract<ViewTarget, { kind: "ref" }>, e: MouseEvent) => void;
 }
 
-/** 경로 하나(또는 여럿의 합)의 오른쪽 표시 값. */
+/**
+ * 경로 하나(또는 여럿의 합)의 오른쪽 표시 값.
+ *
+ * `ahead`·`behind`는 저장소별로 최댓값을 구한 뒤 저장소끼리 더한다(`sumDedupedByRepo`) — 한 저장소의
+ * 워크트리 여러 개가 같은 원격 커밋을 가리켜도(예: 서로 다른 브랜치가 같은 upstream을 추적) 두 번
+ * 세지 않기 위해서다. `paths`가 여러 저장소에 걸치면(워크스페이스 카드 합계) 저장소별 최댓값을 그대로 더한다.
+ */
 export function signalValues(paths: string[], data: SidebarTreeData): RowSignalValues {
   const livePaths = paths.filter((p) => isLivePath(p, data.lastChangedAt, data.now));
+  const repoOf = (path: string) => data.reviewByPath[path]?.repoPath ?? path;
   return {
     dirty: paths.reduce((acc, p) => acc + (data.signals[p]?.dirtyCount ?? 0), 0),
     live: livePaths.length > 0,
     watched: livePaths.some((p) => isWatchedPath(p, data.watched, data.overflow)),
     changedAt: Math.max(0, ...livePaths.map((p) => data.lastChangedAt[p] ?? 0)),
-    ahead: paths.reduce((acc, p) => acc + (data.signals[p]?.ahead ?? 0), 0),
-    behind: paths.reduce((acc, p) => acc + (data.signals[p]?.behind ?? 0), 0),
+    ahead: sumDedupedByRepo(paths, repoOf, (p) => data.signals[p]?.ahead ?? 0),
+    behind: sumDedupedByRepo(paths, repoOf, (p) => data.signals[p]?.behind ?? 0),
   };
 }
 

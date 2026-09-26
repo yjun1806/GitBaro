@@ -24,25 +24,41 @@ export function insertedCommitIds(seen: ReadonlySet<string>, ids: readonly strin
  * `resetKey`가 바뀐 뒤(다른 저장소·다른 브랜치 보기·함께 그리는 워크트리 변경) 처음 받은 목록은
  * 모두 「이미 본 것」이다. `enabled`가 아니면 기억만 하고 비추지 않는다.
  *
+ * `historiesReady`가 거짓인 동안(함께 그리는 다른 워크트리의 이력을 아직 다 불러오지 못함)에도
+ * 기록만 하고 비추지 않는다 — 자신의 이력이 먼저 오고 다른 워크트리 이력이 나중에 와 목록에
+ * 끼어들면(시각순으로 이미 본 커밋들 사이에 놓인다), 그 워크트리 이력이 늦게 와서 낀 것일 뿐인데
+ * 방금 생긴 커밋처럼 보이기 때문이다. `historiesReady`가 참이 된 뒤부터 끼어드는 커밋만 비춘다.
+ *
  * 돌려주는 집합은 마지막으로 새로 끼어든 커밋들이다. 그 행은 클래스가 그대로 남아(다시 마운트되지 않으니)
  * 다시 그려도 다시 비추지 않는다.
  */
-export function useNewCommits(ids: readonly string[], resetKey: string, enabled: boolean): ReadonlySet<string> {
-  const seen = useRef<{ key: string; ids: Set<string> } | null>(null);
+export function useNewCommits(
+  ids: readonly string[],
+  resetKey: string,
+  enabled: boolean,
+  historiesReady: boolean = true,
+): ReadonlySet<string> {
+  const seen = useRef<{ key: string; ids: Set<string>; ready: boolean } | null>(null);
   const [flash, setFlash] = useState<ReadonlySet<string>>(NONE);
 
   useEffect(() => {
     const prev = seen.current;
     if (prev === null || prev.key !== resetKey) {
-      seen.current = { key: resetKey, ids: new Set(ids) };
+      seen.current = { key: resetKey, ids: new Set(ids), ready: historiesReady };
       setFlash(NONE);
+      return;
+    }
+    if (!prev.ready) {
+      // 아직 다른 워크트리 이력을 불러오는 중 — 새로 채워지는 커밋은 기록만 한다. 이 동안에는
+      // 한 번도 비추지 않았으니(flash는 reset 때 NONE으로 시작) 다시 지울 필요가 없다.
+      seen.current = { key: resetKey, ids: new Set([...prev.ids, ...ids]), ready: historiesReady };
       return;
     }
     const inserted = insertedCommitIds(prev.ids, ids);
     // 본 것에 더하기만 한다 — 잠깐 사라졌다 돌아온 커밋(rebase 중)을 새 것으로 비추지 않는다.
-    seen.current = { key: resetKey, ids: new Set([...prev.ids, ...ids]) };
+    seen.current = { key: resetKey, ids: new Set([...prev.ids, ...ids]), ready: historiesReady };
     if (inserted.length > 0 && enabled) setFlash(new Set(inserted));
-  }, [ids, resetKey, enabled]);
+  }, [ids, resetKey, enabled, historiesReady]);
 
   return flash;
 }

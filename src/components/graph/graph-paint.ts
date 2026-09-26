@@ -63,21 +63,42 @@ export function mutedChainNames(
 }
 
 /**
- * 「원격에 올라간 지점」 행을 둘 자리: 원격에 없는 커밋 가운데 마지막 것 아래 처음 나오는, 원격에
- * 있는 커밋의 번호. 그 행부터 아래는 모두 원격에 있다 — 원격 커밋을 merge해 원격에 없는 커밋 사이에
- * 원격 커밋이 끼어도 경계는 그 아래로 간다. 함께 그린 다른 워크트리의 커밋도 같이 센다(화면의
- * 모든 행에 대해 참이어야 한다).
- * 원격에 없는 커밋이 하나도 없거나(모두 올라감) 그 아래 원격에 있는 커밋을 아직 불러오지 않았으면 null.
- * 원격 여부를 모르는 커밋(`isUnpushed` 없음)은 건너뛴다.
+ * 「원격에 올라간 지점」 행을 둘 자리: **지금 연 워크트리 자신의 이력**(`isOwn`)만 보고 정한다 —
+ * 그 이력에서 원격에 없는 커밋 가운데 마지막 것 아래, 처음 나오는 원격에 있는 커밋의 번호. 원격
+ * 커밋을 merge해 원격에 없는 커밋 사이에 원격 커밋이 끼어도(자신의 이력 안에서는) 경계는 그 아래로
+ * 간다. 함께 그린 다른 워크트리의 커밋(`isOwn: false`, 기본값은 own — 다른 화면에서 부르는 기존
+ * 호출은 손대지 않아도 된다)은 경계 위치를 정하는 데는 쓰지 않는다 — 다른 워크트리는 자신과 상관없는
+ * 별도의 브랜치라, 그 워크트리의 오래된 커밋 하나 때문에 자신의 경계가 실제보다 아래로 밀리면 그
+ * 위에 낀 자신의(이미 올라간) 커밋들이 「아직 안 올라감」처럼 보인다.
+ *
+ * 다만 경계를 정한 뒤, 그 위(화면에 그려진 모든 행)에 **다른 워크트리의 이미 원격에 있는 커밋**이
+ * 하나라도 있으면 아예 그리지 않는다 — 「경계 아래는 모두 원격에 있다」는 참이어도 「경계 위는 아직
+ * 안 올라갔다」는 그 커밋 때문에 거짓이 되기 때문이다. (자신의 이력 안에서 원격 커밋이 낀 것은 원래도
+ * 허용한다 — merge 커밋이 그 예다.)
+ *
+ * 자신의 이력에 원격에 없는 커밋이 하나도 없거나(모두 올라감), 그 아래 원격에 있는 커밋을 자신의
+ * 이력에서 아직 찾지 못했으면(다음 페이지를 더 불러와야 할 수 있다) null. 원격 여부를 모르는
+ * 커밋(`isUnpushed` 없음)은 건너뛴다.
  */
-export function remoteBoundaryIndex(commits: readonly { isUnpushed?: boolean }[]): number | null {
-  let lastUnpushed = -1;
+export function remoteBoundaryIndex(
+  commits: readonly { isUnpushed?: boolean; isOwn?: boolean }[],
+): number | null {
+  const isOwn = (i: number) => commits[i].isOwn !== false;
+  let lastOwnUnpushed = -1;
   for (let i = 0; i < commits.length; i++) {
-    if (commits[i].isUnpushed === true) lastUnpushed = i;
+    if (isOwn(i) && commits[i].isUnpushed === true) lastOwnUnpushed = i;
   }
-  if (lastUnpushed === -1) return null;
-  for (let i = lastUnpushed + 1; i < commits.length; i++) {
-    if (commits[i].isUnpushed === false) return i;
+  if (lastOwnUnpushed === -1) return null;
+  let boundary = -1;
+  for (let i = lastOwnUnpushed + 1; i < commits.length; i++) {
+    if (isOwn(i) && commits[i].isUnpushed === false) {
+      boundary = i;
+      break;
+    }
   }
-  return null;
+  if (boundary === -1) return null;
+  for (let i = 0; i < boundary; i++) {
+    if (!isOwn(i) && commits[i].isUnpushed === false) return null;
+  }
+  return boundary;
 }

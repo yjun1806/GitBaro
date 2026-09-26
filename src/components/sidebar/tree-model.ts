@@ -64,6 +64,33 @@ export function repoPaths(node: RepoNode): string[] {
   return [node.repo.path, ...node.worktrees.map((w) => w.path)];
 }
 
+/**
+ * 경로별 값을 더하되, 같은 저장소의 워크트리끼리는 최댓값 하나로 줄인 뒤 저장소끼리는 더한다.
+ *
+ * `ahead`(올릴 커밋 수)·`behind`(받을 커밋 수)는 한 저장소 안 워크트리 여러 개가 같은 원격 커밋을
+ * 가리킬 수 있다 — 예를 들어 서로 다른 로컬 브랜치가 같은 upstream을 추적하거나, 한 워크트리의
+ * 아직 안 올린 커밋을 다른 워크트리(그 위에서 갈라진 브랜치)도 조상으로 가지는 경우. 워크트리별
+ * 값을 그냥 더하면 그 커밋을 두 번 센다. 프런트엔드에는 워크트리별로 정확히 어떤 원격 커밋·어떤
+ * upstream을 가리키는지(이름·커밋 id)가 없어 정확히 겹치는 것만 골라 뺄 수 없으므로, 저장소 하나
+ * 안에서는 모두 겹친다고 보수적으로 보고 최댓값을 그 저장소의 값으로 쓴다.
+ *
+ * 이 방식은 실제로 겹치지 않는 값(워크트리마다 서로 다른 브랜치가 각자의 upstream 대비 독립적으로
+ * 뒤처진 경우)을 과소평가할 수 있지만, 두 배로 부풀려 보여주는 것(#4 버그)보다는 안전하다 — 배경은
+ * `RepoCard.tsx`의 `signalValues` 참고. 저장소가 다르면 커밋을 공유할 수 없으니 그대로 더한다.
+ */
+export function sumDedupedByRepo(
+  paths: readonly string[],
+  repoOf: (path: string) => string,
+  valueOf: (path: string) => number,
+): number {
+  const maxByRepo = new Map<string, number>();
+  for (const path of paths) {
+    const repo = repoOf(path);
+    maxByRepo.set(repo, Math.max(maxByRepo.get(repo) ?? 0, valueOf(path)));
+  }
+  return [...maxByRepo.values()].reduce((acc, v) => acc + v, 0);
+}
+
 /** 경로 중 하나라도 10분 안에 파일이 바뀌었는지. */
 export function isLivePath(
   path: string,

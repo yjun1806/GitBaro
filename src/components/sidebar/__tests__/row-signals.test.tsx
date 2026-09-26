@@ -3,10 +3,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import i18n from "@/i18n/config";
+import type { WorktreeReviewStatus } from "@/hooks/useReviewStatus";
+import type { SidebarTreeData } from "../useSidebarTreeData";
 import { formatAgo, liveDotLabel } from "../row-meta";
 import { RowSignals, type RowSignalValues } from "../RowSignals";
 import { changedAgoText } from "../SidebarHoverCard";
-import { viewOnlyDefaultBranch } from "../RepoCard";
+import { signalValues, viewOnlyDefaultBranch } from "../RepoCard";
 
 afterEach(cleanup);
 
@@ -73,6 +75,49 @@ describe("hover card change time", () => {
     expect(changedAgoText(ko, NOW, NOW - 30_000)).toBe("방금 바뀜");
     expect(changedAgoText(ko, NOW, NOW - 5 * 60_000)).toBe("5분 전 바뀜");
     expect(changedAgoText(en, NOW * 10, NOW * 10 - 2 * 3_600_000)).toBe("changed 2 hours ago");
+  });
+});
+
+describe("signalValues", () => {
+  const REPO = "/r/app";
+  const MAIN = REPO;
+  const FEAT = "/r/app/.worktrees/feat";
+  const review = (path: string): WorktreeReviewStatus => ({ path, branch: "x", headOid: "a", isMain: path === REPO, repoPath: REPO });
+
+  function data(over: Partial<SidebarTreeData> = {}): SidebarTreeData {
+    return {
+      tree: [],
+      signals: {},
+      syncByPath: {},
+      reviewByPath: { [MAIN]: review(MAIN), [FEAT]: review(FEAT) },
+      reviewRepos: [],
+      worktreesByRepo: {},
+      lastChangedAt: {},
+      watched: [],
+      overflow: [],
+      now: NOW,
+      branchOf: () => null,
+      defaultBranchOf: () => undefined,
+      ...over,
+    };
+  }
+
+  it("does not double count ↓·↑ when two worktrees of one repo share an upstream (#4)", () => {
+    // main과 그 워크트리 feat가 둘 다 origin/main을 추적하면, 실제로 받을 커밋·올릴 커밋은 5개이지
+    // 두 워크트리를 더한 10개가 아니다.
+    const d = data({ signals: { [MAIN]: { behind: 5, ahead: 5 }, [FEAT]: { behind: 5, ahead: 5 } } });
+    const values = signalValues([MAIN, FEAT], d);
+    expect(values.behind).toBe(5);
+    expect(values.ahead).toBe(5);
+  });
+
+  it("adds ↓·↑ across different repositories (a workspace card's total)", () => {
+    const OTHER = "/r/other";
+    const d = data({
+      reviewByPath: { [MAIN]: review(MAIN), [OTHER]: { path: OTHER, branch: "x", headOid: "a", isMain: true, repoPath: OTHER } },
+      signals: { [MAIN]: { behind: 3 }, [OTHER]: { behind: 2 } },
+    });
+    expect(signalValues([MAIN, OTHER], d).behind).toBe(5);
   });
 });
 

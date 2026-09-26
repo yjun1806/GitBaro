@@ -8,6 +8,7 @@ import {
   expandedWorktreePaths,
   filterTree,
   isWatchedPath,
+  sumDedupedByRepo,
   workspaceRepoKey,
   worktreesByRepoFrom,
 } from "../tree-model";
@@ -178,6 +179,26 @@ describe("expandedWorktreePaths", () => {
     const saved = ["ws:w1", workspaceRepoKey(API)];
     expect(expandedWorktreePaths(searched, openExcept(saved))).toEqual([]);
     expect(expandedWorktreePaths(searched, () => true)).toEqual([WT]);
+  });
+});
+
+describe("sumDedupedByRepo", () => {
+  const repoOf = (path: string) => (path === WT ? API : path);
+
+  it("takes the max within one repo's worktrees instead of summing (they can share an upstream, #4)", () => {
+    const value: Record<string, number> = { [API]: 5, [WT]: 5 };
+    // main과 그 워크트리 feat가 같은 원격 커밋을 향하면(같은 upstream), 실제로 받을 커밋은 5개이지
+    // 10개가 아니다.
+    expect(sumDedupedByRepo([API, WT], repoOf, (p) => value[p] ?? 0)).toBe(5);
+  });
+
+  it("adds different repositories, since they never share a remote commit", () => {
+    const value: Record<string, number> = { [API]: 3, [WT]: 5, [WEB]: 2 };
+    expect(sumDedupedByRepo([API, WT, WEB], repoOf, (p) => value[p] ?? 0)).toBe(5 + 2);
+  });
+
+  it("returns the single value for a repository with one worktree", () => {
+    expect(sumDedupedByRepo([API], repoOf, () => 4)).toBe(4);
   });
 });
 
