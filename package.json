@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "ds:bundle": "vite build --config vite.ds.config.ts && node scripts/ds-postprocess.mjs",
     "release": "commit-and-tag-version",
     "prepare": "husky"
   },
