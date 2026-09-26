@@ -101,6 +101,8 @@ export function ToolbarRoot() {
     }
     try {
       await updateSettingsApi(updated);
+      // 설정을 읽는 다른 화면(사이드바 등)은 설정 쿼리를 본다.
+      queryClient.setQueryData(["settings"], updated);
     } catch (err) {
       addToast(t("error.failedToUpdateSettings", { error: getErrorMessage(err) }), "error");
     }
