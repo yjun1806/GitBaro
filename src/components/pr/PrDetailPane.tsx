@@ -8,13 +8,14 @@ import { useMenuActions } from "@/hooks/useMenuActions";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { cn } from "@/lib/utils";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
+import type { MaximizedOrigin } from "@/components/layout/maximized-files";
 import { Card } from "@/components/ui/Card";
 import { checkedOutBranch } from "@/components/graph/useHistoryView";
 import { ContextMenu, contextMenuPoint } from "@/components/ui/ContextMenu";
 import { copyMenuItem } from "@/components/ui/menu-items";
 import { Button } from "@/components/ui/Button";
 import { SectionLabel } from "@/components/ui/PanelHeader";
-import { Count, FileStatusLetter, StatusChip } from "@/components/ui/marks";
+import { Code, Count, FileStatusLetter, StatusChip } from "@/components/ui/marks";
 import type { PrFile, PrFiles, PrReviewThread, PullRequestDetail } from "@/types";
 import { fileStatusOf, openThreadCount, revealLineOf, threadsByFile } from "./pr-model";
 import { selectedPrNumber, usePrViewStore } from "./pr-view";
@@ -90,10 +91,24 @@ function PrDetail({ pr, repoPath, accountId }: { pr: PullRequestDetail; repoPath
     if (f) setFileMenu({ file: f, ...contextMenuPoint(e) });
   };
 
+  const origin: MaximizedOrigin = {
+    kind: "pr",
+    label: <Code>{`#${pr.number}`}</Code>,
+    title: pr.title,
+    meta: [
+      t(`pr.state.${pr.isDraft ? "draft" : pr.state}`),
+      `${pr.headRef} → ${pr.baseRef}`,
+      pr.threadCount > 0 ? t("pr.thread.count", { count: pr.threadCount }) : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  };
+
   return (
     <ListDiffSplit
       variant="cards"
       className="animate-content-in"
+      origin={origin}
       files={{
         items: fileList.map((f) => ({
           key: f.path,

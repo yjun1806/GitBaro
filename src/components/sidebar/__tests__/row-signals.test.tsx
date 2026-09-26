@@ -6,7 +6,7 @@ import i18n from "@/i18n/config";
 import type { WorktreeReviewStatus } from "@/hooks/useReviewStatus";
 import type { SidebarTreeData } from "../useSidebarTreeData";
 import { formatAgo, liveDotLabel } from "../row-meta";
-import { RowSignals, type RowSignalValues } from "../RowSignals";
+import { RowSignals, pulseBucket, type RowSignalValues } from "../RowSignals";
 import { changedAgoText } from "../SidebarHoverCard";
 import { signalValues, viewOnlyDefaultBranch } from "../RepoCard";
 
@@ -67,6 +67,33 @@ describe("RowSignals", () => {
     expect(dot()).toHaveTextContent(/^$/);
     rerender(<RowSignals values={{ ...quiet, dirty: 1, live: true, watched: false, changedAt: NOW - 5_000 }} now={NOW} />);
     expect(dot().className).toContain("opacity-40");
+  });
+
+  it("remounts the ring only when changedAt moves to a new pulse bucket", () => {
+    const { container, rerender } = render(
+      <RowSignals values={{ ...quiet, dirty: 1, live: true, changedAt: 10_000 }} now={NOW} />,
+    );
+    const ring = () => container.querySelector('[data-signal="dirty"] [data-testid="dot-pulse"]');
+    const first = ring();
+    expect(first).toBeTruthy();
+    // 접힌 워크스페이스·저장소 행처럼 여러 저장소가 거의 동시에(같은 초 안에) 바뀌어도 테는 한 번만.
+    rerender(<RowSignals values={{ ...quiet, dirty: 2, live: true, changedAt: 10_400 }} now={NOW} />);
+    expect(ring()).toBe(first);
+    // 다음 초로 넘어가면(1000ms 밖) 새로 마운트해 테가 다시 퍼진다.
+    rerender(<RowSignals values={{ ...quiet, dirty: 2, live: true, changedAt: 11_100 }} now={NOW} />);
+    expect(ring()).not.toBe(first);
+  });
+});
+
+describe("pulseBucket", () => {
+  it("coalesces changedAt values within the same second into one bucket", () => {
+    expect(pulseBucket(10_000)).toBe(pulseBucket(10_400));
+    expect(pulseBucket(10_999)).toBe(10);
+  });
+
+  it("moves to a new bucket once changedAt crosses a second boundary", () => {
+    expect(pulseBucket(10_000)).not.toBe(pulseBucket(11_000));
+    expect(pulseBucket(11_100)).toBe(11);
   });
 });
 

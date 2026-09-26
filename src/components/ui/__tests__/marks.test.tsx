@@ -97,6 +97,36 @@ describe("Dot", () => {
     rerender(<Dot on={false} />);
     expect(container.querySelector("span")?.className).toContain("bg-muted-foreground");
   });
+
+  it("shows no pulse ring and fades the static halo out via a transition when not live", () => {
+    const { container } = render(<Dot on />);
+    const outer = container.querySelector("span");
+    expect(outer?.className).toContain("transition-shadow");
+    expect(outer?.className).not.toContain("shadow-[0_0_0_3px_var(--live-soft)]");
+    expect(outer?.querySelector('[data-testid="dot-pulse"]')).toBeNull();
+  });
+
+  it("shows a static halo and a pulse ring child while live", () => {
+    const { container } = render(<Dot on live pulseKey={1} />);
+    const outer = container.querySelector("span");
+    expect(outer?.className).toContain("shadow-[0_0_0_3px_var(--live-soft)]");
+    const ring = outer?.querySelector('[data-testid="dot-pulse"]');
+    expect(ring).toBeTruthy();
+    expect(ring?.className).toContain("animate-live-ring");
+  });
+
+  it("remounts the pulse ring (a new DOM node) only when pulseKey moves forward", () => {
+    const { container, rerender } = render(<Dot on live pulseKey={1} />);
+    const first = container.querySelector('[data-testid="dot-pulse"]');
+    // Same pulseKey, same forced re-render: the ring must not remount (React keeps the node).
+    rerender(<Dot on live pulseKey={1} />);
+    expect(container.querySelector('[data-testid="dot-pulse"]')).toBe(first);
+    // A new pulseKey (changedAt moved forward) remounts a fresh node so the animation replays.
+    rerender(<Dot on live pulseKey={2} />);
+    const second = container.querySelector('[data-testid="dot-pulse"]');
+    expect(second).toBeTruthy();
+    expect(second).not.toBe(first);
+  });
 });
 
 describe("Code", () => {

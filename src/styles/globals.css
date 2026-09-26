@@ -118,6 +118,12 @@
      잠깐 덮였다가 걷힌다. 한 번만 돌고, 끝나면 막은 투명해져(막의 기본 투명도 0) 남는 표시(diff 줄의
      --live-faint 바탕과 주황 줄 번호)만 보인다. 흐려지기만 하는 움직임이라 「동작 줄이기」에서도 그대로 둔다. */
   --animate-focus-flash: motion-focus-flash 1.2s var(--ease-enter) 1;
+  /* 그래프 WIP 원의 점선(에이전트가 지금 쓰는 중, 60초 안): 8초에 한 바퀴 천천히 기어간다. */
+  --animate-wip-crawl: motion-wip-crawl 8s linear infinite;
+  /* WIP 원의 테 한 번 퍼짐: changedAt이 앞으로 갈 때마다(사이드바 점의 --animate-live-ring과 같은 뜻). */
+  --animate-wip-ring: motion-wip-ring 900ms var(--ease-enter) 1;
+  /* 크게 보기 머리 줄: 카드가 다 커진 뒤(FLIP 200ms 후반)에 얹히도록 흐려지며 나타나기를 한 박자 늦춘다. */
+  --animate-maximize-origin-in: motion-fade-in var(--motion-fast) var(--ease-enter) var(--motion-fast) backwards;
 }
 
 /* ── 그레이스케일 팔레트 (아이콘 #343434→#202020 기반 뉴트럴) ── */
@@ -398,6 +404,9 @@
   --motion-fast: 120ms;
   --motion-base: 160ms;
   --motion-slow: 220ms;
+  /* 그래프 WIP 원의 정지 테(동작 줄이기 전용). 기본은 숨김 — 기어가기·테 퍼짐이 그 뜻을 대신한다.
+     아래 reduced-motion 블록에서만 1로 켠다. */
+  --wip-halo-opacity: 0;
 }
 
 @keyframes motion-fade-in {
@@ -468,6 +477,22 @@
     opacity: 0;
   }
 }
+@keyframes motion-wip-crawl {
+  to {
+    /* 원(r=5)의 둘레 ≈ 31.4px, 점선 패턴(2.5 2)과 같은 값 한 바퀴. */
+    stroke-dashoffset: -31.4;
+  }
+}
+@keyframes motion-wip-ring {
+  from {
+    transform: scale(1);
+    stroke-opacity: 0.45;
+  }
+  to {
+    transform: scale(2.2);
+    stroke-opacity: 0;
+  }
+}
 
 /* 「동작 줄이기」: 자리를 옮기거나 크기를 바꾸는 움직임은 모두 흐려지기만으로 바꾸고, 계속 도는 표시(점)는 멈춘다.
    읽는 중 회전(animate-spin)은 진행 중이라는 정보라서 남긴다. */
@@ -483,6 +508,11 @@
     --animate-live-ring: none;
     --animate-live-breathe: none;
     /* --animate-focus-flash는 그대로 둔다: 자리를 옮기지 않고 한 번 흐려지기만 한다. */
+    --animate-wip-crawl: none;
+    --animate-wip-ring: none;
+    /* 기어가기·테 퍼짐 대신 정지한 3px 테 하나로 「지금 쓰는 중」을 보인다(사이드바 점의 정적 테와 같다). */
+    --wip-halo-opacity: 1;
+    /* --animate-maximize-origin-in은 그대로 둔다: 자리를 옮기지 않고 흐려지기만 한다. */
   }
   .transition-transform {
     transition-duration: 0s;

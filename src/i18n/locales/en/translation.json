@@ -463,7 +463,15 @@
     "fileListCount_one": "{{count}} file",
     "fileListCount_other": "{{count}} files",
     "hideFileList": "Hide file list",
-    "showFileList": "Show file list"
+    "showFileList": "Show file list",
+    "restoreSizeAction": "Restore size",
+    "originWorking": "Uncommitted changes",
+    "originFollow": "Uncommitted changes (following)",
+    "originCommit": "Commit",
+    "originStash": "Stash",
+    "originRange": "What pushing will send",
+    "originPr": "Pull request",
+    "originFileTouches": "By file"
   },
   "mdDiff": {
     "rendering": "Computing document diff...",

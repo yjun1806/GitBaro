@@ -462,7 +462,15 @@
     "fileListCount_one": "파일 {{count}}개",
     "fileListCount_other": "파일 {{count}}개",
     "hideFileList": "파일 목록 숨기기",
-    "showFileList": "파일 목록 보기"
+    "showFileList": "파일 목록 보기",
+    "restoreSizeAction": "원래 크기로",
+    "originWorking": "커밋 안 한 변경",
+    "originFollow": "커밋 안 한 변경(따라가는 중)",
+    "originCommit": "커밋",
+    "originStash": "스태시",
+    "originRange": "올릴 내용",
+    "originPr": "Pull Request",
+    "originFileTouches": "파일별 보기"
   },
   "mdDiff": {
     "rendering": "문서 diff 계산 중...",

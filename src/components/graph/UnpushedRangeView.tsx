@@ -2,10 +2,11 @@ import { useTranslation } from "react-i18next";
 import { FileText, X } from "lucide-react";
 import { useRangeChangedFiles, useRangeFileDiff } from "@/api/queries";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
+import type { MaximizedOrigin } from "@/components/layout/maximized-files";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Notice } from "@/components/ui/Notice";
 import { Button } from "@/components/ui/Button";
-import { FileStatusLetter } from "@/components/ui/marks";
+import { Code, FileStatusLetter } from "@/components/ui/marks";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { cn } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -43,10 +44,22 @@ export function UnpushedRangeDetailPane() {
 
   if (!range) return null;
 
+  const origin: MaximizedOrigin = {
+    kind: "range",
+    label: (
+      <>
+        <span className="font-semibold text-foreground shrink-0">{t("graph.unpushedRangeTitle")}</span>
+        <Code>{`${range.baseOid ? range.baseOid.slice(0, 7) : "…"} ‥ ${range.headOid.slice(0, 7)}`}</Code>
+      </>
+    ),
+    meta: t("graph.unpushedHeader"),
+  };
+
   return (
     <ListDiffSplit
       variant="cards"
       className="animate-content-in"
+      origin={origin}
       list={
         <UnpushedRangeFileList
           files={fileList}

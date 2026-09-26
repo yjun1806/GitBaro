@@ -6,8 +6,9 @@ import { cn } from "@/lib/utils";
 import { PANEL_SURFACE } from "@/components/ui/layers";
 import { SplitHandle } from "./SplitHandle";
 import { useMaximizeFlip, usePaneExit } from "./maximize-motion";
-import { MaximizedFilesContext, type MaximizedFiles } from "./maximized-files";
+import { MaximizedFilesContext, MaximizedOriginContext, type MaximizedFiles, type MaximizedOrigin } from "./maximized-files";
 import { MaximizedFileList } from "./MaximizedFileList";
+import { MaximizedOriginHeader } from "./MaximizedOriginHeader";
 
 export interface ListDiffSplitProps {
   /** 왼쪽 칸(파일 목록, 커밋 정보, 스테이징 목록). */
@@ -27,6 +28,11 @@ export interface ListDiffSplitProps {
    * 그대로 넘긴다. 없으면 크게 보기에서 목록 없이 diff만 보인다.
    */
   files?: MaximizedFiles;
+  /**
+   * 크게 보는 동안 diff 카드 맨 위에 둘 「어디서 왔는지」 머리 줄. 없으면 머리 줄을 그리지 않는다
+   * (지금과 같다).
+   */
+  origin?: MaximizedOrigin;
   /** 바깥 틀에 붙일 것(나란히 보기처럼 위에 뜨는 것). */
   children?: ReactNode;
   className?: string;
@@ -54,6 +60,7 @@ export function ListDiffSplit({
   listOverlay,
   detailOverlay,
   files,
+  origin,
   children,
   className,
   "data-testid": testId,
@@ -62,6 +69,7 @@ export function ListDiffSplit({
   const width = useUIStore((s) => s.fileListWidth);
   const setWidth = useUIStore((s) => s.setFileListWidth);
   const maximized = useUIStore((s) => s.isDiffMaximized);
+  const setMaximized = useUIStore((s) => s.setDiffMaximized);
   const fileListOpen = useUIStore((s) => s.maximizedFileListOpen);
   const startWidth = useRef(width);
   const listRef = useRef<HTMLElement | null>(null);
@@ -111,11 +119,15 @@ export function ListDiffSplit({
         className={cn("relative flex-1 min-w-0", cards ? CARD : "flex flex-col min-h-0 overflow-hidden")}
         data-testid="detail-pane"
       >
+        {/* 카드가 다 커진 뒤(FLIP 200ms 후반) 얹힌다. 파일 목록(있으면)과 diff 위에 걸쳐 카드 전체 폭이다. */}
+        {maximized && origin && <MaximizedOriginHeader origin={origin} onRestore={() => setMaximized(false)} />}
         {/* 목록을 켜고 끌 때 diff가 다시 마운트되지 않도록 틀은 늘 같다(목록 자리만 비운다). */}
         <div className="flex flex-1 min-h-0 min-w-0">
           {showFiles && <MaximizedFileList {...files} />}
           <div className="flex flex-col flex-1 min-h-0 min-w-0">
-            <MaximizedFilesContext.Provider value={files !== undefined}>{detail}</MaximizedFilesContext.Provider>
+            <MaximizedOriginContext.Provider value={origin !== undefined}>
+              <MaximizedFilesContext.Provider value={files !== undefined}>{detail}</MaximizedFilesContext.Provider>
+            </MaximizedOriginContext.Provider>
           </div>
         </div>
         {detailOverlay}

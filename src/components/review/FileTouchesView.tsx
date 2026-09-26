@@ -5,6 +5,7 @@ import { useUnpushedFileTouches } from "@/api/queries";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useRepoAvatarColor } from "@/hooks/useRepoDisplay";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
+import { splitFilePath, type MaximizedOrigin } from "@/components/layout/maximized-files";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { FileTouchesList } from "./FileTouchesList";
@@ -63,10 +64,25 @@ export function FileTouchesView({ sources, repoLabel }: FileTouchesViewProps) {
     return <EmptyState icon={FileText} title={t("review.fileView.emptyTitle")} />;
   }
 
+  const origin: MaximizedOrigin | undefined = effectiveRow
+    ? {
+        kind: "fileTouches",
+        label: <span className="italic text-(--fg2) truncate min-w-0">{t("review.fileView.segFiles")}</span>,
+        title: splitFilePath(effectiveRow.touches.path).name,
+        meta: [
+          repoLabel(effectiveRow.source.path),
+          t("review.fileView.combinedScope", { count: effectiveRow.touches.commits.length }),
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      }
+    : undefined;
+
   return (
     <ListDiffSplit
       variant="inline"
       className="animate-content-in"
+      origin={origin}
       list={
         <FileTouchesList
           grouped={grouped}

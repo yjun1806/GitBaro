@@ -5,6 +5,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useToastStore } from "@/stores/toast";
 import { useStashShow, useCommitFileDiff, useStashMutations } from "@/api/queries";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
+import type { MaximizedOrigin } from "@/components/layout/maximized-files";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
@@ -13,7 +14,7 @@ import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import type { FileStatus, StashFileSummary } from "@/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Button } from "@/components/ui/Button";
-import { Count, FileStatusLetter } from "@/components/ui/marks";
+import { Code, Count, FileStatusLetter } from "@/components/ui/marks";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionLabel } from "@/components/ui/PanelHeader";
 
@@ -142,6 +143,15 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
   const totalInsertions = files.reduce((sum, f) => sum + f.insertions, 0);
   const totalDeletions = files.reduce((sum, f) => sum + f.deletions, 0);
 
+  const origin: MaximizedOrigin = {
+    kind: "stash",
+    label: <Code>{`stash@{${stashIndex}}`}</Code>,
+    title: entry.message,
+    meta: [entry.branchName ? t("stash.onBranch", { branch: entry.branchName }) : null, formatRelativeTime(entry.timestamp)]
+      .filter(Boolean)
+      .join(" · "),
+  };
+
   return (
     <div className="flex flex-col h-full animate-content-in">
       {/* Header */}
@@ -182,6 +192,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
       {/* Content: file list + diff */}
       <ListDiffSplit
         variant="inline"
+        origin={origin}
         files={{
           items: files.map((f) => ({
             key: f.path,
