@@ -12,6 +12,7 @@ import {
 } from "@/api/commands";
 import { useToastStore } from "@/stores/toast";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { middleEllipsis } from "@/lib/middle-ellipsis";
 import { TOOLBAR_LABEL_CLASS } from "./ActionButton";
 import { TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
 import { useClickOutside } from "./useToolbarDropdown";
@@ -21,6 +22,9 @@ import { useWorktreeContext } from "@/hooks/useWorktreeContext";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { useCurrentPlaceMenu } from "./useCurrentPlaceMenu";
 import { useActiveRepoName } from "@/hooks/useRepoDisplay";
+
+/** 폴더 이름이 이보다 길면 가운데를 생략한다. 겹침 폭 우선순위의 셋째 항목(브랜치 이름보다 먼저 줄인다). */
+const WORKTREE_LABEL_MAX_CHARS = 16;
 
 interface WorktreeZoneProps {
   isOpen: boolean;
@@ -50,6 +54,7 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
   const currentLabel = isInWorktree && currentWorktree
     ? (currentWorktree.path.split("/").pop() ?? currentWorktree.path)
     : t("worktree.main");
+  const displayLabel = middleEllipsis(currentLabel, WORKTREE_LABEL_MAX_CHARS);
 
   const handleRemoveWorktree = async (path: string) => {
     if (!activeRepoPath) return;
@@ -78,13 +83,14 @@ export function WorktreeZone({ isOpen, onToggle, onClose }: WorktreeZoneProps) {
         onContextMenu={placeMenu.onContextMenu}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        // 「기본 폴더」는 브랜치 main과 헷갈리기 쉬워 뜻을 툴팁으로 덧붙인다.
-        title={isInWorktree ? undefined : t("worktree.primaryFolderHint")}
+        // 워크트리 안에서는 이름이 가운데 생략될 수 있어 전체 이름을 title로 남긴다.
+        // 「기본 폴더」는 브랜치 main과 헷갈리기 쉬워 뜻을 대신 툴팁으로 덧붙인다.
+        title={isInWorktree ? currentLabel : t("worktree.primaryFolderHint")}
         className={cn(toolbarButtonClass({ open: isOpen }), "min-w-0 shrink overflow-hidden", isOpen && "relative z-50")}
       >
         <WorktreeIcon className={TOOLBAR_ICON} />
-        <span className={cn("font-mono truncate max-w-[140px]", isInWorktree && "text-foreground font-semibold")}>
-          {currentLabel}
+        <span className={cn("font-mono truncate min-w-0", isInWorktree && "text-foreground font-semibold")}>
+          {displayLabel}
         </span>
         {linkedCount > 0 && (
           <span className="h-4 min-w-4 px-1 rounded-full bg-foreground/[0.08] text-[10.5px] font-semibold flex items-center justify-center shrink-0 tabular-nums">

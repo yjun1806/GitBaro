@@ -24,7 +24,8 @@ export function RepoCrumb() {
   const avatar = avatarColorOf(repo.path);
   const label = t("repoSettings.open");
   return (
-    <Tooltip label={label} side="bottom" offset={10} delayMs={400} className="min-w-0 shrink-0 flex">
+    // 폭 우선순위의 마지막 항목: 다른 칸이 다 줄어든 뒤에야 이 이름도 줄어든다(shrink, shrink-0 아님).
+    <Tooltip label={label} side="bottom" offset={10} delayMs={400} className="min-w-0 shrink flex">
       <button
         type="button"
         onClick={() => openRepoSettings(repo.path)}
@@ -33,7 +34,7 @@ export function RepoCrumb() {
         className={cn(toolbarButtonClass(), "group gap-1.5 pl-1 pr-1.5 min-w-0")}
       >
         <RepoTile name={name} color={avatar} size="lg" />
-        <span className="text-[13px] font-bold text-(--fg) truncate max-w-[160px]">{name}</span>
+        <span className="text-[13px] font-bold text-(--fg) truncate min-w-0 max-w-[160px]">{name}</span>
         <Settings2
           aria-hidden="true"
           className="w-3 h-3 shrink-0 text-muted-foreground opacity-70 group-hover:opacity-100 transition-opacity motion-reduce:transition-none"

@@ -16,6 +16,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToastStore } from "@/stores/toast";
 import { useSelectionStore } from "@/stores/selection";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { middleEllipsis } from "@/lib/middle-ellipsis";
 import { useClickOutside } from "./useToolbarDropdown";
 import { toolbarButtonClass } from "./toolbar-button";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -27,6 +28,7 @@ import { CreateBranchDialog } from "@/components/branch/CreateBranchDialog";
 import { DeleteBranchDialog } from "@/components/branch/DeleteBranchDialog";
 import { RenameBranchDialog } from "@/components/branch/RenameBranchDialog";
 import { WorktreeBaseLabel } from "@/components/worktree/WorktreeBaseLabel";
+import { worktreeBaseSummary } from "@/lib/worktree-base";
 import { selectionAfterStashPushed } from "@/lib/stash-selection";
 import { runWithStashedChanges } from "./run-with-stashed-changes";
 import { useWorktreeContext } from "@/hooks/useWorktreeContext";
@@ -39,6 +41,17 @@ import { Spinner } from "@/components/ui/Spinner";
 
 /** 제목 툴팁을 머리 줄 아래 경계보다 6px 아래에 띄운다(28px 버튼은 줄 안에서 가운데 정렬). */
 const TITLE_TOOLTIP_OFFSET_PX = (HEADER_HEIGHT_PX - 28) / 2 + 6;
+
+/** 브랜치 이름이 이보다 길면 가운데를 생략한다(끝을 자르는 CSS truncate와 달리 끝도 보인다). 전체 이름은 title에 남는다. */
+const BRANCH_NAME_MAX_CHARS = 28;
+
+/**
+ * 「<base> 기반」 라벨을 보일 최소 너비. 겹침 폭 우선순위의 첫 항목(가장 먼저 감춘다) — 감춰도 뜻은
+ * 브랜치 버튼의 툴팁(`titleTooltip`)에 남는다.
+ */
+const BASE_LABEL_VISIBLE_CLASS = "hidden shrink-0 @min-[1360px]:inline-flex";
+/** 보일 때도 너무 긴 기반 브랜치 이름은 줄인다(전체 이름은 라벨 자체의 title에 남는다). */
+const BASE_LABEL_MAX_CHARS = 20;
 
 interface BranchZoneProps {
   isOpen: boolean;
@@ -240,8 +253,12 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
   const placeMenu = useCurrentPlaceMenu(currentBranch);
   const originAhead = !isInWorktree ? ahead : 0;
   const branchText = currentBranch ?? (isDetached ? t("branch.detachedHead") : t("branch.noBranch"));
+  const worktreeBase = isInWorktree ? (currentWorktree?.base ?? null) : null;
+  // 폭이 좁아 라벨(BASE_LABEL_VISIBLE_CLASS)이 숨어도 뜻은 여기 남는다.
+  const baseText = worktreeBase ? worktreeBaseSummary(worktreeBase, t) : null;
   const titleTooltip = [
     `${repoTitle} · ${branchText}`,
+    baseText,
     originAhead > 0 ? t("branch.originAhead", { count: originAhead }) : null,
     behind > 0 ? t("sidebarTree.badge.behind", { count: behind }) : null,
   ]
@@ -255,7 +272,8 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
       className={cn("relative min-w-[60px] shrink flex items-center", isOpen && "z-50")}
     >
       {/* 경로의 마지막 칸: 브랜치 · 기반 · ▾. 저장소 이름은 앞 칸(RepoCrumb)이, 올릴 커밋 수는 Push 버튼이 맡는다.
-          전체 글은 머리 줄 아래로 늦게 뜨는 툴팁으로 보인다(버튼 바로 밑에서 줄 경계와 겹치지 않게). */}
+          전체 글은 머리 줄 아래로 늦게 뜨는 툴팁으로 보인다(버튼 바로 밑에서 줄 경계와 겹치지 않게).
+          폭 우선순위: 좁아지면 기반 라벨부터 감추고(툴팁에 남음), 그다음 브랜치 이름을 가운데 생략한다. */}
       <Tooltip label={titleTooltip} side="bottom" offset={TITLE_TOOLTIP_OFFSET_PX} delayMs={600} className="min-w-0">
         <button
           ref={triggerRef}
@@ -276,11 +294,18 @@ export function BranchZone({ isOpen, onToggle, onClose }: BranchZoneProps) {
             ) : (
               <GitBranch className="w-3.5 h-3.5 shrink-0 text-(--fg2)" />
             )}
-            <span className="truncate">{branchText}</span>
+            <span className="truncate min-w-0">{middleEllipsis(branchText, BRANCH_NAME_MAX_CHARS)}</span>
           </span>
-          {isInWorktree && currentWorktree?.base ? (
-            <WorktreeBaseLabel base={currentWorktree.base} variant="compact" className="shrink-0 text-[11.5px]" />
-          ) : null}
+          {worktreeBase && (
+            <span className={BASE_LABEL_VISIBLE_CLASS} data-testid="worktree-base-chip">
+              <WorktreeBaseLabel
+                base={worktreeBase}
+                variant="compact"
+                maxBaseNameLength={BASE_LABEL_MAX_CHARS}
+                className="shrink-0 text-[11.5px]"
+              />
+            </span>
+          )}
           {isOpen ? (
             <ChevronUp className="w-3 h-3 opacity-60 shrink-0" />
           ) : (
