@@ -51,6 +51,7 @@ function history(path: string, branch: string, commits: CommitInfo[]): Workspace
     mergeBaseCommit: commit("base", 1),
     commits,
     truncated: false,
+    unpushedOids: [],
     error: null,
   };
 }

@@ -118,6 +118,8 @@ export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> 
       "worktreeHeadHistory",
       // push하면 원격에 없는 커밋이 줄고, pull은 HEAD를 옮긴다.
       "unpushedFileTouches",
+      // 사이드바의 작업 중인 브랜치: push·fetch가 브랜치마다 원격에 없는 커밋·받을 커밋·병합 여부를 바꾼다.
+      "workingBranches",
     ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
   );
 }
@@ -841,15 +843,20 @@ import { getDivergencePoint, getRangeChangedFiles, getRangeFileDiff } from "@/ap
  * 저장소(워크트리) 하나의 HEAD가 main과 갈라진 지점. `headOid`를 키에 넣어 HEAD가 바뀌면 다시 읽는다.
  * 그 밖에는 주기적으로 다시 읽지 않는다: 커밋·체크아웃은 파일 감시가, fetch가 옮긴 `origin/main`은
  * `invalidateAfterSync`가 `["divergencePoint"]`를 무효화한다.
+ * `branch`를 주면 HEAD 대신 체크아웃하지 않은 그 로컬 브랜치 기준이다(`headOid`에는 그 브랜치 끝을 넘긴다).
  */
-export function divergencePointKey(path: string, headOid: string | null = null): readonly unknown[] {
-  return ["divergencePoint", path, headOid ?? ""];
+export function divergencePointKey(
+  path: string,
+  headOid: string | null = null,
+  branch: string | null = null,
+): readonly unknown[] {
+  return ["divergencePoint", path, headOid ?? "", branch ?? ""];
 }
 
-export function useDivergencePoint(path: string | null, headOid: string | null = null) {
+export function useDivergencePoint(path: string | null, headOid: string | null = null, branch: string | null = null) {
   return useQuery({
-    queryKey: divergencePointKey(path ?? "", headOid),
-    queryFn: () => getDivergencePoint(path!),
+    queryKey: divergencePointKey(path ?? "", headOid, branch),
+    queryFn: () => getDivergencePoint(path!, branch),
     enabled: !!path,
     staleTime: Infinity,
   });
@@ -899,6 +906,8 @@ export interface FileTouchTarget {
   repoPath: string;
   /** 워크트리 경로(메인 작업 트리면 `repoPath`와 같다). */
   path: string;
+  /** 체크아웃하지 않은 로컬 브랜치를 볼 때 그 이름. 없으면 `path`의 HEAD 기준이다. */
+  branch?: string | null;
 }
 
 /** 워크트리 하나의 조회 상태. 다시 읽다 실패해도 앞 결과가 있으면 `success`다. */
@@ -909,7 +918,8 @@ export type FileTouchesState =
 
 /**
  * 키가 `["unpushedFileTouches", repoPath, path]`라 앞부분으로 저장소 하나(그 모든 워크트리)나 워크트리 하나만
- * 무효화할 수 있다. 전체 키를 무효화해도 백엔드 캐시 덕에 바뀌지 않은 저장소는 싸다.
+ * 무효화할 수 있다. 전체 키를 무효화해도 백엔드 캐시 덕에 바뀌지 않은 저장소는 싸다. 쿼리 키는 이 뒤에 브랜치
+ * (`FileTouchTarget.branch`, 없으면 "")를 붙인다.
  */
 export function unpushedFileTouchesKey(repoPath: string, path: string) {
   return ["unpushedFileTouches", repoPath, path] as const;
@@ -923,8 +933,8 @@ export function unpushedFileTouchesKey(repoPath: string, path: string) {
 export function useUnpushedFileTouches(targets: readonly FileTouchTarget[]): FileTouchesState[] {
   return useQueries({
     queries: targets.map((target) => ({
-      queryKey: unpushedFileTouchesKey(target.repoPath, target.path),
-      queryFn: async () => (await getUnpushedFileTouches([target.path]))[0],
+      queryKey: [...unpushedFileTouchesKey(target.repoPath, target.path), target.branch ?? ""],
+      queryFn: async () => (await getUnpushedFileTouches([target.path], target.branch ?? null))[0],
       staleTime: 15_000,
       refetchInterval: FILE_TOUCHES_POLL_MS,
       refetchIntervalInBackground: false,
@@ -1033,4 +1043,75 @@ export function useRefreshPullRequests() {
     },
     [queryClient],
   );
+}
+
+// 범위 하나로 보기 — 커밋 줄의 「변경」 칸과 사이드바의 작업 중인 브랜치
+import { getCommitStats, getWorkingBranches } from "@/api/commands";
+import type { CommitStats, RepoWorkingBranches } from "@/types";
+
+/** 커밋 변경 크기를 한 번에 물을 커밋 수의 상한. 넘으면 여러 번 나눠 부른다. */
+const COMMIT_STATS_BATCH = 200;
+
+/**
+ * 같은 순간에 시작된 커밋들의 변경 크기를 저장소별로 한 번의 `get_commit_stats` 호출로 묻는다(그래프 한 쪽이 한 번).
+ * 캐시는 커밋마다 따로 두어 쪽이 겹쳐도 다시 묻지 않는다.
+ */
+const loadCommitStats = createBatchLoader<CommitStats>(async (path, oids) => {
+  const results = await getCommitStats(path, oids);
+  return new Map(results.map((r) => [r.oid, r]));
+}, COMMIT_STATS_BATCH);
+
+/** 커밋 하나의 변경 크기 캐시 키. 커밋은 바뀌지 않으므로 무효화하지 않는다. */
+export function commitStatsKey(path: string, oid: string) {
+  return ["commitStats", path, oid] as const;
+}
+
+/**
+ * 커밋 줄의 「변경」 칸. 화면에 보이는 한 쪽의 `oids`를 넘기면 아직 모르는 커밋만 한 번에 묻는다.
+ * 커밋은 바뀌지 않으므로 다시 읽지 않는다(`staleTime: Infinity`). 결과는 OID → 값이고, 아직 모르거나
+ * 읽지 못한 커밋은 없다. `path`가 null이면 부르지 않는다.
+ */
+export function useCommitStats(path: string | null, oids: readonly string[]): ReadonlyMap<string, CommitStats> {
+  return useQueries({
+    queries: oids.map((oid) => ({
+      queryKey: commitStatsKey(path ?? "", oid),
+      queryFn: async (): Promise<CommitStats> =>
+        (await loadCommitStats(path!, oid)) ?? {
+          oid,
+          merge: false,
+          filesChanged: null,
+          additions: null,
+          deletions: null,
+          error: "missing from the response",
+        },
+      enabled: !!path,
+      staleTime: Infinity,
+      gcTime: 30 * 60_000,
+    })),
+    combine: (results) => {
+      const out = new Map<string, CommitStats>();
+      results.forEach((r, i) => {
+        if (r.data && !r.data.error) out.set(oids[i], r.data);
+      });
+      return out;
+    },
+  });
+}
+
+/**
+ * 저장소마다 로컬 브랜치의 「작업 중인 브랜치」 판단 재료. 키가 `["workingBranches", path]`라 git 폴더 감시
+ * (`useRepoWatcher`)가 그 저장소만 다시 읽게 하고, push·fetch는 `invalidateAfterSync`가 무효화한다. 다른 곳에서 한
+ * 커밋(체크아웃하지 않은 워크트리 등)은 `REVIEW_POLL_MS`마다 다시 읽어 잡는다. 결과는 `paths` 순서다.
+ */
+export function useWorkingBranches(paths: readonly string[]): (RepoWorkingBranches | undefined)[] {
+  return useQueries({
+    queries: paths.map((path) => ({
+      queryKey: ["workingBranches", path],
+      queryFn: async () => (await getWorkingBranches([path]))[0],
+      refetchInterval: REVIEW_POLL_MS,
+      refetchIntervalInBackground: false,
+      placeholderData: keepPreviousData,
+    })),
+    combine: (results) => results.map((r) => r.data),
+  });
 }

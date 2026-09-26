@@ -88,6 +88,7 @@ GitBaro/
 │   │   │   ├── file_diff.rs       # Files changed and line diff between two trees (commit range, PR)
 │   │   │   ├── branch.rs          # Branch name validation
 │   │   │   ├── commit.rs          # Commit message/oid validation, ref map
+│   │   │   ├── commit_stats.rs    # Per-commit files/lines vs first parent (cached per repo + commit)
 │   │   │   ├── binary.rs          # Binary file detection & image preview
 │   │   │   ├── merge.rs           # Merge result helpers
 │   │   │   ├── merge_base.rs      # Where HEAD split from the default branch
@@ -97,15 +98,16 @@ GitBaro/
 │   │   │   ├── unpushed.rs        # Commits not on any remote (the review basis)
 │   │   │   ├── untracked.rs       # Line counts of untracked files (size-capped)
 │   │   │   ├── walk.rs            # Lazy commit walk
+│   │   │   ├── working_branches.rs # Per local branch: unpushed/behind counts, last commit, merged, worktree
 │   │   │   ├── head_advance.rs    # Did HEAD only move forward (for new-commit notifications)
 │   │   │   ├── review_worktrees.rs # Worktrees of every registered repo with branch and HEAD
 │   │   │   └── worktree_base.rs   # Which branch a worktree branch came from
 │   │   ├── commands/              # Tauri #[tauri::command] handlers
 │   │   │   ├── git.rs             # status, stage, unstage, commit, diff, fetch, push, pull, stash
 │   │   │   ├── auto_sync.rs       # per-repo auto sync: post-fetch snapshot, safe ff-only to upstream
-│   │   │   ├── branch.rs          # branches, create, switch, delete, compare, merge, rename, bases
+│   │   │   ├── branch.rs          # branches, create, switch, delete, compare, merge, rename, bases, working branches
 │   │   │   ├── range_changes.rs   # fork point from the default branch; files and diff between two commits
-│   │   │   ├── history.rs         # commit history (any branch, no checkout), detail, file diff, avatars
+│   │   │   ├── history.rs         # commit history (any branch, no checkout), detail, stats, file diff, avatars
 │   │   │   ├── workspace_history.rs # workspace timeline across repos
 │   │   │   ├── wip.rs             # uncommitted files ordered by edit time (live follow)
 │   │   │   ├── unpushed.rs        # commits not on any remote (push confirmation)

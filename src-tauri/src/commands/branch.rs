@@ -4,6 +4,7 @@ use crate::git::cli::{GitCliEngine, GitOperation};
 use crate::git::commit::commit_to_info;
 use crate::git::engine::{BranchCompareResult, MergePreCheckResult, MergeStrategy};
 use crate::git::libgit::working_tree_dirty_summary;
+use crate::git::working_branches::{repo_working_branches, RepoWorkingBranches};
 use crate::git::worktree_base::{
     default_branch_with_fallback, resolve_worktree_base_cached, BaseSource, WorktreeBase,
 };
@@ -77,6 +78,16 @@ pub async fn get_default_branches(paths: Vec<String>) -> Result<Vec<DefaultBranc
     })
     .await
     .map_err(|e| AppError::Channel(e.to_string()))
+}
+
+/// 저장소마다 로컬 브랜치의 「작업 중인 브랜치」 판단 재료(`git::working_branches`): 원격에 없는 커밋 수, 받을 커밋 수,
+/// 마지막 커밋 시각, 기본 브랜치에 병합됐는지, 체크아웃한 작업 트리, 추적 브랜치. 결과는 `paths` 순서이고,
+/// 한 저장소가 실패해도 그 결과의 `error` 만 채운다. 어느 브랜치에 줄을 줄지는 화면이 정한다.
+#[tauri::command]
+pub async fn get_working_branches(paths: Vec<String>) -> Result<Vec<RepoWorkingBranches>, AppError> {
+    tokio::task::spawn_blocking(move || paths.iter().map(|p| repo_working_branches(p)).collect())
+        .await
+        .map_err(|e| AppError::Channel(e.to_string()))
 }
 
 #[tauri::command]

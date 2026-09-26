@@ -81,6 +81,8 @@ pub fn run() {
             commands::branch::get_merge_state,
             commands::history::get_commit_history,
             commands::history::get_commit_detail,
+            commands::history::get_commit_stats,
+            commands::branch::get_working_branches,
             commands::history::get_commit_file_diff,
             commands::history::resolve_commit_avatars,
             commands::history::checkout_commit,

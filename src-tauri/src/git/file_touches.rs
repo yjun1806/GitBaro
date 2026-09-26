@@ -10,6 +10,9 @@
 //!
 //! 이름을 바꾼 파일은 지금(HEAD) 이름으로 묶는다. 결과는 입력(HEAD·추적 브랜치·원격 참조)이 그대로면
 //! 다시 계산하지 않는다(`repo_file_touches_cached`).
+//!
+//! `branch` 를 주면 HEAD 대신 그 로컬 브랜치의 끝과 추적 브랜치로 같은 계산을 한다. 체크아웃하지 않은
+//! 브랜치의 「원격에 없는 커밋」을 작업 트리 없이 볼 때 쓴다. 아래 설명의 HEAD 는 그 브랜치 끝으로 읽는다.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
@@ -89,7 +92,7 @@ pub struct RepoFileTouches {
     /// 합친 diff 의 옛 쪽(`push_base`). 원격에 없는 커밋이 없으면 `head` 와 같다. 처음 커밋까지 원격에
     /// 없으면 `None`(빈 트리).
     pub range_base: Option<String>,
-    /// HEAD 커밋. 커밋이 없는 저장소면 `None`.
+    /// HEAD 커밋(`branch` 를 주었으면 그 브랜치 끝). 커밋이 없는 저장소면 `None`.
     pub head: Option<String>,
     /// 읽은 커밋 중 병합 커밋 수. 이 커밋들은 파일별 커밋 목록에 없다.
     pub merges: usize,
@@ -121,28 +124,29 @@ struct Inputs {
     remote_refs: Vec<(String, String)>,
 }
 
-/// (저장소 경로, 한도) → (입력, 결과)
-type TouchesCache = HashMap<(String, usize), (Inputs, RepoFileTouches)>;
+/// (저장소 경로, 브랜치, 한도) → (입력, 결과)
+type TouchesCache = HashMap<(String, Option<String>, usize), (Inputs, RepoFileTouches)>;
 
-/// 저장소 하나를 읽는다. 실패는 `error` 에 담고 에러로 올리지 않는다.
-pub fn repo_file_touches(path: &str, limit: usize) -> RepoFileTouches {
-    match Repository::open(path).and_then(|repo| file_touches(&repo, path, limit)) {
+/// 저장소 하나를 읽는다. `branch` 가 `None` 이면 HEAD, 있으면 그 로컬 브랜치 기준이다.
+/// 실패(브랜치가 없음 포함)는 `error` 에 담고 에러로 올리지 않는다.
+pub fn repo_file_touches(path: &str, branch: Option<&str>, limit: usize) -> RepoFileTouches {
+    match Repository::open(path).and_then(|repo| file_touches(&repo, path, branch, limit)) {
         Ok(result) => result,
         Err(e) => failed(path, e),
     }
 }
 
-/// `repo_file_touches` 와 같지만, HEAD·추적 브랜치·원격 참조가 지난번과 같으면 지난 결과를 준다.
+/// `repo_file_touches` 와 같지만, HEAD(또는 `branch` 끝)·추적 브랜치·원격 참조가 지난번과 같으면 지난 결과를 준다.
 /// 화면이 주기적으로 다시 묻고, 파일 저장·스테이징처럼 결과와 상관없는 변화에도 다시 묻기 때문이다.
-pub fn repo_file_touches_cached(path: &str, limit: usize) -> RepoFileTouches {
+pub fn repo_file_touches_cached(path: &str, branch: Option<&str>, limit: usize) -> RepoFileTouches {
     static CACHE: OnceLock<Mutex<TouchesCache>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let repo = match Repository::open(path) {
         Ok(repo) => repo,
         Err(e) => return failed(path, e),
     };
-    let key = (path.to_string(), limit);
-    let inputs = match inputs(&repo) {
+    let key = (path.to_string(), branch.map(str::to_string), limit);
+    let inputs = match inputs(&repo, branch) {
         Ok(inputs) => inputs,
         Err(e) => return failed(path, e),
     };
@@ -151,7 +155,7 @@ pub fn repo_file_touches_cached(path: &str, limit: usize) -> RepoFileTouches {
             return cached.clone();
         }
     }
-    let result = match file_touches(&repo, path, limit) {
+    let result = match file_touches(&repo, path, branch, limit) {
         Ok(result) => result,
         Err(e) => return failed(path, e),
     };
@@ -168,8 +172,14 @@ fn failed(path: &str, e: git2::Error) -> RepoFileTouches {
     RepoFileTouches { error: Some(e.message().to_string()), ..RepoFileTouches::empty(path) }
 }
 
-/// HEAD 참조와 그 추적 브랜치 끝. HEAD 가 없으면(빈 저장소) `None`.
-fn head_and_upstream(repo: &Repository) -> Result<Option<(Oid, Option<Oid>)>, git2::Error> {
+/// 기준 커밋과 그 추적 브랜치 끝. `branch` 가 없으면 HEAD 이고, HEAD 가 없으면(빈 저장소) `None`.
+/// `branch` 가 있으면 그 로컬 브랜치다. 없는 브랜치면 에러다.
+fn head_and_upstream(repo: &Repository, branch: Option<&str>) -> Result<Option<(Oid, Option<Oid>)>, git2::Error> {
+    if let Some(name) = branch {
+        let local = repo.find_branch(name, BranchType::Local)?;
+        let tip = local.get().peel_to_commit()?.id();
+        return Ok(Some((tip, upstream_tip(&local))));
+    }
     let head_ref = match repo.head() {
         Ok(head_ref) => head_ref,
         Err(e) if e.code() == ErrorCode::UnbornBranch => return Ok(None),
@@ -186,8 +196,8 @@ fn head_and_upstream(repo: &Repository) -> Result<Option<(Oid, Option<Oid>)>, gi
     Ok(Some((head, upstream)))
 }
 
-fn inputs(repo: &Repository) -> Result<Inputs, git2::Error> {
-    let (head, upstream) = head_and_upstream(repo)?.map_or((None, None), |(h, u)| (Some(h), u));
+fn inputs(repo: &Repository, branch: Option<&str>) -> Result<Inputs, git2::Error> {
+    let (head, upstream) = head_and_upstream(repo, branch)?.map_or((None, None), |(h, u)| (Some(h), u));
     let mut remote_refs = Vec::new();
     for reference in repo.references_glob("refs/remotes/*")? {
         let reference = reference?;
@@ -203,8 +213,8 @@ fn inputs(repo: &Repository) -> Result<Inputs, git2::Error> {
     Ok(Inputs { head, upstream, remotes: repo.remotes()?.len(), remote_refs })
 }
 
-fn file_touches(repo: &Repository, path: &str, limit: usize) -> Result<RepoFileTouches, git2::Error> {
-    let Some((head, upstream)) = head_and_upstream(repo)? else {
+fn file_touches(repo: &Repository, path: &str, branch: Option<&str>, limit: usize) -> Result<RepoFileTouches, git2::Error> {
+    let Some((head, upstream)) = head_and_upstream(repo, branch)? else {
         return Ok(RepoFileTouches::empty(path));
     };
 
@@ -443,7 +453,7 @@ mod tests {
     }
 
     fn touches(dir: &Path) -> RepoFileTouches {
-        repo_file_touches(dir.to_str().unwrap(), FILE_TOUCHES_LIMIT)
+        repo_file_touches(dir.to_str().unwrap(), None, FILE_TOUCHES_LIMIT)
     }
 
     fn file<'a>(r: &'a RepoFileTouches, path: &str) -> &'a FileTouches {
@@ -701,18 +711,18 @@ mod tests {
         write(&work, "a.txt", "three\n");
         commit_at(&work, "new", 3_000);
         let dir = work.to_str().unwrap();
-        let first = repo_file_touches_cached(dir, FILE_TOUCHES_LIMIT);
+        let first = repo_file_touches_cached(dir, None, FILE_TOUCHES_LIMIT);
         assert_eq!(first.error, None);
 
         // 다시 계산하면 깨진 커밋을 읽다 실패한다. 입력이 그대로면 읽지 않는다.
         let hex = &old;
         std::fs::remove_file(work.join(".git/objects").join(&hex[..2]).join(&hex[2..])).unwrap();
         write(&work, "untracked.txt", "wip\n");
-        assert_eq!(repo_file_touches_cached(dir, FILE_TOUCHES_LIMIT), first, "작업 트리 변화는 입력이 아니다");
+        assert_eq!(repo_file_touches_cached(dir, None, FILE_TOUCHES_LIMIT), first, "작업 트리 변화는 입력이 아니다");
 
         write(&work, "a.txt", "four\n");
         commit_at(&work, "newer", 4_000);
-        assert!(repo_file_touches_cached(dir, FILE_TOUCHES_LIMIT).error.is_some(), "HEAD 가 옮겨 다시 계산했다");
+        assert!(repo_file_touches_cached(dir, None, FILE_TOUCHES_LIMIT).error.is_some(), "HEAD 가 옮겨 다시 계산했다");
     }
 
     #[test]
@@ -722,9 +732,9 @@ mod tests {
         write(&work, "a.txt", "two\n");
         commit_at(&work, "c", 2_000);
         let dir = work.to_str().unwrap();
-        assert_eq!(repo_file_touches_cached(dir, FILE_TOUCHES_LIMIT).files.len(), 1);
+        assert_eq!(repo_file_touches_cached(dir, None, FILE_TOUCHES_LIMIT).files.len(), 1);
         git(&work, &["push", "-q", "origin", "main"]);
-        assert!(repo_file_touches_cached(dir, FILE_TOUCHES_LIMIT).files.is_empty(), "원격 추적 참조가 옮겨 다시 계산했다");
+        assert!(repo_file_touches_cached(dir, None, FILE_TOUCHES_LIMIT).files.is_empty(), "원격 추적 참조가 옮겨 다시 계산했다");
     }
 
     #[test]
@@ -805,13 +815,13 @@ mod tests {
             write(&work, "a.txt", &format!("v{i}\n"));
             made.push(commit_at(&work, &format!("c{i}"), 2_000 + i));
         }
-        let r = repo_file_touches(work.to_str().unwrap(), 3);
+        let r = repo_file_touches(work.to_str().unwrap(), None, 3);
         assert!(r.truncated);
         let a = file(&r, "a.txt");
         assert_eq!(oids(a), vec![made[4].as_str(), made[3].as_str(), made[2].as_str()]);
         assert_eq!(r.range_base.as_deref(), Some(pushed.as_str()), "합친 변경은 추적 브랜치부터라 잘리지 않는다");
 
-        let exact = repo_file_touches(work.to_str().unwrap(), 5);
+        let exact = repo_file_touches(work.to_str().unwrap(), None, 5);
         assert!(!exact.truncated, "딱 한도만큼이면 잘리지 않았다");
     }
 
@@ -831,7 +841,7 @@ mod tests {
         }
         // 한도보다 하나 더(c5~c2)만 읽는다. 그보다 오래된 c0 이 깨져 있어도 실패하지 않는다.
         delete_commit_object(&work, Oid::from_str(&made[0]).unwrap());
-        let r = repo_file_touches(work.to_str().unwrap(), 3);
+        let r = repo_file_touches(work.to_str().unwrap(), None, 3);
         assert_eq!(r.error, None);
         assert!(r.truncated);
         assert_eq!(r.range_base.as_deref(), Some(made[2].as_str()), "읽은 범위의 끝");
@@ -839,8 +849,58 @@ mod tests {
     }
 
     #[test]
+    fn a_branch_that_is_not_checked_out_reads_like_checking_it_out() {
+        let tmp = TempDir::new("branch");
+        let (work, _) = cloned(&tmp);
+        git(&work, &["checkout", "-q", "-b", "feat"]);
+        write(&work, "feat.txt", "f\n");
+        commit_at(&work, "feat 1", 2_000);
+        write(&work, "a.txt", "two\n");
+        commit_at(&work, "feat 2", 3_000);
+        let checked_out = touches(&work);
+        git(&work, &["checkout", "-q", "main"]);
+        write(&work, "main-only.txt", "m\n");
+        commit_at(&work, "main local", 4_000);
+
+        let dir = work.to_str().unwrap();
+        let by_branch = repo_file_touches(dir, Some("feat"), FILE_TOUCHES_LIMIT);
+        assert_eq!(by_branch, checked_out, "체크아웃했을 때와 같다");
+        assert_eq!(by_branch.files.len(), 2);
+        // HEAD(main) 기준은 따로다.
+        let head = repo_file_touches(dir, None, FILE_TOUCHES_LIMIT);
+        assert_eq!(head.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), vec!["main-only.txt"]);
+    }
+
+    #[test]
+    fn the_cache_keeps_head_and_branch_results_apart() {
+        let tmp = TempDir::new("branch-cache");
+        let (work, _) = cloned(&tmp);
+        git(&work, &["checkout", "-q", "-b", "feat"]);
+        write(&work, "feat.txt", "f\n");
+        commit_at(&work, "feat", 2_000);
+        git(&work, &["checkout", "-q", "main"]);
+        let dir = work.to_str().unwrap();
+
+        assert!(repo_file_touches_cached(dir, None, FILE_TOUCHES_LIMIT).files.is_empty());
+        assert_eq!(repo_file_touches_cached(dir, Some("feat"), FILE_TOUCHES_LIMIT).files.len(), 1);
+        assert!(repo_file_touches_cached(dir, None, FILE_TOUCHES_LIMIT).files.is_empty());
+        // 체크아웃하지 않은 브랜치가 움직여도 알아챈다.
+        git(&work, &["branch", "-f", "feat", "main"]);
+        assert!(repo_file_touches_cached(dir, Some("feat"), FILE_TOUCHES_LIMIT).files.is_empty());
+    }
+
+    #[test]
+    fn a_missing_branch_fills_only_its_error() {
+        let tmp = TempDir::new("no-branch");
+        let (work, _) = cloned(&tmp);
+        let r = repo_file_touches_cached(work.to_str().unwrap(), Some("nope"), FILE_TOUCHES_LIMIT);
+        assert!(r.error.is_some());
+        assert!(r.files.is_empty());
+    }
+
+    #[test]
     fn a_missing_repository_fills_only_its_error() {
-        let r = repo_file_touches("/definitely/not/a/repo", FILE_TOUCHES_LIMIT);
+        let r = repo_file_touches("/definitely/not/a/repo", None, FILE_TOUCHES_LIMIT);
         assert!(r.error.is_some());
         assert!(r.files.is_empty() && r.head.is_none());
     }
@@ -849,7 +909,7 @@ mod tests {
     fn an_empty_repository_has_no_head() {
         let tmp = TempDir::new("empty");
         git(&tmp.0, &["init", "-q", "-b", "main"]);
-        let r = repo_file_touches(tmp.0.to_str().unwrap(), FILE_TOUCHES_LIMIT);
+        let r = repo_file_touches(tmp.0.to_str().unwrap(), None, FILE_TOUCHES_LIMIT);
         assert_eq!((r.error, r.head, r.files.len()), (None, None, 0));
     }
 

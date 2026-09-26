@@ -433,7 +433,7 @@ fn to_u32(n: usize) -> u32 {
 }
 
 /// 링크된 워크트리에서 연 저장소도 공용 git 디렉토리를 키로 쓴다.
-fn common_dir(repo: &Repository) -> PathBuf {
+pub(crate) fn common_dir(repo: &Repository) -> PathBuf {
     let git_dir = repo.path();
     std::fs::read_to_string(git_dir.join("commondir"))
         .ok()

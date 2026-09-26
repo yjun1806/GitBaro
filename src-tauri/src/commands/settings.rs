@@ -13,7 +13,24 @@ pub struct AppSettings {
     pub default_ai_cli: String,
     pub language: String,
     pub notifications: NotificationSettings,
+    /// 사이드바 「작업 중인 브랜치」의 「최근 N일 안에 커밋했고 기본 브랜치에 병합되지 않음」 규칙의 N.
+    /// 옛 설정 파일에 없거나 양의 정수가 아니면 `DEFAULT_WORKING_BRANCH_RECENT_DAYS`. 화면이 1~365 로 자른다.
+    #[serde(deserialize_with = "recent_days_or_default")]
+    pub working_branch_recent_days: u32,
 }
+
+/// 잘못된 값 하나 때문에 설정 파일 전체가 기본값으로 돌아가지 않게, 이 칸만 기본값으로 읽는다.
+fn recent_days_or_default<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    let value = serde_json::Value::deserialize(d)?;
+    Ok(value
+        .as_u64()
+        .and_then(|n| u32::try_from(n).ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(DEFAULT_WORKING_BRANCH_RECENT_DAYS))
+}
+
+/// `AppSettings::working_branch_recent_days` 의 기본값. TS `DEFAULT_WORKING_BRANCH_RECENT_DAYS` 와 같다.
+pub const DEFAULT_WORKING_BRANCH_RECENT_DAYS: u32 = 7;
 
 /// 알림 설정. 옛 설정 파일에 없으면 기본값(새 커밋·CI 실패 알림 켬, 앱이 앞에 있을 때는 끔)을 쓴다.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -69,6 +86,7 @@ impl Default for AppSettings {
             default_ai_cli: "claude".to_string(),
             language: "en".to_string(),
             notifications: NotificationSettings::default(),
+            working_branch_recent_days: DEFAULT_WORKING_BRANCH_RECENT_DAYS,
         }
     }
 }
@@ -724,6 +742,21 @@ mod tests {
         let partial = parse_settings("{\"notifications\": {\"ciFailures\": false}}");
         assert!(partial.notifications.new_commits);
         assert!(!partial.notifications.ci_failures);
+    }
+
+    #[test]
+    fn settings_saved_before_working_branches_get_seven_days() {
+        let settings = parse_settings("{\"theme\": \"dark\"}");
+        assert_eq!(settings.working_branch_recent_days, 7);
+        let set = parse_settings("{\"workingBranchRecentDays\": 30}");
+        assert_eq!(set.working_branch_recent_days, 30);
+        for bad in ["-1", "0", "2.5", "\"x\"", "null"] {
+            let s = parse_settings(&format!("{{\"theme\": \"dark\", \"workingBranchRecentDays\": {bad}}}"));
+            assert_eq!(s.working_branch_recent_days, 7, "{bad}");
+            assert_eq!(s.theme, "dark", "다른 칸은 그대로 {bad}");
+        }
+        let json = serde_json::to_value(AppSettings::default()).unwrap();
+        assert_eq!(json["workingBranchRecentDays"], 7);
     }
 
     #[test]
