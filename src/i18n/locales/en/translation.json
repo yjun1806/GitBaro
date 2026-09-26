@@ -898,7 +898,7 @@
     "deleteButton": "Delete workspace",
     "suggestion": {
       "title": "Group {{count}} {{name}} repositories?",
-      "body": "These repositories share the name prefix “{{name}}”. Put them in one workspace to review them together.",
+      "body": "These repositories share the name prefix “{{name}}”. Put them in one workspace to see their changes together.",
       "accept": "Create workspace",
       "dismiss": "Not now",
       "dismissLabel": "Dismiss suggestion",
