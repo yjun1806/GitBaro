@@ -10,6 +10,8 @@ import { GraphPanel } from "@/components/graph/GraphPanel";
 import { WorkspaceReview } from "@/components/review/WorkspaceReview";
 import { PrDetailPane } from "@/components/pr/PrDetailPane";
 import { usePrViewStore } from "@/components/pr/pr-view";
+import { UnpushedRangeDetailPane } from "@/components/graph/UnpushedRangeView";
+import { useUnpushedRangeViewStore } from "@/components/graph/unpushed-range-view";
 import { Card, ContentArea, EmptyState } from "./ContentArea";
 import { GraphSplit } from "./GraphSplit";
 import { useDiffMaximizeReset } from "./useDiffMaximize";
@@ -50,6 +52,7 @@ export function MainColumn() {
   const repoListOpen = useUIStore((s) => s.repoListOpen);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const prOpen = usePrViewStore((s) => s.open);
+  const rangeOpen = useUnpushedRangeViewStore((s) => s.range !== null);
   const scope = useActiveScope();
   // 다른 저장소·워크스페이스로 옮기거나 목록을 열면 diff 크게 보기를 끝낸다(숨긴 목록으로 돌아올 길이 없어진다).
   useDiffMaximizeReset(`${scope?.kind === "workspace" ? scope.id : ""}:${activeRepoPath ?? ""}:${repoListOpen}`);
@@ -67,7 +70,15 @@ export function MainColumn() {
           // 저장소 전용 화면은 저장소를 골랐을 때만 마운트한다. 안쪽 파일은 null 경로를 보지 않는다.
           <GraphSplit
             top={<GraphPanel />}
-            bottom={prOpen ? <PrDetailPane /> : <ContentArea activeTab={activeTab} />}
+            bottom={
+              prOpen ? (
+                <PrDetailPane />
+              ) : rangeOpen ? (
+                <UnpushedRangeDetailPane />
+              ) : (
+                <ContentArea activeTab={activeTab} />
+              )
+            }
           />
         ) : scope?.kind === "workspace" ? (
           <WorkspaceReview key={scope.id} workspaceId={scope.id} paths={scope.paths} />

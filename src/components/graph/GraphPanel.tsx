@@ -23,6 +23,7 @@ import { StashView } from "@/components/stash/StashView";
 import { ActionsView } from "@/components/actions/ActionsView";
 import { PrListView } from "@/components/pr/PrListView";
 import { usePrViewStore } from "@/components/pr/pr-view";
+import { useUnpushedRangeViewStore } from "./unpushed-range-view";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import { activeRunCount, badgeCount } from "@/components/review/tab-counts";
@@ -89,8 +90,18 @@ export function GraphPanel() {
   const comparing = !graphListShown;
   const prOpen = usePrViewStore((s) => s.open);
   const setPrOpen = usePrViewStore((s) => s.setOpen);
-  useEffect(() => setPrOpen(false), [activeTab, merging, comparing, setPrOpen]);
-  useEffect(() => () => setPrOpen(false), [setPrOpen]);
+  const closeRange = useUnpushedRangeViewStore((s) => s.close);
+  useEffect(() => {
+    setPrOpen(false);
+    closeRange();
+  }, [activeTab, merging, comparing, setPrOpen, closeRange]);
+  useEffect(
+    () => () => {
+      setPrOpen(false);
+      closeRange();
+    },
+    [setPrOpen, closeRange],
+  );
   const tab: ShownTab = prOpen ? "pr" : graphPanelTabOf(activeTab);
   const worktreeFilter = useWorktreeFilter(review.wips);
   const chipMenu = useWorktreeChipMenu(worktreeFilter);
@@ -114,13 +125,18 @@ export function GraphPanel() {
 
   const openGraphTab = () => {
     setPrOpen(false);
+    closeRange();
     setActiveTab(selectedCommitId ? "history" : "changes");
   };
   const openStoredTab = (next: "stash" | "actions") => {
     setPrOpen(false);
+    closeRange();
     setActiveTab(next);
   };
-  const openPrTab = () => setPrOpen(true);
+  const openPrTab = () => {
+    closeRange();
+    setPrOpen(true);
+  };
 
   return (
     <section

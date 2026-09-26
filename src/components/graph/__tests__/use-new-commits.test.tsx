@@ -39,7 +39,7 @@ const otherHistoryState = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/queries", () => ({
-  useChangesVsDefaultOnHead: (entries: readonly unknown[]) => entries.map(() => ({ data: undefined })),
+  useDivergencePoint: () => ({ data: undefined }),
   useCommitHistoryInfinite: () => ({
     data: historyState.data,
     isLoading: false,

@@ -80,6 +80,38 @@ export function mutedChainNames(
  * 이력에서 아직 찾지 못했으면(다음 페이지를 더 불러와야 할 수 있다) null. 원격 여부를 모르는
  * 커밋(`isUnpushed` 없음)은 건너뛴다.
  */
+/**
+ * 줄기 강조 중(고른 커밋의 줄기, 없으면 마우스 올린 줄기) 이 줄기의 선 하나의 겉모습(D6).
+ * `highlightChain`이 null이면 강조 없음(늘 기본값) — 지금 그대로 그린다.
+ */
+export interface ChainEdgeStyle {
+  strokeWidth: number;
+  strokeOpacity: number;
+}
+
+export function chainEdgeStyle(edgeChain: number, highlightChain: number | null): ChainEdgeStyle {
+  if (highlightChain === null) return { strokeWidth: 2, strokeOpacity: 0.9 };
+  const onActiveChain = edgeChain === highlightChain;
+  return { strokeWidth: onActiveChain ? 2.5 : 2, strokeOpacity: onActiveChain ? 0.9 : 0.45 };
+}
+
+/**
+ * 줄기 강조 중 커밋 점 하나의 겉모습. 고른 커밋 자신(`isSelected`)이 강조 줄기 위에 있으면
+ * 점을 키우고 테를 두른다. 강조 줄기 위의 다른 점은 채운 채 그대로, 다른 줄기는 옅게 흐린다.
+ */
+export interface ChainDotStyle {
+  /** 강조 줄기 위의 고른 커밋 자신인지 — 크게 + 테. */
+  ring: boolean;
+  /** 0.45(다른 줄기, 강조 중일 때만) 또는 1(강조 없음·강조 줄기 위). */
+  opacity: number;
+}
+
+export function chainDotStyle(chain: number, highlightChain: number | null, isSelected: boolean): ChainDotStyle {
+  if (highlightChain === null) return { ring: false, opacity: 1 };
+  const onActiveChain = chain === highlightChain;
+  return { ring: isSelected && onActiveChain, opacity: onActiveChain ? 1 : 0.45 };
+}
+
 export function remoteBoundaryIndex(
   commits: readonly { isUnpushed?: boolean; isOwn?: boolean }[],
 ): number | null {

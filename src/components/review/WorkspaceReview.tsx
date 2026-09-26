@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { AlertTriangle, Folder, GitCommitVertical } from "lucide-react";
+import { AlertTriangle, Folder } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
@@ -21,7 +21,6 @@ import type { RepoLaneGraph } from "@/components/graph/repo-lanes";
 type CommitSelection = Extract<ReviewSelection, { kind: "commit" }>;
 import { useWorkspaceReview, type ReviewRepo } from "./useWorkspaceReview";
 import { useReviewActivityRefresh } from "./useReviewActivityRefresh";
-import { TabGroup, Tab } from "@/components/ui/Tabs";
 
 export interface WorkspaceReviewProps {
   workspaceId: string;
@@ -88,11 +87,8 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
             className="relative flex flex-col shrink-0 flex-1 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
           >
             <div className="flex items-center gap-2 min-h-8 pl-3 pr-3 shrink-0 border-b border-(--line)">
-              <TabGroup aria-label={t("shell.panelTabs")} className="shrink-0 gap-2 border-b-0">
-                <Tab variant="inline" active onClick={NO_OP} icon={<GitCommitVertical className="w-3.5 h-3.5" />}>
-                  {t("shell.graphTab")}
-                </Tab>
-              </TabGroup>
+              {/* 탭이 하나뿐이라 탭 줄 대신 제목만 둔다(카드 머리, 디자인 시스템 3.5). */}
+              <span className="shrink-0 text-[12.5px] font-bold text-foreground">{t("shell.graphTab")}</span>
               <span className="flex-1" />
               <RepoLegend repos={data.visible} />
               {data.hiddenCount > 0 || showAll ? (
@@ -156,9 +152,6 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
     </div>
   );
 }
-
-/** 워크스페이스 화면의 탭은 그래프 하나라 눌러도 할 일이 없다. */
-const NO_OP = () => undefined;
 
 /** 저장소의 기준(main) 상태를 한 줄로. 갈라진 지점을 못 찾았거나 잘렸을 때만 문구가 있다. */
 function historyNote(t: TFunction, h: WorkspaceRepoHistory | undefined): string | null {

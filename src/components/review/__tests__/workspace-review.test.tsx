@@ -80,7 +80,7 @@ const statuses: Record<string, StatusEntry[]> = {
 
 const syncState = vi.hoisted(() => ({ byPath: {} as Record<string, { unpushed: number }> }));
 vi.mock("@/api/queries", () => ({
-  useChangesVsDefaultOnHead: (entries: readonly unknown[]) => entries.map(() => ({ data: undefined })),
+  useDivergencePoint: () => ({ data: undefined }),
   useReviewStatusQuery: () => ({ data: reviewRepos, isLoading: false }),
   useWorkspaceHistories: (repos: { path: string }[]) => repos.map((r) => histories[r.path]),
   useStatusMany: (paths: string[]) =>
@@ -208,7 +208,7 @@ describe("WorkspaceReview", () => {
   it("does not repeat the unpushed commit count on the graph tab (the sidebar and Push show it)", () => {
     syncState.byPath = { [APP]: { unpushed: 2 }, [API]: { unpushed: 1 }, [API_WT]: { unpushed: 4 } };
     renderReview();
-    expect(screen.getByRole("tab", { name: /Commit graph/ }).textContent).toBe("Commit graph");
+    expect(screen.getByText("Commit graph").textContent).toBe("Commit graph");
   });
 
   it("keeps each repository's lane colour when another repository is hidden or shown", () => {
@@ -221,9 +221,10 @@ describe("WorkspaceReview", () => {
     expect(laneFill(container, "api1")).toBe(before.api);
   });
 
-  it("has only the graph tab: no changes-vs-main tab", () => {
+  it("has only the graph, as a plain title (one tab is no tab bar): no changes-vs-main tab", () => {
     renderReview();
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Commit graph"]);
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    expect(screen.getByText("Commit graph").textContent).toBe("Commit graph");
     expect(screen.getByText("Where each repository branched off its default branch")).toBeTruthy();
   });
 
@@ -262,8 +263,9 @@ describe("WorkspaceReview", () => {
     expect(useFollowStore.getState().target).toBe(API_WT);
     expect(screen.getByText("settings.ts")).toBeTruthy();
     expect(screen.getByText("diff-viewer")).toBeTruthy();
-    // 「따라가는 중」은 고른 WIP 행과 파일 목록 머리에 붙는다.
-    expect(screen.getAllByTestId("follow-badge").map((b) => b.textContent)).toEqual(["Following", "Following"]);
+    // 「따라가는 중」은 파일 목록 머리(FollowBadge)와 WIP 행의 따라가기 버튼에 각각 붙는다.
+    expect(screen.getByTestId("follow-badge").textContent).toBe("Following");
+    expect(screen.getByRole("button", { name: "Following · stop" })).toBeTruthy();
   });
 
   it("switches between a repository's working changes and its picked commit, keeping the mode visible", () => {

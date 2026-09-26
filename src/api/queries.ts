@@ -854,20 +854,6 @@ export function useDivergencePoint(path: string | null, headOid: string | null =
 }
 
 /**
- * @deprecated 옛 「main 대비 변경」 조회의 자리. 이제는 갈라진 지점만 읽는다(`useDivergencePoint`와 같은 키).
- * TODO(ui agent): switch to useDivergencePoint — CommitGraph의 「main에서 갈라진 지점」 행만 쓴다.
- */
-export function useChangesVsDefaultOnHead(entries: readonly { path: string; headOid: string | null }[]) {
-  return useQueries({
-    queries: entries.map(({ path, headOid }) => ({
-      queryKey: divergencePointKey(path, headOid),
-      queryFn: () => getDivergencePoint(path),
-      staleTime: Infinity,
-    })),
-  });
-}
-
-/**
  * `baseOid`(null이면 처음부터) → `headOid`에서 바뀐 파일. 두 커밋이 정해지면 결과가 바뀌지 않으므로
  * 다시 읽지 않는다. `headOid`가 null이면 부르지 않는다.
  */

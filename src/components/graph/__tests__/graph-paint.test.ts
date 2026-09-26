@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { computeGraphLanes } from "@/lib/graph-lanes";
 import type { RefLabel } from "@/types";
-import { branchColors, mutedChainNames, remoteBoundaryIndex, worktreeChainColors } from "../graph-paint";
+import {
+  branchColors,
+  chainDotStyle,
+  chainEdgeStyle,
+  mutedChainNames,
+  remoteBoundaryIndex,
+  worktreeChainColors,
+} from "../graph-paint";
 import { withWipLanes, worktreeColor } from "../worktree-history";
 
 const MAIN = "/repos/app";
@@ -139,5 +146,43 @@ describe("remoteBoundaryIndex", () => {
     ];
     // 다른 워크트리에는 이미 올라간 커밋이 있어도, 자신의 이력이 아직 올라간 지점에 닿지 못했으면 기다린다.
     expect(remoteBoundaryIndex(list)).toBeNull();
+  });
+});
+
+// D6: 커밋을 고르면 그 줄기 전체(끼어드는 fork·merge 곡선 포함)를 칠하고 나머지를 흐린다. 곡선은
+// `computeGraphLanes`가 이미 그 줄기 번호를 붙여 두므로(merge 커밋의 두 번째 부모 선, 줄기 마지막
+// 커밋이 부모 줄기로 합류하는 선) `chain === highlightChain` 비교만으로 줄기 전체(곡선 포함)가 걸린다.
+describe("chainEdgeStyle", () => {
+  it("draws every line the same when nothing is highlighted", () => {
+    expect(chainEdgeStyle(0, null)).toEqual({ strokeWidth: 2, strokeOpacity: 0.9 });
+    expect(chainEdgeStyle(3, null)).toEqual({ strokeWidth: 2, strokeOpacity: 0.9 });
+  });
+
+  it("thickens the highlighted chain's own lines and dims every other chain's", () => {
+    expect(chainEdgeStyle(4, 4)).toEqual({ strokeWidth: 2.5, strokeOpacity: 0.9 });
+    expect(chainEdgeStyle(1, 4)).toEqual({ strokeWidth: 2, strokeOpacity: 0.45 });
+  });
+
+  it("highlights a merge-in or fork-out curve by its own edge chain, not the row's dot chain", () => {
+    // 머지 커밋 자신은 줄기 1이지만, 두 번째 부모로 이어지는 곡선의 chain은 4(합쳐 들어오는 줄기)다.
+    expect(chainEdgeStyle(4, 4)).toEqual({ strokeWidth: 2.5, strokeOpacity: 0.9 });
+  });
+});
+
+describe("chainDotStyle", () => {
+  it("leaves dots plain when nothing is highlighted", () => {
+    expect(chainDotStyle(0, null, false)).toEqual({ ring: false, opacity: 1 });
+    expect(chainDotStyle(0, null, true)).toEqual({ ring: false, opacity: 1 });
+  });
+
+  it("dims dots on other chains and keeps the highlighted chain's dots full", () => {
+    expect(chainDotStyle(4, 4, false)).toEqual({ ring: false, opacity: 1 });
+    expect(chainDotStyle(1, 4, false)).toEqual({ ring: false, opacity: 0.45 });
+  });
+
+  it("rings only the actually selected commit's dot, and only while its chain is the active one", () => {
+    expect(chainDotStyle(4, 4, true)).toEqual({ ring: true, opacity: 1 });
+    // 미리보기로 다른 줄기를 강조하는 동안은 고른 커밋도 링 없이 흐려진다.
+    expect(chainDotStyle(4, 1, true)).toEqual({ ring: false, opacity: 0.45 });
   });
 });

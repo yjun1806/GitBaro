@@ -11,6 +11,7 @@ import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useFollowStore } from "@/stores/follow";
 import { useBranchRangeStore } from "@/components/branch/branch-range";
 import { useHistoryViewStore } from "@/stores/history-view";
+import { useUnpushedRangeViewStore } from "../unpushed-range-view";
 import { syncStatusPaths } from "@/components/sidebar/tree-model";
 import { worktreeColor } from "../worktree-history";
 import { useGraphWorktreesStore } from "../graph-worktrees";
@@ -103,14 +104,13 @@ const historyTargets: unknown[] = [];
 /** `useBranches` 응답. 기본은 비어 있다. */
 const branchList: { name: string; isHead: boolean; isRemote: boolean }[] = [];
 
-/** main과 갈라진 지점(갈라진 지점 행). 테스트마다 채운다. */
+/** main과 갈라진 지점(기본 브랜치 머리). 테스트마다 채운다. */
 const changesVsDefaultByPath: Record<string, unknown> = {};
 
 const unpushedState = vi.hoisted(() => ({ value: undefined as unknown }));
 const stashPush = vi.hoisted(() => vi.fn(async (_message?: string) => "stash-oid" as string | null));
 vi.mock("@/api/queries", () => ({
-  useChangesVsDefaultOnHead: (entries: readonly { path: string }[]) =>
-    entries.map((e) => ({ data: changesVsDefaultByPath[e.path] })),
+  useDivergencePoint: (path: string | null) => ({ data: path ? changesVsDefaultByPath[path] : undefined }),
   useStatusMany: () => ({}),
   useStatus: (path: string | null) => ({ data: path ? statusEntries : undefined }),
   useStashList: () => ({ data: [] }),
@@ -156,7 +156,9 @@ function renderPanel() {
 
 /** 스크롤 영역 안의 행(버튼)을 화면 순서대로. */
 function rowLabels(): string[] {
-  const rows = document.querySelectorAll("[role=tabpanel] button:not([data-working-changes])");
+  const rows = document.querySelectorAll(
+    "[role=tabpanel] button:not([data-working-changes]):not([data-follow-button])",
+  );
   return [...rows].map((el) => el.getAttribute("data-commit-id") ?? el.getAttribute("aria-label") ?? "");
 }
 
@@ -178,6 +180,7 @@ beforeEach(async () => {
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
   useFollowStore.getState().stop();
   useHistoryViewStore.getState().reset();
+  useUnpushedRangeViewStore.getState().close();
   historyTargets.length = 0;
   branchList.length = 0;
 });
@@ -223,7 +226,8 @@ describe("GraphPanel commit graph", () => {
     // Only the followed row is picked, and it carries the "following" pill.
     expect(row.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Uncommitted changes · main branch · primary folder · 1 file" }).getAttribute("aria-pressed")).toBe("false");
-    expect(within(row).getByTestId("follow-badge").textContent).toBe("Following");
+    const container = row.closest('[data-testid="wip-row"]') as HTMLElement;
+    expect(within(container).getByRole("button", { name: "Following · stop" })).toBeTruthy();
   });
 
   it("stops following when a commit is picked or another repository is opened", () => {
@@ -450,7 +454,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     expect(screen.getByRole("tab", { name: "Stash" }).textContent).toBe("Stash");
   });
 
-  it("draws the fork-point row right above the merge-base commit", async () => {
+  it("draws the base branch header right above the merge-base commit", async () => {
     changesVsDefaultByPath[REPO] = {
       baseStatus: "found",
       mergeBaseOid: "c3",
@@ -459,15 +463,16 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
       committed: [],
     };
     renderPanel();
-    const fork = await screen.findByTestId("fork-point-row");
-    expect(fork.textContent).toContain("Branched off main here");
-    const order = [...document.querySelectorAll("[data-commit-id], [data-testid=fork-point-row]")].map(
-      (el) => el.getAttribute("data-commit-id") ?? "fork",
+    const base = await screen.findByTestId("base-header-row");
+    expect(base.textContent).toContain("main");
+    expect(base.textContent).toContain("Diverged");
+    const order = [...document.querySelectorAll("[data-commit-id], [data-testid=base-header-row]")].map(
+      (el) => el.getAttribute("data-commit-id") ?? "base",
     );
-    expect(order).toEqual(["c1", "c2", "fork", "c3", "c4"]);
+    expect(order).toEqual(["c1", "c2", "base", "c3", "c4"]);
   });
 
-  it("has no fork-point row on the default branch itself", () => {
+  it("has no base branch header on the default branch itself", () => {
     changesVsDefaultByPath[REPO] = {
       baseStatus: "found",
       mergeBaseOid: "c3",
@@ -476,7 +481,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
       committed: [],
     };
     renderPanel();
-    expect(screen.queryByTestId("fork-point-row")).toBeNull();
+    expect(screen.queryByTestId("base-header-row")).toBeNull();
   });
 
   it("hides the open worktree's WIP row when nothing is uncommitted, and shows it again", () => {
@@ -615,6 +620,9 @@ describe("GraphPanel commits not on any remote", () => {
       { ...c3, isUnpushed: false },
       { ...c4, isUnpushed: false },
     ];
+    // 원격 추적 브랜치가 있다 = fetch한 적 있음(이 describe의 기본값). 「한 번도 fetch하지 않은
+    // 저장소」 테스트만 이 목록을 비워 반대 상황을 만든다.
+    branchList.push({ name: "origin/main", isHead: false, isRemote: true });
   });
 
   afterEach(() => {
@@ -626,25 +634,38 @@ describe("GraphPanel commits not on any remote", () => {
     document.querySelector(`[data-commit-id="${id}"] circle[data-dot]`)?.getAttribute("data-dot");
   const tinted = (id: string) =>
     document.querySelector(`[data-commit-id="${id}"]`)?.className.includes(UNPUSHED_ROW_CLASS);
-  /** 커밋 행과 경계 행을 화면 순서대로. */
+  /** 커밋 행과 머리 행을 화면 순서대로. */
   const rowOrder = () =>
     [...document.querySelectorAll("[data-commit-id], [role=separator]")].map(
       (el) => el.getAttribute("data-commit-id") ?? el.getAttribute("data-testid"),
     );
 
-  it("tints unpushed commits and puts an 'on the remote' row above the first pushed one", () => {
+  it("tints unpushed commits and puts an 'unpushed work' header above them, an 'on the remote' header above the first pushed one", () => {
     renderPanel();
     expect(["c1", "c2", "c3", "c4"].map(dot)).toEqual(["unpushed", "unpushed", "pushed", "pushed"]);
     expect(["c1", "c2", "c3", "c4"].map(tinted)).toEqual([true, true, false, false]);
-    expect(rowOrder()).toEqual(["c1", "c2", "remote-boundary-row", "c3", "c4"]);
-    // 원격 이름표 + 문장 + 아래 커밋의 시각. 개수는 사이드바와 Push 버튼이 맡으므로 여기엔 없다.
-    const boundary = screen.getByRole("separator", { name: /On the remote from here down/ });
-    expect(boundary.textContent).toMatch(
-      /^originOn the remote from here down · the commits above are not pushed yet\d+ years? ago$/,
-    );
+    expect(rowOrder()).toEqual(["unpushed-header-row", "c1", "c2", "remote-header-row", "c3", "c4"]);
+    // 개수는 사이드바와 Push 버튼이 맡으므로 머리에는 넣지 않는다.
+    const unpushedHeader = screen.getByTestId("unpushed-header-row");
+    expect(unpushedHeader.textContent).toContain("Not pushed yet");
+    expect(unpushedHeader.textContent).toContain("Pushing sends these to the remote");
+    expect(within(unpushedHeader).getByRole("button", { name: "See everything to push" })).toBeTruthy();
+    const remoteHeader = screen.getByTestId("remote-header-row");
+    expect(remoteHeader.textContent).toBe("On origin");
   });
 
-  it("puts the remote boundary above the fork point when both sit on the same commit", async () => {
+  it("opens the combined diff of the unpushed range from the header, closing it toggles back", () => {
+    renderPanel();
+    const openBtn = screen.getByRole("button", { name: "See everything to push" });
+    fireEvent.click(openBtn);
+    expect(openBtn.getAttribute("aria-pressed")).toBe("true");
+    // base = 경계가 앉은 커밋(원격에 있는 첫 커밋 c3), head = 열린 워크트리의 HEAD(c1).
+    expect(useUnpushedRangeViewStore.getState().range).toEqual({ repoPath: REPO, baseOid: "c3", headOid: "c1" });
+    fireEvent.click(screen.getByRole("button", { name: "See everything to push" }));
+    expect(useUnpushedRangeViewStore.getState().range).toBeNull();
+  });
+
+  it("puts the remote header above the base header when both sit on the same commit", async () => {
     changesVsDefaultByPath[REPO] = {
       baseStatus: "found",
       mergeBaseOid: "c3",
@@ -653,28 +674,48 @@ describe("GraphPanel commits not on any remote", () => {
       committed: [],
     };
     renderPanel();
-    await screen.findByTestId("fork-point-row");
-    expect(rowOrder()).toEqual(["c1", "c2", "remote-boundary-row", "fork-point-row", "c3", "c4"]);
+    await screen.findByTestId("base-header-row");
+    expect(rowOrder()).toEqual([
+      "unpushed-header-row",
+      "c1",
+      "c2",
+      "remote-header-row",
+      "base-header-row",
+      "c3",
+      "c4",
+    ]);
   });
 
-  it("names no remote on the boundary row when the repository has several", () => {
+  it("names no remote on the header when the repository has several", () => {
     const twoRemotes = {
       ...remoteRepo,
       remotes: [...remoteRepo.remotes, { name: "upstream", url: "https://github.com/u/app.git" }],
     } as RepoInfo;
     useRepositoryStore.setState({ repos: [twoRemotes], activeRepo: twoRemotes, activeRepoPath: REPO });
     renderPanel();
-    const boundary = screen.getByTestId("remote-boundary-row");
-    expect(boundary.textContent).not.toContain("origin");
-    expect(boundary.textContent).toMatch(/^remote/);
+    const header = screen.getByTestId("remote-header-row");
+    expect(header.textContent).not.toContain("origin");
+    expect(header.textContent).toMatch(/^On remote/);
   });
 
-  it("draws no band, boundary or hollow dots without a remote", () => {
+  it("draws no band, header or hollow dots without a remote", () => {
     useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
     renderPanel();
-    expect(screen.queryByTestId("remote-boundary-row")).toBeNull();
+    expect(screen.queryByTestId("unpushed-header-row")).toBeNull();
+    expect(screen.queryByTestId("remote-header-row")).toBeNull();
     expect(["c1", "c3"].map(dot)).toEqual(["plain", "plain"]);
     expect(["c1", "c3"].map(tinted)).toEqual([false, false]);
+  });
+
+  it("draws no tint or headers in a repository that has a remote but has never been fetched", () => {
+    // 원격은 있지만(remoteRepo) 원격 추적 브랜치가 하나도 없다 — `git fetch`를 한 번도 하지 않은 저장소.
+    // 판정(모두 isUnpushed=true)은 맞아도 전체가 칠해지면 강조 효과가 사라지므로 tint·머리를 끈다.
+    branchList.length = 0;
+    renderPanel();
+    expect(screen.queryByTestId("unpushed-header-row")).toBeNull();
+    expect(screen.queryByTestId("remote-header-row")).toBeNull();
+    expect(["c1", "c2", "c3", "c4"].map(dot)).toEqual(["plain", "plain", "plain", "plain"]);
+    expect(["c1", "c2", "c3", "c4"].map(tinted)).toEqual([false, false, false, false]);
   });
 });
 

@@ -50,12 +50,8 @@ const historyPages = {
 /** 지금 연 저장소가 병합·pull 충돌 등으로 멈췄는지(`useMergeState`). */
 let mergeStateValue: string | null = null;
 
-/** main과 갈라진 지점(갈라진 지점 행). 테스트마다 채운다. */
-const changesVsDefaultByPath: Record<string, unknown> = {};
-
 vi.mock("@/api/queries", () => ({
-  useChangesVsDefaultOnHead: (entries: readonly { path: string }[]) =>
-    entries.map((e) => ({ data: changesVsDefaultByPath[e.path] })),
+  useDivergencePoint: () => ({ data: undefined }),
   useMergeState: () => ({ data: mergeStateValue }),
   useStatus: (path: string | null) => ({ data: path ? statusEntries : [] }),
   useCommitHistoryInfinite: () => ({

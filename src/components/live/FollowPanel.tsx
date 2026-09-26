@@ -36,6 +36,7 @@ import { useWorkingFileMenu } from "@/components/commit/useWorkingFileMenu";
 import { useFileMenu } from "@/components/commit/useFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { useNow } from "@/hooks/useNow";
 
 /** `registerWatchPaths`에 쓰는 이 화면의 key. 감시 대상 목록에서 맨 앞에 온다. */
 export const FOLLOW_WATCH_KEY = FOLLOW_KEY;
@@ -208,16 +209,6 @@ function useFreshLines(
  */
 export function wipEntry(f: WipFile): StatusEntry {
   return { path: f.path, origPath: f.origPath, status: f.status, staged: !f.unstaged };
-}
-
-/** 초 단위 표시가 흐르도록 1초마다 다시 그린다. 파일 목록만 다시 그리게 이 안에서만 쓴다. */
-function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
 }
 
 /** diff 머리의 「4초 전 수정」(시안 D4). 1분 안이면 작업 중 색으로 초 단위를 센다. */
