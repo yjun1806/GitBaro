@@ -175,7 +175,8 @@ const CI_ICON: Record<Exclude<CiState, "running">, typeof CircleCheck> = {
  * 있을 때만 그린다(호출하는 쪽이 `showCi && ci`로 감싼다) — 뜻은 펼친 정보 칸의 CI 줄(이름 포함)과
  * 같고 표현만 다르다.
  */
-function CiStateIcon({ ci }: { ci: CiSummary }) {
+/** 그래프 행의 CI 칸(3.15)도 이 아이콘을 그대로 쓴다 — 글자 없이 아이콘 하나로 말하는 자리는 이 하나뿐이다. */
+export function CiStateIcon({ ci }: { ci: CiSummary }) {
   const { t } = useTranslation();
   const label = t(`commitDetail2.ciState.${ci.state}`);
   const title = `${label} · ${ci.names.join(", ")}`;

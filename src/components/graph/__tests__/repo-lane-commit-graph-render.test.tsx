@@ -7,6 +7,11 @@ import { buildRepoLaneRows, type LaneRepo, type LaneWip } from "../repo-lanes";
 import type { CommitInfo } from "@/types";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
+// 저장소별 레인 그래프의 「변경」 칸(3.15)이 쓰는 조회. 이 스위트는 재렌더 횟수만 보므로 늘 빈 맵.
+vi.mock("@/api/queries", () => ({
+  useCommitStatsAcrossRepos: () => new Map(),
+  commitStatsAcrossReposKey: (path: string, oid: string) => `${path}\u0000${oid}`,
+}));
 
 const renders = vi.hoisted(() => new Map<string, number>());
 vi.mock("../GraphRow", async (importOriginal) => {

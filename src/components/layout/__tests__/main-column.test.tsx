@@ -75,6 +75,10 @@ vi.mock("@/api/queries", () => ({
   useCommitDetail: () => ({ data: undefined, isLoading: true }),
   useCommitFileDiff: () => ({ data: null }),
   useCommitAvatars: () => ({ data: {} }),
+  // 커밋 그래프 「변경」 칸(3.15)
+  useCommitStats: () => new Map(),
+  useCommitStatsAcrossRepos: () => new Map(),
+  commitStatsAcrossReposKey: (path: string, oid: string) => `${path}\u0000${oid}`,
   // W4-T3 워크스페이스 리뷰 화면
   useWorkspaceHistories: (repos: { path: string }[]) =>
     repos.map((r) => ({

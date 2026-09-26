@@ -919,9 +919,11 @@
   },
   "graph": {
     "colDescription": "Description",
+    "colChange": "Change",
+    "colCi": "CI",
     "colAuthor": "Author",
     "colTime": "Time",
-    "colCommit": "Commit",
+    "mergeCommit": "Merge",
     "agent": "a coding agent",
     "agentGuess": "Probably written with {{name}} (guessed from the Co-Authored-By trailer)",
     "worktree": "Worktree",

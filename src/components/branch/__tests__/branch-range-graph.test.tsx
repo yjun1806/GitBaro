@@ -80,6 +80,8 @@ vi.mock("@/api/queries", () => ({
   useRemoteTags: () => ({ data: undefined }),
   useCommitAvatars: () => ({ data: {} }),
   useBranchDivergence: () => ({ data: [], isLoading: false }),
+  // 범위 화면 그래프의 「변경」 칸(3.15)
+  useCommitStats: () => new Map(),
   // W6-T2 워크트리 칩·겹침 경고
   useWorktreeHeadHistories: () => [],
   useWipFilesMany: () => [],

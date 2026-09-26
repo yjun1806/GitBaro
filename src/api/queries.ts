@@ -1098,6 +1098,43 @@ export function useCommitStats(path: string | null, oids: readonly string[]): Re
   });
 }
 
+/** `useCommitStatsAcrossRepos`의 맵 키. 저장소가 달라도 같은 oid가 있을 수 있어(포크 등) 저장소 경로를 합친다. */
+export function commitStatsAcrossReposKey(path: string, oid: string): string {
+  return `${path}\u0000${oid}`;
+}
+
+/**
+ * 여러 저장소에 걸친 커밋의 「변경」 칸(워크스페이스·저장소별 레인 그래프). `useCommitStats`와 같은
+ * 캐시·배치(`loadCommitStats`, 저장소 경로별로 묶임)를 쓰되, 커밋마다 저장소 경로를 따로 받는다.
+ */
+export function useCommitStatsAcrossRepos(
+  pairs: readonly { path: string; oid: string }[],
+): ReadonlyMap<string, CommitStats> {
+  return useQueries({
+    queries: pairs.map(({ path, oid }) => ({
+      queryKey: commitStatsKey(path, oid),
+      queryFn: async (): Promise<CommitStats> =>
+        (await loadCommitStats(path, oid)) ?? {
+          oid,
+          merge: false,
+          filesChanged: null,
+          additions: null,
+          deletions: null,
+          error: "missing from the response",
+        },
+      staleTime: Infinity,
+      gcTime: 30 * 60_000,
+    })),
+    combine: (results) => {
+      const out = new Map<string, CommitStats>();
+      results.forEach((r, i) => {
+        if (r.data && !r.data.error) out.set(commitStatsAcrossReposKey(pairs[i].path, pairs[i].oid), r.data);
+      });
+      return out;
+    },
+  });
+}
+
 /**
  * 저장소마다 로컬 브랜치의 「작업 중인 브랜치」 판단 재료. 키가 `["workingBranches", path]`라 git 폴더 감시
  * (`useRepoWatcher`)가 그 저장소만 다시 읽게 하고, push·fetch는 `invalidateAfterSync`가 무효화한다. 다른 곳에서 한

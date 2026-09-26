@@ -140,6 +140,8 @@ vi.mock("@/api/queries", () => ({
   useReviewStatusQuery: () => ({ data: scan, isLoading: false }),
   useUnpushedCommits: () => ({ data: unpushedState.value }),
   useStashMutations: () => ({ push: { mutateAsync: stashPush } }),
+  // 커밋 그래프 「변경」 칸(3.15)
+  useCommitStats: () => new Map(),
 }));
 
 const { GraphPanel } = await import("@/components/graph/GraphPanel");
