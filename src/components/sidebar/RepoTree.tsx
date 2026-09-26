@@ -195,7 +195,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
     const key = workspaceRepoKey(node.repo.path);
     const open = isOpen(key);
     return (
-      <div key={node.key} role="none" className="flex flex-col">
+      <div key={node.key} role="none" className="flex flex-col animate-reveal">
         <DraggableRow
           id={node.key}
           kind="repo"
@@ -209,7 +209,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
           <RepoHeaderRow
             repo={node.repo}
             level={3}
-            depth={0}
+            depth={1}
             paths={repoPaths(node)}
             data={data}
             favorite={favoriteRepos.includes(node.repo.path)}
@@ -225,7 +225,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
           />
         </DraggableRow>
         {open && (
-          <RepoFolderRows node={node} level={4} depth={1} data={data} selection={selection} actions={actions} />
+          <RepoFolderRows node={node} level={4} depth={2} data={data} selection={selection} actions={actions} />
         )}
         {open && <DropAfterLine id={node.key} depth={1} />}
       </div>
@@ -295,7 +295,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
                         if (child.kind === "repo") return renderRepoCard(child);
                         const wsOpen = isOpen(workspaceNodeKey(child.workspace.id));
                         return (
-                          <div key={child.key} role="none" className="flex flex-col">
+                          <div key={child.key} role="none" className="flex flex-col animate-reveal">
                             <div role="none" className={SIDEBAR_CARD}>
                               <WorkspaceRow
                                 nodeKey={child.key}

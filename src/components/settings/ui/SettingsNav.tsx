@@ -18,7 +18,7 @@ interface SettingsNavProps<T extends string> {
 }
 
 /**
- * 설정 화면 왼쪽 칸 목록(층 0 틀 위). 고른 칸은 한 단계 진한 채움과 왼쪽 브랜드 색 막대로 보인다.
+ * 설정 화면 왼쪽 칸 목록(층 0 틀 위). 고른 칸은 한 단계 진한 채움과 굵은 글자로 보인다.
  * 위아래 화살표로 칸을 옮긴다.
  */
 export function SettingsNav<T extends string>({ items, active, onSelect, ariaLabel }: SettingsNavProps<T>) {
@@ -47,7 +47,7 @@ export function SettingsNav<T extends string>({ items, active, onSelect, ariaLab
               }
             }}
             className={cn(
-              "relative flex items-center gap-2.5 h-8 pl-3 pr-2 rounded-(--radius-item) text-left text-[13px] outline-none",
+              "flex items-center gap-2.5 h-8 pl-3 pr-2 rounded-(--radius-item) text-left text-[13px] outline-none",
               "transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring/40",
               selected
                 ? "bg-(--frame-sel) text-foreground font-semibold"
@@ -55,9 +55,6 @@ export function SettingsNav<T extends string>({ items, active, onSelect, ariaLab
               danger && !selected && "text-destructive",
             )}
           >
-            {selected && (
-              <span aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[3px] rounded-r-full bg-(--acc)" />
-            )}
             <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span className="truncate">{label}</span>
           </button>

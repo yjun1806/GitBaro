@@ -129,7 +129,7 @@ function SortMenuPopup({ mode, position, onPick, onClose, ignore }: SortMenuPopu
       tabIndex={-1}
       onKeyDown={onKeyDown}
       onClick={(e) => e.stopPropagation()}
-      className={cn("fixed z-[100] w-[220px] p-[5px] rounded-[10px] outline-none", FLOATING_SURFACE)}
+      className={cn("fixed z-[100] w-[220px] p-[5px] rounded-[10px] outline-none animate-pop-in", FLOATING_SURFACE)}
       style={{ left: position.x, top: position.y }}
     >
       {SORT_MODES.map((m) => {

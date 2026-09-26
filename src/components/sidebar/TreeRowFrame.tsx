@@ -3,21 +3,13 @@ import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebarHoverCard, type HoverSubject } from "./SidebarHoverCard";
 
-/** 카드 안에서 한 단계 들여 쓰는 폭(px). 워크스페이스 카드 안 저장소의 작업 폴더 줄에 쓴다. */
-export const INDENT_PX = 8;
-/** 행 좌우 안쪽 여백(px). 양쪽이 같다. 선택 막대(3px)는 이 여백 안에 그려진다. */
+/**
+ * 카드 안에서 한 단계 들여 쓰는 폭(px). 워크스페이스 카드 안에서 저장소 줄은 한 단계, 그 작업 폴더 줄은 두 단계
+ * 들여 써서 워크스페이스에 묶인 것이 보이게 한다.
+ */
+export const INDENT_PX = 12;
+/** 행 좌우 안쪽 여백(px). 양쪽이 같다. */
 export const ROW_PAD_X = 8;
-
-/** 사이드바에서 선택된 줄의 왼쪽 막대(브랜드 색). 부모는 `relative`여야 한다. 행 채움 안쪽에 둥근 막대로 그려 둥근 모서리 밖으로 삐져나오지 않게 한다. */
-export function SelectionBar() {
-  return (
-    <span
-      aria-hidden="true"
-      data-testid="selection-bar"
-      className="absolute left-[3px] top-[7px] bottom-[7px] w-[3px] rounded-full bg-(--acc)"
-    />
-  );
-}
 
 interface TreeRowFrameProps {
   /** 화면 읽기 프로그램에 알리는 트리 단계(1부터). */
@@ -48,7 +40,7 @@ interface TreeRowFrameProps {
 }
 
 /**
- * 사이드바 한 줄의 공통 틀: 한 줄 28px, 좌우 여백 8px, ▾/▸ 접기 표시, 선택 채움과 막대, 키보드 조작,
+ * 사이드바 한 줄의 공통 틀: 한 줄 28px, 좌우 여백 8px, ▾/▸ 접기 표시, 선택 채움, 키보드 조작,
  * 자세한 정보 카드(hover card). 행은 평평하게 늘어놓고 `aria-level`로 단계를 알린다(ARIA 트리의 평면 구조).
  */
 export function TreeRowFrame({
@@ -133,7 +125,8 @@ export function TreeRowFrame({
       className={cn(
         "relative flex items-center gap-[var(--item)] h-[var(--row)] rounded-[var(--radius-item)] cursor-default select-none outline-none",
         "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40",
-        // 카드(층 2) 안 행: 선택은 회색 채움 + 브랜드 색 왼쪽 막대, hover는 더 옅은 채움.
+        // 카드(층 2) 안 행: 선택은 회색 채움, hover는 더 옅은 채움. 글자 강조(text-foreground font-semibold)는
+        // 각 행이 자기 이름표에 직접 준다(예: RepoFolderRows의 ROW_BRANCH).
         surface === "panel"
           ? selected
             ? "bg-(--panel-sel)"
@@ -144,7 +137,6 @@ export function TreeRowFrame({
         className,
       )}
     >
-      {selected && <SelectionBar />}
       {chevron === "leading" && chevronMark}
       {children}
       {chevron === "trailing" && chevronMark}

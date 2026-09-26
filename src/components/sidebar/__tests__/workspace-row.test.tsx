@@ -51,7 +51,7 @@ describe("WorkspaceRow", () => {
           accountLabel="acme"
           repoCount={1}
           memberCount={1}
-          signals={{ dirty: 0, live: false, watched: false, changedAt: 0, ahead: 0 }}
+          signals={{ dirty: 0, live: false, watched: false, changedAt: 0, ahead: 0, behind: 0 }}
           now={0}
           expanded
           draggable={false}

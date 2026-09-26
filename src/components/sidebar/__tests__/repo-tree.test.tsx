@@ -197,7 +197,7 @@ describe("RepoTree — cards and levels", () => {
     ).toBeTruthy();
   });
 
-  it("opens a workspace repository's working folders inside the workspace card, one indent step in", async () => {
+  it("indents a workspace's repositories one step and their working folders two steps", async () => {
     const { onSelectRepo } = renderTree(makeData(baseSignals));
     expect(screen.queryByRole("treeitem", { name: "feat/login" })).toBeNull();
     fireEvent.click(item("api"));
@@ -205,8 +205,9 @@ describe("RepoTree — cards and levels", () => {
     expect(item("api")).toHaveAttribute("aria-expanded", "true");
     expect(item(PRIMARY_MAIN)).toHaveAttribute("aria-level", "4");
     expect(item("feat/login")).toHaveAttribute("aria-level", "4");
-    expect(item("feat/login").style.paddingLeft).toBe("16px");
-    expect(item("api").style.paddingLeft).toBe("8px");
+    expect(item("feat/login").style.paddingLeft).toBe("32px");
+    expect(item("api").style.paddingLeft).toBe("20px");
+    expect(item("product").style.paddingLeft).toBe("8px");
     // main은 기본 폴더가 체크아웃하고 있어 워크스페이스 카드 안에는 보기 줄이 따로 없다.
     const productCard = item("product").closest(".bg-card") as HTMLElement;
     expect(within(productCard).queryByRole("treeitem", { name: "View main (no checkout)" })).toBeNull();
@@ -450,8 +451,8 @@ describe("RepoTree — search and selection", () => {
     fireEvent.keyDown(item("api"), { key: "ArrowRight" });
     expect(item("feat/login")).toHaveAttribute("aria-selected", "true");
     expect(item("api")).toHaveAttribute("aria-selected", "false");
-    // 선택 막대는 카드 안 줄 안쪽에 그린다.
-    expect(within(item("feat/login")).getByTestId("selection-bar")).toBeInTheDocument();
+    // 선택 표시는 막대가 아니라 채움과 브랜치 이름 글자 강조로 낸다.
+    expect(item("feat/login").querySelector(".font-mono")?.className).toContain("text-foreground");
   });
 
   it("marks favorite repositories", () => {

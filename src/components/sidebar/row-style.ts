@@ -6,7 +6,7 @@ import { PANEL_SURFACE } from "@/components/ui/layers";
 
 /**
  * 저장소·워크스페이스 카드: 본문 카드와 같은 흰 섬(층 2). 안쪽 여백은 사방 4px이고,
- * 행(좌우 8px)과 선택 막대는 그 안에 놓인다.
+ * 행(좌우 8px)은 그 안에 놓인다.
  */
 export const SIDEBAR_CARD = `flex flex-col p-1 ${PANEL_SURFACE}`;
 

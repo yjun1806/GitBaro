@@ -105,7 +105,7 @@ export function SidebarHoverCardProvider({ data, children }: { data: SidebarTree
             role="tooltip"
             data-testid="sidebar-hover-card"
             className={cn(
-              "fixed z-[90] pointer-events-none rounded-[10px] px-3 py-2.5 flex flex-col gap-1 text-[12px]",
+              "fixed z-[90] pointer-events-none rounded-[10px] px-3 py-2.5 flex flex-col gap-1 text-[12px] animate-fade-in",
               FLOATING_SURFACE,
             )}
             style={{ top: placement.top, left: placement.left, width: CARD_WIDTH_PX }}

@@ -1,5 +1,5 @@
 import type { MouseEvent } from "react";
-import { Eye, GitBranch, Loader2, Star } from "lucide-react";
+import { Eye, GitBranch, Star } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { avatarInitial } from "@/lib/avatar-color";
 import { useRepoAvatarColor, useRepoName } from "@/hooks/useRepoDisplay";
@@ -22,6 +22,8 @@ import { TreeRowFrame } from "./TreeRowFrame";
 import type { FolderRow } from "./useSidebarRowMenus";
 import { isLivePath, isWatchedPath, repoPaths } from "./tree-model";
 import type { SidebarTreeData } from "./useSidebarTreeData";
+import { Spinner } from "@/components/ui/Spinner";
+import { useSteadyFlag } from "@/hooks/useSteadyValue";
 
 /** 행 선택과 브랜치 보기에 쓰는 지금 상태. */
 export interface RepoSelection {
@@ -54,6 +56,7 @@ export function signalValues(paths: string[], data: SidebarTreeData): RowSignalV
     watched: livePaths.some((p) => isWatchedPath(p, data.watched, data.overflow)),
     changedAt: Math.max(0, ...livePaths.map((p) => data.lastChangedAt[p] ?? 0)),
     ahead: paths.reduce((acc, p) => acc + (data.signals[p]?.ahead ?? 0), 0),
+    behind: paths.reduce((acc, p) => acc + (data.signals[p]?.behind ?? 0), 0),
   };
 }
 
@@ -130,6 +133,7 @@ export function RepoFolderRows({ node, level, depth, data, selection, actions }:
             label={isPrimary ? `${label} · ${t("sidebarTree.card.primaryFolder")}` : label}
             selected={selected}
             hover={{ kind: "worktree", repoPath: repo.path, path, isPrimary }}
+            className="animate-reveal"
             onSelect={() => (isPrimary ? actions.onSelectRepo(repo) : actions.onSelectWorktree(repo, path))}
             onContextMenu={(e) => actions.onFolderContextMenu?.(repo, { path, isPrimary, branch: data.branchOf(path) }, e)}
           >
@@ -150,6 +154,7 @@ export function RepoFolderRows({ node, level, depth, data, selection, actions }:
           label={t("sidebarTree.card.viewBranchLabel", { branch: viewTarget.name })}
           selected={viewingHere?.kind === "ref" && viewingHere.name === viewTarget.name}
           hover={{ kind: "branch", repoPath: repo.path, branch: viewTarget.name }}
+          className="animate-reveal"
           onSelect={() => actions.onViewBranch(repo, viewTarget)}
           onContextMenu={(e) => actions.onViewContextMenu?.(repo, viewTarget, e)}
         >
@@ -199,7 +204,7 @@ export function RepoCard({
   const headerSelected = !expanded && selection.activeOwnerPath === repo.path;
   return (
     <>
-      <div className={SIDEBAR_CARD} role="none" data-repo-card={repo.path}>
+      <div className={cn(SIDEBAR_CARD, "animate-reveal")} role="none" data-repo-card={repo.path}>
         <DraggableRow
           id={node.key}
           kind="repo"
@@ -267,6 +272,8 @@ export function RepoHeaderRow({
 }: RepoHeaderRowProps) {
   const { t } = useTranslation();
   const name = useRepoName()(repo);
+  // 워크스페이스의 저장소를 차례로 fetch할 때 줄마다 깜박이지 않게 고르게 한다.
+  const showFetching = useSteadyFlag(fetching);
   return (
     <TreeRowFrame
       level={level}
@@ -294,7 +301,7 @@ export function RepoHeaderRow({
           />
         )}
       </span>
-      {fetching && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
+      {showFetching && <Spinner size="sm" className="text-muted-foreground" label={t("sync.fetching")} />}
       {!expanded && <RowSignals values={signalValues(paths, data)} now={data.now} />}
     </TreeRowFrame>
   );

@@ -13,17 +13,19 @@ export interface RowSignalValues {
   changedAt: number;
   /** 올릴 커밋 수 */
   ahead: number;
+  /** 받을 커밋 수 */
+  behind: number;
 }
 
 /**
- * 행 오른쪽 표시(많아야 둘): 주황 점 = 커밋 안 한 변경(10분 안에 파일이 바뀌었으면 옅은 테 = 지금 바뀌는 중),
- * 회색 「↑N」 = 올릴 커밋. 자세한 내용은 자세한 정보 카드에 있다.
+ * 행 오른쪽 표시(많아야 셋): 주황 점과 숫자 = 커밋 안 한 파일(10분 안에 파일이 바뀌었으면 점에 옅은 테 = 지금 바뀌는 중),
+ * 「↓N」 = 받을 커밋, 「↑N」 = 올릴 커밋. 자세한 내용은 자세한 정보 카드에 있다.
  */
 export function RowSignals({ values, now }: { values: RowSignalValues; now: number }) {
   const { t } = useTranslation();
-  const { dirty, live, watched, changedAt, ahead } = values;
+  const { dirty, live, watched, changedAt, ahead, behind } = values;
   const showDot = dirty > 0 || live;
-  if (!showDot && ahead === 0) return null;
+  if (!showDot && ahead === 0 && behind === 0) return null;
   const dotLabel = [
     dirty > 0 ? t("sidebarTree.card.uncommitted", { count: dirty }) : null,
     live ? liveDotLabel(t, watched, now, changedAt) : null,
@@ -31,7 +33,7 @@ export function RowSignals({ values, now }: { values: RowSignalValues; now: numb
     .filter(Boolean)
     .join(" · ");
   return (
-    <span className="flex items-center gap-1.5 shrink-0">
+    <span className="flex items-center gap-2 shrink-0 text-[10.5px] leading-none tabular-nums">
       {showDot && (
         <span
           role="img"
@@ -41,17 +43,34 @@ export function RowSignals({ values, now }: { values: RowSignalValues; now: numb
           data-live={live || undefined}
           data-watched={watched}
           className={cn(
-            "w-[7px] h-[7px] rounded-full bg-[var(--live)] shrink-0",
-            live && "shadow-[0_0_0_3px_var(--live-soft)]",
+            "flex items-center gap-1 font-semibold text-(--live) animate-fade-in",
             live && !watched && "opacity-40",
           )}
-        />
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "w-[7px] h-[7px] rounded-full bg-[var(--live)] shrink-0",
+              live && "shadow-[0_0_0_3px_var(--live-soft)] animate-live-ring",
+            )}
+          />
+          {dirty > 0 && dirty}
+        </span>
+      )}
+      {behind > 0 && (
+        <span
+          data-signal="behind"
+          title={t("sidebarTree.badge.behind", { count: behind })}
+          className="text-(--fg2) animate-fade-in"
+        >
+          ↓{behind}
+        </span>
       )}
       {ahead > 0 && (
         <span
           data-signal="ahead"
           title={t("sidebarTree.card.toPush", { count: ahead })}
-          className="text-[10.5px] tabular-nums text-muted-foreground"
+          className="text-(--fg2) animate-fade-in"
         >
           ↑{ahead}
         </span>
