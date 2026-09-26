@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/Button";
 import { Segmented, type SegmentedOption } from "@/components/ui/Segmented";
 import type { WorkspaceRepoHistory } from "@/types";
 import { WorkspaceTitle } from "./WorkspaceTitle";
-import { StatusActivity } from "./StatusActivity";
 import { ReviewFilesPanel, type ReviewSelection } from "./ReviewFilesPanel";
 import { FileTouchesView } from "./FileTouchesView";
 import { fileTouchSources } from "./file-touches-model";
@@ -117,8 +116,6 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
                   {showAll ? t("review.hideQuiet") : t("review.showAll", { count: data.hiddenCount })}
                 </Button>
               ) : null}
-              {/* 저장소 화면의 git 상태 줄과 같은 자리: 오프라인 표시, 도는 git 명령, 작업 기록 열기. */}
-              <StatusActivity />
             </div>
             {reviewView === "commits" && (
               <RepoLaneCommitGraph

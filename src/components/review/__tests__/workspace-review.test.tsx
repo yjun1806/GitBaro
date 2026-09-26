@@ -253,14 +253,6 @@ describe("WorkspaceReview", () => {
     expect(screen.getAllByRole("button", { name: /Uncommitted changes · .* · 1 file$/ })).toHaveLength(1);
   });
 
-  it("reaches the activity log from the workspace header", async () => {
-    const { useUIStore } = await import("@/stores/ui");
-    useUIStore.setState({ isActivityLogOpen: false });
-    renderReview();
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("activity.title") }));
-    expect(useUIStore.getState().isActivityLogOpen).toBe(true);
-  });
-
   it("opens the commit detail of the picked repository", () => {
     const { container } = renderReview();
     fireEvent.click(container.querySelector('[data-commit-id="api1"]') as HTMLElement);

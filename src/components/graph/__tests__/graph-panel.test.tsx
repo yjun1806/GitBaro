@@ -38,16 +38,6 @@ vi.mock("@/hooks/useOpenWorktree", () => ({ useOpenWorktree: () => openWorktree 
 const REPO = "/work/app";
 const FEAT = "/work/app-feat";
 
-/**
- * 「보는 중」 띠(GitStatusLine). 같은 화면에 「WIP 안내」(Notice)도 `role="status"`를 쓰므로
- * 텍스트로 가려낸다.
- */
-function viewingStrip(): HTMLElement {
-  const strip = screen.getAllByRole("status").find((el) => el.textContent?.includes("Viewing"));
-  if (!strip) throw new Error("viewing strip not found");
-  return strip;
-}
-
 function commit(id: string, parentIds: string[], extra: Partial<CommitInfo> = {}): CommitInfo {
   return {
     id,
@@ -546,10 +536,9 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     useUIStore.setState({ activeTab: "history" });
     useSelectionStore.getState().selectCommit("c2");
     renderPanel();
-    // 파일 수는 같은 행이 말하므로 버튼에는 수가 없다. 상태 줄에도 두지 않는다.
+    // 파일 수는 같은 행이 말하므로 버튼에는 수가 없다.
     const buttons = screen.getAllByRole("button", { name: "Working changes" });
     expect(buttons).toHaveLength(1);
-    expect(within(screen.getByRole("status")).queryByRole("button", { name: /^Working changes/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Commit/ })).toBeNull();
     // 다른 워크트리 행에는 없다(그 워크트리를 열어야 스테이징할 수 있다).
     const featRow = screen.getAllByTestId("wip-row")[0];
@@ -580,7 +569,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     expect(screen.queryByTestId("compare-chip")).toBeNull();
   });
 
-  it("views another branch without checking it out: no WIP rows, a strip with actions", () => {
+  it("views another branch without checking it out: no WIP rows, a notice instead", () => {
     branchList.push({ name: "main", isHead: true, isRemote: false }, { name: "feat/x", isHead: false, isRemote: false });
     renderPanel();
     expect(screen.getAllByTestId("wip-row")).toHaveLength(2);
@@ -589,6 +578,8 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     // 커밋 목록은 그 브랜치에서 읽는다.
     expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "ref", name: "feat/x" });
     // 체크아웃한 작업 트리의 것(WIP 행, 작업 중인 변경 버튼)은 감추고 안내를 둔다.
+    // 「보는 중」 띠와 체크아웃·돌아가기 버튼은 창 맨 아래 상태 막대(StatusBar)로 옮겨
+    // status-bar.test.tsx가 다룬다.
     expect(screen.queryAllByTestId("wip-row")).toHaveLength(0);
     expect(screen.getByText(i18n.t("historyView.wipHidden"))).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Working changes/ })).toBeNull();
@@ -596,10 +587,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     fireEvent.click(document.querySelector<HTMLElement>('[data-commit-id="c2"]')!);
     expect(useSelectionStore.getState().selectedCommitId).toBe("c2");
 
-    const strip = viewingStrip();
-    expect(strip.textContent).toContain("Viewing feat/x · not checked out");
-    expect(within(strip).getByRole("button", { name: "Check out this branch" })).toBeTruthy();
-    fireEvent.click(within(strip).getByRole("button", { name: "Back to current branch" }));
+    act(() => useHistoryViewStore.getState().reset());
     expect(useHistoryViewStore.getState().target).toBeNull();
     expect(screen.getAllByTestId("wip-row")).toHaveLength(2);
     expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "head" });
@@ -623,8 +611,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     fireEvent.click(screen.getByRole("option", { name: "All branches" }));
     expect(useHistoryViewStore.getState().target).toEqual({ kind: "all" });
     expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "all" });
-    // 모든 브랜치는 체크아웃할 수 없다.
-    expect(within(viewingStrip()).queryByRole("button", { name: "Check out this branch" })).toBeNull();
+    // 「모든 브랜치는 체크아웃할 수 없다」는 상태 막대 쪽 동작이라 status-bar.test.tsx가 다룬다.
 
     fireEvent.click(screen.getByRole("button", { name: /Viewing\s*All branches/ }));
     fireEvent.click(screen.getByRole("option", { name: /Current checkout/ }));
@@ -634,7 +621,8 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
   it("ends viewing when another repository is opened", () => {
     useHistoryViewStore.getState().view(REPO, { kind: "all" });
     renderPanel();
-    expect(viewingStrip().textContent).toContain("Viewing All branches");
+    // 「모든 브랜치」를 보는 중이라 체크아웃한 작업 트리의 WIP 행이 없다.
+    expect(screen.queryAllByTestId("wip-row")).toHaveLength(0);
     act(() => useRepositoryStore.setState({ activeRepoPath: FEAT }));
     expect(useHistoryViewStore.getState().target).toBeNull();
   });

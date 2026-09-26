@@ -35,12 +35,19 @@ export function remoteOpFor(upstream: NonNullable<GitStatusLineModel["upstream"]
   return null;
 }
 
-const TONE_CLASS: Record<GitStatusTone, string> = {
-  normal: "bg-card text-muted-foreground",
+export const TONE_CLASS: Record<GitStatusTone, string> = {
+  normal: "bg-background text-muted-foreground",
   viewing: "bg-info/10 text-foreground",
   operation: "bg-warning/10 text-foreground",
   detached: "bg-warning/10 text-foreground",
 };
+
+/**
+ * 창 맨 아래 상태 막대 한 줄의 모양(2.3·2.5): 28px 높이, 카드 없는 경계라 위쪽에 1px `--line`
+ * 하나만. 저장소 화면(`GitStatusLineView`)과 워크스페이스 화면(`WorkspaceStatusLine`)이 함께 쓴다.
+ */
+export const STATUS_BAR_ROW_CLASS =
+  "flex items-center gap-2 h-7 pl-3 pr-2 shrink-0 border-t border-(--line) text-[11.5px] min-w-0 overflow-hidden";
 
 function Dot() {
   return (
@@ -63,7 +70,7 @@ export interface GitStatusLineViewProps {
 }
 
 /**
- * 메인 칸 맨 위의 git 상태 한 줄(약 32px). 저장소 이름은 툴바가 말하고, 이 줄은 상태를 설명한다:
+ * 창 맨 아래 상태 막대의 git 상태 줄(28px). 저장소 이름은 툴바가 말하고, 이 줄은 상태를 설명한다:
  * 작업 트리 · 체크아웃 · upstream. 수는 적지 않는다(사이드바·WIP 행·Push 버튼이 말한다). 보는 중·진행 중·분리된 HEAD는 줄의 색과
  * 머리 글을 바꾼다. 보는 중이면 이 줄이 「보는 중」 띠이고, 체크아웃·돌아가기 버튼을 단다.
  * 오른쪽 끝에는 도는 git 명령과 작업 기록 버튼, 오프라인일 때만 그 표시를 둔다(`trailing`).
@@ -80,14 +87,7 @@ export function GitStatusLineView({
   const viewing = model.tone === "viewing";
   const HeadIcon = viewing ? Eye : AlertTriangle;
   return (
-    <div
-      role="status"
-      data-tone={model.tone}
-      className={cn(
-        "flex items-center gap-2 h-8 px-3 shrink-0 border-b border-(--line) text-[11.5px] min-w-0 overflow-hidden",
-        TONE_CLASS[model.tone],
-      )}
-    >
+    <div role="status" data-tone={model.tone} className={cn(STATUS_BAR_ROW_CLASS, TONE_CLASS[model.tone])}>
       {model.headline && (
         <>
           <HeadIcon
@@ -147,7 +147,7 @@ export function GitStatusLineView({
   );
 }
 
-/** 지금 연 저장소(워크트리)의 git 상태 줄. 그래프 패널 맨 위에 둔다. */
+/** 지금 연 저장소(워크트리)의 git 상태 줄. 창 맨 아래 상태 막대(`StatusBar`)에 둔다. */
 export function GitStatusLine() {
   const { t } = useTranslation();
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);

@@ -12,6 +12,7 @@ import { MainColumn } from "./MainColumn";
 import { SplitHandle } from "./SplitHandle";
 import { useDiffMaximizeEscape } from "./useDiffMaximize";
 import { ActivityLogPanel } from "./ActivityLogPanel";
+import { StatusBar } from "./StatusBar";
 import { RepoSettingsHost } from "@/components/settings/repo/RepoSettingsDialog";
 import { clampSidebarWidth } from "@/lib/sidebar-width";
 
@@ -79,7 +80,10 @@ export function MainLayout() {
         <MainColumn />
       </div>
 
-      {/* 작업 기록. git 상태 줄의 작업 기록 버튼으로 연다. */}
+      {/* 창 맨 아래 상태 막대: git 상태 줄(저장소) 또는 워크스페이스 요약, 오른쪽 끝은 작업 기록 버튼. */}
+      <StatusBar />
+
+      {/* 작업 기록. 상태 막대의 작업 기록 버튼으로 연다. */}
       {isActivityLogOpen && <ActivityLogPanel />}
 
       {/* 머리 줄 저장소 칸·저장소 메뉴에서 여는 저장소 설정 */}
