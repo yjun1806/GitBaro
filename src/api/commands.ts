@@ -965,9 +965,12 @@ export async function getWipFiles(path: string): Promise<WipFile[]> {
 
 import type { DivergencePoint, RangeChangedFile, TreeFileDiff } from "@/types";
 
-/** 저장소(워크트리) 하나의 HEAD가 기본 브랜치(main)와 갈라진 지점. 파일을 비교하지 않아 가볍다. */
-export async function getDivergencePoint(path: string): Promise<DivergencePoint> {
-  return invoke("get_divergence_point", { path });
+/**
+ * 저장소(워크트리) 하나의 HEAD가 기본 브랜치(main)와 갈라진 지점. 파일을 비교하지 않아 가볍다.
+ * `branch`(로컬 브랜치 이름)를 주면 체크아웃하지 않고 그 브랜치 기준으로 계산한다. 없는 브랜치면 실패한다.
+ */
+export async function getDivergencePoint(path: string, branch: string | null = null): Promise<DivergencePoint> {
+  return invoke("get_divergence_point", { path, branch });
 }
 
 /**
@@ -1024,9 +1027,10 @@ import type { RepoFileTouches } from "@/types";
 /**
  * 저장소(워크트리)마다 원격에 없는 커밋이 건드린 파일과, 파일마다 그 커밋들. 결과는 `paths` 순서이고
  * 저장소마다 따로 읽는다(실패한 곳은 `error`만 채운다). 파일 diff는 `getRangeFileDiff`로 본다.
+ * `branch`(로컬 브랜치 이름)를 주면 HEAD 대신 그 브랜치 끝과 추적 브랜치로 계산한다(체크아웃하지 않은 브랜치).
  */
-export async function getUnpushedFileTouches(paths: string[]): Promise<RepoFileTouches[]> {
-  return invoke("get_unpushed_file_touches", { paths });
+export async function getUnpushedFileTouches(paths: string[], branch: string | null = null): Promise<RepoFileTouches[]> {
+  return invoke("get_unpushed_file_touches", { paths, branch });
 }
 
 // W5-T2 — 여러 저장소 원격 작업 확인 창(D3)
@@ -1132,4 +1136,20 @@ export async function getPullRequestFileDiff(
     oldPath,
   });
   return treeFileDiffFromRaw(raw);
+}
+
+// 범위 하나로 보기 — 커밋 줄의 「변경」 칸과 사이드바의 작업 중인 브랜치
+import type { CommitStats, RepoWorkingBranches } from "@/types";
+
+/**
+ * 커밋마다 첫 부모 대비 바뀐 파일 수와 줄 수. `oids`는 40자 OID이고 결과는 같은 순서다. 한 커밋을 못 읽어도
+ * 그 항목의 `error`만 채운다. 커밋은 바뀌지 않아 백엔드가 (저장소, 커밋)으로 기억한다.
+ */
+export async function getCommitStats(path: string, oids: string[]): Promise<CommitStats[]> {
+  return invoke("get_commit_stats", { path, oids });
+}
+
+/** 저장소마다 로컬 브랜치의 「작업 중인 브랜치」 판단 재료. 결과는 `paths` 순서이고 실패한 곳은 `error`만 채운다. */
+export async function getWorkingBranches(paths: string[]): Promise<RepoWorkingBranches[]> {
+  return invoke("get_working_branches", { paths });
 }

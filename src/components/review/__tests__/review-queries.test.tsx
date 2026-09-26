@@ -34,6 +34,7 @@ function history(path: string, headOid: string): WorkspaceRepoHistory {
     mergeBaseCommit: null,
     commits: [],
     truncated: false,
+    unpushedOids: [],
     error: null,
   };
 }

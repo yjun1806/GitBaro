@@ -2,6 +2,7 @@ pub mod binary;
 pub mod branch;
 pub mod cli;
 pub mod commit;
+pub mod commit_stats;
 pub mod diff;
 pub mod file_diff;
 pub mod file_touches;
@@ -15,6 +16,7 @@ pub mod status;
 pub mod unpushed;
 pub mod untracked;
 pub mod walk;
+pub mod working_branches;
 pub mod worktree_base;
 
 // Convenient re-exports for callers

@@ -304,6 +304,11 @@ export interface AppSettings {
   language: string;
   /** 알림 설정. 옛 설정 파일이나 불러오기 실패로 빠질 수 있어, 없으면 기본값을 쓴다. */
   notifications?: NotificationSettings;
+  /**
+   * 사이드바 「작업 중인 브랜치」의 「최근 N일 안에 커밋했고 기본 브랜치에 병합되지 않음」 규칙의 N(일).
+   * 없거나 잘못된 값이면 `workingBranchRecentDays()`(`lib/working-branches.ts`)가 기본값 7을 준다.
+   */
+  workingBranchRecentDays?: number;
 }
 
 /** 알림 설정(Rust: `commands::settings::NotificationSettings`). */
@@ -636,6 +641,11 @@ export interface WorkspaceRepoHistory {
   commits: CommitInfo[];
   /** 한도(`limitPerRepo`)를 넘어 잘렸는가. */
   truncated: boolean;
+  /**
+   * `commits` 중 어느 원격에도 없는 커밋(`git rev-list HEAD --not --remotes`, 추적 브랜치 끝도 올린 것으로 본다).
+   * 순서는 `commits`와 같다. 원격이 하나도 없으면 비어 있다.
+   */
+  unpushedOids: string[];
   error: string | null;
 }
 
@@ -989,4 +999,52 @@ export interface PrFiles {
   files: PrFile[];
   /** 1000개까지만 읽었다. */
   truncated: boolean;
+}
+
+// 범위 하나로 보기 — 커밋 줄의 「변경」 칸과 사이드바의 작업 중인 브랜치
+
+/**
+ * `get_commit_stats`의 커밋 하나(Rust: `git::commit_stats::CommitStats`). 첫 부모(처음 커밋이면 빈 트리)와
+ * 비교하고 이름 바꾸기는 파일 하나로 센다(커밋 상세의 수와 같다).
+ * - 병합 커밋: `merge`가 true이고 수는 모두 null이다.
+ * - 바뀐 파일이 1000개를 넘으면 `filesChanged`만 있고 줄 수는 null이다.
+ * - 읽지 못한 커밋: `error`만 있다.
+ */
+export interface CommitStats {
+  /** 요청한 커밋 OID(40자) 그대로. */
+  oid: string;
+  merge: boolean;
+  filesChanged: number | null;
+  additions: number | null;
+  deletions: number | null;
+  error: string | null;
+}
+
+/** `get_working_branches`의 로컬 브랜치 하나(Rust: `git::working_branches::WorkingBranch`). */
+export interface WorkingBranch {
+  name: string;
+  /** 저장소의 기본 브랜치. 사이드바는 이 브랜치에 줄을 따로 주지 않는다(저장소 줄이 대신한다). */
+  isDefault: boolean;
+  /** 이 브랜치를 체크아웃한 작업 트리(메인 포함). `reviewStatus`의 워크트리 `path`와 같은 값. 없으면 null. */
+  worktreePath: string | null;
+  /** 추적 브랜치(`origin/feat/x`). 없으면 null. */
+  upstream: string | null;
+  /** 추적 브랜치에만 있는 커밋 수(받을 커밋, ↓N). 추적 브랜치가 없으면 0. */
+  behind: number;
+  /** 어느 원격에도 없는 커밋 수(올릴 커밋, ↑N). 추적 브랜치가 없어도 센다. 원격이 없으면 0. */
+  unpushed: number;
+  /** 끝 커밋의 커미터 시각(유닉스 **초**). */
+  lastCommitTime: number;
+  /** 끝 커밋이 로컬 기본 브랜치나 `origin/<기본>`에서 닿는다(같은 커밋 포함). 기본 브랜치 자신이면 false. */
+  mergedIntoDefault: boolean;
+}
+
+/** `get_working_branches`의 저장소 하나. 읽지 못하면 `error`만 채워진다. */
+export interface RepoWorkingBranches {
+  /** 요청에 넘긴 경로 그대로. */
+  path: string;
+  defaultBranch: string | null;
+  /** 로컬 브랜치 전부, 마지막 커밋이 늦은 순. 어느 브랜치에 줄을 줄지는 화면이 정한다. */
+  branches: WorkingBranch[];
+  error: string | null;
 }

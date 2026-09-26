@@ -57,6 +57,7 @@ describe("getWorkspaceHistory mapping", () => {
           },
         ],
         truncated: false,
+        unpushedOids: [HEAD],
         error: null,
       },
       {
@@ -70,6 +71,7 @@ describe("getWorkspaceHistory mapping", () => {
         mergeBaseCommit: null,
         commits: [],
         truncated: false,
+        unpushedOids: [],
         error: "could not find repository",
       },
     ]);
@@ -91,6 +93,7 @@ describe("getWorkspaceHistory mapping", () => {
     expect(out[0].commits[0].author).not.toHaveProperty("timestamp");
     expect(out[0].mergeBaseOid).toBe(BASE);
     expect(out[0].baseStatus).toBe("found");
+    expect(out[0].unpushedOids).toEqual([HEAD]);
     expect(out[0].mergeBaseCommit).toMatchObject({
       id: BASE,
       shortId: BASE.slice(0, 7),

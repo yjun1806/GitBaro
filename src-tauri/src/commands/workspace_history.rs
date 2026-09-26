@@ -3,7 +3,7 @@
 //! 저장소마다 따로 계산한다. 한 저장소가 실패해도 그 저장소의 `error` 만 채우고 나머지 결과는
 //! 그대로 돌려준다. 브랜치 이름이 같아도 저장소를 합치지 않는다(요청한 경로마다 결과 하나).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use git2::{Oid, Repository, Sort};
 use serde::Serialize;
@@ -13,6 +13,7 @@ use crate::git::commit::{build_ref_map, commit_to_info};
 use crate::git::merge_base::{divergence_point, BaseStatus};
 use crate::git::worktree_base::default_branch_with_fallback;
 use crate::git::engine::{CommitInfo, RefLabel};
+use crate::git::unpushed::{commits_not_on_any_remote, upstream_tip, UNPUSHED_LIMIT};
 use crate::git::walk::newest_first;
 
 /// `limit_per_repo` 를 주지 않았을 때 저장소마다 돌려줄 커밋 수.
@@ -45,6 +46,9 @@ pub struct RepoHistory {
     pub commits: Vec<CommitInfo>,
     /// 커밋이 `limit` 보다 많아 잘렸는가.
     pub truncated: bool,
+    /// `commits` 중 어느 원격에도 없는 커밋(`git::unpushed` 규칙, `git rev-list HEAD --not --remotes`).
+    /// 순서는 `commits` 와 같다. 원격이 하나도 없으면 비어 있다(올릴 곳이 없다).
+    pub unpushed_oids: Vec<String>,
     /// 이 저장소를 읽지 못한 이유. 있으면 나머지 필드는 비어 있다.
     pub error: Option<String>,
 }
@@ -62,6 +66,7 @@ impl RepoHistory {
             merge_base_commit: None,
             commits: Vec::new(),
             truncated: false,
+            unpushed_oids: Vec::new(),
             error: Some(error),
         }
     }
@@ -96,6 +101,7 @@ fn read_repo_history(path: &str, limit: usize) -> Result<RepoHistory, git2::Erro
     let point = divergence_point(&repo, head, branch.as_deref())?;
     let ref_map = build_ref_map(&repo);
     let (commits, truncated) = commits_since(&repo, &ref_map, head, point.merge_base, limit)?;
+    let unpushed_oids = unpushed_among(&repo, &head_ref, head, &commits)?;
     let merge_base_commit = point
         .merge_base
         .map(|oid| repo.find_commit(oid).map(|c| with_refs(&ref_map, &c)))
@@ -112,8 +118,38 @@ fn read_repo_history(path: &str, limit: usize) -> Result<RepoHistory, git2::Erro
         merge_base_commit,
         commits,
         truncated,
+        unpushed_oids,
         error: None,
     })
+}
+
+/// `commits` 중 어느 원격에도 없는 것, `commits` 순서대로. 규칙은 `git::unpushed` 와 같다(추적 브랜치 끝도 숨긴다).
+/// 원격에 없는 커밋은 `UNPUSHED_LIMIT` 까지만 센다(원격을 한 번도 fetch 하지 않은 큰 저장소). 넘으면 목록의 오래된 쪽
+/// 커밋이 원격에 없어도 빠질 수 있다.
+fn unpushed_among(
+    repo: &Repository,
+    head_ref: &git2::Reference,
+    head: Oid,
+    commits: &[CommitInfo],
+) -> Result<Vec<String>, git2::Error> {
+    if commits.is_empty() {
+        return Ok(Vec::new());
+    }
+    let upstream = head_ref
+        .is_branch()
+        .then(|| head_ref.shorthand())
+        .flatten()
+        .and_then(|name| repo.find_branch(name, git2::BranchType::Local).ok())
+        .as_ref()
+        .and_then(upstream_tip);
+    let unpushed: HashSet<Oid> = commits_not_on_any_remote(repo, &[head], upstream, UNPUSHED_LIMIT)?
+        .into_iter()
+        .collect();
+    Ok(commits
+        .iter()
+        .filter(|c| Oid::from_str(&c.id).is_ok_and(|oid| unpushed.contains(&oid)))
+        .map(|c| c.id.clone())
+        .collect())
 }
 
 /// 커밋이 없는 저장소에서 HEAD 가 가리키는 브랜치 이름(`refs/heads/main` → `main`).
@@ -510,6 +546,56 @@ mod tests {
         assert_eq!(h.default_branch, default_branch_with_fallback(&repo));
         assert!(h.default_branch.is_none());
         assert_eq!(h.base_status, Some(BaseStatus::NoDefaultBranch));
+    }
+
+    #[test]
+    fn commits_not_on_any_remote_are_flagged() {
+        let root = tmp_dir("unpushed-flag");
+        let (_upstream, clone) = clone_of_main(&root);
+        git(&clone, &["checkout", "-q", "-b", "feat"]);
+        commit(&clone, "pushed");
+        git(&clone, &["push", "-q", "-u", "origin", "feat"]);
+        commit(&clone, "local 1");
+        commit(&clone, "local 2");
+
+        let h = repo_history(clone.to_str().unwrap(), 100);
+        assert_eq!(summaries(&h), vec!["local 2", "local 1", "pushed"]);
+        let ids: Vec<&str> = h.commits.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(h.unpushed_oids, vec![ids[0], ids[1]], "올린 커밋은 빠지고 순서는 commits 와 같다");
+    }
+
+    #[test]
+    fn without_a_remote_nothing_is_flagged() {
+        let root = tmp_dir("unpushed-no-remote");
+        let dir = root.join("r");
+        repo_with_branch(&dir, 1, 2);
+        let h = repo_history(dir.to_str().unwrap(), 100);
+        assert_eq!(h.commits.len(), 2);
+        assert!(h.unpushed_oids.is_empty(), "올릴 곳이 없으면 표시하지 않는다");
+    }
+
+    #[test]
+    fn a_linked_worktree_path_reads_that_worktree_head() {
+        let root = tmp_dir("linked-wt");
+        let (_upstream, clone) = clone_of_main(&root);
+        commit(&clone, "main local");
+        let wt = root.join("wt");
+        git(&clone, &["worktree", "add", "-q", "-b", "feat/wt", wt.to_str().unwrap(), "origin/main"]);
+        commit(&wt, "wt 1");
+        commit(&wt, "wt 2");
+
+        let main = repo_history(clone.to_str().unwrap(), 100);
+        let linked = repo_history(wt.to_str().unwrap(), 100);
+        assert_eq!(main.branch.as_deref(), Some("main"));
+        assert_eq!(summaries(&main), vec!["main local"]);
+        assert_eq!(linked.error, None);
+        assert_eq!(linked.path, wt.to_str().unwrap());
+        assert_eq!(linked.branch.as_deref(), Some("feat/wt"));
+        assert_eq!(linked.head_oid.as_deref(), Some(head_of(&wt, "HEAD").as_str()));
+        assert_eq!(linked.base_status, Some(BaseStatus::Found));
+        assert_eq!(linked.merge_base_oid.as_deref(), Some(head_of(&clone, "origin/main").as_str()));
+        assert_eq!(summaries(&linked), vec!["wt 2", "wt 1"]);
+        assert_eq!(linked.unpushed_oids.len(), 2);
     }
 
     #[tokio::test]

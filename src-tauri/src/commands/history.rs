@@ -4,6 +4,7 @@ use crate::error::AppError;
 use crate::gh::cli;
 use crate::git::binary::{detect_file_type, extension_to_mime, is_previewable, MAX_PREVIEW_SIZE};
 use crate::git::commit::{agent_attribution, parent_ids};
+use crate::git::commit_stats::{commit_stats, CommitStats};
 use crate::git::diff::{detect_renames, rename_source};
 use crate::git::remote::parse_github_url;
 use crate::git::unpushed::{commits_not_on_any_remote, upstream_tip, UNPUSHED_LIMIT};
@@ -180,6 +181,18 @@ pub async fn get_commit_history(
     .map_err(|e| AppError::Channel(e.to_string()))??;
 
     Ok(result)
+}
+
+/// 커밋 줄의 「변경」 칸: 커밋마다 첫 부모 대비 바뀐 파일 수와 줄 수(`git::commit_stats`). 결과는 `oids` 순서이고,
+/// 한 커밋을 읽지 못해도 그 항목의 `error` 만 채운다. 커밋은 바뀌지 않으므로 한 번 센 커밋은 다시 세지 않는다.
+#[tauri::command]
+pub async fn get_commit_stats(path: String, oids: Vec<String>) -> Result<Vec<CommitStats>, AppError> {
+    tokio::task::spawn_blocking(move || {
+        let repo = git2::Repository::open(&path)?;
+        Ok(commit_stats(&repo, &oids))
+    })
+    .await
+    .map_err(|e| AppError::Channel(e.to_string()))?
 }
 
 #[tauri::command]

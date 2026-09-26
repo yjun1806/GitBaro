@@ -3,8 +3,8 @@
 //! 그래프가 「push 안 한 범위」(원격에 올라간 지점 → HEAD)를 한 번에 보여 줄 때 쓴다. 두 커밋의
 //! 트리만 비교하므로 커밋하지 않은 변경은 들어가지 않는다. 저장소마다 따로 부른다.
 //!
-//! - `get_divergence_point`: HEAD 가 기본 브랜치(main)와 갈라진 지점. 워크스페이스 타임라인과 같은
-//!   규칙(`git::merge_base::divergence_point`)이다. 파일을 비교하지 않아 가볍다.
+//! - `get_divergence_point`: HEAD(또는 체크아웃하지 않은 로컬 브랜치)가 기본 브랜치(main)와 갈라진 지점.
+//!   워크스페이스 타임라인과 같은 규칙(`git::merge_base::divergence_point`)이다. 파일을 비교하지 않아 가볍다.
 //! - `get_range_changed_files`: `base` → `head` 에서 바뀐 파일. `base` 가 없으면 빈 트리(처음부터)와 비교한다.
 //! - `get_range_file_diff`: 같은 범위의 파일 하나의 줄 단위 diff. PR 파일 diff 와 같은 모양이다.
 
@@ -19,9 +19,9 @@ use crate::git::merge_base::{divergence_point, BaseStatus};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DivergenceInfo {
-    /// 체크아웃한 로컬 브랜치. detached HEAD 면 `None`.
+    /// 체크아웃한 로컬 브랜치(`branch` 를 주었으면 그 브랜치). detached HEAD 면 `None`.
     pub branch: Option<String>,
-    /// HEAD 커밋. 커밋이 없는 저장소면 `None`.
+    /// HEAD 커밋(`branch` 를 주었으면 그 브랜치 끝). 커밋이 없는 저장소면 `None`.
     pub head_oid: Option<String>,
     /// 기본 브랜치 이름(`main`). 찾지 못하면 `None`.
     pub default_branch: Option<String>,
@@ -34,8 +34,13 @@ pub struct DivergenceInfo {
     pub merge_base_oid: Option<String>,
 }
 
-pub fn divergence_info(path: &str) -> Result<DivergenceInfo, AppError> {
+/// `branch` 가 `None` 이면 HEAD, 있으면 그 로컬 브랜치가 기본 브랜치와 갈라진 지점. 없는 브랜치면 에러다.
+pub fn divergence_info(path: &str, branch: Option<&str>) -> Result<DivergenceInfo, AppError> {
     let repo = open(path)?;
+    if let Some(name) = branch {
+        let tip = repo.find_branch(name, git2::BranchType::Local)?.get().peel_to_commit()?.id();
+        return Ok(divergence_of(&repo, tip, Some(name.to_string()))?);
+    }
     let head_ref = match repo.head() {
         Ok(head_ref) => head_ref,
         Err(e) if e.code() == ErrorCode::UnbornBranch => {
@@ -52,7 +57,11 @@ pub fn divergence_info(path: &str) -> Result<DivergenceInfo, AppError> {
     };
     let head = head_ref.peel_to_commit()?.id();
     let branch = head_ref.is_branch().then(|| head_ref.shorthand().map(str::to_string)).flatten();
-    let point = divergence_point(&repo, head, branch.as_deref())?;
+    Ok(divergence_of(&repo, head, branch)?)
+}
+
+fn divergence_of(repo: &Repository, head: Oid, branch: Option<String>) -> Result<DivergenceInfo, git2::Error> {
+    let point = divergence_point(repo, head, branch.as_deref())?;
     Ok(DivergenceInfo {
         branch,
         head_oid: Some(head.to_string()),
@@ -117,9 +126,10 @@ pub fn range_file_diff(
 }
 
 /// HEAD 가 기본 브랜치(main)와 갈라진 지점. 파일을 비교하지 않는다.
+/// `branch`(로컬 브랜치 이름)를 주면 체크아웃하지 않고 그 브랜치 기준으로 계산한다.
 #[tauri::command]
-pub async fn get_divergence_point(path: String) -> Result<DivergenceInfo, AppError> {
-    tokio::task::spawn_blocking(move || divergence_info(&path))
+pub async fn get_divergence_point(path: String, branch: Option<String>) -> Result<DivergenceInfo, AppError> {
+    tokio::task::spawn_blocking(move || divergence_info(&path, branch.as_deref()))
         .await
         .map_err(|e| AppError::Channel(e.to_string()))?
 }
@@ -261,7 +271,7 @@ mod tests {
         commit_all(dir.path(), "main later");
         git(dir.path(), &["checkout", "-q", "feat"]);
 
-        let d = divergence_info(dir.str()).unwrap();
+        let d = divergence_info(dir.str(), None).unwrap();
         assert_eq!(d.branch.as_deref(), Some("feat"));
         assert_eq!(d.default_branch.as_deref(), Some("main"));
         assert_eq!(d.base_ref.as_deref(), Some("main"));
@@ -271,10 +281,31 @@ mod tests {
     }
 
     #[test]
+    fn divergence_point_of_a_branch_that_is_not_checked_out() {
+        let dir = TempDir::new("fork-branch");
+        let (base, feat_head) = feature_repo(dir.path());
+        git(dir.path(), &["checkout", "-q", "main"]);
+        write(dir.path(), "main-only.txt", "m\n");
+        commit_all(dir.path(), "main later");
+
+        let d = divergence_info(dir.str(), Some("feat")).unwrap();
+        assert_eq!(d.branch.as_deref(), Some("feat"));
+        assert_eq!(d.head_oid.as_deref(), Some(feat_head.as_str()));
+        assert_eq!(d.base_ref.as_deref(), Some("main"));
+        assert_eq!(d.merge_base_oid.as_deref(), Some(base.as_str()));
+        // HEAD(main) 기준은 그대로다.
+        let head = divergence_info(dir.str(), None).unwrap();
+        assert_eq!(head.branch.as_deref(), Some("main"));
+        // 기본 브랜치 자신을 주면 체크아웃했을 때와 같다.
+        assert_eq!(divergence_info(dir.str(), Some("main")).unwrap(), head);
+        assert!(divergence_info(dir.str(), Some("nope")).is_err());
+    }
+
+    #[test]
     fn divergence_point_of_an_empty_repo_is_unknown() {
         let dir = TempDir::new("empty");
         git(dir.path(), &["init", "-q", "-b", "main"]);
-        let d = divergence_info(dir.str()).unwrap();
+        let d = divergence_info(dir.str(), None).unwrap();
         assert_eq!((d.head_oid, d.base_status, d.merge_base_oid), (None, None, None));
     }
 
@@ -283,7 +314,7 @@ mod tests {
         // src/types/index.ts 의 DivergencePoint 와 키가 같아야 한다.
         let dir = TempDir::new("fork-shape");
         feature_repo(dir.path());
-        let json = serde_json::to_value(divergence_info(dir.str()).unwrap()).unwrap();
+        let json = serde_json::to_value(divergence_info(dir.str(), None).unwrap()).unwrap();
         let mut keys: Vec<&String> = json.as_object().unwrap().keys().collect();
         keys.sort();
         assert_eq!(keys, ["baseRef", "baseStatus", "branch", "defaultBranch", "headOid", "mergeBaseOid"]);
@@ -417,7 +448,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_missing_repo_is_an_error() {
-        assert!(get_divergence_point("/definitely/not/a/repo".into()).await.is_err());
+        assert!(get_divergence_point("/definitely/not/a/repo".into(), None).await.is_err());
         let zero = "0".repeat(40);
         assert!(get_range_changed_files("/definitely/not/a/repo".into(), None, zero).await.is_err());
     }
