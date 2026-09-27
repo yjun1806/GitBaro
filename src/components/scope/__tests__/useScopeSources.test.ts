@@ -19,11 +19,14 @@ vi.mock("@/hooks/useReviewStatus", () => ({
 
 let syncByPath: Record<string, { unpushed: number; dirtyCount: number }> = {};
 let defaultByRepo: Record<string, { name: string | null }> = {};
-let branches: { name: string; isRemote: boolean; aheadBehind: { ahead: number; behind: number } | null }[] = [];
+let workingBranchesByPath: Record<
+  string,
+  { defaultBranch: string | null; branches: { name: string; unpushed: number }[] }
+> = {};
 vi.mock("@/api/queries", () => ({
   useRepoSyncStatuses: () => ({ data: syncByPath }),
   useDefaultBranches: () => ({ data: defaultByRepo }),
-  useBranches: () => ({ data: branches }),
+  useWorkingBranches: (paths: readonly string[]) => paths.map((p) => workingBranchesByPath[p]),
 }));
 
 const { useScopeSources } = await import("../useScopeSources");
@@ -38,7 +41,7 @@ describe("useScopeSources", () => {
     reviewRepos = [];
     syncByPath = {};
     defaultByRepo = {};
-    branches = [];
+    workingBranchesByPath = {};
     useRepositoryStore.setState({ repos: [], activeRepoPath: null, activeRepo: null, activeWorktrees: {} });
     useWorkspaceStore.setState({ workspaces: [] });
   });
@@ -118,8 +121,9 @@ describe("useScopeSources", () => {
     mockScope = { kind: "branch", repoPath: "/r/a", branch: "feat/y", worktreePath: null };
     useRepositoryStore.setState({ repos: [repoInfo("/r/a", "a")] });
     reviewRepos = [{ repoPath: "/r/a", worktrees: [{ path: "/r/a", branch: "main", headOid: "h1", isMain: true }] }];
-    branches = [{ name: "feat/y", isRemote: false, aheadBehind: { ahead: 3, behind: 0 } }];
-    defaultByRepo = { "/r/a": { name: "main" } };
+    workingBranchesByPath = {
+      "/r/a": { defaultBranch: "main", branches: [{ name: "feat/y", unpushed: 3 }] },
+    };
 
     const { result } = renderHook(() => useScopeSources());
     expect(result.current.sources).toHaveLength(1);
