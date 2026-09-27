@@ -135,6 +135,14 @@ describe("GraphRow columns (design-system.md 3.15)", () => {
     expect(row.getAttribute("title")).toContain("fix(graph): tidy region labels");
   });
 
+  it("keeps a branch label whole before the title: it does not shrink, capped at 45% of the description (max 320px)", () => {
+    const c = commit({ refs: [{ name: "feat/agent-review-ux", kind: "localBranch", isHead: false }] });
+    render(<GraphRow {...baseProps} commit={c} stats={stats()} />);
+    const label = screen.getByTitle("feat/agent-review-ux");
+    expect(label.className).toContain("shrink-0");
+    expect(label.className).toContain("max-w-[min(320px,45%)]!");
+  });
+
   it("shows the CI icon only when a run exists for this commit", () => {
     const c = commit();
     const ci: CiSummary = { state: "failed", names: ["build"] };

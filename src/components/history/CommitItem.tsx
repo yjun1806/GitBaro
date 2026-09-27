@@ -6,8 +6,11 @@ export function RefBadge({
   label,
   remoteTags,
   laneColor,
+  className,
 }: {
   label: RefLabel;
+  /** 이름표 폭 규칙(커밋 그래프는 이름표를 제목보다 먼저 지킨다). */
+  className?: string;
   remoteTags?: Set<string> | null;
   /**
    * 커밋 그래프에서 이 브랜치를 체크아웃한 워크트리의 레인 색. `kind="local"`로 정해진 브랜치에만
@@ -38,6 +41,7 @@ export function RefBadge({
       name={label.name}
       kind={kind}
       laneColor={laneColor}
+      className={className}
       title={isLocalOnlyTag ? t("history.tagLocalOnly", { name: label.name }) : undefined}
     />
   );

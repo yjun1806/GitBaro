@@ -361,7 +361,14 @@ export const GraphRow = memo(function GraphRow({
                   : undefined
               }
             >
-              <RefBadge label={label} remoteTags={remoteTags} laneColor={refColor?.(label)} />
+              {/* 이름표를 제목보다 먼저 지킨다: 줄어들지 않고 다 보이되, 설명 칸의 45%(최대 320px)를 넘으면
+                  그때만 말줄임. 제목은 남은 폭을 쓴다(3.15). */}
+              <RefBadge
+                label={label}
+                remoteTags={remoteTags}
+                laneColor={refColor?.(label)}
+                className="shrink-0 max-w-[min(320px,45%)]!"
+              />
             </span>
           ))}
           {ticket && (
@@ -377,7 +384,7 @@ export const GraphRow = memo(function GraphRow({
               {ticket ? ticket.rest : commit.summary}
             </span>
           )}
-          {chainLabelHere && highlightChain !== null && chainLabel && (
+          {chainLabelHere && !compact && highlightChain !== null && chainLabel && (
             <span
               className="shrink-0 px-1.5 py-px rounded-(--radius-chip) text-[10.5px] font-semibold"
               style={{ color: colorOf(highlightChain) }}
