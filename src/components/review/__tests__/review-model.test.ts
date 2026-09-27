@@ -5,7 +5,6 @@ import {
   isHiddenReviewRepo,
   isOnDefaultBranch,
   activityTargetOf,
-  splitReviewRepos,
   type ReviewRepoSignals,
 } from "../review-model";
 
@@ -52,26 +51,6 @@ describe("isHiddenReviewRepo (질문 2: main에 있고 원격에 없는 커밋·
 
   it("treats a not-yet-counted unpushed number as zero", () => {
     expect(isHiddenReviewRepo({ ...quiet, unpushedCount: null })).toBe(true);
-  });
-});
-
-describe("splitReviewRepos", () => {
-  const repos = [
-    { ...quiet, id: "a" },
-    { ...quiet, id: "b", unpushedCount: 3 },
-    { ...quiet, id: "c", wipCount: 2 },
-  ];
-
-  it("keeps the order and counts what it hid", () => {
-    const { visible, hiddenCount } = splitReviewRepos(repos, false);
-    expect(visible.map((r) => r.id)).toEqual(["b", "c"]);
-    expect(hiddenCount).toBe(1);
-  });
-
-  it("shows everything with show-all", () => {
-    const { visible, hiddenCount } = splitReviewRepos(repos, true);
-    expect(visible.map((r) => r.id)).toEqual(["a", "b", "c"]);
-    expect(hiddenCount).toBe(0);
   });
 });
 

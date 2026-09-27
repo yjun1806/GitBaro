@@ -842,6 +842,8 @@ export interface RepoLaneCommitGraphProps {
   isLoading: boolean;
   /** 그릴 행이 없을 때의 문구. 없으면 「갈라진 뒤 커밋 없음」. */
   emptyMessage?: string;
+  /** 영역 머리(「올리지 않음 · push하면 {원격}에」, 「{원격}에 있음」)에 쓸 원격 이름. 레인마다 다르면 「원격」. */
+  remoteLabel: string;
   onSelectCommit: (repoPath: string, commit: CommitInfo, key: string) => void;
   onSelectWip: (wip: LaneWip, key: string) => void;
 }
@@ -865,6 +867,7 @@ export function RepoLaneCommitGraph({
   baseBranchLabel,
   isLoading,
   emptyMessage,
+  remoteLabel,
   onSelectCommit,
   onSelectWip,
 }: RepoLaneCommitGraphProps) {
@@ -983,6 +986,15 @@ export function RepoLaneCommitGraph({
                     onContextMenu={handleCommitContextMenu}
                   />
                 );
+              }
+              case "header": {
+                const through = row.layout.edges.map((e) => ({ lane: e.fromLane, chain: e.chain }));
+                const common = { graphWidth, through, colorOf };
+                if (row.region === "now") return <NowHeaderRow key={row.key} {...common} />;
+                if (row.region === "unpushed") {
+                  return <UnpushedHeaderRow key={row.key} {...common} remote={remoteLabel} />;
+                }
+                return <RemoteHeaderRow key={row.key} {...common} remote={remoteLabel} />;
               }
               case "base":
                 return (
@@ -1107,6 +1119,7 @@ const RepoLaneCommitRow = memo(function RepoLaneCommitRow({
       isSelected={isSelected}
       isHighlighted={isHighlighted}
       wipAbove={false}
+      dot={row.region === "unpushed" ? "unpushed" : row.region === "remote" ? "pushed" : "plain"}
       leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
       onClick={() => onSelect(row.repoPath, row.commit, row.key)}
       onContextMenu={(e) => onContextMenu(row, e)}
@@ -1149,16 +1162,14 @@ function BaseRow({
         ))}
         <circle cx={laneX(0)} cy={H / 2} r={5} fill="var(--card)" stroke="var(--muted)" strokeWidth={2} />
       </svg>
-      <span className={GRAPH_COLUMNS + " flex-1 min-w-0 pl-2 pr-3 text-[12.5px]"}>
-        <span className="flex items-center gap-2 min-w-0">
-          <StatusChip tone="neutral">{branchLabel}</StatusChip>
-          <span className="truncate text-(--fg2)">{t("review.baseRow")}</span>
-        </span>
-        <span />
-        <span className="truncate text-[11.5px] text-muted-foreground">
-          {baseTime !== null ? formatRelativeTime(baseTime) : null}
-        </span>
-        <span />
+      {/* 영역 머리(D48)와 같은 말: 「{기본 브랜치}와 같음 · N일 전 갈라짐」. */}
+      <span className="flex items-center gap-2 flex-1 min-w-0 pl-2 pr-3" title={t("review.baseRow")}>
+        <StatusChip tone="neutral">{t("graph.baseHeader", { branch: branchLabel })}</StatusChip>
+        {baseTime !== null && (
+          <span className="flex-1 min-w-0 truncate text-[11.5px] text-muted-foreground">
+            {t("graph.baseHeaderDesc", { time: formatRelativeTime(baseTime) })}
+          </span>
+        )}
       </span>
     </div>
   );

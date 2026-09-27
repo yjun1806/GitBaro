@@ -23,7 +23,44 @@ const B: LaneRepo = { path: "/w/b", commits: [commit("b2", 40), commit("b1", 30)
 const wipA: LaneWip = { repoPath: "/w/a", path: "/w/a", branch: "feat", isMain: true, count: 2, changedAt: 1000 };
 
 const summary = (rows: ReturnType<typeof buildRepoLaneRows>["rows"]) =>
-  rows.map((r) => (r.kind === "commit" ? r.commit.id : r.kind === "wip" ? `wip:${r.repoPath}` : r.kind));
+  rows.map((r) =>
+    r.kind === "commit"
+      ? r.commit.id
+      : r.kind === "wip"
+        ? `wip:${r.repoPath}`
+        : r.kind === "header"
+          ? `[${r.region}]`
+          : r.kind,
+  );
+
+describe("buildRepoLaneRows regions (D48)", () => {
+  it("splits rows into now, not pushed and on the remote when every lane says which commits are unpushed", () => {
+    const { rows } = buildRepoLaneRows(
+      [
+        { ...A, unpushedOids: new Set(["a2"]) },
+        { ...B, unpushedOids: new Set() },
+      ],
+      [wipA],
+    );
+    expect(summary(rows)).toEqual(["[now]", "wip:/w/a", "[unpushed]", "a2", "[remote]", "b2", "b1", "a1", "base"]);
+    const a2 = rows.find((r) => r.kind === "commit" && r.commit.id === "a2");
+    expect(a2?.kind === "commit" && a2.region).toBe("unpushed");
+  });
+
+  it("runs each lane straight through the header rows", () => {
+    const { rows } = buildRepoLaneRows([{ ...A, unpushedOids: new Set(["a2"]) }, { ...B, unpushedOids: new Set() }], []);
+    const remoteHeader = rows.find((r) => r.kind === "header" && r.region === "remote");
+    // a2(레인 0)가 위에서 시작했고 a1까지 이어지므로 머리 행을 지나간다. b는 아직 시작하지 않았다.
+    expect(remoteHeader?.layout.edges).toEqual([{ kind: "pass", fromLane: 0, toLane: 0, chain: 0 }]);
+  });
+
+  it("leaves out an empty region's header, and all headers when a lane cannot say (no remote)", () => {
+    const split = buildRepoLaneRows([{ ...A, unpushedOids: new Set() }], []);
+    expect(summary(split.rows)).toEqual(["[remote]", "a2", "a1", "base"]);
+    const mixed = buildRepoLaneRows([{ ...A, unpushedOids: new Set(["a2"]) }, B], [wipA]);
+    expect(summary(mixed.rows)).toEqual(["wip:/w/a", "a2", "b2", "b1", "a1", "base"]);
+  });
+});
 
 describe("buildRepoLaneRows", () => {
   it("puts WIP rows on top, then commits by time, then the base", () => {

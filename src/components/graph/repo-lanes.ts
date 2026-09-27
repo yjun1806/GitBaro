@@ -17,7 +17,16 @@ export interface LaneRepo {
   commits: readonly CommitInfo[];
   /** main과 갈라진 지점을 찾았는지. 찾았으면 레인이 맨 아래 행까지 이어진다. */
   hasBase: boolean;
+  /**
+   * 어느 원격에도 없는 커밋(`get_workspace_history`의 `unpushedOids`). 모든 레인이 이 값을 주면 행을
+   * 영역(올리지 않음 → 원격에 있음)으로 나누고 영역 머리를 끼운다. 원격이 없는 저장소가 하나라도 있으면
+   * (「원격에 있음」이 거짓이 된다) 주지 않는다 — 그때는 영역 없이 시각순으로만 섞는다.
+   */
+  unpushedOids?: ReadonlySet<string>;
 }
+
+/** 영역 머리(D48): 지금(WIP 행 위) · 올리지 않음 · 원격에 있음. 기본 브랜치는 맨 아래 `base` 행이 말한다. */
+export type LaneRegion = "now" | "unpushed" | "remote";
 
 /** 워크트리 하나의 커밋하지 않은 변경. */
 export interface LaneWip {
@@ -41,7 +50,10 @@ export type RepoLaneRow =
       repoPath: string;
       commit: CommitInfo;
       layout: GraphRowLayout;
+      /** 영역으로 나눴을 때 이 커밋의 영역. 나누지 않았으면 없다. */
+      region?: "unpushed" | "remote";
     }
+  | { kind: "header"; key: string; region: LaneRegion; layout: GraphRowLayout }
   | { kind: "base"; key: string; layout: GraphRowLayout };
 
 export interface RepoLaneGraph {
@@ -87,12 +99,17 @@ export function mergeByTime<T>(lists: readonly (readonly T[])[], timeOf: (item: 
 
 type Draft =
   | { kind: "wip"; lane: number; repoLane: number; wip: LaneWip }
-  | { kind: "commit"; lane: number; commit: CommitInfo }
+  | { kind: "commit"; lane: number; commit: CommitInfo; region?: "unpushed" | "remote" }
+  | { kind: "header"; region: LaneRegion }
   | { kind: "base" };
 
 /**
  * 행 순서: WIP 행(최근에 바뀐 순) → 커밋(시각순) → main에서 갈라진 지점.
  * 갈라진 지점을 찾은 저장소가 없으면 맨 아래 행도 두지 않는다.
+ *
+ * 모든 레인이 `unpushedOids`를 주면 영역으로 나눈다(5.1 「영역 머리」): 「지금」 머리 + WIP 행 →
+ * 「올리지 않음」 머리 + 레인마다 올리지 않은 커밋(시각순) → 「원격에 있음」 머리 + 나머지 → 기본 브랜치.
+ * 빈 영역은 머리도 두지 않는다. 한 레인 안의 순서는 늘 지킨다 — 올리지 않은 커밋은 HEAD 쪽에 몰려 있다.
  */
 export function buildRepoLaneRows(repos: readonly LaneRepo[], wips: readonly LaneWip[]): RepoLaneGraph {
   const laneOf = new Map(repos.map((r, i) => [r.path, i]));
@@ -121,12 +138,26 @@ export function buildRepoLaneRows(repos: readonly LaneRepo[], wips: readonly Lan
       wip,
     }));
 
-  const commitRows = mergeByTime(
-    repos.map((repo, lane) => repo.commits.map((commit) => ({ kind: "commit" as const, lane, commit }))),
-    (d) => d.commit.timestamp,
-  );
+  const byRegion = repos.length > 0 && repos.every((r) => r.unpushedOids !== undefined);
+  const commitsOf = (region?: "unpushed" | "remote"): Draft[] =>
+    mergeByTime(
+      repos.map((repo, lane) =>
+        repo.commits
+          .filter((c) => region === undefined || (repo.unpushedOids?.has(c.id) ?? false) === (region === "unpushed"))
+          .map((commit) => ({ kind: "commit" as const, lane, commit, region })),
+      ),
+      (d) => d.commit.timestamp,
+    );
+  const withHeader = (region: LaneRegion, rows: Draft[]): Draft[] =>
+    rows.length > 0 ? [{ kind: "header", region }, ...rows] : [];
 
-  const drafts: Draft[] = [...wipDrafts, ...commitRows];
+  const drafts: Draft[] = byRegion
+    ? [
+        ...withHeader("now", wipDrafts),
+        ...withHeader("unpushed", commitsOf("unpushed")),
+        ...withHeader("remote", commitsOf("remote")),
+      ]
+    : [...wipDrafts, ...commitsOf()];
   const baseIndex = repos.some((r) => r.hasBase) ? drafts.length : -1;
   if (baseIndex >= 0) drafts.push({ kind: "base" });
 
@@ -182,8 +213,16 @@ export function buildRepoLaneRows(repos: readonly LaneRepo[], wips: readonly Lan
           repoPath,
           commit: d.commit,
           layout: { oid: d.commit.id, lane: d.lane, chain: d.lane, edges, width: Math.max(width, d.lane + 1) },
+          ...(d.region ? { region: d.region } : {}),
         };
       }
+      case "header":
+        return {
+          kind: "header",
+          key: `header:${d.region}`,
+          region: d.region,
+          layout: { oid: `header:${d.region}`, lane: 0, chain: -1, edges, width },
+        };
       case "base":
         return { kind: "base", key: "base", layout: { oid: "base", lane: 0, chain: -1, edges, width } };
     }

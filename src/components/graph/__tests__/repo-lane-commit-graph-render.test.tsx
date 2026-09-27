@@ -71,6 +71,7 @@ describe("RepoLaneCommitGraph ticking (#4)", () => {
         selectedKey={null}
         baseTime={null}
         baseBranchLabel="main"
+        remoteLabel="origin"
         isLoading={false}
         onSelectCommit={() => {}}
         onSelectWip={() => {}}

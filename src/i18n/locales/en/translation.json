@@ -993,10 +993,6 @@
   "review": {
     "subtitle_one": "Workspace · {{account}} · showing {{shown}} of {{count}} repository",
     "subtitle_other": "Workspace · {{account}} · showing {{shown}} of {{count}} repositories",
-    "showAll_one": "Show all ({{count}} hidden)",
-    "showAll_other": "Show all ({{count}} hidden)",
-    "hideQuiet": "Hide quiet repositories",
-    "hiddenHint": "Repositories on their default branch with no unpushed commits and no uncommitted changes are hidden",
     "noCommits": "No commits since these repositories branched off their default branch",
     "baseRow": "Where each repository branched off its default branch",
     "repoError": "Couldn't read {{repo}}: {{error}}",
@@ -1008,8 +1004,8 @@
     "selectTitle": "Pick a commit or uncommitted changes",
     "selectHint": "Its files and diff show here.",
     "openToCommit": "Open this working tree",
-    "allQuiet_one": "{{count}} quiet repository is hidden: it is on its default branch with no unpushed commits and no uncommitted changes. Use Show all to see it.",
-    "allQuiet_other": "All {{count}} repositories are quiet and hidden: they are on their default branch with no unpushed commits and no uncommitted changes. Use Show all to see them.",
+    "allQuiet_one": "{{count}} quiet repository is off: on its default branch, nothing unpushed or uncommitted. Turn its chip on to see it.",
+    "allQuiet_other": "All {{count}} repositories are quiet and off: on their default branch, nothing unpushed or uncommitted. Turn a chip on to see one.",
     "fileView": {
       "viewLabel": "View",
       "segCommits": "Commit order",
@@ -1035,7 +1031,9 @@
       "mergesLeftOut_one": "{{repo}}: {{count}} merge commit is not listed per file",
       "mergesLeftOut_other": "{{repo}}: {{count}} merge commits are not listed per file",
       "worktreeSource": "{{repo}} · {{worktree}}"
-    }
+    },
+    "repoChipsLabel": "Repositories shown as lanes",
+    "quietChipHint": "Quiet: default branch, nothing unpushed or uncommitted"
   },
   "gitActions": {
     "syncGroup": "Sync",

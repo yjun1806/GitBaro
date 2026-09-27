@@ -8,6 +8,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useFollowStore } from "@/stores/follow";
 import { useUIStore } from "@/stores/ui";
+import { useScopeStore } from "@/components/scope/scope-store";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
 import type {
   ActivityEvent,
@@ -183,7 +184,8 @@ beforeEach(async () => {
   histories = baseHistories();
   reviewRepos = baseReviewRepos();
   useRepositoryStore.setState({ repos: [repo(APP), repo(API), repo(DESIGN)], activeRepo: null, activeRepoPath: null });
-  useUIStore.setState({ reviewFileViewByWorkspace: {} });
+  useUIStore.setState({ reviewFileView: "commits" });
+  useScopeStore.setState({ repoShown: {}, lastSelection: null });
   useWorkspaceStore.setState({
     workspaces: [{ id: "w1", name: "xames", accountKey: "local", repoPaths: [APP, API, DESIGN] }],
     activeWorkspaceId: "w1",
@@ -202,27 +204,57 @@ describe("WorkspaceReview", () => {
     expect(screen.getByText("Workspace · Local · showing 2 of 3 repositories")).toBeTruthy();
   });
 
-  it("hides a quiet repository on main and shows it again with show all", () => {
+  it("starts a quiet repository's chip off and draws it once the chip is on", () => {
     renderReview();
-    const legend = screen.getByTestId("repo-legend");
-    expect(within(legend).queryByText("xames-design")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Show all (1 hidden)" }));
-    expect(within(legend).getByText("xames-design")).toBeTruthy();
+    const chips = screen.getByRole("group", { name: "Repositories shown as lanes" });
+    const design = within(chips).getByRole("button", { name: "xames-design" });
+    expect(design.getAttribute("aria-pressed")).toBe("false");
+    expect(within(chips).getByRole("button", { name: "xames-app" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(design);
+    expect(design.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("Workspace · Local · showing 3 of 3 repositories")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Hide quiet repositories" }));
-    expect(within(legend).queryByText("xames-design")).toBeNull();
+    expect(useScopeStore.getState().repoShown).toEqual({ [DESIGN]: true });
+    fireEvent.click(within(chips).getByRole("button", { name: "xames-app" }));
+    expect(screen.getByText("Workspace · Local · showing 2 of 3 repositories")).toBeTruthy();
   });
 
   it("draws WIP rows and the base row", () => {
     renderReview();
     expect(screen.getByRole("button", { name: /^xames-backend · Uncommitted changes · .* branch · .* · 1 file$/ })).toBeTruthy();
-    expect(screen.getByText("Where each repository branched off its default branch")).toBeTruthy();
+    expect(screen.getByText("Same as main")).toBeTruthy();
   });
 
-  it("does not repeat the unpushed commit count on the graph tab (the sidebar and Push show it)", () => {
+  it("does not repeat the unpushed commit count on the chips (the sidebar and Push show it)", () => {
     syncState.byPath = { [APP]: { unpushed: 2 }, [API]: { unpushed: 1 }, [API_WT]: { unpushed: 4 } };
     renderReview();
-    expect(screen.getByText("Commit graph").textContent).toBe("Commit graph");
+    const chips = screen.getByRole("group", { name: "Repositories shown as lanes" });
+    expect(within(chips).getByRole("button", { name: "xames-backend" }).textContent).toBe("xames-backend");
+  });
+
+  it("splits commits into not pushed and on the remote when every lane has a remote", () => {
+    const withOrigin = (path: string) =>
+      ({ ...repo(path), remotes: [{ name: "origin", url: "git@github.com:o/r.git" }] }) as unknown as RepoInfo;
+    useRepositoryStore.setState({ repos: [withOrigin(APP), withOrigin(API), withOrigin(DESIGN)] });
+    histories[APP] = { ...histories[APP], unpushedOids: ["app2"] };
+    const { container } = renderReview();
+    const order = [...container.querySelectorAll("[data-commit-id], [data-testid$='header-row']")].map(
+      (el) => el.getAttribute("data-commit-id") ?? el.getAttribute("data-testid"),
+    );
+    expect(order).toEqual([
+      "now-header-row",
+      "unpushed-header-row",
+      "app2",
+      "remote-header-row",
+      "api1",
+      "app1",
+    ]);
+    expect(screen.getByText("Push sends this to origin")).toBeTruthy();
+  });
+
+  it("draws no region headers while a lane has no remote", () => {
+    const { container } = renderReview();
+    expect(container.querySelector("[data-testid='unpushed-header-row']")).toBeNull();
+    expect(container.querySelector("[data-testid='remote-header-row']")).toBeNull();
   });
 
   it("keeps each repository's lane colour when another repository is hidden or shown", () => {
@@ -230,16 +262,24 @@ describe("WorkspaceReview", () => {
     const before = { app: laneFill(container, "app1"), api: laneFill(container, "api1") };
     expect(before.app).toBe(repoLaneColor(APP));
     expect(before.api).toBe(repoLaneColor(API));
-    fireEvent.click(screen.getByRole("button", { name: "Show all (1 hidden)" }));
+    fireEvent.click(screen.getByRole("button", { name: "xames-design" }));
     expect(laneFill(container, "app1")).toBe(before.app);
     expect(laneFill(container, "api1")).toBe(before.api);
   });
 
-  it("has only the graph, as a plain title (one tab is no tab bar): no changes-vs-main tab", () => {
+  it("has no tabs, only the filter bar above the graph (5.1)", () => {
     renderReview();
     expect(screen.queryAllByRole("tab")).toHaveLength(0);
-    expect(screen.getByText("Commit graph").textContent).toBe("Commit graph");
-    expect(screen.getByText("Where each repository branched off its default branch")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Repositories shown as lanes" })).toBeTruthy();
+    expect(screen.getByTestId("repo-lane-base")).toBeTruthy();
+  });
+
+  it("opens the side pane only once a row is picked, and remembers the commit for the next step", () => {
+    const { container } = renderReview();
+    expect(screen.queryByTestId("pane-strip-bottom")).toBeNull();
+    fireEvent.click(container.querySelector('[data-commit-id="api1"]') as HTMLElement);
+    expect(screen.getByTestId("pane-strip-bottom")).toBeTruthy();
+    expect(useScopeStore.getState().lastSelection).toEqual({ laneId: API, commitOid: "api1" });
   });
 
   it("shows a linked worktree once when it is also registered as a repository", () => {
@@ -322,7 +362,7 @@ describe("WorkspaceReview", () => {
     syncState.byPath = { [DESIGN_WT]: { unpushed: 3 } };
     renderReview();
     expect(screen.getByText("Workspace · Local · showing 3 of 3 repositories")).toBeTruthy();
-    expect(within(screen.getByTestId("repo-legend")).getByText("xames-design")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "xames-design" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("says the repositories are hidden, not that there are no commits, when every one is quiet", () => {
@@ -335,7 +375,7 @@ describe("WorkspaceReview", () => {
     reviewRepos[1] = { repoPath: API, worktrees: [{ path: API, branch: "main", headOid: "base", isMain: true }] };
     renderReview();
     expect(screen.getByText("Workspace · Local · showing 0 of 3 repositories")).toBeTruthy();
-    expect(screen.getByText(/All 3 repositories are quiet and hidden/)).toBeTruthy();
+    expect(screen.getByText(/All 3 repositories are quiet and off/)).toBeTruthy();
     expect(screen.queryByText(/No commits since/)).toBeNull();
   });
 
@@ -361,17 +401,17 @@ describe("WorkspaceReview", () => {
     expect(within(seg).getByRole("radio", { name: "By file" }).getAttribute("aria-checked")).toBe("false");
   });
 
-  it("switches to the per-file view and remembers the choice for this workspace", () => {
+  it("switches to the per-file view with the switch every scope step shares", () => {
     renderReview();
     fireEvent.click(screen.getByRole("radio", { name: "By file" }));
     // 그래프(WIP 행)는 사라지고, 파일별 보기의 빈 상태가 대신 보인다.
     expect(screen.queryByRole("button", { name: /Uncommitted changes/ })).toBeNull();
     expect(screen.getByText("No commits to push")).toBeTruthy();
-    expect(useUIStore.getState().reviewFileViewByWorkspace.w1).toBe("files");
+    expect(useUIStore.getState().reviewFileView).toBe("files");
 
     fireEvent.click(screen.getByRole("radio", { name: "Commit order" }));
     expect(screen.getByRole("button", { name: /^xames-backend · Uncommitted changes · .* branch · .* · 1 file$/ })).toBeTruthy();
-    expect(useUIStore.getState().reviewFileViewByWorkspace.w1).toBe("commits");
+    expect(useUIStore.getState().reviewFileView).toBe("commits");
   });
 
   it("puts the title in the toolbar's title slot when there is one", () => {

@@ -39,15 +39,6 @@ export function isHiddenReviewRepo(s: ReviewRepoSignals): boolean {
   return (s.unpushedCount ?? 0) === 0 && s.wipCount === 0;
 }
 
-/** 보일 저장소와 숨긴 수. `showAll`이면 모두 보인다. 입력 순서를 지킨다. */
-export function splitReviewRepos<T extends ReviewRepoSignals>(
-  repos: readonly T[],
-  showAll: boolean,
-): { visible: T[]; hiddenCount: number } {
-  const visible = showAll ? [...repos] : repos.filter((r) => !isHiddenReviewRepo(r));
-  return { visible, hiddenCount: repos.length - visible.length };
-}
-
 /** 저장소 하나와 그 워크트리 경로. */
 export interface ReviewRepoPaths {
   repoPath: string;

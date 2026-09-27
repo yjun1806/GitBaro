@@ -12,10 +12,11 @@ import {
 } from "@/components/graph/repo-lanes";
 import { countChangedFiles } from "@/lib/utils";
 import type { CommitInfo, ReviewWorktree, WorkspaceRepoHistory } from "@/types";
+import { sharedRemoteName } from "@/components/scope/scope-lanes";
 import {
   baseName,
   dedupeReviewMembers,
-  splitReviewRepos,
+  isHiddenReviewRepo,
   type ReviewRepoPaths,
   type ReviewRepoSignals,
 } from "./review-model";
@@ -28,6 +29,10 @@ export interface ReviewRepo extends ReviewRepoSignals {
   history: WorkspaceRepoHistory | undefined;
   /** 레인에 그릴 커밋(main과 갈라진 뒤). 읽지 못했거나 아직 못 읽었으면 null. */
   lane: { commits: CommitInfo[]; hasBase: boolean } | null;
+  /** 저장소의 원격 이름. 없으면 빈 배열(영역 머리를 그리지 않는다). */
+  remotes: readonly string[];
+  /** 조용한 저장소인지(`isHiddenReviewRepo`). 칩이 꺼진 채로 시작한다. */
+  quiet: boolean;
 }
 
 export interface WorkspaceReviewData {
@@ -43,6 +48,8 @@ export interface WorkspaceReviewData {
   repoPaths: ReviewRepoPaths[];
   baseTime: number | null;
   baseBranchLabel: string;
+  /** 보이는 레인 모두가 같은 원격 하나를 쓰면 그 이름(영역 머리), 아니면 null. */
+  remoteName: string | null;
   isLoading: boolean;
 }
 
@@ -54,8 +61,14 @@ const DEFAULT_BRANCH_FALLBACK = "main";
  * - 커밋: `get_workspace_history`(저장소마다 한 쿼리, HEAD가 바뀌면 다시 읽음)
  * - 커밋하지 않은 변경: 워크트리마다 `status`
  * - 원격에 없는 커밋 수: 워크트리마다 `repo_sync_status`. 숨김 규칙은 모든 워크트리의 수를 본다.
+ *
+ * `repoShown`은 필터 막대의 저장소 칩을 사용자가 건드린 것이다(5.1). 건드리지 않은 저장소는 조용하면
+ * 꺼진 채로, 아니면 켜진 채로 시작한다(D43).
  */
-export function useWorkspaceReview(memberPaths: readonly string[], showAll: boolean): WorkspaceReviewData {
+export function useWorkspaceReview(
+  memberPaths: readonly string[],
+  repoShown: Readonly<Record<string, boolean>>,
+): WorkspaceReviewData {
   const allRepos = useRepositoryStore((s) => s.repos);
   const repoName = useRepoName();
   const allRepoPaths = useMemo(() => allRepos.map((r) => r.path), [allRepos]);
@@ -89,6 +102,7 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
   const { data: syncByPath } = useRepoSyncStatuses(worktreePaths);
   const lastChangedAt = useLiveChangesStore((s) => s.lastChangedAt);
 
+  const remotesByPath = new Map(allRepos.map((r) => [r.path, r.remotes.map((remote) => remote.name)]));
   const repos: ReviewRepo[] = members.map((m, i) => {
     const history = histories[i];
     const lane =
@@ -101,29 +115,38 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
       const n = syncByPath?.[w.path]?.unpushed;
       return n === undefined ? [] : [n];
     });
-    return {
-      path: m.path,
-      name: m.name,
-      worktrees: m.worktrees,
-      history,
-      lane,
+    const signals: ReviewRepoSignals = {
       branch: history ? history.branch : m.main.branch,
       defaultBranch: history?.defaultBranch ?? null,
       unpushedCount: unpushed.length > 0 ? unpushed.reduce((a, b) => a + b, 0) : null,
       wipCount,
       error: history?.error ?? null,
     };
+    return {
+      ...signals,
+      path: m.path,
+      name: m.name,
+      worktrees: m.worktrees,
+      history,
+      lane,
+      remotes: remotesByPath.get(m.path) ?? [],
+      quiet: isHiddenReviewRepo(signals),
+    };
   });
 
-  const { visible, hiddenCount } = splitReviewRepos(repos, showAll);
+  const visible = repos.filter((r) => repoShown[r.path] ?? !r.quiet);
+  const hiddenCount = repos.length - visible.length;
 
-  const laneRepos: LaneRepo[] = visible
-    .filter((r) => r.error === null)
-    .map((r) => ({
-      path: r.path,
-      commits: r.lane?.commits ?? [],
-      hasBase: r.lane?.hasBase ?? false,
-    }));
+  const drawn = visible.filter((r) => r.error === null);
+  // 영역 머리(D48)는 모든 레인이 원격을 가질 때만 그린다. 원격이 없는 저장소의 커밋을 「원격에 있음」에
+  // 넣으면 거짓이 된다.
+  const byRegion = drawn.length > 0 && drawn.every((r) => r.remotes.length > 0);
+  const laneRepos: LaneRepo[] = drawn.map((r) => ({
+    path: r.path,
+    commits: r.lane?.commits ?? [],
+    hasBase: r.lane?.hasBase ?? false,
+    ...(byRegion ? { unpushedOids: new Set(r.history?.unpushedOids ?? []) } : {}),
+  }));
   const lanePathKey = laneRepos.map((r) => r.path).join("\u0000");
   const lanePaths = useMemo(() => (lanePathKey ? lanePathKey.split("\u0000") : []), [lanePathKey]);
 
@@ -146,7 +169,10 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
   // HEAD가 그대로여도 커밋의 참조 표시가 바뀌므로 키에 넣는다.
   const graphKey = [
     lanePathKey,
-    ...laneRepos.map((r) => `${r.path}:${r.hasBase}:${r.commits.map(commitKey).join(";")}`),
+    ...laneRepos.map(
+      (r) =>
+        `${r.path}:${r.hasBase}:${r.commits.map(commitKey).join(";")}:${r.unpushedOids ? [...r.unpushedOids].join(",") : "-"}`,
+    ),
     ...wips.map((w) => `${w.path}:${w.count}:${w.changedAt ?? ""}`),
   ].join("\n");
   // eslint-disable-next-line react-hooks/exhaustive-deps -- graphKey가 laneRepos·wips의 내용을 대신 비교한다
@@ -174,6 +200,7 @@ export function useWorkspaceReview(memberPaths: readonly string[], showAll: bool
     repoPaths,
     baseTime,
     baseBranchLabel,
+    remoteName: sharedRemoteName(drawn),
     isLoading: histories.some((h) => h === undefined),
   };
 }

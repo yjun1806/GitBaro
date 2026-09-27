@@ -6,14 +6,18 @@ import { AlertTriangle, Folder } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { useUIStore, type ReviewFileView } from "@/stores/ui";
+import { useUIStore } from "@/stores/ui";
+import { useFollowStore } from "@/stores/follow";
 import { repoAccountsByPath } from "@/lib/repo-tree";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GraphSplit } from "@/components/layout/GraphSplit";
-import { RepoLaneCommitGraph, RepoLaneTag } from "@/components/graph/CommitGraph";
-import { Button } from "@/components/ui/Button";
-import { Segmented, type SegmentedOption } from "@/components/ui/Segmented";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { FilterChip } from "@/components/ui/FilterChip";
+import { PaneStrip } from "@/components/layout/PaneStrip";
+import { RepoLaneCommitGraph } from "@/components/graph/CommitGraph";
+import { repoLaneColor } from "@/components/graph/repo-lanes";
+import { useScopeStore } from "@/components/scope/scope-store";
+import { ScopeViewToggle } from "@/components/scope/ScopeViewToggle";
 import type { WorkspaceRepoHistory } from "@/types";
 import { WorkspaceTitle } from "./WorkspaceTitle";
 import { ReviewFilesPanel, type ReviewSelection } from "./ReviewFilesPanel";
@@ -21,10 +25,10 @@ import { FileTouchesView } from "./FileTouchesView";
 import { fileTouchSources } from "./file-touches-model";
 import { WorkSwitcher } from "@/components/commit/WorkSwitcher";
 import type { RepoLaneGraph } from "@/components/graph/repo-lanes";
-
-type CommitSelection = Extract<ReviewSelection, { kind: "commit" }>;
 import { useWorkspaceReview, type ReviewRepo } from "./useWorkspaceReview";
 import { useReviewActivityRefresh } from "./useReviewActivityRefresh";
+
+type CommitSelection = Extract<ReviewSelection, { kind: "commit" }>;
 
 export interface WorkspaceReviewProps {
   workspaceId: string;
@@ -33,23 +37,26 @@ export interface WorkspaceReviewProps {
 }
 
 /**
- * 워크스페이스를 고른 상태의 메인 칸(D1). 제목, 여러 저장소 커밋 그래프(저장소별 레인),
- * 아래에 고른 커밋이나 커밋하지 않은 변경의 파일 목록과 diff.
- * 조용한 저장소(main에 있고 원격에 없는 커밋·커밋하지 않은 변경이 없음)는 접고 「모두 보기」로 펼친다.
+ * 워크스페이스 단계의 메인 칸(5.1). 저장소·브랜치 단계와 같은 틀이다: 필터 막대(저장소 칩 ·
+ * 커밋 순서|파일별) 아래 저장소마다 레인인 커밋 그래프, 행을 고르면 옆 칸(`PaneStrip`)에 그 커밋이나
+ * 커밋하지 않은 변경의 파일 목록과 diff. 탭은 없다. 조용한 저장소(기본 브랜치에 있고 원격에 없는
+ * 커밋·커밋하지 않은 변경이 없음)의 칩은 꺼진 채로 시작한다(D43).
  */
 export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const { t } = useTranslation();
   const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
   const repos = useRepositoryStore((s) => s.repos);
   const accounts = useAccountStore((s) => s.accounts);
-  const [showAll, setShowAll] = useState(false);
+  const repoShown = useScopeStore((s) => s.repoShown);
+  const setRepoShown = useScopeStore((s) => s.setRepoShown);
+  const rememberSelection = useScopeStore((s) => s.rememberSelection);
+  const stopFollow = useFollowStore((s) => s.stop);
   const [selection, setSelection] = useState<ReviewSelection>(null);
-  const reviewView = useUIStore((s) => s.reviewFileViewByWorkspace[workspaceId] ?? "commits");
-  const setReviewFileView = useUIStore((s) => s.setReviewFileView);
+  const reviewView = useUIStore((s) => s.reviewFileView);
   // 저장소마다 마지막으로 고른 커밋. 「작업 중인 변경」으로 갔다가 「커밋」 칸으로 돌아올 때 쓴다.
   const [lastCommitByRepo, setLastCommitByRepo] = useState<Readonly<Record<string, CommitSelection>>>({});
 
-  const data = useWorkspaceReview(paths, showAll);
+  const data = useWorkspaceReview(paths, repoShown);
   useReviewActivityRefresh(data.repoPaths);
 
   const accountLabel = useMemo(() => {
@@ -83,6 +90,62 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
     data.visible.length === 0 && data.hiddenCount > 0
       ? t("review.allQuiet", { count: data.hiddenCount })
       : undefined;
+  const filesView = reviewView === "files";
+
+  const pick = (next: ReviewSelection) => {
+    setSelection(next);
+    // 저장소·브랜치 단계로 내려가도 같은 커밋을 고른 채로 둔다(`carrySelection`). 워크스페이스 레인의
+    // 커밋은 그 저장소의 메인 작업 트리 이력이다.
+    rememberSelection(next?.kind === "commit" ? { laneId: next.repoPath, commitOid: next.oid } : null);
+  };
+
+  const graphCard = (
+    <section
+      aria-label={t("shell.graphTab")}
+      className="relative flex flex-col h-full min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
+    >
+      <FilterBar
+        left={
+          <RepoChips
+            repos={data.repos}
+            visible={data.visible}
+            onToggle={(repo, shown) => setRepoShown(repo.path, shown)}
+          />
+        }
+        right={<ScopeViewToggle />}
+      />
+      {filesView ? (
+        <FileTouchesView sources={fileSources} repoLabel={repoLabel} />
+      ) : (
+        <RepoLaneCommitGraph
+          graph={data.graph}
+          lanePaths={data.lanePaths}
+          repoLabel={repoLabel}
+          selectedKey={selection?.key ?? null}
+          baseTime={data.baseTime}
+          baseBranchLabel={data.baseBranchLabel}
+          remoteLabel={data.remoteName ?? t("graph.anyRemote")}
+          isLoading={data.isLoading}
+          emptyMessage={emptyMessage}
+          onSelectCommit={(repoPath, commit, key) => {
+            const picked: CommitSelection = { kind: "commit", key, repoPath, oid: commit.id };
+            pick(picked);
+            setLastCommitByRepo((prev) => ({ ...prev, [repoPath]: picked }));
+          }}
+          onSelectWip={(wip, key) =>
+            pick({
+              kind: "wip",
+              key,
+              repoPath: wip.repoPath,
+              path: wip.path,
+              branch: wip.branch,
+              isMain: wip.isMain,
+            })
+          }
+        />
+      )}
+    </section>
+  );
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-(--g) animate-content-in">
@@ -92,92 +155,34 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
           <EmptyState icon={Folder} title={t("review.emptyTitle")} description={t("review.emptyHint")} />
         </Card>
       ) : (
-        <GraphSplit
-          topCollapsed={reviewView === "files"}
-          top={
-          <section
-            aria-label={t("shell.panelTabs")}
-            className="relative flex flex-col shrink-0 flex-1 min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
-          >
-            <div className="flex items-center gap-2 min-h-8 pl-3 pr-3 shrink-0 border-b border-(--line)">
-              {/* 탭이 하나뿐이라 탭 줄 대신 제목만 둔다(카드 머리, 디자인 시스템 3.5). */}
-              <span className="shrink-0 text-[12.5px] font-bold text-foreground">{t("shell.graphTab")}</span>
-              <Segmented
-                value={reviewView}
-                onChange={(v) => setReviewFileView(workspaceId, v)}
-                size="sm"
-                ariaLabel={t("review.fileView.viewLabel")}
-                options={REVIEW_VIEW_OPTIONS(t)}
-              />
-              <span className="flex-1" />
-              <RepoLegend repos={data.visible} />
-              {data.hiddenCount > 0 || showAll ? (
-                <Button variant="ghost" size="sm" onClick={() => setShowAll((v) => !v)} title={t("review.hiddenHint")}>
-                  {showAll ? t("review.hideQuiet") : t("review.showAll", { count: data.hiddenCount })}
-                </Button>
-              ) : null}
-            </div>
-            {reviewView === "commits" && (
-              <RepoLaneCommitGraph
-                graph={data.graph}
-                lanePaths={data.lanePaths}
-                repoLabel={repoLabel}
-                selectedKey={selection?.key ?? null}
-                baseTime={data.baseTime}
-                baseBranchLabel={data.baseBranchLabel}
-                isLoading={data.isLoading}
-                emptyMessage={emptyMessage}
-                onSelectCommit={(repoPath, commit, key) => {
-                  const picked: CommitSelection = { kind: "commit", key, repoPath, oid: commit.id };
-                  setSelection(picked);
-                  setLastCommitByRepo((prev) => ({ ...prev, [repoPath]: picked }));
-                }}
-                onSelectWip={(wip, key) =>
-                  setSelection({
-                    kind: "wip",
-                    key,
-                    repoPath: wip.repoPath,
-                    path: wip.path,
-                    branch: wip.branch,
-                    isMain: wip.isMain,
-                  })
-                }
-              />
-            )}
-          </section>
-          }
+        <PaneStrip
+          graph={graphCard}
+          // 파일별 보기는 그래프 칸 안에 파일 목록과 diff를 함께 그리므로 옆 칸을 열지 않는다(5.4).
+          hasSelection={!filesView && selection !== null}
+          onExpandGraph={() => {
+            stopFollow();
+            pick(null);
+          }}
           bottom={
             <Card className="flex-1">
-              {reviewView === "commits" ? (
-                <ReviewFilesPanel
-                  selection={selection}
-                  repoLabel={repoLabel}
-                  switcher={
-                    <WorkspaceWorkSwitcher
-                      selection={selection}
-                      graph={data.graph}
-                      lastCommit={selection ? (lastCommitByRepo[selection.repoPath] ?? null) : null}
-                      onSelect={setSelection}
-                    />
-                  }
-                />
-              ) : (
-                <FileTouchesView sources={fileSources} repoLabel={repoLabel} />
-              )}
+              <ReviewFilesPanel
+                selection={selection}
+                repoLabel={repoLabel}
+                switcher={
+                  <WorkspaceWorkSwitcher
+                    selection={selection}
+                    graph={data.graph}
+                    lastCommit={selection ? (lastCommitByRepo[selection.repoPath] ?? null) : null}
+                    onSelect={pick}
+                  />
+                }
+              />
             </Card>
           }
         />
       )}
     </div>
   );
-}
-
-/** 그래프 카드 머리의 [커밋 순서 | 파일별] 전환 선택지. */
-function REVIEW_VIEW_OPTIONS(t: TFunction): SegmentedOption<ReviewFileView>[] {
-  return [
-    { value: "commits", label: t("review.fileView.segCommits") },
-    { value: "files", label: t("review.fileView.segFiles") },
-  ];
 }
 
 /** 저장소의 기준(main) 상태를 한 줄로. 갈라진 지점을 못 찾았거나 잘렸을 때만 문구가 있다. */
@@ -190,38 +195,50 @@ function historyNote(t: TFunction, h: WorkspaceRepoHistory | undefined): string 
 }
 
 /**
- * 그래프 머리의 저장소 표시: 레인 색, 저장소 이름, 지금 브랜치. 읽지 못한 저장소는 경고로 표시한다.
- * 저장소 이름표는 그래프 행·WIP 행과 같은 `RepoLaneTag`(레인 색을 입힌 `RefLabel`, D4)를 쓴다.
+ * 필터 막대의 저장소 칩(5.1 「레인 칩: 저장소」, D43). 견본 색이 그래프의 레인 색이다. 조용한 저장소는
+ * 꺼진 채로 시작하고, 읽지 못한 저장소는 경고 아이콘과 이유를 단다. 수는 싣지 않는다 — 올릴 커밋 수는
+ * 사이드바가 말한다.
  */
-function RepoLegend({ repos }: { repos: ReviewRepo[] }) {
+function RepoChips({
+  repos,
+  visible,
+  onToggle,
+}: {
+  repos: readonly ReviewRepo[];
+  visible: readonly ReviewRepo[];
+  onToggle: (repo: ReviewRepo, shown: boolean) => void;
+}) {
   const { t } = useTranslation();
+  const shown = new Set(visible.map((r) => r.path));
   return (
-    <span className="flex items-center gap-2 min-w-0 overflow-x-auto" data-testid="repo-legend">
+    <div
+      role="group"
+      aria-label={t("review.repoChipsLabel")}
+      className="flex items-center gap-1.5 min-w-0 overflow-x-auto"
+      data-testid="repo-chips"
+    >
       {repos.map((r) => {
+        const on = shown.has(r.path);
         const note = historyNote(t, r.history);
         const title = r.error
           ? t("review.repoError", { repo: r.name, error: r.error })
-          : (note ?? r.path);
+          : [r.branch ?? r.path, note, r.quiet ? t("review.quietChipHint") : null].filter(Boolean).join(" · ");
         return (
-          <span
+          <FilterChip
             key={r.path}
+            pressed={on}
+            swatchColor={repoLaneColor(r.path)}
+            icon={
+              r.error ? <AlertTriangle className="w-3 h-3 shrink-0 text-danger" aria-hidden="true" /> : undefined
+            }
             title={title}
-            data-repo={r.path}
-            className="flex items-center gap-1 shrink-0 text-[11.5px] text-muted-foreground"
+            onClick={() => onToggle(r, !on)}
           >
-            <RepoLaneTag repoPath={r.path} label={r.name} />
-            {r.error && (
-              <AlertTriangle
-                className="w-3 h-3 text-danger"
-                aria-label={t("review.repoError", { repo: r.name, error: r.error })}
-              />
-            )}
-            {r.branch && <span className="font-mono">{r.branch}</span>}
-            {note && <span aria-hidden="true">*</span>}
-          </span>
+            {r.name}
+          </FilterChip>
         );
       })}
-    </span>
+    </div>
   );
 }
 

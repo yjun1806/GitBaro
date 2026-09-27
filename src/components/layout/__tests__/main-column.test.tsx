@@ -334,9 +334,9 @@ describe("MainColumn — workspace scope (W4-T1)", () => {
     // 없는 저장소는 숨긴다(질문 2).
     expect(screen.getByRole("heading", { name: "xames" })).toBeTruthy();
     expect(screen.getByText("Workspace · Local · showing 0 of 1 repository")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Show all (1 hidden)" })).toBeTruthy();
-    // 모두 숨겼을 때는 「커밋 없음」이 아니라 숨긴 저장소가 있다고 알린다.
-    expect(screen.getByText(/1 quiet repository is hidden/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "app" }).getAttribute("aria-pressed")).toBe("false");
+    // 모두 껐을 때는 「커밋 없음」이 아니라 꺼 둔 조용한 저장소가 있다고 알린다.
+    expect(screen.getByText(/1 quiet repository is off/)).toBeTruthy();
     // 워크스페이스 화면에도 커밋 그래프 탭이 있지만, 저장소 전용 탭(스태시)은 없다.
     expect(screen.queryByRole("tab", { name: "Stash" })).toBeNull();
     expect(screen.queryByText("changes-view")).toBeNull();
