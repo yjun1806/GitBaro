@@ -177,7 +177,7 @@ Element.prototype.scrollIntoView = vi.fn();
 beforeEach(async () => {
   await i18n.changeLanguage("en");
   // 기존 시나리오는 저장소 단계(모든 워크트리를 레인으로)다. 브랜치 단계(지금 워크트리만)는 따로 본다.
-  useScopeStore.setState({ aggregateRepoPath: REPO, laneShown: {} });
+  useScopeStore.setState({ aggregateRepoPath: REPO, laneShown: {}, lastSelection: null });
   openWorktree.mockReset();
   openWorktree.mockImplementation(switchTo);
   worktreeState.list = [];
@@ -896,5 +896,25 @@ describe("GraphPanel by-file view (5.1)", () => {
     expect(fileTouchTargets[fileTouchTargets.length - 1]).toEqual([
       { repoPath: REPO, path: REPO, worktreeLabel: "feat/y", branch: "feat/y" },
     ]);
+  });
+});
+
+describe("GraphPanel selection across scope steps (5.1)", () => {
+  it("keeps the commit picked in the previous step when its lane is here", () => {
+    useScopeStore.setState({ lastSelection: { laneId: REPO, commitOid: "c3" } });
+    renderPanel();
+    expect(useSelectionStore.getState().selectedCommitId).toBe("c3");
+  });
+
+  it("does not pick anything when the lane is not in this step", () => {
+    useScopeStore.setState({ lastSelection: { laneId: "/elsewhere", commitOid: "c3" } });
+    renderPanel();
+    expect(useSelectionStore.getState().selectedCommitId).toBeNull();
+  });
+
+  it("remembers a commit picked here for the next step", () => {
+    renderPanel();
+    fireEvent.click(document.querySelector('[data-commit-id="c2"]') as HTMLElement);
+    expect(useScopeStore.getState().lastSelection).toEqual({ laneId: REPO, commitOid: "c2" });
   });
 });

@@ -7,6 +7,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
 import { useFollowStore } from "@/stores/follow";
+import { useScopeStore } from "@/components/scope/scope-store";
 import type { RepoInfo, StatusEntry } from "@/types";
 
 // Heavy children talk to Tauri; the shell only decides which one to show.
@@ -146,6 +147,7 @@ beforeEach(async () => {
   await i18n.changeLanguage("en");
   useUIStore.setState({ activeTab: "changes", repoListOpen: false });
   useSelectionStore.getState().clearAll();
+  useScopeStore.setState({ aggregateRepoPath: null, lastSelection: null, laneShown: {}, repoShown: {} });
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: repo.path });
   useFollowStore.getState().stop();
   mergeStateValue = null;

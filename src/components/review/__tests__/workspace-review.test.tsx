@@ -414,6 +414,12 @@ describe("WorkspaceReview", () => {
     expect(useUIStore.getState().reviewFileView).toBe("commits");
   });
 
+  it("comes in with the commit picked in the repository or branch step selected", () => {
+    useScopeStore.setState({ lastSelection: { laneId: API, commitOid: "api1" } });
+    renderReview();
+    expect(screen.getByText(`commit-detail ${API} api1`)).toBeTruthy();
+  });
+
   it("puts the title in the toolbar's title slot when there is one", () => {
     const slot = document.createElement("div");
     slot.setAttribute("data-toolbar-title-slot", "");

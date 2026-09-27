@@ -33,10 +33,12 @@ import { trimTrailingSlash } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { useActiveRepoName } from "@/hooks/useRepoDisplay";
+import { useGraphFilesView } from "./graph-files-view";
 import { useScopeSources } from "@/components/scope/useScopeSources";
 import { useScopeStore } from "@/components/scope/scope-store";
-import { visibleLaneSources, type LaneSource } from "@/components/scope/scope-lanes";
-import type { Scope } from "@/components/scope/scope";
+import { openedLaneId, visibleLaneSources, type LaneSource } from "@/components/scope/scope-lanes";
+import { carrySelection } from "@/components/scope/scope-selection";
+import { sameScope, type Scope } from "@/components/scope/scope";
 import { ScopeViewToggle } from "@/components/scope/ScopeViewToggle";
 import { FileTouchesView } from "@/components/review/FileTouchesView";
 import { fileTouchSources, type FileTouchSource } from "@/components/review/file-touches-model";
@@ -107,6 +109,7 @@ export function GraphPanel() {
   const filesView = useGraphFilesView();
   const fileSources = useFileSources(scope, worktreeFilter.wips);
   const repoName = useActiveRepoName();
+  useCarriedSelection(scope, sources);
 
   // 커밋을 새로 고를 때만 아래 칸을 커밋 상세로 바꾼다. 패널이 다시 마운트될 때
   // (저장소 목록을 열었다 닫을 때 등) 남아 있던 선택으로 스태시·Actions 탭에서
@@ -305,24 +308,40 @@ function useWorktreeFilter(allWips: GraphWip[], scope: Scope | null, sources: re
   return { chips, visible, wips, heads, toggle, showOnly };
 }
 
+/**
+ * 단계를 옮겨도 고른 커밋을 이어 간다(5.1 「선택」). 고른 커밋은 (레인, 커밋)으로 `lastSelection`에
+ * 적고, 새 단계에 들어와 레인 목록을 읽으면 한 번 `carrySelection`으로 되살린다 — 워크스페이스에서 고른
+ * 커밋의 저장소로 내려오면 그 커밋이 고른 채로 있다. 이미 고른 커밋이 있으면 건드리지 않는다.
+ */
+function useCarriedSelection(scope: Scope | null, sources: readonly LaneSource[]) {
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
+  const selectCommit = useSelectionStore((s) => s.selectCommit);
+  const rememberSelection = useScopeStore((s) => s.rememberSelection);
+
+  // 고른 커밋을 적는다. 같은 워크트리에서 선택을 풀면(WIP 행을 고르는 등) 지운다 — 다른 저장소로
+  // 옮겨 가며 풀린 선택은 지우지 않는다(옮겨 간 단계가 이어받아야 한다).
+  // 처음 그릴 때는 아무것도 지우지 않는다(이어받을 선택을 아래 효과가 먼저 읽어야 한다).
+  const prevRepoPath = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const sameRepo = prevRepoPath.current === activeRepoPath;
+    prevRepoPath.current = activeRepoPath;
+    if (selectedCommitId && activeRepoPath) rememberSelection({ laneId: activeRepoPath, commitOid: selectedCommitId });
+    else if (sameRepo) rememberSelection(null);
+  }, [selectedCommitId, activeRepoPath, rememberSelection]);
+
+  const carriedFor = useRef<Scope | null>(null);
+  useEffect(() => {
+    if (!scope || sources.length === 0 || sameScope(carriedFor.current, scope)) return;
+    carriedFor.current = scope;
+    const last = useScopeStore.getState().lastSelection;
+    const carried = carrySelection(last, sources, openedLaneId(scope, sources));
+    if (carried?.commitOid && useSelectionStore.getState().selectedCommitId === null) selectCommit(carried.commitOid);
+  }, [scope, sources, selectCommit]);
+}
+
 const NO_CHIPS: WorktreeChip[] = [];
 const NO_OVERRIDES: ReadonlyMap<string, boolean> = new Map();
-
-/**
- * 그래프 탭이 「파일별」 보기인지(5.1, D44). 브랜치 비교 중에는 비교 그래프를 그대로 둔다.
- * 메인 칸(`MainColumn`)도 이 값으로 옆 칸을 열지 않는다 — 파일별 보기는 그래프 칸 안에 파일 목록과
- * diff를 함께 그린다(5.4 「첫 칸이 파일 목록」).
- */
-export function useGraphFilesView(): boolean {
-  const activeTab = useUIStore((s) => s.activeTab);
-  const view = useUIStore((s) => s.reviewFileView);
-  const prOpen = usePrViewStore((s) => s.open);
-  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
-  const branchRange = useBranchRangeStore((s) => s.range);
-  return (
-    view === "files" && !prOpen && graphPanelTabOf(activeTab) === "graph" && activeRange(branchRange, activeRepoPath) === null
-  );
-}
 
 /**
  * 파일별 보기가 읽을 워크트리(5.1 「파일별」). 저장소 단계는 보이는 워크트리 모두, 브랜치 단계는 그

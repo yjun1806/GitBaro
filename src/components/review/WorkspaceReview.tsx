@@ -76,6 +76,18 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
 
   const titleSlot = useToolbarTitleSlot();
 
+  // 저장소·브랜치 단계에서 고른 커밋이 이 워크스페이스의 레인(저장소 메인 작업 트리)에 있으면 그 행을
+  // 고른 채로 들어온다(5.1 「선택」, `carrySelection`과 같은 규칙). 그래프를 읽은 뒤 한 번만 본다.
+  const [carryChecked, setCarryChecked] = useState(false);
+  if (!carryChecked && data.graph.rows.length > 0) {
+    setCarryChecked(true);
+    const last = useScopeStore.getState().lastSelection;
+    const row = last?.commitOid
+      ? data.graph.rows.find((r) => r.kind === "commit" && r.repoPath === last.laneId && r.commit.id === last.commitOid)
+      : undefined;
+    if (row?.kind === "commit") setSelection({ kind: "commit", key: row.key, repoPath: row.repoPath, oid: row.commit.id });
+  }
+
   if (!workspace) return null;
 
   const title = (
