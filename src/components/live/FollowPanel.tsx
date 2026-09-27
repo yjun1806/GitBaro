@@ -5,7 +5,14 @@ import { TAURI_EVENTS } from "@/api/events";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
-import { fetchFileDiff, useFileDiff, useStashMutations, useWipFiles, useWorktrees } from "@/api/queries";
+import {
+  fetchFileDiff,
+  useFileDiff,
+  useStashMutations,
+  useUnpushedFileTouches,
+  useWipFiles,
+  useWorktrees,
+} from "@/api/queries";
 import { stageFiles } from "@/api/commands";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
@@ -17,6 +24,8 @@ import { FOLLOW_KEY, useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { diffDelta, type DiffDelta } from "@/lib/diff-delta";
 import { useJustChanged, type JustChanged } from "./useJustChanged";
+import { FollowLine } from "./FollowLine";
+import { followNote } from "./follow-note";
 import { FocusFlash } from "@/components/ui/FocusFlash";
 import { cn, formatRelativeTime, getErrorMessage, trimTrailingSlash } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
@@ -431,6 +440,17 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
   const [sideBySideOf, setSideBySideOf] = useState<string | null>(null);
   const sideBySideOpen = shown !== null && sideBySideOf === shown.path && shownSiblings.length > 0;
 
+  // 따라가기 줄의 「눈여겨볼 것」(D49). 파일별 보기와 같은 조회(`useUnpushedFileTouches`)에서
+  // 지금 보는 파일의 원격에 없는 커밋을 찾는다. repoPath는 캐시 키일 뿐 이 조회에 쓰이지 않으니
+  // 워크트리 경로를 그대로 넣는다.
+  const touchTargets = useMemo(() => [{ repoPath: path, path, branch: null }], [path]);
+  const [touchesResult] = useUnpushedFileTouches(touchTargets);
+  const shownTouches =
+    shown && touchesResult?.status === "success"
+      ? touchesResult.data.files.find((f) => f.path === shown.path)
+      : undefined;
+  const followLineNote = shown ? followNote(t, shown, shownTouches?.commits ?? []) : null;
+
   const handlePause = () => pause(shown?.path ?? pausedOn);
   const handleResume = () => (isTarget ? resume() : start(path));
 
@@ -575,6 +595,9 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
         <LoadingState label={t("diff.loadingDiff")} />
       ) : (
         <>
+          {isTarget && (
+            <FollowLine mode={mode} pinnedFile={pausedOn} onResume={handleResume} note={followLineNote} />
+          )}
           {shownSiblings.length > 0 && siblingFilePath && (
             <OverlapBanner
               filePath={siblingFilePath}
