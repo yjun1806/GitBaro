@@ -21,6 +21,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), ask: vi.fn() }));
 
 import { getBranches, getWorktrees } from "@/api/commands";
 import { useHistoryViewStore } from "@/stores/history-view";
+import { useScopeStore } from "@/components/scope/scope-store";
 import { RepoTree } from "../RepoTree";
 import type { WorkingBranchRow } from "../tree-model";
 import { SIDEBAR_WATCH_KEY, type SidebarTreeData } from "../useSidebarTreeData";
@@ -178,6 +179,7 @@ beforeEach(() => {
   });
   useActivityTargetsStore.setState({ extraByKey: {} });
   useWorkspaceStore.setState({ workspaces, collapsed: [], orderByParent: {}, sortModeByAccount: {} });
+  useScopeStore.getState().viewRepoAggregate(null);
 });
 
 afterEach(cleanup);
@@ -446,6 +448,19 @@ describe("RepoTree — search and selection", () => {
     fireEvent.click(item("dev · Primary folder"));
     expect(useRepositoryStore.getState().activeWorktrees[SOLO]).toBeUndefined();
     expect(onSelectRepo).toHaveBeenLastCalledWith(SOLO);
+  });
+
+  it("enters the 'repository' scope (every worktree) from the repository row, not from its folder rows (5.1)", () => {
+    renderTree(makeData(baseSignals));
+    // 저장소 줄(카드 머리, 워크스페이스 안이든 밖이든)은 「저장소」 단계로 들어간다.
+    fireEvent.click(item("api"));
+    expect(useScopeStore.getState().aggregateRepoPath).toBe(API);
+    fireEvent.click(item("solo"));
+    expect(useScopeStore.getState().aggregateRepoPath).toBe(SOLO);
+    // 작업 폴더 줄은 그 워크트리의 체크아웃한 브랜치(「브랜치」 단계)를 그대로 연다 — 저장소
+    // 전체를 보는 「저장소」 단계로 바꾸지 않는다.
+    fireEvent.click(item("dev · Primary folder"));
+    expect(useScopeStore.getState().aggregateRepoPath).toBe(SOLO);
   });
 
   it("opens a worktree from its line", () => {
