@@ -564,7 +564,16 @@
     "monthsAgo_one": "{{count}} month ago",
     "monthsAgo_other": "{{count}} months ago",
     "yearsAgo_one": "{{count}} year ago",
-    "yearsAgo_other": "{{count}} years ago"
+    "yearsAgo_other": "{{count}} years ago",
+    "short": {
+      "justNow": "now",
+      "minutes": "{{count}}m",
+      "hours": "{{count}}h",
+      "days": "{{count}}d",
+      "weeks": "{{count}}w",
+      "months": "{{count}}mo",
+      "years": "{{count}}y"
+    }
   },
   "status": {
     "offline": "Offline",

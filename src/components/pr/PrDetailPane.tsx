@@ -17,7 +17,7 @@ import { ContextMenu, contextMenuPoint } from "@/components/ui/ContextMenu";
 import { copyMenuItem } from "@/components/ui/menu-items";
 import { Button } from "@/components/ui/Button";
 import { SectionLabel } from "@/components/ui/PanelHeader";
-import { Code, Count, FileStatusLetter, StatusChip } from "@/components/ui/marks";
+import { Code, Count, FileStatusLetter, StatusChip, LineDelta } from "@/components/ui/marks";
 import type { PrFile, PrFiles, PrReviewThread, PullRequestDetail } from "@/types";
 import { fileStatusOf, openThreadCount, revealLineOf, threadsByFile } from "./pr-model";
 import { selectedPrNumber, usePrViewStore } from "./pr-view";
@@ -306,9 +306,7 @@ function PrSideList({
       <SectionLabel
         title={t("pr.changedFiles", { count: pr.changedFiles })}
         trailing={
-          <span className="font-mono text-[11.5px]">
-            <span className="text-diff-add-fg">+{pr.additions}</span> <span className="text-diff-del-fg">−{pr.deletions}</span>
-          </span>
+          <LineDelta additions={pr.additions} deletions={pr.deletions} className="text-[11.5px]" />
         }
       />
       {filesLoading ? (
@@ -354,10 +352,7 @@ function PrSideList({
                     {open}
                   </span>
                 )}
-                <span className="shrink-0 font-mono text-[11.5px] text-muted-foreground">
-                  <span className="text-diff-add-fg">+{f.additions}</span>{" "}
-                  <span className="text-diff-del-fg">−{f.deletions}</span>
-                </span>
+                <LineDelta additions={f.additions} deletions={f.deletions} className="text-[11.5px]" />
               </button>
             );
           })}

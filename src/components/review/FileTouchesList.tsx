@@ -4,7 +4,7 @@ import type { TFunction } from "i18next";
 import { AlertTriangle } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { splitFilePath } from "@/components/layout/maximized-files";
-import { FileStatusLetter, RepoTile } from "@/components/ui/marks";
+import { FileStatusLetter, RepoTile, LineDelta } from "@/components/ui/marks";
 import { SectionLabel } from "@/components/ui/PanelHeader";
 import type { AvatarColor } from "@/lib/avatar-color";
 import {
@@ -171,11 +171,7 @@ function FileTouchesRow({
             ? t("review.fileView.commits", { count: touches.commits.length })
             : t("review.fileView.mergeOnly")}
         </span>
-        {touches.status !== null && (
-          <span className="shrink-0 font-mono">
-            <span className="text-diff-add-fg">+{touches.additions}</span> <span className="text-diff-del-fg">−{touches.deletions}</span>
-          </span>
-        )}
+        {touches.status !== null && <LineDelta additions={touches.additions} deletions={touches.deletions} />}
         {ticketKeys.length > 0 && (
           <span className="min-w-0 truncate font-semibold text-warning" title={ticketKeys.join(", ")}>
             {t("review.fileView.ticketNote", { keys: ticketKeys.join(", ") })}

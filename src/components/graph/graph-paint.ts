@@ -134,3 +134,19 @@ export function remoteBoundaryIndex(
   }
   return boundary;
 }
+
+/**
+ * 「올리지 않음」 영역 머리를 둘 행: 첫 올리지 않은 커밋. 원격 경계(`remoteBoundaryIndex`)를 아직 못
+ * 찾았어도(경계가 다음 페이지에 있다) 머리는 둔다 — 그 위가 올리지 않은 커밋이라는 말은 참이다. 다만
+ * 머리와 경계(없으면 목록 끝) 사이에 다른 워크트리의 이미 올라간 커밋이 끼면 그 말이 거짓이 되어 두지
+ * 않는다(-1). 올리지 않은 커밋이 없어도 -1.
+ */
+export function unpushedHeaderIndex(commits: readonly { isUnpushed?: boolean; isOwn?: boolean }[]): number {
+  const first = commits.findIndex((c) => c.isUnpushed === true);
+  if (first === -1) return -1;
+  const end = remoteBoundaryIndex(commits) ?? commits.length;
+  for (let i = first; i < end; i++) {
+    if (commits[i].isOwn === false && commits[i].isUnpushed === false) return -1;
+  }
+  return first;
+}

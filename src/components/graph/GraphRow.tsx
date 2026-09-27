@@ -5,8 +5,8 @@ import { Bot } from "lucide-react";
 import { RefBadge } from "@/components/history/CommitItem";
 import { CiStateIcon, type CiSummary } from "@/components/history/CommitDetail";
 import { FocusFlash } from "@/components/ui/FocusFlash";
-import { RefLabel as RefLabelMark, StatusChip } from "@/components/ui/marks";
-import { cn, formatRelativeTime } from "@/lib/utils";
+import { RefLabel as RefLabelMark, StatusChip, LineDelta } from "@/components/ui/marks";
+import { cn, formatRelativeTime, formatRelativeTimeShort, splitConventionalPrefix } from "@/lib/utils";
 import { leadingTicketKey } from "@/lib/ticket-keys";
 import type { GraphEdge, GraphRowLayout } from "@/lib/graph-lanes";
 import type { CommitInfo, CommitStats, RefLabel } from "@/types";
@@ -85,13 +85,7 @@ function ChangeCell({ stats }: { stats: CommitStats | undefined }) {
         </span>
       )}
       {/* 0인 쪽은 뺀다(+7 −0 → +7). 둘 다 0이면(이름만 바뀜·바이너리) 숫자를 두지 않는다. */}
-      {hasLines && (additions > 0 || deletions > 0) && (
-        <span className="shrink-0 font-mono text-[11.5px]">
-          {additions > 0 && <span className="text-(--diff-add-fg)">+{additions}</span>}
-          {additions > 0 && deletions > 0 && " "}
-          {deletions > 0 && <span className="text-(--diff-del-fg)">−{deletions}</span>}
-        </span>
-      )}
+      {hasLines && <LineDelta additions={additions} deletions={deletions} className="text-[11.5px]" />}
     </span>
   );
 }
@@ -144,10 +138,26 @@ interface GraphCellProps {
   highlightChain?: number | null;
   /** 이 행이 고른 커밋인지. 강조 중인 줄기 위에 있으면 점을 키우고 테를 두른다. */
   isSelected?: boolean;
+  /**
+   * 좁은 커밋 목록(D47 2단계): 레인 점 하나 폭만 쓴다. 가지·병합 선 대신 옅은 세로선 하나에 그 커밋의
+   * 줄기 색 점을 둔다 — 제목 폭을 넓히려는 것이다. 가지 모양은 「그래프 펼치기」로 본다.
+   */
+  compact?: boolean;
 }
 
 /** 한 행의 그래프 칸. 선이 행 안에서 완결되므로 행마다 따로 그린다(`graph-lanes`). */
-function GraphCell({ layout, width, colorOf, wipAbove, dot, laneTitle, highlightChain = null, isSelected = false }: GraphCellProps) {
+function GraphCell({
+  layout,
+  width,
+  colorOf,
+  wipAbove,
+  dot,
+  laneTitle,
+  highlightChain = null,
+  isSelected = false,
+  compact = false,
+}: GraphCellProps) {
+  if (compact) return <CompactGraphCell layout={layout} colorOf={colorOf} dot={dot} isSelected={isSelected} />;
   const x = laneX(layout.lane);
   const color = colorOf(layout.chain);
   const dotTitle = laneTitle?.(layout.chain);
@@ -198,7 +208,28 @@ function GraphCell({ layout, width, colorOf, wipAbove, dot, laneTitle, highlight
   );
 }
 
+/** 좁은 커밋 목록의 그래프 칸: 레인 하나 폭, 옅은 세로선 + 줄기 색 점. */
+function CompactGraphCell({
+  layout,
+  colorOf,
+  dot,
+  isSelected,
+}: Pick<GraphCellProps, "layout" | "colorOf" | "dot" | "isSelected">) {
+  const width = COMPACT_GRAPH_WIDTH;
+  const x = laneX(0);
+  return (
+    <svg width={width} height={H} viewBox={`0 0 ${width} ${H}`} aria-hidden="true" className="shrink-0" data-lane={layout.lane}>
+      <path d={`M${x} 0 V${H}`} stroke="var(--line2)" strokeWidth={2} fill="none" />
+      <circle cx={x} cy={MID} r={isSelected ? SELECTED_DOT_R : DOT_R} data-dot={dot} fill={colorOf(layout.chain)} />
+    </svg>
+  );
+}
+
+/** 좁은 커밋 목록의 그래프 칸 폭(px): 레인 하나. */
+export const COMPACT_GRAPH_WIDTH = laneX(0) * 2;
+
 interface GraphRowProps {
+  compact?: boolean;
   commit: CommitInfo;
   layout: GraphRowLayout;
   graphWidth: number;
@@ -263,6 +294,7 @@ export const GraphRow = memo(function GraphRow({
   highlightChain = null,
   chainLabel,
   chainLabelHere = false,
+  compact = false,
   onClick,
   onContextMenu,
   onRefContextMenu,
@@ -309,6 +341,7 @@ export const GraphRow = memo(function GraphRow({
         laneTitle={laneTitle}
         highlightChain={highlightChain}
         isSelected={isSelected}
+        compact={compact}
       />
       <span className={cn(GRAPH_COLUMNS, "flex-1 min-w-0 pl-2 pr-3 text-[12.5px]")}>
         <span className="flex items-center gap-2 min-w-0">
@@ -336,9 +369,14 @@ export const GraphRow = memo(function GraphRow({
               {ticket.key}
             </span>
           )}
-          <span className={cn("truncate text-foreground", isSelected ? "font-bold" : "font-medium")}>
-            {ticket ? ticket.rest : commit.summary}
-          </span>
+          {/* 좁은 목록: Conventional Commits 머리는 타입만 흐리게 두고 나머지를 제목으로(전체는 줄 title). */}
+          {compact ? (
+            <NarrowTitle summary={commit.summary} bold={isSelected} />
+          ) : (
+            <span className={cn("truncate text-foreground", isSelected ? "font-bold" : "font-medium")}>
+              {ticket ? ticket.rest : commit.summary}
+            </span>
+          )}
           {chainLabelHere && highlightChain !== null && chainLabel && (
             <span
               className="shrink-0 px-1.5 py-px rounded-(--radius-chip) text-[10.5px] font-semibold"
@@ -373,14 +411,33 @@ export const GraphRow = memo(function GraphRow({
           )}
         </span>
         <span className="truncate text-[11.5px] text-muted-foreground">
-          {formatRelativeTime(commit.timestamp)}
+          {compact ? formatRelativeTimeShort(commit.timestamp) : formatRelativeTime(commit.timestamp)}
         </span>
       </span>
     </button>
   );
 });
 
+/** 좁은 커밋 목록의 제목: Conventional Commits 머리는 타입만 흐리게 둔다. */
+function NarrowTitle({ summary, bold }: { summary: string; bold: boolean }) {
+  const conventional = splitConventionalPrefix(summary);
+  return (
+    <span className={cn("truncate text-foreground", bold ? "font-bold" : "font-medium")}>
+      {conventional ? (
+        <>
+          <span className="font-normal text-muted-foreground">{conventional.type} </span>
+          {conventional.rest}
+        </>
+      ) : (
+        summary
+      )}
+    </span>
+  );
+}
+
 interface GraphWipRowProps {
+  /** 좁은 커밋 목록(D47 2단계): 「커밋 안 한 변경 · 9」와 짧은 시각. */
+  compact?: boolean;
   /** 설명 칸 앞부분(스크린 리더용 이름에도 쓴다). 파일 수는 이 컴포넌트가 붙인다. */
   wipLabel: string;
   /** 변경이 쌓인 브랜치와 워크트리. 행마다 늘 보여 준다(여러 워크트리가 있어도 헷갈리지 않게). */
@@ -437,6 +494,7 @@ export function GraphWipRow({
   trailing,
   action,
   live = false,
+  compact = false,
   onSelect,
   onContextMenu,
 }: GraphWipRowProps) {
@@ -556,7 +614,10 @@ export function GraphWipRow({
             <span className="shrink-0 text-[11.5px] text-muted-foreground">{worktreeText}</span>
           )}
           </span>
-          <span className="text-[11.5px] text-muted-foreground shrink-0">{countText}</span>
+          {/* 좁은 목록: 「커밋 안 한 변경 · 9」. 수는 이 행 한 곳에만 있다(One owner per number). */}
+          <span className="text-[11.5px] text-muted-foreground shrink-0">
+            {compact ? (count !== null ? `· ${count}` : null) : countText}
+          </span>
           <span className={cn("contents", NARROW_HIDDEN_CLASS)}>{trailing}</span>
         </span>
         {/* 변경 · CI · 작성자 칸은 커밋하지 않은 변경에는 없다(3.15는 커밋 줄만 다룬다) — 그리드 정렬만 맞춘다. */}
@@ -565,7 +626,9 @@ export function GraphWipRow({
         <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />
         <span className="truncate text-[11.5px] text-muted-foreground">
           {changedAt !== null && (count ?? 0) > 0
-            ? t("graph.modifiedAgo", { time: formatRelativeTime(changedAt / 1000) })
+            ? compact
+              ? formatRelativeTimeShort(changedAt / 1000)
+              : t("graph.modifiedAgo", { time: formatRelativeTime(changedAt / 1000) })
             : null}
         </span>
       </span>

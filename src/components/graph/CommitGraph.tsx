@@ -42,6 +42,7 @@ import {
   BaseHeaderRow,
   edgePath,
   followRowParts,
+  COMPACT_GRAPH_WIDTH,
   GRAPH_COLUMNS,
   NARROW_HIDDEN_CLASS,
   GraphRow,
@@ -68,6 +69,7 @@ import {
   branchColors,
   mutedChainNames,
   remoteBoundaryIndex,
+  unpushedHeaderIndex,
   worktreeChainColors,
   type ShownWorktree,
 } from "./graph-paint";
@@ -108,6 +110,7 @@ export interface WorktreeHead {
 }
 
 const NO_WORKTREE_HEADS: readonly WorktreeHead[] = [];
+const NO_THROUGH: readonly { lane: number; chain: number }[] = [];
 const NO_CI_RUNS: readonly WorkflowRun[] = [];
 
 /**
@@ -212,10 +215,12 @@ interface WipRowsProps {
   colorOf?: (chain: number) => string;
   /** 그래프에 그린 지금 연 워크트리의 HEAD(스캔보다 새 값). 브랜치가 없을 때 SHA 표시에 쓴다. */
   currentHead?: string | null;
+  /** 좁은 커밋 목록(D47 2단계)의 짧은 줄. */
+  compact?: boolean;
 }
 
 /** 맨 위 WIP 행들. 워크트리마다 한 행. */
-function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = null }: WipRowsProps) {
+function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = null, compact = false }: WipRowsProps) {
   const { t } = useTranslation();
   const activeTab = useUIStore((s) => s.activeTab);
   const followTarget = useFollowStore((s) => s.target);
@@ -243,6 +248,7 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
             changedAt={wip.changedAt}
             color={worktreeColor(wip.path)}
             graphWidth={graphWidth}
+            compact={compact}
             selected={activeTab === "changes" && (followTarget !== null ? followed !== null : wip.isCurrent)}
             connectDown={false}
             layout={lanes?.get(wipLaneOid(wip.path))}
@@ -397,8 +403,11 @@ function CommitGraphList({
   // 단계에서 함께 그리는 다른 워크트리의 커밋도 센다 — 그 레인의 올리지 않은 커밋이 머리 위로 올라가지 않게.
   // 경계를 그리지 못하면(교정 규칙) 이 머리도 그리지 않는다 — 행 바탕 틴트만 남는다.
   const unpushedIdx = useMemo(
-    () => (boundaryIdx !== null ? commits.findIndex((c) => c.isUnpushed === true) : -1),
-    [boundaryIdx, commits],
+    () =>
+      markRemote
+        ? unpushedHeaderIndex(commits.map((c) => ({ isUnpushed: c.isUnpushed, isOwn: ownIds.has(c.id) })))
+        : -1,
+    [markRemote, commits, ownIds],
   );
   // 머리 행의 이름표: 「원격에 없음」은 어느 원격에도 없다는 뜻이라, 원격이 여럿이면 이름을 고르지 않는다.
   const remotes = useRepositoryStore((s) => s.activeRepo?.remotes);
@@ -497,7 +506,10 @@ function CommitGraphList({
   // 무한 스크롤: 맨 아래 표시가 보이면 다음 페이지를 불러온다.
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
-  useRevealSelectedWhenNarrow(useGraphNarrow(), scrollRef, selectedCommitId);
+  const narrow = useGraphNarrow();
+  useRevealSelectedWhenNarrow(narrow, scrollRef, selectedCommitId);
+  // 좁은 커밋 목록(D47 2단계)은 레인 하나 폭만 그린다 — 제목 폭을 넓힌다.
+  const drawWidth = narrow ? COMPACT_GRAPH_WIDTH : graphWidth;
   const loadState = useRef({ hasNextPage, isFetchingNextPage, fetchNextPage });
   useEffect(() => {
     loadState.current = { hasNextPage, isFetchingNextPage, fetchNextPage };
@@ -557,12 +569,13 @@ function CommitGraphList({
         ) : (
           <>
             {/* 「지금」 영역 머리(D48): 보일 WIP 행이 있을 때만 그 위에 둔다. */}
-            {wips.length > 0 && <NowHeaderRow graphWidth={graphWidth} through={[]} colorOf={colorOf} />}
+            {wips.length > 0 && <NowHeaderRow graphWidth={drawWidth} through={[]} colorOf={colorOf} />}
             <WipRows
               wips={wips}
               selection={selection}
-              graphWidth={graphWidth}
-              lanes={layouts}
+              graphWidth={drawWidth}
+              lanes={narrow ? undefined : layouts}
+              compact={narrow}
               colorOf={colorOf}
               currentHead={ownHead}
             />
@@ -578,7 +591,7 @@ function CommitGraphList({
             const layout = layouts.get(commit.id);
             if (!layout) return null;
             const emailKey = commit.author.email?.toLowerCase() ?? "";
-            const through = throughAt(index);
+            const through = narrow ? NO_THROUGH : throughAt(index);
             return (
               <Fragment key={commit.id}>
                 {/* 영역 머리는 그 영역 맨 위에 둔다: 올리지 않은 작업 → origin에 있음 → 기본 브랜치.
@@ -586,7 +599,7 @@ function CommitGraphList({
                 {unpushedIdx === index && (
                   <UnpushedHeaderRow
                     remote={remoteLabel}
-                    graphWidth={graphWidth}
+                    graphWidth={drawWidth}
                     through={through}
                     colorOf={colorOf}
                   />
@@ -595,7 +608,7 @@ function CommitGraphList({
                   <RemoteHeaderRow
                     remote={remoteLabel}
                     branch={boundaryRemoteRef}
-                    graphWidth={graphWidth}
+                    graphWidth={drawWidth}
                     through={through}
                     colorOf={colorOf}
                   />
@@ -604,7 +617,7 @@ function CommitGraphList({
                   <BaseHeaderRow
                     branch={changes.defaultBranch}
                     timestamp={commit.timestamp}
-                    graphWidth={graphWidth}
+                    graphWidth={drawWidth}
                     through={through}
                     colorOf={colorOf}
                   />
@@ -614,7 +627,8 @@ function CommitGraphList({
                   itemRef={itemRef}
                   commit={commit}
                   layout={layout}
-                  graphWidth={graphWidth}
+                  graphWidth={drawWidth}
+                  compact={narrow}
                   colorOf={colorOf}
                   remoteTags={remoteTags}
                   avatarUrl={accountAvatarMap.get(emailKey) || githubAvatarMap?.[emailKey] || undefined}
@@ -803,6 +817,8 @@ interface HistoryGraphRowProps {
   chainLabel?: string;
   /** 이 행이 이름 칩을 붙일 행인지(#3, 미리보기·선택을 뒤섞지 않는다). */
   chainLabelHere: boolean;
+  /** 좁은 커밋 목록(D47 2단계)의 한 줄: 레인 하나 폭만 그린다. */
+  compact: boolean;
   onSelect: (commitId: string) => void;
   onRowContextMenu: (commit: CommitInfo, e: MouseEvent) => void;
   onRefContextMenu: (label: RefLabel, e: MouseEvent) => void;
@@ -934,7 +950,10 @@ export function RepoLaneCommitGraph({
 
   const laneScrollRef = useRef<HTMLDivElement | null>(null);
   const selectedCommitOid = selectedIdx >= 0 ? commitRows[selectedIdx].commit.id : null;
-  useRevealSelectedWhenNarrow(useGraphNarrow(), laneScrollRef, selectedCommitOid);
+  const narrow = useGraphNarrow();
+  useRevealSelectedWhenNarrow(narrow, laneScrollRef, selectedCommitOid);
+  // 좁은 커밋 목록(D47 2단계)은 레인 하나 폭만 그린다.
+  const drawWidth = narrow ? COMPACT_GRAPH_WIDTH : graphWidth;
 
   return (
     <div className="@container/graph flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -963,7 +982,8 @@ export function RepoLaneCommitGraph({
                   <RepoLaneWipRow
                     key={row.key}
                     row={row}
-                    graphWidth={graphWidth}
+                    graphWidth={drawWidth}
+                    compact={narrow}
                     colorOf={colorOf}
                     repoLabel={repoLabel}
                     selected={selectedKey === row.key}
@@ -992,7 +1012,8 @@ export function RepoLaneCommitGraph({
                     row={row}
                     index={idx}
                     itemRef={itemRef}
-                    graphWidth={graphWidth}
+                    graphWidth={drawWidth}
+                    compact={narrow}
                     colorOf={colorOf}
                     avatarUrl={accountAvatarMap.get(emailKey) || undefined}
                     stats={commitStats.get(commitStatsAcrossReposKey(row.repoPath, row.commit.id))}
@@ -1005,8 +1026,8 @@ export function RepoLaneCommitGraph({
                 );
               }
               case "header": {
-                const through = row.layout.edges.map((e) => ({ lane: e.fromLane, chain: e.chain }));
-                const common = { graphWidth, through, colorOf };
+                const through = narrow ? NO_THROUGH : row.layout.edges.map((e) => ({ lane: e.fromLane, chain: e.chain }));
+                const common = { graphWidth: drawWidth, through, colorOf };
                 if (row.region === "now") return <NowHeaderRow key={row.key} {...common} />;
                 if (row.region === "unpushed") {
                   return <UnpushedHeaderRow key={row.key} {...common} remote={remoteLabel} />;
@@ -1018,7 +1039,8 @@ export function RepoLaneCommitGraph({
                   <BaseRow
                     key={row.key}
                     row={row}
-                    graphWidth={graphWidth}
+                    graphWidth={drawWidth}
+                    compact={narrow}
                     colorOf={colorOf}
                     baseTime={baseTime}
                     branchLabel={baseBranchLabel}
@@ -1047,6 +1069,7 @@ export function RepoLaneCommitGraph({
 function RepoLaneWipRow({
   row,
   graphWidth,
+  compact,
   colorOf,
   repoLabel,
   selected,
@@ -1056,6 +1079,7 @@ function RepoLaneWipRow({
 }: {
   row: Extract<RepoLaneRow, { kind: "wip" }>;
   graphWidth: number;
+  compact: boolean;
   colorOf: (chain: number) => string;
   repoLabel: (repoPath: string) => string;
   selected: boolean;
@@ -1068,6 +1092,7 @@ function RepoLaneWipRow({
   const { trailing, followButton, live } = followRowParts(t, now, row.wip.changedAt, row.wip.count, following, onToggleFollow);
   return (
     <GraphWipRow
+      compact={compact}
       wipLabel={t("shell.uncommitted")}
       ariaContext={repoLabel(row.repoPath)}
       target={wipTarget(row.wip)}
@@ -1077,8 +1102,8 @@ function RepoLaneWipRow({
       graphWidth={graphWidth}
       selected={selected}
       connectDown={false}
-      layout={row.layout}
-      colorOf={colorOf}
+      layout={compact ? undefined : row.layout}
+      colorOf={compact ? undefined : colorOf}
       leading={<RepoLaneTag repoPath={row.repoPath} label={repoLabel(row.repoPath)} />}
       trailing={trailing}
       action={followButton}
@@ -1089,6 +1114,7 @@ function RepoLaneWipRow({
 }
 
 interface RepoLaneCommitRowProps {
+  compact: boolean;
   row: Extract<RepoLaneRow, { kind: "commit" }>;
   index: number;
   itemRef: (index: number) => (el: HTMLElement | null) => void;
@@ -1109,6 +1135,7 @@ interface RepoLaneCommitRowProps {
  * 변화가 이 행까지 다시 그리게 하지 않는다 — 단일 저장소 그래프의 `HistoryGraphRow`와 같은 패턴이다.
  */
 const RepoLaneCommitRow = memo(function RepoLaneCommitRow({
+  compact,
   row,
   index,
   itemRef,
@@ -1129,6 +1156,7 @@ const RepoLaneCommitRow = memo(function RepoLaneCommitRow({
       commit={row.commit}
       layout={row.layout}
       graphWidth={graphWidth}
+      compact={compact}
       colorOf={colorOf}
       remoteTags={null}
       avatarUrl={avatarUrl}
@@ -1148,6 +1176,7 @@ const RepoLaneCommitRow = memo(function RepoLaneCommitRow({
 function BaseRow({
   row,
   graphWidth,
+  compact,
   colorOf,
   baseTime,
   branchLabel,
@@ -1155,6 +1184,7 @@ function BaseRow({
   branchLabel: string;
   row: Extract<RepoLaneGraph["rows"][number], { kind: "base" }>;
   graphWidth: number;
+  compact: boolean;
   colorOf: (chain: number) => string;
   baseTime: number | null;
 }) {
@@ -1167,7 +1197,7 @@ function BaseRow({
       data-testid="repo-lane-base"
     >
       <svg width={graphWidth} height={H} viewBox={`0 0 ${graphWidth} ${H}`} aria-hidden="true" className="shrink-0">
-        {row.layout.edges.map((edge, i) => (
+        {(compact ? [] : row.layout.edges).map((edge, i) => (
           <path
             key={i}
             d={edgePath(edge, 0)}

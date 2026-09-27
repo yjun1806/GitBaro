@@ -122,6 +122,19 @@ describe("GraphRow columns (design-system.md 3.15)", () => {
     expect(text).not.toContain("−0");
   });
 
+  it("in the narrow list, dims the conventional-commit type, drops the scope and uses a short time", () => {
+    const c = commit({ summary: "fix(graph): tidy region labels", timestamp: Math.floor(Date.now() / 1000) - 4 * 3600 });
+    render(<GraphRow {...baseProps} commit={c} stats={stats()} compact />);
+    const row = screen.getByRole("button");
+    expect(row.textContent).toContain("fix tidy region labels");
+    expect(row.textContent).not.toContain("(graph)");
+    expect(screen.getByText("fix", { exact: false }).className).toContain("text-muted-foreground");
+    expect(row.textContent).toContain("4h");
+    expect(row.textContent).not.toContain("hours ago");
+    // 전체 제목은 줄의 title에 남는다.
+    expect(row.getAttribute("title")).toContain("fix(graph): tidy region labels");
+  });
+
   it("shows the CI icon only when a run exists for this commit", () => {
     const c = commit();
     const ci: CiSummary = { state: "failed", names: ["build"] };

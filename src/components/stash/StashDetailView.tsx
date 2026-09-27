@@ -15,7 +15,7 @@ import { useOpenFileInEditor } from "@/hooks/useOpenFileInEditor";
 import type { FileStatus, StashFileSummary } from "@/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Button } from "@/components/ui/Button";
-import { Code, Count, FileStatusLetter } from "@/components/ui/marks";
+import { Code, Count, FileStatusLetter, LineDelta } from "@/components/ui/marks";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionLabel } from "@/components/ui/PanelHeader";
 
@@ -67,12 +67,7 @@ function FileSummaryRow({
         {file.path.split("/").pop()}
       </span>
       <FileStatusLetter status={toFileStatus(file.status)} />
-      {(file.insertions > 0 || file.deletions > 0) && (
-        <span className="flex items-center gap-1.5 font-mono text-[11.5px] shrink-0">
-          {file.insertions > 0 && <span className="text-diff-add-fg">+{file.insertions}</span>}
-          {file.deletions > 0 && <span className="text-diff-del-fg">{"−"}{file.deletions}</span>}
-        </span>
-      )}
+      <LineDelta additions={file.insertions} deletions={file.deletions} className="text-[11.5px]" />
     </button>
   );
 }
@@ -179,12 +174,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
               <span>
                 {files.length} {files.length === 1 ? "file" : "files"}
               </span>
-              {totalInsertions > 0 && (
-                <span className="font-mono text-diff-add-fg">+{totalInsertions}</span>
-              )}
-              {totalDeletions > 0 && (
-                <span className="font-mono text-diff-del-fg">{"−"}{totalDeletions}</span>
-              )}
+              <LineDelta additions={totalInsertions} deletions={totalDeletions} />
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">

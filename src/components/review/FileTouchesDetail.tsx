@@ -5,7 +5,7 @@ import { useRangeFileDiff } from "@/api/queries";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { RepoTile } from "@/components/ui/marks";
+import { RepoTile, LineDelta } from "@/components/ui/marks";
 import { SectionLabel } from "@/components/ui/PanelHeader";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { AvatarColor } from "@/lib/avatar-color";
@@ -97,11 +97,7 @@ export const FileTouchesDetail = forwardRef<HTMLDivElement, FileTouchesDetailPro
               ? t("review.fileView.commits", { count: touches.commits.length })
               : t("review.fileView.mergeOnly")}
           </span>
-          {touches.status !== null && (
-            <span className="font-mono">
-              <span className="text-diff-add-fg">+{touches.additions}</span> <span className="text-diff-del-fg">−{touches.deletions}</span>
-            </span>
-          )}
+          {touches.status !== null && <LineDelta additions={touches.additions} deletions={touches.deletions} />}
           {ticketKeys.length > 0 && (
             <span className="font-semibold text-warning" title={ticketKeys.join(", ")}>
               {t("review.fileView.differentWork", { count: ticketKeys.length })}

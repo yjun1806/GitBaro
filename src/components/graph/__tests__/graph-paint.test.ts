@@ -8,6 +8,7 @@ import {
   mutedChainNames,
   remoteBoundaryIndex,
   worktreeChainColors,
+  unpushedHeaderIndex,
 } from "../graph-paint";
 import { withWipLanes, worktreeColor } from "../worktree-history";
 
@@ -184,5 +185,23 @@ describe("chainDotStyle", () => {
     expect(chainDotStyle(4, 4, true)).toEqual({ ring: true, opacity: 1 });
     // 미리보기로 다른 줄기를 강조하는 동안은 고른 커밋도 링 없이 흐려진다.
     expect(chainDotStyle(4, 1, true)).toEqual({ ring: false, opacity: 0.45 });
+  });
+});
+
+describe("unpushedHeaderIndex", () => {
+  it("puts the header on the first unpushed commit even before the remote boundary is loaded", () => {
+    // 첫 페이지가 모두 올리지 않은 커밋이라 경계를 아직 모른다.
+    expect(unpushedHeaderIndex([{ isUnpushed: true }, { isUnpushed: true }])).toBe(0);
+    expect(unpushedHeaderIndex([{ isUnpushed: true }, { isUnpushed: false }])).toBe(0);
+  });
+
+  it("has no header when nothing is unpushed", () => {
+    expect(unpushedHeaderIndex([{ isUnpushed: false }, {}])).toBe(-1);
+  });
+
+  it("drops the header when another worktree's pushed commit sits inside the unpushed region", () => {
+    expect(
+      unpushedHeaderIndex([{ isUnpushed: true }, { isUnpushed: false, isOwn: false }, { isUnpushed: true }]),
+    ).toBe(-1);
   });
 });

@@ -51,7 +51,7 @@ import { Notice } from "@/components/ui/Notice";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionLabel } from "@/components/ui/PanelHeader";
 import { Segmented } from "@/components/ui/Segmented";
-import { Dot, FileStatusLetter, RefLabel, StatusChip } from "@/components/ui/marks";
+import { Dot, FileStatusLetter, RefLabel, StatusChip, LineDelta } from "@/components/ui/marks";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
 
 /** `registerWatchPaths`에 쓰는 이 화면의 key. 감시 대상 목록에서 맨 앞에 온다. */
@@ -326,10 +326,7 @@ function FollowFileList({
                 {recent ? t("live.secondsAgo", { count: seconds }) : formatRelativeTime(f.modifiedAt!)}
               </span>
             )}
-            {f.insertions !== null && (
-              <span className="shrink-0 font-mono text-[11.5px] text-diff-add-fg">+{f.insertions}</span>
-            )}
-            {f.deletions ? <span className="shrink-0 font-mono text-[11.5px] text-diff-del-fg">−{f.deletions}</span> : null}
+            <LineDelta additions={f.insertions} deletions={f.deletions} className="text-[11.5px]" />
           </button>
         );
       })}

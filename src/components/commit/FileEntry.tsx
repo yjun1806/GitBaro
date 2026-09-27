@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Undo2 } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
-import { FileStatusLetter } from "@/components/ui/marks";
+import { FileStatusLetter, LineDelta } from "@/components/ui/marks";
 import type { FileStatus } from "@/types";
 
 export interface FileEntryProps {
@@ -94,13 +94,7 @@ function FileEntryComponent({
         {previousName && <span className="text-muted-foreground">{previousName} → </span>}
         {filename}
       </span>
-      {(entry.insertions != null || entry.deletions != null) && (
-        <span className="font-mono text-[11.5px] shrink-0">
-          {entry.insertions != null && <span className="text-diff-add-fg">+{entry.insertions}</span>}
-          {entry.insertions != null && entry.deletions != null && <span className="text-muted-foreground"> </span>}
-          {entry.deletions != null && <span className="text-diff-del-fg">{"−"}{entry.deletions}</span>}
-        </span>
-      )}
+      <LineDelta additions={entry.insertions} deletions={entry.deletions} className="text-[11.5px]" />
       <span className="flex-1" />
       {entry.modifiedAt != null && (
         <span className="text-[11.5px] text-muted-foreground shrink-0">{formatRelativeTime(entry.modifiedAt)}</span>

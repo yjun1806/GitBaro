@@ -3,7 +3,7 @@ import { PanelLeftOpen } from "lucide-react";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { cn } from "@/lib/utils";
 import { MAXIMIZED_LIST_FOLDED_WIDTH, MAXIMIZED_LIST_WIDTH } from "@/lib/split-size";
-import { FileStatusLetter } from "@/components/ui/marks";
+import { FileStatusLetter, LineDelta } from "@/components/ui/marks";
 import { SectionLabel } from "@/components/ui/PanelHeader";
 import { splitFilePath, type MaximizedFiles } from "./maximized-files";
 
@@ -67,12 +67,7 @@ export function MaximizedFileList({ items, selectedKey, onSelect, onContextMenu,
                     {name}
                     {dir && <span className="ml-1 text-[11.5px] text-muted-foreground">{dir}</span>}
                   </span>
-                  {f.additions != null && f.additions > 0 && (
-                    <span className="shrink-0 font-mono text-[11.5px] text-diff-add-fg">+{f.additions}</span>
-                  )}
-                  {f.deletions != null && f.deletions > 0 && (
-                    <span className="shrink-0 font-mono text-[11.5px] text-diff-del-fg">−{f.deletions}</span>
-                  )}
+                  <LineDelta additions={f.additions} deletions={f.deletions} className="text-[11.5px]" />
                 </span>
               </button>
             </div>

@@ -37,6 +37,30 @@ export function formatRelativeTime(timestamp: number): string {
   return i18n.t("time.yearsAgo", { count: diffYears });
 }
 
+/** 짧은 상대 시각(「4시간」「3일」, 영어 「4h」). 좁은 커밋 목록처럼 칸이 좁은 곳에 쓴다. */
+export function formatRelativeTimeShort(timestamp: number): string {
+  const diffSeconds = Math.floor((Date.now() - timestamp * 1000) / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffSeconds < 60) return i18n.t("time.short.justNow");
+  if (diffMinutes < 60) return i18n.t("time.short.minutes", { count: diffMinutes });
+  if (diffHours < 24) return i18n.t("time.short.hours", { count: diffHours });
+  if (diffDays < 7) return i18n.t("time.short.days", { count: diffDays });
+  if (diffDays < 30) return i18n.t("time.short.weeks", { count: Math.floor(diffDays / 7) });
+  if (diffDays < 365) return i18n.t("time.short.months", { count: Math.floor(diffDays / 30) });
+  return i18n.t("time.short.years", { count: Math.floor(diffDays / 365) });
+}
+
+/**
+ * Conventional Commits 머리(`fix(graph): `, `feat!: `)를 떼어 타입과 나머지로 나눈다. 없으면 null.
+ * 좁은 커밋 목록에서 타입만 흐리게 두고 제목 폭을 넓히는 데 쓴다(전체 제목은 줄의 title에 남는다).
+ */
+export function splitConventionalPrefix(summary: string): { type: string; rest: string } | null {
+  const m = /^([a-z]+)(\([^)]*\))?!?:\s+(.+)$/i.exec(summary);
+  return m ? { type: m[1], rest: m[3] } : null;
+}
+
 export function truncateHash(hash: string, length = 7): string {
   return hash.slice(0, length);
 }

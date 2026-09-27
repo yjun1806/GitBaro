@@ -267,3 +267,27 @@ export function FileStatusLetter({ status }: FileStatusLetterProps) {
     </span>
   );
 }
+
+/* ── LineDelta ───────────────────────────────────────────────────── */
+
+export interface LineDeltaProps {
+  additions: number | null | undefined;
+  deletions: number | null | undefined;
+  className?: string;
+}
+
+/**
+ * 줄 수 변화 「+N −N」(3.15). 0이거나 모르는 쪽은 뺀다(`+7 −0` → `+7`). 둘 다 없으면 아무것도 그리지
+ * 않는다 — 「+0 −0」은 읽을 거리가 없다. 앱에서 +/−를 그리는 곳은 모두 이것을 쓴다.
+ */
+export function LineDelta({ additions, deletions, className }: LineDeltaProps) {
+  const add = additions ?? 0;
+  const del = deletions ?? 0;
+  if (add <= 0 && del <= 0) return null;
+  return (
+    <span className={cn("inline-flex items-center gap-1 shrink-0 font-mono whitespace-nowrap", className)}>
+      {add > 0 && <span className="text-diff-add-fg">+{add}</span>}
+      {del > 0 && <span className="text-diff-del-fg">−{del}</span>}
+    </span>
+  );
+}

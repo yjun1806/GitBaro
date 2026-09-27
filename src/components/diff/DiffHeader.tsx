@@ -4,7 +4,7 @@ import { Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Search, X } from "
 import { useUIStore } from "@/stores/ui";
 import { useDiffClose, useHasMaximizedFiles, useHasMaximizedOrigin } from "@/components/layout/maximized-files";
 import { Button } from "@/components/ui/Button";
-import { FileStatusLetter } from "@/components/ui/marks";
+import { FileStatusLetter, LineDelta } from "@/components/ui/marks";
 import { Segmented } from "@/components/ui/Segmented";
 import type { FileStatus } from "@/types";
 import type { DiffViewMode } from "./view-mode";
@@ -72,16 +72,7 @@ export function DiffHeader({
 
       <div className="flex items-center gap-2 shrink-0">
         {extra}
-        {addedLines > 0 && (
-          <span className="font-mono text-[11.5px] text-diff-add-fg">
-            +{addedLines}
-          </span>
-        )}
-        {removedLines > 0 && (
-          <span className="font-mono text-[11.5px] text-diff-del-fg">
-            {"−"}{removedLines}
-          </span>
-        )}
+        <LineDelta additions={addedLines} deletions={removedLines} className="text-[11.5px]" />
 
         {modes.length > 1 && (
           <Segmented
