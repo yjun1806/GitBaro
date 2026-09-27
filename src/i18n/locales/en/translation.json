@@ -1244,11 +1244,12 @@
   },
   "statusBar": {
     "workspace": {
-      "changed_one": "{{count}} repository has changes",
-      "changed_other": "{{count}} repositories have changes",
-      "unpushed_one": "{{count}} repository has commits to push",
-      "unpushed_other": "{{count}} repositories have commits to push",
-      "allQuiet": "All repositories are quiet"
+      "summary": "Workspace {{name}} · based on each repository's checked-out branch"
+    },
+    "repoScope": {
+      "mainCheckout": "Primary folder ⎇ {{branch}}",
+      "lanesAreWorktrees": "Lanes are worktrees",
+      "noLinkedWorktrees": "No linked worktrees"
     }
   },
   "statusLine": {
