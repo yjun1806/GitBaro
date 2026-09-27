@@ -110,6 +110,10 @@ export function GraphPanel() {
   const fileSources = useFileSources(scope, worktreeFilter.wips);
   const repoName = useActiveRepoName();
   useCarriedSelection(scope, sources);
+  const branchOnly = useScopeStore((s) => s.branchOnly);
+  const setBranchOnly = useScopeStore((s) => s.setBranchOnly);
+  const branchFilter =
+    scope?.kind === "branch" ? { branch: scope.branch, on: branchOnly, onToggle: () => setBranchOnly(!branchOnly) } : undefined;
 
   // 커밋을 새로 고를 때만 아래 칸을 커밋 상세로 바꾼다. 패널이 다시 마운트될 때
   // (저장소 목록을 열었다 닫을 때 등) 남아 있던 선택으로 스태시·Actions 탭에서
@@ -141,7 +145,7 @@ export function GraphPanel() {
   };
 
   return (
-    <div role="region" aria-label={t("shell.panelTabs")} className="flex flex-col shrink-0 flex-1 min-h-0">
+    <div role="region" aria-label={t("shell.panelTabs")} className="flex flex-col shrink-0 flex-1 h-full min-h-0">
       <Card className="relative flex-1 min-h-0">
         <div className="flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)">
           <TabGroup aria-label={t("shell.panelTabs")} className="flex-1 min-w-0 gap-2 px-3 border-b-0">
@@ -215,9 +219,9 @@ export function GraphPanel() {
           ) : tab === "stash" ? (
             <StashView />
           ) : tab === "pr" ? (
-            <PrListView />
+            <PrListView branchFilter={branchFilter} />
           ) : (
-            <ActionsView />
+            <ActionsView branchFilter={branchFilter} />
           )}
           <SwitchingOverlay />
         </div>

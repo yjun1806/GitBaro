@@ -1463,7 +1463,8 @@
       "noGitHubRemote": "Could not find the GitHub repository from the origin remote",
       "network": "Could not reach GitHub. Check the network",
       "other": "{{error}}"
-    }
+    },
+    "stateLabel": "State"
   },
   "settingsPanel": {
     "subtitle": "Applies to the whole app",
@@ -1608,5 +1609,9 @@
   },
   "filters": {
     "removeChip": "Remove filter"
+  },
+  "scope": {
+    "thisBranchOnly": "This branch only",
+    "thisBranchOnlyHint": "Only {{branch}} · off shows the whole repository"
   }
 }

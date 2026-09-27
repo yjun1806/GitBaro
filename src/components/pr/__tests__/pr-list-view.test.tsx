@@ -17,10 +17,10 @@ const { PrListView } = await import("../PrListView");
 type Handler = (args: Record<string, unknown>) => unknown;
 let handlers: Record<string, Handler> = {};
 
-function renderList() {
+function renderList(props: Parameters<typeof PrListView>[0] = {}) {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <PrListView />
+      <PrListView {...props} />
     </QueryClientProvider>,
   );
 }
@@ -89,9 +89,26 @@ describe("PrListView", () => {
     handlers.list_pull_requests = ({ state }) => (state === "closed" ? [] : [summary()]);
     renderList();
     await screen.findByText("Some change");
-    fireEvent.click(screen.getByRole("radio", { name: i18n.t("pr.filter.closed") }));
+    fireEvent.click(screen.getByRole("button", { name: /State/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: i18n.t("pr.filter.closed") }));
     await screen.findByText(i18n.t("pr.empty.closed"));
     expect(invoke).toHaveBeenCalledWith("list_pull_requests", expect.objectContaining({ state: "closed" }));
+  });
+
+  it("shows only the branch's PRs while 'This branch only' is on, and every PR once it is off (5.1)", async () => {
+    const onToggle = vi.fn();
+    const { rerender } = renderList({ branchFilter: { branch: "feat/other", on: true, onToggle } });
+    await waitFor(() => expect(rowTitles()).toEqual(["Older PR"]));
+    const chip = screen.getByRole("button", { name: "This branch only" });
+    expect(chip.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(chip);
+    expect(onToggle).toHaveBeenCalled();
+    rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <PrListView branchFilter={{ branch: "feat/other", on: false, onToggle }} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(rowTitles()).toHaveLength(3));
   });
 
   it("does not show the previous repository's PRs while the next one loads", async () => {

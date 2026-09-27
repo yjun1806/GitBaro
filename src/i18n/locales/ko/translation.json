@@ -1445,7 +1445,8 @@
       "noGitHubRemote": "origin 원격 주소로 GitHub 저장소를 찾지 못했습니다",
       "network": "GitHub에 연결하지 못했습니다. 네트워크를 확인하세요",
       "other": "{{error}}"
-    }
+    },
+    "stateLabel": "상태"
   },
   "settingsPanel": {
     "subtitle": "앱 전체에 적용",
@@ -1590,5 +1591,9 @@
   },
   "filters": {
     "removeChip": "필터 빼기"
+  },
+  "scope": {
+    "thisBranchOnly": "이 브랜치만",
+    "thisBranchOnlyHint": "{{branch}}만 · 끄면 저장소 전체"
   }
 }

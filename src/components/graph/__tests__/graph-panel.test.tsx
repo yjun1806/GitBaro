@@ -26,7 +26,11 @@ import type {
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/components/stash/StashView", () => ({ StashView: () => <div>stash-list</div> }));
-vi.mock("@/components/actions/ActionsView", () => ({ ActionsView: () => <div>actions-list</div> }));
+vi.mock("@/components/actions/ActionsView", () => ({
+  ActionsView: ({ branchFilter }: { branchFilter?: { branch: string; on: boolean } }) => (
+    <div>actions-list{branchFilter ? ` only:${branchFilter.branch}:${branchFilter.on}` : ""}</div>
+  ),
+}));
 
 const switchTo = async (path: string) => {
   useRepositoryStore.setState({ activeRepoPath: path });
@@ -916,5 +920,20 @@ describe("GraphPanel selection across scope steps (5.1)", () => {
     renderPanel();
     fireEvent.click(document.querySelector('[data-commit-id="c2"]') as HTMLElement);
     expect(useScopeStore.getState().lastSelection).toEqual({ laneId: REPO, commitOid: "c2" });
+  });
+});
+
+describe("GraphPanel tabs per scope step (5.1)", () => {
+  it("offers 'this branch only' on Actions in the branch step, and nothing in the repository step", () => {
+    useUIStore.setState({ activeTab: "actions" });
+    const { unmount } = renderPanel();
+    expect(screen.getByText("actions-list")).toBeTruthy();
+    unmount();
+
+    useScopeStore.setState({ aggregateRepoPath: null, branchOnly: true });
+    branchList.push({ name: "main", isHead: true, isRemote: false });
+    renderPanel();
+    expect(screen.getByText("actions-list only:main:true")).toBeTruthy();
+    branchList.length = 0;
   });
 });

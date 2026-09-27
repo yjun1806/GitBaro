@@ -6,8 +6,15 @@ import { useSelectionStore } from "@/stores/selection";
 import { useWorkflowRuns } from "@/api/queries";
 import { ActionsList } from "./ActionsList";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { BranchOnlyChip, type BranchOnlyFilter } from "@/components/scope/BranchOnlyChip";
 
-export function ActionsView() {
+/**
+ * 그래프 패널의 「Actions」 탭: 이 저장소의 워크플로 실행. 브랜치 단계에서는 `branchFilter`로 그
+ * 브랜치의 실행만 보인다(5.1 「이 브랜치만」, 끄면 저장소 전체). 저장소 단계는 거를 것이 없어 필터
+ * 막대가 없다.
+ */
+export function ActionsView({ branchFilter }: { branchFilter?: BranchOnlyFilter }) {
   const { t } = useTranslation();
   const activeRepo = useRepositoryStore((s) => s.activeRepo);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
@@ -24,12 +31,12 @@ export function ActionsView() {
     { polling: true },
   );
 
+  const onlyBranch = branchFilter?.on ? branchFilter.branch : null;
+  const shownRuns = onlyBranch === null ? runs : runs.filter((run) => run.headBranch === onlyBranch);
+
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center h-8 px-3 border-b border-border">
-        <span className="text-[12.5px] font-bold">{t("actions.title")}</span>
-      </div>
+      <FilterBar left={branchFilter ? <BranchOnlyChip filter={branchFilter} /> : undefined} />
 
       {/* Guard: no account */}
       {!accountId ? (
@@ -40,7 +47,7 @@ export function ActionsView() {
       ) : (
         /* Normal: show runs */
         <ActionsList
-          runs={runs}
+          runs={shownRuns}
           isLoading={isLoading}
           selectedRunId={selectedRunId}
           onSelectRun={selectRun}

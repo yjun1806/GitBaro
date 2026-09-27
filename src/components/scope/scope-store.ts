@@ -29,6 +29,9 @@ interface ScopeState {
    */
   lastSelection: ScopeSelection | null;
   rememberSelection: (selection: ScopeSelection | null) => void;
+  /** 브랜치 단계 Actions·PR 탭의 「이 브랜치만」. 기본은 켜짐, 끄면 저장소 전체(5.1). */
+  branchOnly: boolean;
+  setBranchOnly: (on: boolean) => void;
 }
 
 export const useScopeStore = create<ScopeState>()((set) => ({
@@ -41,6 +44,8 @@ export const useScopeStore = create<ScopeState>()((set) => ({
   setLanesShown: (shown) => set((state) => ({ laneShown: { ...state.laneShown, ...shown } })),
   lastSelection: null,
   rememberSelection: (selection) => set({ lastSelection: selection }),
+  branchOnly: true,
+  setBranchOnly: (on) => set({ branchOnly: on }),
 }));
 
 // 연 저장소(워크트리 포함)의 소유 저장소가 바뀌면 「저장소」 단계 보기를 끈다. 다른 저장소로

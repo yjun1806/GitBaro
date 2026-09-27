@@ -16,16 +16,19 @@ import { usePrMenu } from "./usePrMenu";
 import { BranchPair, CiChip, DraftChip, PrAvatar, PrStateIcon, ReviewDecisionChip, TimeAgo } from "./PrBits";
 import { PrError, PrLoading, PrPlaceholder } from "./PrStates";
 import { Button } from "@/components/ui/Button";
-import { Segmented } from "@/components/ui/Segmented";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { FilterDropdown } from "@/components/ui/FilterDropdown";
+import { BranchOnlyChip, type BranchOnlyFilter } from "@/components/scope/BranchOnlyChip";
 import { Count, StatusChip } from "@/components/ui/marks";
 
 const FILTERS: PrStateFilter[] = ["open", "closed", "all"];
 
 /**
  * 그래프 패널의 「PR」 탭: 이 저장소의 PR 목록. 고른 PR의 상세는 아래 칸(`PrDetailPane`)에 그린다.
- * 지금 체크아웃한 브랜치의 열린 PR은 맨 위에 두고 표시한다.
+ * 지금 체크아웃한 브랜치의 열린 PR은 맨 위에 두고 표시한다. 브랜치 단계에서는 `branchFilter`로
+ * 그 브랜치의 PR만 보인다(5.1 「이 브랜치만」, 끄면 저장소 전체).
  */
-export function PrListView() {
+export function PrListView({ branchFilter }: { branchFilter?: BranchOnlyFilter }) {
   const { t } = useTranslation();
   const activeRepo = useRepositoryStore((s) => s.activeRepo);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
@@ -44,7 +47,11 @@ export function PrListView() {
   const { data, isLoading, isError, error, refetch } = usePullRequests(repoPath, accountId, filter);
   const { data: branches } = useBranches(activeRepoPath);
   const currentBranch = checkedOutBranch(branches);
-  const rows = useMemo(() => orderForBranch(data ?? [], currentBranch), [data, currentBranch]);
+  const onlyBranch = branchFilter?.on ? branchFilter.branch : null;
+  const rows = useMemo(
+    () => orderForBranch((data ?? []).filter((pr) => onlyBranch === null || pr.headRef === onlyBranch), currentBranch),
+    [data, currentBranch, onlyBranch],
+  );
 
   const handleRefresh = async () => {
     if (!repoPath || !accountId) return;
@@ -79,40 +86,48 @@ export function PrListView() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-(--line) shrink-0">
-        <Segmented
-          size="sm"
-          ariaLabel={t("pr.filterLabel")}
-          value={filter}
-          onChange={setFilter}
-          options={FILTERS.map((f) => ({ value: f, label: t(`pr.filter.${f}`) }))}
-        />
-        <span className="flex-1" />
-        <Button
-          iconOnly
-          size="sm"
-          variant="ghost"
-          onClick={() => void handleRefresh()}
-          disabled={!repoPath || !accountId || refreshing}
-          busy={refreshing}
-          title={t("pr.refresh")}
-          aria-label={t("pr.refresh")}
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-        </Button>
-        {repoUrl && (
-          <Button
-            iconOnly
-            size="sm"
-            variant="ghost"
-            onClick={() => actions.openInBrowser(`${repoUrl}/pulls`)}
-            title={t("pr.openListOnGitHub")}
-            aria-label={t("pr.openListOnGitHub")}
-          >
-            <Globe className="w-3.5 h-3.5" />
-          </Button>
-        )}
-      </div>
+      <FilterBar
+        left={
+          <>
+            {branchFilter && <BranchOnlyChip filter={branchFilter} />}
+            <FilterDropdown
+              label={t("pr.stateLabel")}
+              ariaLabel={t("pr.filterLabel")}
+              value={filter}
+              onChange={setFilter}
+              options={FILTERS.map((f) => ({ value: f, label: t(`pr.filter.${f}`) }))}
+            />
+          </>
+        }
+        right={
+          <>
+            <Button
+              iconOnly
+              size="sm"
+              variant="ghost"
+              onClick={() => void handleRefresh()}
+              disabled={!repoPath || !accountId || refreshing}
+              busy={refreshing}
+              title={t("pr.refresh")}
+              aria-label={t("pr.refresh")}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </Button>
+            {repoUrl && (
+              <Button
+                iconOnly
+                size="sm"
+                variant="ghost"
+                onClick={() => actions.openInBrowser(`${repoUrl}/pulls`)}
+                title={t("pr.openListOnGitHub")}
+                aria-label={t("pr.openListOnGitHub")}
+              >
+                <Globe className="w-3.5 h-3.5" />
+              </Button>
+            )}
+          </>
+        }
+      />
       {body}
     </div>
   );
