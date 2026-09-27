@@ -823,7 +823,8 @@
     "hideSidebar": "Hide sidebar",
     "showSidebar": "Show sidebar",
     "panelTabs": "Main panel",
-    "selectCommitOrChanges": "Select a commit or the uncommitted changes row above."
+    "selectCommitOrChanges": "Select a commit or the uncommitted changes row above.",
+    "uncommittedShort": "Uncommitted"
   },
   "sidebarTree": {
     "search": "Find repository or branch",

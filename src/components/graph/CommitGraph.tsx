@@ -27,7 +27,7 @@ import { useCommitActions } from "@/hooks/useCommitActions";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { computeGraphLanes } from "@/lib/graph-lanes";
-import { formatRelativeTime, getErrorMessage, gitHubRepoUrl, trimTrailingSlash } from "@/lib/utils";
+import { cn, formatRelativeTime, getErrorMessage, gitHubRepoUrl, trimTrailingSlash } from "@/lib/utils";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
 import { summarizeCi, type CiSummary } from "@/components/history/CommitDetail";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
@@ -233,6 +233,7 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
     <>
       {wips.map((wip) => {
         const followed = activeTab === "changes" ? followModeOf(wip.path) : null;
+        const rowSelected = activeTab === "changes" && (followTarget !== null ? followed !== null : wip.isCurrent);
         const following = followed === "following";
         const { trailing, followButton, live } = followRowParts(t, now, wip.changedAt, wip.count, following, () =>
           following ? stopFollow() : selection.selectWip(wip),
@@ -249,7 +250,7 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
             color={worktreeColor(wip.path)}
             graphWidth={graphWidth}
             compact={compact}
-            selected={activeTab === "changes" && (followTarget !== null ? followed !== null : wip.isCurrent)}
+            selected={rowSelected}
             connectDown={false}
             layout={lanes?.get(wipLaneOid(wip.path))}
             colorOf={lanes ? colorOf : undefined}
@@ -257,7 +258,17 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
             action={
               <>
                 {followButton}
-                {wip.isCurrent && (wip.count ?? 0) > 0 && <WorkingChangesButton />}
+                {/* 「작업 중인 변경」(스테이징 목록 열기)은 이 줄을 골랐거나 마우스·키보드가 머물 때만 드러난다.
+                    숨어 있어도 탭으로 닿고, 닿으면 보인다. */}
+                {wip.isCurrent && (wip.count ?? 0) > 0 && (
+                  <span
+                    className={cn(
+                      !rowSelected && "opacity-0 group-hover/wip:opacity-100 focus-within:opacity-100 transition-opacity",
+                    )}
+                  >
+                    <WorkingChangesButton />
+                  </span>
+                )}
               </>
             }
             onSelect={() => selection.selectWip(wip)}

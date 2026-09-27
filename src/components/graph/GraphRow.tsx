@@ -510,7 +510,7 @@ export function GraphWipRow({
   return (
     <div
       className={cn(
-        "flex items-center w-full shrink-0 border-b border-(--line) transition-colors",
+        "group/wip flex items-center w-full shrink-0 border-b border-(--line) transition-colors",
         selected ? "bg-(--acc-sel)" : "hover:bg-accent",
       )}
       style={{ height: H }}
@@ -589,9 +589,11 @@ export function GraphWipRow({
         )}
       </svg>
       <span className={cn(GRAPH_COLUMNS, "flex-1 min-w-0 pl-2 pr-3 text-[12.5px]")}>
-        <span className="flex items-center gap-2 min-w-0">
+        {/* 설명이 변경·CI·작성자 칸까지 넓게 쓴다(커밋 안 한 변경에는 그 칸들이 없다). 시각 칸만 맞춘다. */}
+        <span className="col-span-4 @max-[400px]/graph:col-span-1 flex items-center gap-2 min-w-0">
           {leading && <span className={cn("contents", NARROW_HIDDEN_CLASS)}>{leading}</span>}
-          <span className="italic text-(--fg2) truncate">{wipLabel}</span>
+          {/* 좁으면 말줄임 대신 더 짧은 말로 바꾼다. */}
+          <span className="italic text-(--fg2) shrink-0 whitespace-nowrap">{compact ? t("shell.uncommittedShort") : wipLabel}</span>
           <span className={cn("contents", NARROW_HIDDEN_CLASS)}>
           {/* 이 변경이 쌓인 브랜치(그 브랜치 최신 커밋 위)와 워크트리. 브랜치는 늘 브랜치 아이콘이고,
               체크아웃한 워크트리가 있으면 그 레인 색으로 채운다 — 워크트리 이름표(폴더 아이콘)와
@@ -600,7 +602,7 @@ export function GraphWipRow({
             name={branchText}
             kind="local"
             laneColor={target.branch !== null ? color : null}
-            className="max-w-[200px]"
+            className="max-w-[320px]"
           />
           {target.worktree !== null ? (
             <RefLabelMark
@@ -608,7 +610,7 @@ export function GraphWipRow({
               kind="worktree"
               laneColor={color}
               title={t("graph.worktree")}
-              className="max-w-[180px]"
+              className="max-w-[240px]"
             />
           ) : (
             <span className="shrink-0 text-[11.5px] text-muted-foreground">{worktreeText}</span>
@@ -620,12 +622,10 @@ export function GraphWipRow({
           </span>
           <span className={cn("contents", NARROW_HIDDEN_CLASS)}>{trailing}</span>
         </span>
-        {/* 변경 · CI · 작성자 칸은 커밋하지 않은 변경에는 없다(3.15는 커밋 줄만 다룬다) — 그리드 정렬만 맞춘다. */}
-        <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />
-        <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />
-        <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />
+        {/* 시각은 한 번만: 방금 바뀐 중이면 설명 끝의 주황 「N초 전 바뀜」이 말하고, 이 칸은 비운다.
+            좁은 목록은 그 주황 안내를 감추므로 이 칸이 짧은 시각을 맡는다. */}
         <span className="truncate text-[11.5px] text-muted-foreground">
-          {changedAt !== null && (count ?? 0) > 0
+          {changedAt !== null && (count ?? 0) > 0 && (compact || !trailing)
             ? compact
               ? formatRelativeTimeShort(changedAt / 1000)
               : t("graph.modifiedAgo", { time: formatRelativeTime(changedAt / 1000) })
@@ -708,7 +708,9 @@ export function followRowParts(
     ) : undefined;
   return {
     trailing,
-    followButton: <FollowRowButton mode={following ? "following" : null} live={live} onClick={onToggle} />,
+    // 따라가지 않을 때는 버튼을 두지 않는다 — 줄을 누르는 것이 곧 따라가기다(같은 동작 둘을 나란히 두지 않는다).
+    // 따라가는 중에는 그 상태를 알리고 멈추는 자리로 남긴다.
+    followButton: following ? <FollowRowButton mode="following" live={live} onClick={onToggle} /> : null,
     live,
   };
 }

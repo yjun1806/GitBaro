@@ -822,7 +822,8 @@
     "hideSidebar": "사이드바 숨기기",
     "showSidebar": "사이드바 보이기",
     "panelTabs": "메인 패널",
-    "selectCommitOrChanges": "위에서 커밋이나 「커밋 안 한 변경」 행을 고르세요."
+    "selectCommitOrChanges": "위에서 커밋이나 「커밋 안 한 변경」 행을 고르세요.",
+    "uncommittedShort": "커밋 안 함"
   },
   "sidebarTree": {
     "search": "저장소·브랜치 찾기",
