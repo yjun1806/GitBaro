@@ -33,11 +33,12 @@ const lines = (n: number, extra: Record<number, string[]> = {}) =>
     .join("\n") + "\n";
 
 /** 파일별 보기(`useUnpushedFileTouches`)가 돌려줄 커밋 하나(따라가기 줄의 「눈여겨볼 것」용). */
-const commitTouch = (subject: string, authorTime: number): CommitTouch => ({
+const commitTouch = (subject: string, authorTime: number, authorName = "t"): CommitTouch => ({
   oid: "deadbeef",
   shortOid: "deadbee",
   subject,
   authorTime,
+  authorName,
   parentOid: null,
   path: "",
   oldPath: null,
@@ -369,6 +370,30 @@ describe("FollowPanel — follow line above the diff (D49)", () => {
     renderFollow();
     await waitFor(() => expect(diffText()).toContain("src/b.ts"));
     expect(screen.getByTestId("follow-line").textContent).toContain('also in commit “tidy up the login form”');
+  });
+
+  it("adds an earlier edit by a different author", async () => {
+    backend.touches = {
+      "src/b.ts": [
+        commitTouch("[XMS-371] tidy up", nowSecs() - 480, "me"),
+        commitTouch("earlier fix", nowSecs() - 7_200, "YJun"),
+      ],
+    };
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.getByTestId("follow-line").textContent).toContain("edited by YJun");
+  });
+
+  it("says nothing extra when the earlier commit is by the same author", async () => {
+    backend.touches = {
+      "src/b.ts": [
+        commitTouch("[XMS-371] tidy up", nowSecs() - 480, "me"),
+        commitTouch("earlier fix", nowSecs() - 7_200, "me"),
+      ],
+    };
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.getByTestId("follow-line").textContent).not.toContain("edited by");
   });
 
   it("notes the changed line count when the file has no unpushed commit yet", async () => {

@@ -744,6 +744,8 @@ export interface CommitTouch {
   subject: string;
   /** 작성 시각(유닉스 초). */
   authorTime: number;
+  /** 작성자 이름(없으면 "Unknown"). 따라가기 줄이 「그 전에 다른 작성자가 고쳤다」를 판단하는 데 쓴다. */
+  authorName: string;
   /** 부모(병합 커밋은 목록에 오지 않아 부모는 하나다). 첫 커밋이면 null(빈 트리). */
   parentOid: string | null;
   /** 이 커밋에서의 경로. 뒤에서 이름을 바꿨으면 `FileTouches.path`와 다르다. */

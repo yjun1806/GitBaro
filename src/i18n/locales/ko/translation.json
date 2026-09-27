@@ -1164,6 +1164,7 @@
     "followLineNoteLabel": "눈여겨볼 것",
     "followLineCommitTicket": "{{time}} 커밋 {{ticket}}에도 있음",
     "followLineCommitSubject": "{{time}} 커밋 「{{subject}}」에도 있음",
+    "followLineOtherAuthor": "{{time}} {{author}} 수정",
     "followLineNewFile": "새 파일",
     "followLineSize": "+{{add}} −{{del}}",
     "uncommitted": "커밋 안 한 변경",

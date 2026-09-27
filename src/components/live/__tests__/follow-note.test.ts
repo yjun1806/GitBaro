@@ -6,11 +6,12 @@ import type { CommitTouch, WipFile } from "@/types";
 
 const { t } = i18n;
 
-const commit = (subject: string, authorTime: number): CommitTouch => ({
+const commit = (subject: string, authorTime: number, authorName = "t"): CommitTouch => ({
   oid: "deadbeef",
   shortOid: "deadbee",
   subject,
   authorTime,
+  authorName,
   parentOid: null,
   path: "src/a.ts",
   oldPath: null,
@@ -69,5 +70,32 @@ describe("followNote", () => {
     const note = followNote(t, file({ insertions: 12, deletions: 3 }), commits);
     expect(note).toContain("XMS-371");
     expect(note).not.toContain("+12");
+  });
+
+  it("adds an earlier edit by a different author", () => {
+    const commits = [
+      commit("[XMS-371] tidy up", nowSecs() - 480, "me"),
+      commit("earlier fix", nowSecs() - 7_200, "YJun"),
+    ];
+    const note = followNote(t, file(), commits);
+    expect(note).toContain("XMS-371");
+    expect(note).toContain("YJun");
+  });
+
+  it("says nothing extra when the earlier commit is by the same author", () => {
+    const commits = [commit("[XMS-371] tidy up", nowSecs() - 480, "me"), commit("earlier fix", nowSecs() - 7_200, "me")];
+    const note = followNote(t, file(), commits);
+    expect(note).toContain("XMS-371");
+    expect(note).not.toContain("me");
+  });
+
+  it("looks past a same-author commit to find the most recent one by someone else", () => {
+    const commits = [
+      commit("[XMS-371] tidy up", nowSecs() - 480, "me"),
+      commit("also mine", nowSecs() - 1_000, "me"),
+      commit("their fix", nowSecs() - 7_200, "YJun"),
+    ];
+    const note = followNote(t, file(), commits);
+    expect(note).toContain("YJun");
   });
 });

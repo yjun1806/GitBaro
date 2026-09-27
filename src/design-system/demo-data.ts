@@ -108,12 +108,21 @@ export const DEMO_ROW_SIGNALS: { repo: string; values: RowSignalValues }[] = [
   { repo: "infra-scripts", values: { dirty: 5, live: true, watched: false, changedAt: Date.now() - 20000, ahead: 0, behind: 0 } },
 ];
 
-function touch(oid: string, subject: string, path: string, minutesAgo: number, additions = 5, deletions = 1): CommitTouch {
+function touch(
+  oid: string,
+  subject: string,
+  path: string,
+  minutesAgo: number,
+  additions = 5,
+  deletions = 1,
+  authorName = "YJun",
+): CommitTouch {
   return {
     oid,
     shortOid: oid.slice(0, 7),
     subject,
     authorTime: Math.floor(Date.now() / 1000 - minutesAgo * 60),
+    authorName,
     parentOid: null,
     path,
     oldPath: null,

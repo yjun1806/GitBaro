@@ -1175,6 +1175,7 @@
     "followLineNoteLabel": "Worth noting",
     "followLineCommitTicket": "{{time}}, also in commit {{ticket}}",
     "followLineCommitSubject": "{{time}}, also in commit “{{subject}}”",
+    "followLineOtherAuthor": "{{time}}, edited by {{author}}",
     "followLineNewFile": "New file",
     "followLineSize": "+{{add}} −{{del}}",
     "uncommitted": "Uncommitted changes",

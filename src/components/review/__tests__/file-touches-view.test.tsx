@@ -43,6 +43,7 @@ Element.prototype.scrollIntoView = vi.fn();
 function commitTouch(overrides: Partial<CommitTouch> & { oid: string; subject: string; authorTime: number }): CommitTouch {
   return {
     shortOid: overrides.oid.slice(0, 7),
+    authorName: "t",
     parentOid: `${overrides.oid}^`,
     path: "src/multi.ts",
     oldPath: null,

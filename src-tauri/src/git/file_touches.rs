@@ -42,6 +42,9 @@ pub struct CommitTouch {
     pub subject: String,
     /// 작성 시각(유닉스 초).
     pub author_time: i64,
+    /// 작성자 이름(`git::commit::signature_to_author`와 같은 규칙 — 없으면 "Unknown"). 따라가기 줄의
+    /// 「눈여겨볼 것」이 「그 전에 다른 작성자가 고쳤다」를 판단하는 데 쓴다.
+    pub author_name: String,
     /// 부모. 이 커밋만의 diff 는 `parent_oid` → `oid` 로 본다. 첫 커밋이면 `None`(빈 트리).
     /// 병합 커밋은 목록에 오지 않으므로 부모는 하나다.
     pub parent_oid: Option<String>,
@@ -352,11 +355,13 @@ fn first_parent_below(repo: &Repository, head: Oid, range: &HashSet<Oid>) -> Res
 
 fn commit_touch(commit: &git2::Commit, parent: Option<Oid>, file: ChangedFile) -> CommitTouch {
     let oid = commit.id().to_string();
+    let author = commit.author();
     CommitTouch {
         short_oid: oid[..8].to_string(),
         oid,
         subject: subject_line(commit.message().unwrap_or("")).to_string(),
-        author_time: commit.author().when().seconds(),
+        author_time: author.when().seconds(),
+        author_name: author.name().unwrap_or("Unknown").to_string(),
         parent_oid: parent.map(|p| p.to_string()),
         path: file.path,
         old_path: file.old_path,
@@ -439,6 +444,27 @@ mod tests {
         git(dir, &["rev-parse", "HEAD"])
     }
 
+    /// `commit_at`과 같지만 작성자 이름을 다르게 준다(동료가 고친 기록을 흉내낸다).
+    fn commit_at_by(dir: &Path, msg: &str, at: i64, author_name: &str) -> String {
+        let date = format!("@{} +0000", 1_700_000_000 + at);
+        git(dir, &["add", "-A"]);
+        let out = Command::new("git")
+            .args(["commit", "-q", "--allow-empty", "-m", msg])
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_AUTHOR_NAME", author_name)
+            .env("GIT_AUTHOR_EMAIL", "them@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .env("GIT_AUTHOR_DATE", &date)
+            .env("GIT_COMMITTER_DATE", &date)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        git(dir, &["rev-parse", "HEAD"])
+    }
+
     /// 원격(bare)에 커밋 하나(`base.txt`, `a.txt`)를 올리고 clone 한 작업 폴더와 그 커밋.
     fn cloned(tmp: &TempDir) -> (PathBuf, String) {
         let seed = tmp.0.join("seed");
@@ -489,12 +515,29 @@ mod tests {
         assert_eq!((newest.additions, newest.deletions, newest.status.clone()), (2, 0, FileStatus::Modified));
         assert_eq!(newest.subject, "[XMS-2] more");
         assert_eq!(newest.author_time, 1_700_004_000);
+        assert_eq!(newest.author_name, "t", "테스트 하네스가 커밋마다 주는 작성자 이름");
         assert_eq!(newest.short_oid, &c3[..8]);
         assert_eq!(newest.parent_oid.as_deref(), Some(c2.as_str()));
         assert_eq!(a.commits[1].parent_oid.as_deref(), Some(pushed.as_str()));
 
         let b = file(&r, "b.txt");
         assert_eq!((b.status.clone(), oids(b)), (Some(FileStatus::Added), vec![c2.as_str()]));
+    }
+
+    #[test]
+    fn each_commit_touch_carries_its_own_authors_name() {
+        // 따라가기 줄이 「그 전에 다른 작성자가 고쳤다」를 알려면 커밋마다의 작성자가 필요하다.
+        let tmp = TempDir::new("author");
+        let (work, _) = cloned(&tmp);
+        write(&work, "a.txt", "one\ntwo\n");
+        commit_at(&work, "mine", 2_000);
+        write(&work, "a.txt", "one\ntwo\nthree\n");
+        commit_at_by(&work, "teammate's", 3_000, "Alex");
+
+        let r = touches(&work);
+        let a = file(&r, "a.txt");
+        assert_eq!(a.commits[0].author_name, "Alex", "가장 최근 커밋");
+        assert_eq!(a.commits[1].author_name, "t", "그 전 커밋(테스트 하네스 기본 작성자)");
     }
 
     #[test]
@@ -934,7 +977,7 @@ mod tests {
         assert_eq!(
             keys(&json["files"][0]["commits"][0]),
             vec![
-                "additions", "authorTime", "deletions", "isBinary", "oid", "oldPath", "parentOid", "path",
+                "additions", "authorName", "authorTime", "deletions", "isBinary", "oid", "oldPath", "parentOid", "path",
                 "shortOid", "status", "subject", "tooLarge"
             ]
         );
