@@ -270,7 +270,7 @@
   --acc-faint: #f8f8f7;
   --acc-line: color-mix(in srgb, var(--acc) 35%, transparent);
   /* 커밋 그래프에서 아직 push하지 않은 커밋 행의 바탕("옅게" 단계, 2026-09-26 결정). */
-  --unpushed-tint: #f2f2f0;
+  --unpushed-tint: #f3f6fb;
 
   --live: #e5700b;
   --live-soft: rgba(229, 112, 11, 0.16);
@@ -374,7 +374,7 @@
   --acc-sel: color-mix(in srgb, var(--acc) 12%, var(--panel));
   --acc-faint: var(--gray-975);
   --acc-line: color-mix(in srgb, var(--acc) 45%, transparent);
-  --unpushed-tint: #272727;
+  --unpushed-tint: #242a32;
 
   --live: #e5700b;
   --live-soft: rgba(229, 112, 11, 0.16);

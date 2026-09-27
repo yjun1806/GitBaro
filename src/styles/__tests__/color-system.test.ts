@@ -61,7 +61,16 @@ function contrast(a: string, b: string): number {
 
 const TEXT_LEVELS = ["--fg", "--fg2", "--muted"] as const;
 /** 층 0~3과 사이드바 선택·hover 채움. 글자가 올라가는 모든 바탕. */
-const SURFACES = ["--frame", "--frame-sel", "--canvas", "--panel", "--float", "--panel-hover", "--panel-sel"] as const;
+const SURFACES = [
+  "--frame",
+  "--frame-sel",
+  "--canvas",
+  "--panel",
+  "--float",
+  "--panel-hover",
+  "--panel-sel",
+  "--unpushed-tint",
+] as const;
 
 describe("브랜드 색", () => {
   it("라이트 브랜드 색은 라즈베리 #be3f72이고 primary·ring이 이를 가리킨다", () => {
@@ -137,6 +146,22 @@ describe("층", () => {
       expect(own.has(name), `${name} missing in .dark`).toBe(true);
     }
   });
+});
+
+describe("올리지 않은 커밋 바탕(--unpushed-tint)", () => {
+  // 바탕(canvas)과 같은 회색이면 카드에 구멍이 난 듯 가라앉아 보인다 — 옅은 청회색으로 「표시된 줄」로 읽힌다.
+  for (const [theme, tokens] of [
+    ["light", lightTokens],
+    ["dark", darkTokens],
+  ] as const) {
+    it(`${theme}: is a cool blue-gray, not the canvas gray`, () => {
+      const tint = resolveHex(tokens, "--unpushed-tint");
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(tint.slice(i, i + 2), 16));
+      expect(b).toBeGreaterThan(r);
+      expect(b).toBeGreaterThanOrEqual(g);
+      expect(tint).not.toBe(resolveHex(tokens, "--canvas"));
+    });
+  }
 });
 
 describe("글자 세 단계의 대비", () => {
