@@ -128,9 +128,8 @@ export function BranchPanel({
   // 보기와 섞이지 않게, 체크아웃·비교·Merge를 시작하면 보기를 끝낸다.
   const endView = () => useHistoryViewStore.getState().reset();
 
-  // 모든 브랜치를 합쳐 본다(체크아웃 없음). 예전 그래프 머리 「보는 브랜치」 고르기의
-  // ViewBranchPicker.viewableBranches와 같은 목록 위에서, 그 고르기에 있던 「모든 브랜치」
-  // 옵션만 여기 패널로 옮긴다(검색 중에는 실제 브랜치만 보이게 감춘다).
+  // 모든 브랜치를 합쳐 본다(체크아웃 없음). 예전 그래프 머리 「보는 브랜치」 고르기에 있던
+  // 「모든 브랜치」 옵션을 여기 패널로 옮긴다(검색 중에는 실제 브랜치만 보이게 감춘다).
   const isAllViewed = viewed?.kind === "all";
   const viewAll = () => {
     setView({ kind: "all" });
@@ -360,7 +359,8 @@ export function BranchPanel({
 
 /**
  * 「모든 브랜치」를 합쳐 보는 고정 행. 실제 브랜치가 아니라 `BranchPanelRowView`를 쓸 수 없어
- * ViewBranchPicker의 같은 옵션과 같은 뜻(Layers 아이콘, 체크아웃 없음)을 이 패널의 행 모양에 맞춰 그린다.
+ * 예전 그래프 머리 고르기의 같은 옵션과 같은 뜻(Layers 아이콘, 체크아웃 없음)을 이 패널의 행 모양에
+ * 맞춰 그린다.
  */
 function AllBranchesRow({ selected, onSelect }: { selected: boolean; onSelect: () => void }) {
   const { t } = useTranslation();

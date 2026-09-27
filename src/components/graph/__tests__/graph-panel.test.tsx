@@ -11,7 +11,6 @@ import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useFollowStore } from "@/stores/follow";
 import { useBranchRangeStore } from "@/components/branch/branch-range";
 import { useHistoryViewStore } from "@/stores/history-view";
-import { useUnpushedRangeViewStore } from "../unpushed-range-view";
 import { syncStatusPaths } from "@/components/sidebar/tree-model";
 import { worktreeColor } from "../worktree-history";
 import { useGraphWorktreesStore } from "../graph-worktrees";
@@ -182,7 +181,6 @@ beforeEach(async () => {
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
   useFollowStore.getState().stop();
   useHistoryViewStore.getState().reset();
-  useUnpushedRangeViewStore.getState().close();
   historyTargets.length = 0;
   branchList.length = 0;
 });
@@ -595,30 +593,9 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "head" });
   });
 
-  it("picks what to view from the graph header: a branch, all branches, or the current checkout", () => {
-    branchList.push(
-      { name: "main", isHead: true, isRemote: false },
-      { name: "feat/x", isHead: false, isRemote: false },
-      { name: "origin/feat/y", isHead: false, isRemote: true },
-      { name: "origin/HEAD", isHead: false, isRemote: true },
-    );
-    renderPanel();
-    const picker = screen.getByRole("button", { name: /Viewing\s*Current checkout/ });
-    fireEvent.click(picker);
-    expect(screen.queryByRole("option", { name: /origin\/HEAD/ })).toBeNull();
-    fireEvent.click(screen.getByRole("option", { name: /origin\/feat\/y/ }));
-    expect(useHistoryViewStore.getState().target).toEqual({ kind: "ref", name: "origin/feat/y", isRemote: true });
-
-    fireEvent.click(screen.getByRole("button", { name: /Viewing\s*origin\/feat\/y/ }));
-    fireEvent.click(screen.getByRole("option", { name: "All branches" }));
-    expect(useHistoryViewStore.getState().target).toEqual({ kind: "all" });
-    expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "all" });
-    // 「모든 브랜치는 체크아웃할 수 없다」는 상태 막대 쪽 동작이라 status-bar.test.tsx가 다룬다.
-
-    fireEvent.click(screen.getByRole("button", { name: /Viewing\s*All branches/ }));
-    fireEvent.click(screen.getByRole("option", { name: /Current checkout/ }));
-    expect(useHistoryViewStore.getState().target).toBeNull();
-  });
+  // 「보는 브랜치」 고르기 UI는 그래프 머리에서 툴바 경로의 「브랜치 ▾」로 옮겼다(D42/5.1) —
+  // 그 고르기 자체(로컬·원격·모든 브랜치)는 `branch-zone-panel.test.tsx`·`branch-panel.test.tsx`가
+  // 다룬다. 이 파일은 `useHistoryViewStore`를 직접 조작해 그래프가 보는 대상에 맞게 바뀌는지만 본다.
 
   it("ends viewing when another repository is opened", () => {
     useHistoryViewStore.getState().view(REPO, { kind: "all" });
@@ -662,65 +639,18 @@ describe("GraphPanel commits not on any remote", () => {
       (el) => el.getAttribute("data-commit-id") ?? el.getAttribute("data-testid"),
     );
 
-  it("tints unpushed commits and puts an 'unpushed work' header above them, an 'on the remote' header above the first pushed one", () => {
+  it("tints unpushed commits and puts a 'not pushed' header above them, an 'on the remote' header above the first pushed one", () => {
     renderPanel();
     expect(["c1", "c2", "c3", "c4"].map(dot)).toEqual(["unpushed", "unpushed", "pushed", "pushed"]);
     expect(["c1", "c2", "c3", "c4"].map(tinted)).toEqual([true, true, false, false]);
-    expect(rowOrder()).toEqual(["unpushed-header-row", "c1", "c2", "remote-header-row", "c3", "c4"]);
-    // 개수는 사이드바와 Push 버튼이 맡으므로 머리에는 넣지 않는다.
+    expect(rowOrder()).toEqual(["now-header-row", "unpushed-header-row", "c1", "c2", "remote-header-row", "c3", "c4"]);
+    // 개수는 사이드바와 Push 버튼이 맡으므로 머리에는 넣지 않는다(D48: 짧은 상태 말).
     const unpushedHeader = screen.getByTestId("unpushed-header-row");
-    expect(unpushedHeader.textContent).toContain("Not pushed yet");
-    expect(unpushedHeader.textContent).toContain("Pushing sends these to the remote");
-    expect(within(unpushedHeader).getByRole("button", { name: "See everything to push" })).toBeTruthy();
+    expect(unpushedHeader.textContent).toContain("Not pushed");
+    expect(unpushedHeader.textContent).toContain("Push sends this to origin");
     const remoteHeader = screen.getByTestId("remote-header-row");
     expect(remoteHeader.textContent).toBe("On origin");
   });
-
-  it("opens the combined diff of the unpushed range from the header, closing it toggles back", () => {
-    renderPanel();
-    const openBtn = screen.getByRole("button", { name: "See everything to push" });
-    fireEvent.click(openBtn);
-    expect(openBtn.getAttribute("aria-pressed")).toBe("true");
-    // base = 경계가 앉은 커밋(원격에 있는 첫 커밋 c3), head = 열린 워크트리의 HEAD(c1).
-    expect(useUnpushedRangeViewStore.getState().range).toEqual({
-      repoPath: REPO,
-      historyTarget: { kind: "head" },
-      baseOid: "c3",
-      headOid: "c1",
-    });
-    fireEvent.click(screen.getByRole("button", { name: "See everything to push" }));
-    expect(useUnpushedRangeViewStore.getState().range).toBeNull();
-  });
-
-  it("exposes the 'see everything to push' button outside a presentational separator (#5)", () => {
-    renderPanel();
-    const header = screen.getByTestId("unpushed-header-row");
-    // `role="separator"`는 자식을 장식으로 감춰 버튼이 보조기술에 드러나지 않는다 — 이름 붙은
-    // 묶음(`group`)으로 바꿔 버튼을 그대로 노출한다.
-    expect(header.getAttribute("role")).toBe("group");
-    expect(within(header).getByRole("button", { name: "See everything to push" })).toBeTruthy();
-  });
-
-  it("closes the open range when another repository or worktree opens (#1)", () => {
-    renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "See everything to push" }));
-    expect(useUnpushedRangeViewStore.getState().range).not.toBeNull();
-    act(() => useRepositoryStore.setState({ activeRepoPath: FEAT }));
-    expect(useUnpushedRangeViewStore.getState().range).toBeNull();
-  });
-
-  it("closes the open range when the viewed branch changes (#1)", () => {
-    branchList.push({ name: "feat/x", isHead: false, isRemote: false });
-    renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "See everything to push" }));
-    expect(useUnpushedRangeViewStore.getState().range).not.toBeNull();
-    act(() => useHistoryViewStore.getState().view(REPO, { kind: "ref", name: "feat/x", isRemote: false }));
-    expect(useUnpushedRangeViewStore.getState().range).toBeNull();
-  });
-
-  // 「열려 있는 동안 head·경계를 따라간다」(#2)는 `unpushed-range-follow.test.tsx`에서 다룬다 — 이 파일의
-  // `useCommitHistoryInfinite` mock은 `historyData` 참조를 고정해 두므로(`rerender`가 recompute를
-  // 강제하지 않는다) 그 조건에 맞는 별도 mock으로 검증한다.
 
   it("shows the remote branch actually on the boundary commit, not the checked-out branch (#6)", () => {
     changesVsDefaultByPath[REPO] = {
@@ -773,6 +703,7 @@ describe("GraphPanel commits not on any remote", () => {
     renderPanel();
     await screen.findByTestId("base-header-row");
     expect(rowOrder()).toEqual([
+      "now-header-row",
       "unpushed-header-row",
       "c1",
       "c2",
