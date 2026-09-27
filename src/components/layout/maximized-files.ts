@@ -23,6 +23,8 @@ export interface MaximizedFiles {
   onSelect: (key: string) => void;
   /** 행 우클릭. 원래 목록의 메뉴를 그대로 연다. */
   onContextMenu?: (key: string, e: React.MouseEvent) => void;
+  /** 행 더블클릭. 원래 목록과 같은 동작(편집기에서 열기)을 그대로 부른다. */
+  onDoubleClick?: (key: string) => void;
 }
 
 /** 지금 diff를 감싼 `ListDiffSplit`이 크게 보기용 파일 목록을 가졌는지. diff 머리의 목록 버튼이 쓴다. */

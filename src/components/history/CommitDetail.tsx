@@ -24,6 +24,7 @@ import { DiffViewer } from "@/components/diff/DiffViewer";
 import { RepoWorkSwitcher } from "@/components/commit/WorkSwitcher";
 import { useFileMenu } from "@/components/commit/useFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import { useOpenFileInEditor } from "@/hooks/useOpenFileInEditor";
 
 const AVATAR_SIZE_CLASS = { 16: "w-4 h-4", 20: "w-5 h-5" } as const;
 
@@ -302,6 +303,14 @@ export function CommitDetail({
     fileMenu.open({ repoPath, filePath: path, exists: status !== "deleted" }, contextMenuPoint(e));
   };
 
+  // 파일 더블클릭: 편집기에서 연다. 지운 파일은 열지 않고 이유를 알린다(우클릭 메뉴와 같은 판단).
+  const openFileInEditor = useOpenFileInEditor();
+  const handleFileDoubleClick = (path: string) => {
+    if (!repoPath) return;
+    const status = changedFiles.find((f) => f.path === path)?.status;
+    openFileInEditor(repoPath, path, status !== "deleted");
+  };
+
   const selectedFileIdx = changedFiles.findIndex((f) => f.path === selectedPath);
 
   const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
@@ -506,6 +515,7 @@ export function CommitDetail({
         selectedKey: selectedPath,
         onSelect: handleFileClick,
         onContextMenu: openFileMenu,
+        onDoubleClick: handleFileDoubleClick,
       }}
       origin={origin}
       list={
@@ -532,9 +542,10 @@ export function CommitDetail({
                   ref={itemRef(index)}
                   title={f.path}
                   onClick={() => handleFileClick(f.path)}
+                  onDoubleClick={() => handleFileDoubleClick(f.path)}
                   onContextMenu={(e) => openFileMenu(f.path, e)}
                   className={cn(
-                    "w-full flex items-center gap-2 h-7 px-3 text-left transition-colors",
+                    "w-full flex items-center gap-2 h-7 px-3 text-left select-none transition-colors",
                     isSelected
                       ? "bg-(--acc-sel)"
                       : !isSelected && isHighlighted

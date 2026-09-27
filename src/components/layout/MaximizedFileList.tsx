@@ -9,7 +9,7 @@ import { splitFilePath, type MaximizedFiles } from "./maximized-files";
  * 크게 보는 diff 왼쪽의 좁은 파일 목록. diff를 연 목록의 행과 선택을 그대로 보여 주고,
  * 누르거나 위아래 화살표로 옮기면 원래 목록에서 고른 것과 같다.
  */
-export function MaximizedFileList({ items, selectedKey, onSelect, onContextMenu }: MaximizedFiles) {
+export function MaximizedFileList({ items, selectedKey, onSelect, onContextMenu, onDoubleClick }: MaximizedFiles) {
   const { t } = useTranslation();
   const selectedIndex = selectedKey === null ? -1 : items.findIndex((f) => f.key === selectedKey);
   const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
@@ -39,6 +39,7 @@ export function MaximizedFileList({ items, selectedKey, onSelect, onContextMenu 
                 title={f.path}
                 aria-current={selected || undefined}
                 onClick={() => onSelect(f.key)}
+                onDoubleClick={onDoubleClick ? () => onDoubleClick(f.key) : undefined}
                 onContextMenu={
                   onContextMenu
                     ? (e) => {
@@ -48,7 +49,7 @@ export function MaximizedFileList({ items, selectedKey, onSelect, onContextMenu 
                     : undefined
                 }
                 className={cn(
-                  "w-full flex items-center gap-1.5 h-7 px-3 text-left transition-colors motion-reduce:transition-none",
+                  "w-full flex items-center gap-1.5 h-7 px-3 text-left select-none transition-colors motion-reduce:transition-none",
                   selected
                     ? "bg-(--acc-sel)"
                     : activeIndex === index

@@ -5,7 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
-import type { DiffOutput } from "@/types";
+import { useToastStore } from "@/stores/toast";
+import type { BranchInfo, DiffOutput } from "@/types";
 import { usePrViewStore } from "../pr-view";
 import { detail, rawFiles, REPO, repo } from "./pr-fixtures";
 
@@ -73,6 +74,7 @@ beforeEach(async () => {
   });
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: REPO });
   useUIStore.setState({ isDiffMaximized: false });
+  useToastStore.setState({ toasts: [] });
   usePrViewStore.setState({ open: true, filter: "open", selected: { repoPath: REPO, number: 42 }, selectedFile: null });
 });
 
@@ -171,6 +173,25 @@ describe("PrDetailPane", () => {
     fireEvent.click(within(codeComments).getByText("Why this line?"));
     expect(usePrViewStore.getState().selectedFile).toBe("src/login.ts");
     expect((await screen.findByTestId("diff-reveal")).textContent).toBe("11");
+  });
+
+  it("opens a file in the editor on double-click when the PR's branch is checked out", async () => {
+    handlers.get_branches = () => [
+      { name: "feat/x", isHead: true, isRemote: false, isDefault: false, upstream: null, aheadBehind: null, lastCommitTime: null, isFullyMerged: false, lastCommitAuthor: null } satisfies BranchInfo,
+    ];
+    renderPane();
+    const row = await fileRow("src/login.ts");
+    fireEvent.doubleClick(row);
+    expect(invoke).toHaveBeenCalledWith("open_in_editor", { repoPath: REPO, filePath: "src/login.ts" });
+  });
+
+  it("explains why double-click can't open a file when the PR isn't checked out", async () => {
+    renderPane();
+    const row = await fileRow("src/login.ts");
+    fireEvent.doubleClick(row);
+    expect(invoke).not.toHaveBeenCalledWith("open_in_editor", expect.anything());
+    const { toasts } = useToastStore.getState();
+    expect(toasts[toasts.length - 1]?.message).toBe(i18n.t("pr.file.notCheckedOut"));
   });
 
   it("explains a missing PR", async () => {

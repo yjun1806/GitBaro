@@ -6,9 +6,13 @@ import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useUIStore } from "@/stores/ui";
+import { useToastStore } from "@/stores/toast";
 import type { BranchInfo, CommitInfo, RepoInfo, RepoSyncStatus, WorkflowRun } from "@/types";
 
 vi.mock("@/components/diff/DiffViewer", () => ({ DiffViewer: () => <div>diff-viewer</div> }));
+
+const invoke = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => undefined as unknown));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => invoke(...args) }));
 
 // Every IPC call the detail could make. The view must read what other screens
 // already cached, so most tests assert these are never called.
@@ -135,6 +139,8 @@ function expectNoFetch() {
 beforeEach(async () => {
   await i18n.changeLanguage("ko");
   vi.clearAllMocks();
+  invoke.mockClear();
+  useToastStore.setState({ toasts: [] });
   Object.assign(navigator, { clipboard: { writeText } });
   ipc.listWorkflowRuns.mockResolvedValue([]);
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -291,6 +297,35 @@ describe("CommitDetail remote line", () => {
     cacheHistory([makeCommit({ isUnpushed: true })], "/work/other");
     renderDetail();
     expect(screen.queryByText("원격")).toBeNull();
+  });
+});
+
+describe("CommitDetail file double-click", () => {
+  const files = [
+    { path: "a.ts", status: "modified" as const },
+    { path: "b.ts", status: "deleted" as const },
+  ];
+
+  it("opens the file in the editor", async () => {
+    render(
+      <QueryClientProvider client={client}>
+        <CommitDetail commit={makeCommit()} changedFiles={files} />
+      </QueryClientProvider>,
+    );
+    fireEvent.doubleClick(screen.getByTitle("a.ts"));
+    expect(invoke).toHaveBeenCalledWith("open_in_editor", { repoPath: repo.path, filePath: "a.ts" });
+  });
+
+  it("does not open a deleted file, and explains why", async () => {
+    render(
+      <QueryClientProvider client={client}>
+        <CommitDetail commit={makeCommit()} changedFiles={files} />
+      </QueryClientProvider>,
+    );
+    fireEvent.doubleClick(screen.getByTitle("b.ts"));
+    expect(invoke).not.toHaveBeenCalledWith("open_in_editor", expect.anything());
+    const { toasts } = useToastStore.getState();
+    expect(toasts[toasts.length - 1]?.message).toBe(i18n.t("menu.cannotOpenDeleted"));
   });
 });
 

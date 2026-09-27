@@ -12,7 +12,7 @@ import { useSelectionStore } from "@/stores/selection";
 import { useMergeState, useStatus } from "@/api/queries";
 import { useCurrentBranch } from "@/hooks/useCurrentBranch";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
-import { createCommit, stageFiles, unstageFiles, openInEditor } from "@/api/commands";
+import { createCommit, stageFiles, unstageFiles } from "@/api/commands";
 import { CommitErrorDialog } from "@/components/commit/CommitErrorDialog";
 import { FileEntry } from "@/components/commit/FileEntry";
 import { MergeConflictBanner } from "@/components/conflict/MergeConflictBanner";
@@ -36,6 +36,7 @@ import { CommitComposer } from "./CommitComposer";
 import { useCommitTarget } from "./useCommitTarget";
 import { useUIStore } from "@/stores/ui";
 import { useWorkingFileMenu } from "./useWorkingFileMenu";
+import { useOpenFileInEditor } from "@/hooks/useOpenFileInEditor";
 
 /**
  * 스테이징 목록과 커밋 입력. 체크아웃하지 않고 다른 브랜치를 보는 중에는 그리지 않고 안내를
@@ -126,18 +127,10 @@ function ChangesViewBody() {
   // 행 동작(스테이지·되돌리기·.gitignore)과 우클릭 메뉴·확인 창. 크게 보는 diff 옆 목록도 같은 것을 쓴다.
   const fileMenu = useWorkingFileMenu(activeRepoPath);
 
-  const handleOpenInEditor = async (filePath: string) => {
+  const openFileInEditor = useOpenFileInEditor();
+  const handleOpenInEditor = (entry: { path: string; status: string }) => {
     if (!activeRepoPath) return;
-    try {
-      await openInEditor(activeRepoPath, filePath);
-    } catch (err) {
-      const msg = getErrorMessage(err);
-      if (msg.includes("No default editor") || msg.includes("Unknown editor")) {
-        addToast(t("settings.editorNotSet"), "warning");
-      } else {
-        addToast(t("error.generic"), "error");
-      }
-    }
+    openFileInEditor(activeRepoPath, entry.path, entry.status !== "deleted");
   };
 
   // Memoize the split so downstream group memos aren't invalidated by a new
@@ -339,7 +332,7 @@ function ChangesViewBody() {
                         isSelected={isSelectedEntry(entry, selection)}
                         isHighlighted={activeIndex === navIdx && navIdx >= 0}
                         onClick={() => selectFile(entry.path, entry.staged)}
-                        onDoubleClick={() => handleOpenInEditor(entry.path)}
+                        onDoubleClick={() => handleOpenInEditor(entry)}
                         onContextMenu={(e) => {
                           e.preventDefault();
                           selectFile(entry.path, entry.staged);
@@ -407,7 +400,7 @@ function ChangesViewBody() {
                         isSelected={isSelectedEntry(entry, selection)}
                         isHighlighted={activeIndex === navIdx && navIdx >= 0}
                         onClick={() => selectFile(entry.path, entry.staged)}
-                        onDoubleClick={() => handleOpenInEditor(entry.path)}
+                        onDoubleClick={() => handleOpenInEditor(entry)}
                         onContextMenu={(e) => {
                           e.preventDefault();
                           selectFile(entry.path, entry.staged);

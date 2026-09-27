@@ -34,6 +34,7 @@ import type { DiffOutput, StatusEntry, WipFile } from "@/types";
 import { useWorkingFileMenu } from "@/components/commit/useWorkingFileMenu";
 import { useFileMenu } from "@/components/commit/useFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import { useOpenFileInEditor } from "@/hooks/useOpenFileInEditor";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useNow } from "@/hooks/useNow";
 import { Button } from "@/components/ui/Button";
@@ -244,6 +245,7 @@ function FollowFileList({
   overlap,
   justChanged,
   onPick,
+  onDoubleClick,
   onContextMenu,
 }: {
   files: WipFile[];
@@ -253,6 +255,7 @@ function FollowFileList({
   /** 방금 바뀐 파일들(한 번 비출 것). 목록이 비었다 다시 채워져도 기억이 이어지게 `FollowPanel`에서 받는다. */
   justChanged: JustChanged | null;
   onPick: (path: string) => void;
+  onDoubleClick: (path: string) => void;
   onContextMenu: (path: string, e: React.MouseEvent) => void;
 }) {
   const { t } = useTranslation();
@@ -281,9 +284,10 @@ function FollowFileList({
             title={f.path}
             aria-current={f.path === selected || undefined}
             onClick={() => onPick(f.path)}
+            onDoubleClick={() => onDoubleClick(f.path)}
             onContextMenu={(e) => onContextMenu(f.path, e)}
             className={cn(
-              "relative isolate w-full flex items-center gap-2 min-h-(--row) px-3 text-left border-b border-(--line) transition-colors",
+              "relative isolate w-full flex items-center gap-2 min-h-(--row) px-3 text-left select-none border-b border-(--line) transition-colors",
               f.path === selected
                 ? "bg-(--acc-sel)"
                 : activeIndex === index
@@ -454,6 +458,13 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
     else readOnlyMenu.open({ repoPath: path, filePath, exists: file.status !== "deleted" }, point);
   };
 
+  // 파일 더블클릭: 편집기에서 연다(스테이징 여부와 무관하게 워크트리 경로 기준).
+  const openFileInEditor = useOpenFileInEditor();
+  const handleFileDoubleClick = (filePath: string) => {
+    const file = list.find((f) => f.path === filePath);
+    openFileInEditor(path, filePath, file?.status !== "deleted");
+  };
+
   // 크게 보기 머리 줄. 파일마다 다른 diff 머리의 ModifiedAgo와 달리, 목록 전체(정렬 시각 순 맨 위)의
   // 최근 수정 시각을 한 번만 보인다.
   const origin: MaximizedOrigin = {
@@ -482,6 +493,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
     selectedKey: shown?.path ?? null,
     onSelect: pickFile,
     onContextMenu: openFileMenu,
+    onDoubleClick: handleFileDoubleClick,
   };
 
   const listPane = (
@@ -523,6 +535,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
           overlap={overlap}
           justChanged={justChanged}
           onPick={pickFile}
+          onDoubleClick={handleFileDoubleClick}
           onContextMenu={openFileMenu}
         />
       )}

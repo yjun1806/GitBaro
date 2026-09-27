@@ -2,7 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import i18n from "@/i18n/config";
+import { useToastStore } from "@/stores/toast";
 import type { CommitTouch, FileTouches, RepoFileTouches } from "@/types";
+
+const invoke = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => undefined as unknown));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => invoke(...args) }));
 
 type DiffCall = { path: string | null; base: string | null; head: string | null; file: string | null };
 const diffCalls: DiffCall[] = [];
@@ -63,6 +67,11 @@ function fileTouches(overrides: Partial<FileTouches> & { path: string; commits: 
   };
 }
 
+/** 목록 행(버튼). 같은 파일 이름이 오른쪽 칸에도 나올 수 있어 role로 좁힌다. */
+function fileRow(path: string): HTMLElement {
+  return screen.getByRole("option", { name: new RegExp(path.split("/").pop()!) });
+}
+
 const REPO_A = "/w/app";
 const REPO_B = "/w/backend";
 const repoLabel = (path: string) => (path === REPO_A ? "app" : "backend");
@@ -113,6 +122,8 @@ beforeEach(async () => {
   diffCalls.length = 0;
   touchesByPath = baseRepoTouches();
   failedPaths = {};
+  invoke.mockClear();
+  useToastStore.setState({ toasts: [] });
 });
 
 afterEach(cleanup);
@@ -251,5 +262,29 @@ describe("FileTouchesView", () => {
     expect(screen.getByText("Files changed only in a merge")).toBeTruthy();
     expect(screen.getByText("app: 1 merge commit is not listed per file")).toBeTruthy();
     expect(screen.queryByText("Commits that touched this file")).toBeNull();
+  });
+
+  it("opens a row's file in the editor on double-click, using its worktree path", () => {
+    render(<FileTouchesView sources={SOURCES} repoLabel={repoLabel} />);
+    fireEvent.doubleClick(fileRow("src/multi.ts"));
+    expect(invoke).toHaveBeenCalledWith("open_in_editor", { repoPath: REPO_A, filePath: "src/multi.ts" });
+  });
+
+  it("does not open a deleted file on double-click, and explains why", () => {
+    touchesByPath[REPO_A] = {
+      ...touchesByPath[REPO_A]!,
+      files: [
+        fileTouches({
+          path: "src/removed.ts",
+          status: "deleted",
+          commits: [commitTouch({ oid: "d1", subject: "[XMS-1] remove", authorTime: 10, path: "src/removed.ts" })],
+        }),
+      ],
+    };
+    render(<FileTouchesView sources={SOURCES} repoLabel={repoLabel} />);
+    fireEvent.doubleClick(fileRow("src/removed.ts"));
+    expect(invoke).not.toHaveBeenCalledWith("open_in_editor", expect.anything());
+    const { toasts } = useToastStore.getState();
+    expect(toasts[toasts.length - 1]?.message).toBe(i18n.t("menu.cannotOpenDeleted"));
   });
 });

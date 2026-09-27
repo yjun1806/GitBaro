@@ -1271,6 +1271,7 @@
     "copyFailed": "복사하지 못했어요: {{error}}",
     "revealFailed": "Finder에서 열지 못했어요: {{error}}",
     "openUrlFailed": "브라우저를 열지 못했어요: {{error}}",
+    "cannotOpenDeleted": "삭제된 파일이라 열 수 없어요.",
     "fileMenu": "파일 메뉴",
     "copyRelativePath": "상대 경로 복사",
     "copyFullPath": "전체 경로 복사",
@@ -1414,7 +1415,8 @@
       "noPatchHint": "바이너리이거나 너무 큰 파일입니다. 이 PR의 커밋도 로컬에 없습니다",
       "patchSource": "GitHub diff",
       "patchSourceHint": "이 PR의 커밋이 로컬에 없어 GitHub이 준 diff를 보입니다. fetch하면 접힌 줄 펼치기와 문서 보기가 됩니다",
-      "viewOnGitHub": "GitHub에서 파일 보기"
+      "viewOnGitHub": "GitHub에서 파일 보기",
+      "notCheckedOut": "이 PR의 브랜치를 체크아웃해야 편집기에서 파일을 열 수 있어요."
     },
     "menu": {
       "label": "PR #{{number}}",

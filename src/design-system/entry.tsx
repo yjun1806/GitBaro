@@ -683,6 +683,7 @@ function FileTouchesRowDemo() {
   }, []);
   const itemRef = useCallback(() => () => {}, []);
   const containerProps = useMemo(() => ({ tabIndex: 0, onKeyDown: () => {}, style: {} }), []);
+  const onDoubleClick = useCallback(() => {}, []);
 
   return (
     <Card className="w-[380px]">
@@ -693,6 +694,7 @@ function FileTouchesRowDemo() {
         repoLabel={repoLabel}
         avatarColorOf={avatarColorOf}
         onSelect={onSelect}
+        onDoubleClick={onDoubleClick}
         containerProps={containerProps}
         itemRef={itemRef}
       />

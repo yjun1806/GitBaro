@@ -6,6 +6,8 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import { useMenuActions } from "@/hooks/useMenuActions";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
+import { useOpenFileInEditor } from "@/hooks/useOpenFileInEditor";
+import { useToastStore } from "@/stores/toast";
 import { cn } from "@/lib/utils";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import type { MaximizedOrigin } from "@/components/layout/maximized-files";
@@ -91,6 +93,20 @@ function PrDetail({ pr, repoPath, accountId }: { pr: PullRequestDetail; repoPath
     if (f) setFileMenu({ file: f, ...contextMenuPoint(e) });
   };
 
+  // 파일 더블클릭: 편집기에서 연다. PR head가 체크아웃된 상태여야 작업 폴더의 파일이 PR 내용과
+  // 같다(diff 칸의 repoPath와 같은 판단) — 아니면 왜 못 여는지 알린다. 체크아웃돼 있어도 PR에서
+  // 지운 파일은 작업 폴더에도 없다.
+  const openFileInEditor = useOpenFileInEditor();
+  const addToast = useToastStore((s) => s.addToast);
+  const handleFileDoubleClick = (path: string) => {
+    if (!headCheckedOut) {
+      addToast(t("pr.file.notCheckedOut"), "info");
+      return;
+    }
+    const status = fileList.find((f) => f.path === path)?.status;
+    openFileInEditor(repoPath, path, status !== "removed");
+  };
+
   const origin: MaximizedOrigin = {
     kind: "pr",
     label: <Code>{`#${pr.number}`}</Code>,
@@ -120,6 +136,7 @@ function PrDetail({ pr, repoPath, accountId }: { pr: PullRequestDetail; repoPath
         selectedKey: selectedFile,
         onSelect: (key) => openFile(key),
         onContextMenu: openFileMenu,
+        onDoubleClick: handleFileDoubleClick,
       }}
       list={
         <PrSideList
@@ -130,6 +147,7 @@ function PrDetail({ pr, repoPath, accountId }: { pr: PullRequestDetail; repoPath
           threads={threads}
           selectedFile={selectedFile}
           onSelectFile={(path) => openFile(path)}
+          onFileDoubleClick={handleFileDoubleClick}
           onFileContextMenu={openFileMenu}
         />
       }
@@ -181,6 +199,7 @@ interface PrSideListProps {
   threads: ReturnType<typeof threadsByFile>;
   selectedFile: string | null;
   onSelectFile: (path: string | null) => void;
+  onFileDoubleClick: (path: string) => void;
   onFileContextMenu: (path: string, e: React.MouseEvent) => void;
 }
 
@@ -193,6 +212,7 @@ function PrSideList({
   threads,
   selectedFile,
   onSelectFile,
+  onFileDoubleClick,
   onFileContextMenu,
 }: PrSideListProps) {
   const { t } = useTranslation();
@@ -305,9 +325,10 @@ function PrSideList({
                 type="button"
                 title={f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
                 onClick={() => onSelectFile(f.path)}
+                onDoubleClick={() => onFileDoubleClick(f.path)}
                 onContextMenu={(e) => onFileContextMenu(f.path, e)}
                 className={cn(
-                  "w-full h-7 flex items-center gap-2 px-3 text-left transition-colors",
+                  "w-full h-7 flex items-center gap-2 px-3 text-left select-none transition-colors",
                   selectedFile === f.path
                     ? "bg-(--acc-sel)"
                     : activeIndex === index

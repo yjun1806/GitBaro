@@ -1289,6 +1289,7 @@
     "copyFailed": "Couldn't copy: {{error}}",
     "revealFailed": "Couldn't show it in Finder: {{error}}",
     "openUrlFailed": "Couldn't open the browser: {{error}}",
+    "cannotOpenDeleted": "This file was deleted, so there's nothing to open.",
     "fileMenu": "File menu",
     "copyRelativePath": "Copy relative path",
     "copyFullPath": "Copy full path",
@@ -1432,7 +1433,8 @@
       "noPatchHint": "It is binary or too large. The PR's commits are not in this clone either",
       "patchSource": "Diff from GitHub",
       "patchSourceHint": "The PR's commits are not in this clone, so this is GitHub's diff. Fetch to expand context and see rendered documents",
-      "viewOnGitHub": "View files on GitHub"
+      "viewOnGitHub": "View files on GitHub",
+      "notCheckedOut": "Check out this pull request's branch to open its files in your editor."
     },
     "menu": {
       "label": "Pull request #{{number}}",

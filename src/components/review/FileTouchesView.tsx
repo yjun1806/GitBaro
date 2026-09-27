@@ -8,6 +8,7 @@ import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import { splitFilePath, type MaximizedOrigin } from "@/components/layout/maximized-files";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { useOpenFileInEditor } from "@/hooks/useOpenFileInEditor";
 import { FileTouchesList } from "./FileTouchesList";
 import { FileTouchesDetail } from "./FileTouchesDetail";
 import { groupFileTouches, type FileTouchRow, type FileTouchSource } from "./file-touches-model";
@@ -41,6 +42,12 @@ export function FileTouchesView({ sources, repoLabel }: FileTouchesViewProps) {
   const selectRow = (row: FileTouchRow) => {
     setSelectedKey(row.key);
     setSelectedCommitOid(null);
+  };
+
+  // 행 더블클릭: 편집기에서 연다. 그 행의 워크트리 경로 기준이고, 지운 파일은 열지 않고 알린다.
+  const openFileInEditor = useOpenFileInEditor();
+  const handleRowDoubleClick = (row: FileTouchRow) => {
+    openFileInEditor(row.source.path, row.touches.path, row.touches.status !== "deleted");
   };
 
   const detailRef = useRef<HTMLDivElement>(null);
@@ -91,6 +98,7 @@ export function FileTouchesView({ sources, repoLabel }: FileTouchesViewProps) {
           repoLabel={repoLabel}
           avatarColorOf={avatarColorOf}
           onSelect={selectRow}
+          onDoubleClick={handleRowDoubleClick}
           containerProps={{ ...containerProps, onKeyDown: handleKeyDown }}
           itemRef={itemRef}
         />

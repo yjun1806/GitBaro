@@ -22,6 +22,7 @@ export interface FileTouchesListProps {
   repoLabel: (repoPath: string) => string;
   avatarColorOf: (repoPath: string) => AvatarColor;
   onSelect: (row: FileTouchRow, index: number) => void;
+  onDoubleClick: (row: FileTouchRow) => void;
   containerProps: { tabIndex: number; onKeyDown: (e: KeyboardEvent) => void; style: CSSProperties };
   itemRef: (index: number) => (el: HTMLElement | null) => void;
 }
@@ -43,6 +44,7 @@ export function FileTouchesList({
   repoLabel,
   avatarColorOf,
   onSelect,
+  onDoubleClick,
   containerProps,
   itemRef,
 }: FileTouchesListProps) {
@@ -92,6 +94,7 @@ export function FileTouchesList({
                 repoLabel={repoLabel}
                 avatarColorOf={avatarColorOf}
                 onSelect={onSelect}
+                onDoubleClick={onDoubleClick}
                 itemRef={itemRef}
               />
             )),
@@ -109,6 +112,7 @@ function FileTouchesRow({
   repoLabel,
   avatarColorOf,
   onSelect,
+  onDoubleClick,
   itemRef,
 }: {
   row: FileTouchRow;
@@ -118,6 +122,7 @@ function FileTouchesRow({
   repoLabel: (repoPath: string) => string;
   avatarColorOf: (repoPath: string) => AvatarColor;
   onSelect: (row: FileTouchRow, index: number) => void;
+  onDoubleClick: (row: FileTouchRow) => void;
   itemRef: (index: number) => (el: HTMLElement | null) => void;
 }) {
   const { t } = useTranslation();
@@ -134,6 +139,7 @@ function FileTouchesRow({
       aria-selected={selected}
       title={touches.oldPath ? `${touches.oldPath} → ${touches.path}` : touches.path}
       onClick={() => onSelect(row, index)}
+      onDoubleClick={() => onDoubleClick(row)}
       className={cn(
         "w-full flex flex-col justify-center gap-1 min-h-11 px-3 py-1.5 text-left border-b border-(--line) select-none transition-colors motion-reduce:transition-none",
         selected ? "bg-(--acc-sel)" : highlighted ? "bg-accent ring-1 ring-inset ring-primary/30" : "hover:bg-accent",

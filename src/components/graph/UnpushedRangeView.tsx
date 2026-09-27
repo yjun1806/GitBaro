@@ -10,6 +10,7 @@ import { Code, FileStatusLetter } from "@/components/ui/marks";
 import { DiffViewer } from "@/components/diff/DiffViewer";
 import { cn } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { useOpenFileInEditor } from "@/hooks/useOpenFileInEditor";
 import { useUnpushedRangeViewStore } from "./unpushed-range-view";
 import type { RangeChangedFile } from "@/types";
 
@@ -42,6 +43,14 @@ export function UnpushedRangeDetailPane() {
     file ? { path: file.path, oldPath: file.oldPath } : null,
   );
 
+  // 파일 더블클릭: 편집기에서 연다. diff 칸의 편집기 열기(줄 번호 더블클릭)와 같은 저장소 경로를 쓴다.
+  const openFileInEditor = useOpenFileInEditor();
+  const handleFileDoubleClick = (path: string) => {
+    if (!range) return;
+    const status = fileList.find((f) => f.path === path)?.status;
+    openFileInEditor(range.repoPath, path, status !== "deleted");
+  };
+
   if (!range) return null;
 
   const origin: MaximizedOrigin = {
@@ -67,6 +76,7 @@ export function UnpushedRangeDetailPane() {
           error={filesQuery.isError}
           selectedFile={selectedFile}
           onSelectFile={selectFile}
+          onFileDoubleClick={handleFileDoubleClick}
           onClose={close}
         />
       }
@@ -89,6 +99,7 @@ function UnpushedRangeFileList({
   error,
   selectedFile,
   onSelectFile,
+  onFileDoubleClick,
   onClose,
 }: {
   files: readonly RangeChangedFile[];
@@ -96,6 +107,7 @@ function UnpushedRangeFileList({
   error: boolean;
   selectedFile: string | null;
   onSelectFile: (path: string) => void;
+  onFileDoubleClick: (path: string) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -141,8 +153,9 @@ function UnpushedRangeFileList({
                 type="button"
                 title={f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
                 onClick={() => onSelectFile(f.path)}
+                onDoubleClick={() => onFileDoubleClick(f.path)}
                 className={cn(
-                  "w-full flex items-center gap-2 h-7 px-3 text-left transition-colors",
+                  "w-full flex items-center gap-2 h-7 px-3 text-left select-none transition-colors",
                   selectedFile === f.path ? "bg-(--acc-sel)" : "hover:bg-accent",
                 )}
               >

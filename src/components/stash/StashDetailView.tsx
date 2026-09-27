@@ -11,6 +11,7 @@ import { formatRelativeTime, getErrorMessage } from "@/lib/utils";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useFileMenu } from "@/components/commit/useFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
+import { useOpenFileInEditor } from "@/hooks/useOpenFileInEditor";
 import type { FileStatus, StashFileSummary } from "@/types";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Button } from "@/components/ui/Button";
@@ -34,6 +35,7 @@ function FileSummaryRow({
   isSelected,
   isHighlighted,
   onClick,
+  onDoubleClick,
   onContextMenu,
   ref,
 }: {
@@ -41,6 +43,7 @@ function FileSummaryRow({
   isSelected: boolean;
   isHighlighted?: boolean;
   onClick: () => void;
+  onDoubleClick?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   ref?: React.Ref<HTMLButtonElement>;
 }) {
@@ -48,9 +51,10 @@ function FileSummaryRow({
     <button
       ref={ref}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       title={file.path}
-      className={`w-full flex items-center gap-2 h-7 px-3 text-left transition-colors ${
+      className={`w-full flex items-center gap-2 h-7 px-3 text-left select-none transition-colors ${
         isSelected
           ? "bg-(--acc-sel)"
           : !isSelected && isHighlighted
@@ -106,6 +110,14 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
     if (!activeRepoPath) return;
     const status = stashFiles.find((f) => f.path === path)?.status;
     fileMenu.open({ repoPath: activeRepoPath, filePath: path, exists: status !== "deleted" }, contextMenuPoint(e));
+  };
+
+  // 파일 더블클릭: 편집기에서 연다. 작업 폴더에 없는 파일(지운 파일)은 열지 않고 이유를 알린다.
+  const openFileInEditor = useOpenFileInEditor();
+  const handleFileDoubleClick = (path: string) => {
+    if (!activeRepoPath) return;
+    const status = stashFiles.find((f) => f.path === path)?.status;
+    openFileInEditor(activeRepoPath, path, status !== "deleted");
   };
 
   const handleApply = async () => {
@@ -204,6 +216,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
           selectedKey: selectedFilePath,
           onSelect: setSelectedFilePath,
           onContextMenu: openFileMenu,
+          onDoubleClick: handleFileDoubleClick,
         }}
         list={
           <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
@@ -219,6 +232,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
                 isSelected={selectedFilePath === file.path}
                 isHighlighted={activeIndex === index}
                 onClick={() => setSelectedFilePath(file.path)}
+                onDoubleClick={() => handleFileDoubleClick(file.path)}
                 onContextMenu={(e) => openFileMenu(file.path, e)}
               />
             ))
