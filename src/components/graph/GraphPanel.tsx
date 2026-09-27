@@ -29,9 +29,11 @@ import { CompareChip } from "./CompareChip";
 import { useWorktreeChipMenu } from "./useWorktreeChipMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { useHistoryView } from "./useHistoryView";
-import { trimTrailingSlash } from "@/lib/utils";
+import { cn, trimTrailingSlash } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
 import { FilterBar } from "@/components/ui/FilterBar";
+import { NarrowPaneHeader } from "@/components/layout/NarrowPaneHeader";
+import { useGraphNarrow } from "@/components/layout/pane-state";
 import { useActiveRepoName } from "@/hooks/useRepoDisplay";
 import { useGraphFilesView } from "./graph-files-view";
 import { useScopeSources } from "@/components/scope/useScopeSources";
@@ -109,6 +111,9 @@ export function GraphPanel() {
   const filesView = useGraphFilesView();
   const fileSources = useFileSources(scope, worktreeFilter.wips);
   const repoName = useActiveRepoName();
+  const narrow = useGraphNarrow();
+  const tabLabel =
+    tab === "graph" ? t("shell.graphTab") : tab === "stash" ? t("shell.stashTab") : tab === "pr" ? t("pr.tab") : t("actions.title");
   useCarriedSelection(scope, sources);
   const branchOnly = useScopeStore((s) => s.branchOnly);
   const setBranchOnly = useScopeStore((s) => s.setBranchOnly);
@@ -147,7 +152,8 @@ export function GraphPanel() {
   return (
     <div role="region" aria-label={t("shell.panelTabs")} className="flex flex-col shrink-0 flex-1 h-full min-h-0">
       <Card className="relative flex-1 min-h-0">
-        <div className="flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)">
+        {narrow && <NarrowPaneHeader label={tabLabel} />}
+        <div className={cn("flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)", narrow && "hidden")}>
           <TabGroup aria-label={t("shell.panelTabs")} className="flex-1 min-w-0 gap-2 px-3 border-b-0">
             <Tab
               variant="inline"
@@ -190,7 +196,7 @@ export function GraphPanel() {
           {/* 「작업 중인 변경 N」은 아래 WIP 행이 말한다(여기 배지를 두지 않는다). */}
         </div>
 
-        {tab === "graph" && graphListShown && (
+        {tab === "graph" && graphListShown && !narrow && (
           <FilterBar
             left={
               worktreeFilter.chips.length > 1 ? (

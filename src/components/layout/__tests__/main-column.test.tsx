@@ -8,6 +8,7 @@ import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
 import { useFollowStore } from "@/stores/follow";
 import { useScopeStore } from "@/components/scope/scope-store";
+import { usePaneStore } from "../pane-state";
 import type { RepoInfo, StatusEntry } from "@/types";
 
 // Heavy children talk to Tauri; the shell only decides which one to show.
@@ -148,6 +149,7 @@ beforeEach(async () => {
   useUIStore.setState({ activeTab: "changes", repoListOpen: false });
   useSelectionStore.getState().clearAll();
   useScopeStore.setState({ aggregateRepoPath: null, lastSelection: null, laneShown: {}, repoShown: {} });
+  usePaneStore.setState({ graphExpanded: false });
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: repo.path });
   useFollowStore.getState().stop();
   mergeStateValue = null;
@@ -188,24 +190,39 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getByText("changes-view")).toBeTruthy();
   });
 
-  it("D47/5.4: folds the graph once following opens a file, and unfolds it from the folded pane", () => {
+  it("D47/5.4: keeps a narrow commit list once following opens a file, and expands it back to level 1", () => {
     renderShell();
     const graphPane = screen.getByTestId("graph-pane");
     expect(graphPane.dataset.paneLevel).toBe("1");
     expect(graphPane.style.width).toBe("46%");
 
-    // 따라가기는 첫 파일을 스스로 고르므로(D49) 곧바로 2단계(접힌 그래프)로 간다.
+    // 따라가기는 첫 파일을 스스로 고르므로(D49) 곧바로 2단계(좁은 커밋 목록)로 간다.
     fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · primary folder · 2 files$/ }));
     expect(graphPane.dataset.paneLevel).toBe("2");
-    expect(graphPane.style.width).toBe("120px");
-    // 그래프 자체는 접혀도 그대로 화면에 있다(다시 마운트되지 않는다).
+    expect(graphPane.style.width).toBe("240px");
+    // 그래프 자체는 그대로 화면에 있다(다시 마운트되지 않는다). 탭 줄 대신 좁은 목록 머리 줄이 선다.
     expect(screen.getByRole("tablist")).toBeTruthy();
+    expect(screen.getByText("history-list")).toBeTruthy();
 
-    // 접힌 그래프 칸을 누르면 지금 탭(변경)의 선택을 지우고 1단계로 되돌아간다.
-    fireEvent.click(screen.getByRole("button", { name: "Back to the graph" }));
-    expect(useFollowStore.getState().target).toBeNull();
+    // 「그래프 펼치기」는 선택을 지우지 않고 1단계 폭으로만 돌아간다.
+    fireEvent.click(screen.getByRole("button", { name: "Expand the graph" }));
+    expect(useFollowStore.getState().target).toBe(repo.path);
     expect(graphPane.dataset.paneLevel).toBe("1");
     expect(graphPane.style.width).toBe("46%");
+  });
+
+  it("D47: picking a commit in the narrow list keeps level 2 and switches what the panes show", () => {
+    renderShell();
+    fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · primary folder · 2 files$/ }));
+    const graphPane = screen.getByTestId("graph-pane");
+    expect(graphPane.dataset.paneLevel).toBe("2");
+
+    fireEvent.click(screen.getByText("history-list"));
+    expect(useSelectionStore.getState().selectedCommitId).toBe("c1");
+    expect(useUIStore.getState().activeTab).toBe("history");
+    // 커밋 상세를 읽는 동안에도 1단계로 튀지 않는다.
+    expect(graphPane.dataset.paneLevel).toBe("2");
+    expect(graphPane.style.width).toBe("240px");
   });
 
   it("stops following and shows the staging list (conflict banner) once a merge or pull stops on a conflict", () => {

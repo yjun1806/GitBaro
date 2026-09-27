@@ -43,6 +43,7 @@ import {
   edgePath,
   followRowParts,
   GRAPH_COLUMNS,
+  NARROW_HIDDEN_CLASS,
   GraphRow,
   GraphWipRow,
   NowHeaderRow,
@@ -164,8 +165,18 @@ function useActiveBranchRange() {
  */
 function useGraphSelection() {
   const setActiveTab = useUIStore((s) => s.setActiveTab);
-  const selectCommit = useSelectionStore((s) => s.selectCommit);
+  const pickCommit = useSelectionStore((s) => s.selectCommit);
   const startFollow = useFollowStore((s) => s.start);
+
+  // 커밋을 고르면 같은 차례에 커밋 탭으로 옮긴다. 한 차례 늦으면(패널의 효과가 옮기면) 그 사이 아래 칸이
+  // 「작업 중인 변경」으로 한 번 그려져, 2단계 좁은 목록에서 커밋을 바꿀 때 1단계로 튀었다 돌아온다.
+  const selectCommit = useCallback(
+    (id: string) => {
+      pickCommit(id);
+      setActiveTab("history");
+    },
+    [pickCommit, setActiveTab],
+  );
 
   const selectWip = useCallback(
     (wip: GraphWip) => {
@@ -527,14 +538,14 @@ function CommitGraphList({
   return (
     <div className="@container/graph flex flex-col flex-1 min-h-0 overflow-hidden">
       <div
-        className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
+        className={GRAPH_COLUMNS + " @max-[400px]/graph:hidden h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
         style={{ paddingLeft: graphWidth + 8 }}
         aria-hidden="true"
       >
         <span className="pl-3.5">{t("graph.colDescription")}</span>
-        <span>{t("graph.colChange")}</span>
-        <span title={t("graph.colCi")}>{t("graph.colCi")}</span>
-        <span>{t("graph.colAuthor")}</span>
+        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colChange")}</span>
+        <span className={NARROW_HIDDEN_CLASS} title={t("graph.colCi")}>{t("graph.colCi")}</span>
+        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colAuthor")}</span>
         <span>{t("graph.colTime")}</span>
       </div>
 
@@ -922,14 +933,14 @@ export function RepoLaneCommitGraph({
   return (
     <div className="@container/graph flex flex-col flex-1 min-h-0 overflow-hidden">
       <div
-        className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
+        className={GRAPH_COLUMNS + " @max-[400px]/graph:hidden h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
         style={{ paddingLeft: graphWidth + 8 }}
         aria-hidden="true"
       >
         <span className="pl-3.5">{t("graph.colDescription")}</span>
-        <span>{t("graph.colChange")}</span>
-        <span title={t("graph.colCi")}>{t("graph.colCi")}</span>
-        <span>{t("graph.colAuthor")}</span>
+        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colChange")}</span>
+        <span className={NARROW_HIDDEN_CLASS} title={t("graph.colCi")}>{t("graph.colCi")}</span>
+        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colAuthor")}</span>
         <span>{t("graph.colTime")}</span>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>

@@ -14,7 +14,7 @@ import { usePrViewStore } from "@/components/pr/pr-view";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
-import { ContentArea, useExpandGraph } from "./ContentArea";
+import { ContentArea } from "./ContentArea";
 import { PaneStrip } from "./PaneStrip";
 import { useDiffMaximizeReset } from "./useDiffMaximize";
 import { useSelectionStore } from "@/stores/selection";
@@ -79,7 +79,6 @@ export function MainColumn() {
   const repoListOpen = useUIStore((s) => s.repoListOpen);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const prOpen = usePrViewStore((s) => s.open);
-  const setPrOpen = usePrViewStore((s) => s.setOpen);
   const scope = useActiveScope();
   // 다른 저장소·워크스페이스로 옮기거나 목록을 열면 diff 크게 보기를 끝낸다(숨긴 목록으로 돌아올 길이 없어진다).
   useDiffMaximizeReset(`${scope?.kind === "workspace" ? scope.id : ""}:${activeRepoPath ?? ""}:${repoListOpen}`);
@@ -89,11 +88,6 @@ export function MainColumn() {
   // 파일별 보기는 그래프 칸 안에 파일 목록과 diff를 함께 그리므로 옆 칸을 열지 않는다(5.4).
   const filesView = useGraphFilesView();
   const hasSelection = useHasPaneContent(activeTab, activeRepoPath, prOpen) && !filesView;
-  const expandContentTab = useExpandGraph(activeTab);
-  const handleExpandGraph = () => {
-    if (prOpen) setPrOpen(false);
-    else expandContentTab();
-  };
 
   return (
     <main className="relative flex flex-col flex-1 min-w-0 h-full bg-background">
@@ -109,7 +103,6 @@ export function MainColumn() {
           <PaneStrip
             graph={<GraphPanel />}
             hasSelection={hasSelection}
-            onExpandGraph={handleExpandGraph}
             bottom={prOpen ? <PrDetailPane /> : <ContentArea activeTab={activeTab} />}
           />
         ) : scope?.kind === "workspace" ? (

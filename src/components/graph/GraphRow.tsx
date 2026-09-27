@@ -30,8 +30,10 @@ export const REGION_HEADER_HEIGHT = 32;
  * - 820px 이하: 작성자 칸을 줄이고(112→36px) 이름을 뺀다(아바타만 남는다).
  * - 680px 이하: 변경 칸을 줄이고(128→64px) 파일 수·크기 막대를 빼고 `+ −` 숫자만 남긴다.
  * - 560px 이하: 변경 칸을 뺀다(0px, 내용도 감춘다).
+ * - 400px 이하(D47 2단계의 좁은 커밋 목록): 설명과 시각 두 칸만 남는다. CI·작성자 칸, 브랜치 이름표,
+ *   WIP 행의 브랜치·워크트리 표시와 버튼을 감추고, 설명은 제목만 말줄임으로 둔다.
  *
- * CI(16px)·시각(64px)·설명(`1fr`)은 좁아져도 그대로다.
+ * CI(16px)·시각(64px)·설명(`1fr`)은 400px까지 그대로다.
  */
 export const GRAPH_COLUMNS = cn(
   "grid items-center gap-3",
@@ -39,7 +41,11 @@ export const GRAPH_COLUMNS = cn(
   "@max-[820px]/graph:grid-cols-[minmax(0,1fr)_128px_16px_36px_64px]",
   "@max-[680px]/graph:grid-cols-[minmax(0,1fr)_64px_16px_36px_64px]",
   "@max-[560px]/graph:grid-cols-[minmax(0,1fr)_0px_16px_36px_64px]",
+  "@max-[400px]/graph:grid-cols-[minmax(0,1fr)_auto] @max-[400px]/graph:gap-2",
 );
+
+/** 좁은 커밋 목록(400px 이하)에서 감추는 칸·표시. 감춘 칸은 그리드에서 빠져 설명·시각 두 칸만 남는다. */
+export const NARROW_HIDDEN_CLASS = "@max-[400px]/graph:hidden";
 
 /** 「변경」 칸을 좁아짐 둘째 단계에서 줄이는 표시(파일 수·크기 막대를 감춘다, `+ −` 숫자만 남긴다). */
 const CHANGE_DETAIL_CLASS = "@max-[680px]/graph:hidden";
@@ -51,20 +57,20 @@ const AUTHOR_NAME_HIDDEN_CLASS = "@max-[820px]/graph:hidden";
 /** 커밋 줄 「변경」 칸(3.15). 병합 커밋은 「병합」 글자 하나, 그 외는 파일 수·크기 막대·`+N −N`. */
 function ChangeCell({ stats }: { stats: CommitStats | undefined }) {
   const { t } = useTranslation();
-  if (!stats) return <span aria-hidden="true" />;
+  if (!stats) return <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />;
   if (stats.merge) {
     return (
-      <span className={cn("truncate text-[11.5px] text-muted-foreground", CHANGE_CELL_HIDDEN_CLASS)}>
+      <span className={cn("truncate text-[11.5px] text-muted-foreground", CHANGE_CELL_HIDDEN_CLASS, NARROW_HIDDEN_CLASS)}>
         {t("graph.mergeCommit")}
       </span>
     );
   }
   const { filesChanged, additions, deletions } = stats;
-  if (filesChanged === null) return <span aria-hidden="true" />;
+  if (filesChanged === null) return <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />;
   const hasLines = additions !== null && deletions !== null;
   const bar = hasLines ? changeBarWidths(additions, deletions) : null;
   return (
-    <span className={cn("flex items-center gap-1.5 min-w-0 whitespace-nowrap", CHANGE_CELL_HIDDEN_CLASS)}>
+    <span className={cn("flex items-center gap-1.5 min-w-0 whitespace-nowrap", CHANGE_CELL_HIDDEN_CLASS, NARROW_HIDDEN_CLASS)}>
       <span className={cn("shrink-0 text-[11.5px] text-muted-foreground", CHANGE_DETAIL_CLASS)}>
         {t("graph.fileCount", { count: filesChanged })}
       </span>
@@ -88,9 +94,9 @@ function ChangeCell({ stats }: { stats: CommitStats | undefined }) {
 
 /** 커밋 줄 「CI」 칸(3.15). 실행 기록이 있을 때만 아이콘 하나(`CommitDetail`의 접힌 요약 줄과 같은 부품). */
 function CiCell({ ci }: { ci: CiSummary | null | undefined }) {
-  if (!ci) return <span aria-hidden="true" />;
+  if (!ci) return <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />;
   return (
-    <span className="flex items-center justify-center">
+    <span className={cn("flex items-center justify-center", NARROW_HIDDEN_CLASS)}>
       <CiStateIcon ci={ci} />
     </span>
   );
@@ -302,11 +308,11 @@ export const GraphRow = memo(function GraphRow({
       />
       <span className={cn(GRAPH_COLUMNS, "flex-1 min-w-0 pl-2 pr-3 text-[12.5px]")}>
         <span className="flex items-center gap-2 min-w-0">
-          {leading}
+          {leading && <span className={cn("contents", NARROW_HIDDEN_CLASS)}>{leading}</span>}
           {commit.refs.map((label) => (
             <span
               key={`${label.kind}:${label.name}`}
-              className="contents"
+              className={cn("contents", NARROW_HIDDEN_CLASS)}
               data-ref-label={label.name}
               onContextMenu={
                 onRefContextMenu
@@ -322,7 +328,7 @@ export const GraphRow = memo(function GraphRow({
             </span>
           ))}
           {ticket && (
-            <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-(--radius-chip) bg-(--chip) text-(--fg2) font-mono text-[10.5px] font-semibold">
+            <span className="shrink-0 @max-[400px]/graph:hidden inline-flex items-center h-[18px] px-1.5 rounded-(--radius-chip) bg-(--chip) text-(--fg2) font-mono text-[10.5px] font-semibold">
               {ticket.key}
             </span>
           )}
@@ -340,7 +346,7 @@ export const GraphRow = memo(function GraphRow({
         </span>
         <ChangeCell stats={stats} />
         <CiCell ci={ci} />
-        <span className="flex items-center gap-1.5 min-w-0 text-[12.5px] text-(--fg2)">
+        <span className={cn("flex items-center gap-1.5 min-w-0 text-[12.5px] text-(--fg2)", NARROW_HIDDEN_CLASS)}>
           {resolvedAvatar ? (
             <img src={resolvedAvatar} alt="" className="w-[18px] h-[18px] rounded-full shrink-0 object-cover" />
           ) : (
@@ -522,8 +528,9 @@ export function GraphWipRow({
       </svg>
       <span className={cn(GRAPH_COLUMNS, "flex-1 min-w-0 pl-2 pr-3 text-[12.5px]")}>
         <span className="flex items-center gap-2 min-w-0">
-          {leading}
+          {leading && <span className={cn("contents", NARROW_HIDDEN_CLASS)}>{leading}</span>}
           <span className="italic text-(--fg2) truncate">{wipLabel}</span>
+          <span className={cn("contents", NARROW_HIDDEN_CLASS)}>
           {/* 이 변경이 쌓인 브랜치(그 브랜치 최신 커밋 위)와 워크트리. 브랜치는 늘 브랜치 아이콘이고,
               체크아웃한 워크트리가 있으면 그 레인 색으로 채운다 — 워크트리 이름표(폴더 아이콘)와
               헷갈리지 않게 종류를 지킨다. */}
@@ -544,13 +551,14 @@ export function GraphWipRow({
           ) : (
             <span className="shrink-0 text-[11.5px] text-muted-foreground">{worktreeText}</span>
           )}
+          </span>
           <span className="text-[11.5px] text-muted-foreground shrink-0">{countText}</span>
-          {trailing}
+          <span className={cn("contents", NARROW_HIDDEN_CLASS)}>{trailing}</span>
         </span>
         {/* 변경 · CI · 작성자 칸은 커밋하지 않은 변경에는 없다(3.15는 커밋 줄만 다룬다) — 그리드 정렬만 맞춘다. */}
-        <span aria-hidden="true" />
-        <span aria-hidden="true" />
-        <span aria-hidden="true" />
+        <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />
+        <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />
+        <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />
         <span className="truncate text-[11.5px] text-muted-foreground">
           {changedAt !== null && (count ?? 0) > 0
             ? t("graph.modifiedAgo", { time: formatRelativeTime(changedAt / 1000) })
@@ -558,7 +566,7 @@ export function GraphWipRow({
         </span>
       </span>
     </button>
-    {action && <span className="shrink-0 pr-3 pl-1 flex items-center gap-1.5">{action}</span>}
+    {action && <span className={cn("shrink-0 pr-3 pl-1 flex items-center gap-1.5", NARROW_HIDDEN_CLASS)}>{action}</span>}
     </div>
   );
 }

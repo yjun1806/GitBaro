@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { PANEL_SURFACE } from "@/components/ui/layers";
 import { SplitHandle } from "./SplitHandle";
 import { useMaximizeFlip, usePaneExit } from "./maximize-motion";
+import { usePaneStore } from "./pane-state";
 import {
   MaximizedFilesContext,
   MaximizedOriginContext,
@@ -107,6 +108,16 @@ export function ListDiffSplit({
     return () => setDiffFileOpen(false);
   }, [hasFile, setDiffFileOpen]);
 
+  // 다른 파일을 고르면 「그래프 펼치기」(1단계 폭)를 풀어 다시 좁은 커밋 목록(2단계)으로 간다.
+  const setGraphExpanded = usePaneStore((s) => s.setGraphExpanded);
+  const selectedKey = files?.selectedKey ?? null;
+  const prevSelectedKey = useRef(selectedKey);
+  useEffect(() => {
+    if (prevSelectedKey.current === selectedKey) return;
+    prevSelectedKey.current = selectedKey;
+    if (selectedKey !== null) setGraphExpanded(false);
+  }, [selectedKey, setGraphExpanded]);
+
   // 크게 보기를 벗어나면 파일 목록 접힘을 푼다("원래 크기로 돌아오면 풀린다", 5.4).
   const prevMaximized = useRef(maximized);
   useEffect(() => {
@@ -132,8 +143,8 @@ export function ListDiffSplit({
           listLeaving ? "absolute top-0 bottom-0 left-0 pointer-events-none" : "relative",
           maximized && hasFile && !listLeaving && "hidden",
           // 파일을 아직 안 골랐으면(1단계) 목록이 칸 전체를 쓴다. 골랐으면(2단계) diff가 너무
-          // 좁아지지 않게 목록은 전체의 60%를 넘지 않는다.
-          hasFile ? "shrink-0 max-w-[60%]" : "flex-1",
+          // 좁아지지 않게 목록은 전체의 60%를 넘지 않고, 창이 좁으면 diff보다 먼저 220px까지 줄어든다(5.4).
+          hasFile ? "shrink min-w-[220px] max-w-[60%]" : "flex-1",
         )}
         aria-hidden={(maximized && hasFile) || undefined}
         data-testid="list-pane"

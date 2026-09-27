@@ -1,9 +1,14 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useUIStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
-import { GRAPH_FOLDED_WIDTH, GRAPH_LEVEL1_RATIO } from "@/lib/split-size";
+import {
+  GRAPH_LEVEL1_RATIO,
+  GRAPH_NARROW_WIDTH,
+  MIN_DIFF_PANE_WIDTH,
+  MIN_FILE_LIST_SQUEEZED_WIDTH,
+} from "@/lib/split-size";
 import { canAnimate } from "./maximize-motion";
+import { GraphNarrowContext, usePaneStore } from "./pane-state";
 
 export interface PaneStripProps {
   /** 1단계 칸: 그래프 패널. 단계와 상관없이 늘 같은 자리에 마운트돼 있다(화면 상태를 잃지 않는다). */
@@ -19,12 +24,6 @@ export interface PaneStripProps {
    * `ui.isDiffMaximized`로 알린다(트리를 거슬러 prop을 내려보낼 길이 없어서 store로 잇는다).
    */
   bottom: ReactNode;
-  /**
-   * 2단계의 접힌 그래프 칸을 누르면 부른다. 파일 하나만 닫고 커밋은 남기는 세밀한 되돌리기는
-   * 각 상세 화면(`CommitDetail` 등)이 파일 선택을 안에 갇힌 상태로 들고 있어 밖에서 못 하므로,
-   * 이 자리는 늘 0단계(고른 행 자체를 지움)로 되돌린다 — 부르는 쪽이 지금 탭에 맞게 고른 것을 지운다.
-   */
-  onExpandGraph: () => void;
 }
 
 /** 폭 전환이 도는 동안(240ms) 매 프레임 다시 재지 않게 자식을 목표 폭으로 못박아 두는 시간(ms). */
@@ -33,24 +32,32 @@ const FREEZE_MS = 240;
 function graphTargetWidth(level: 0 | 1 | 2 | 3, containerWidth: number): number {
   if (level === 0) return containerWidth;
   if (level === 1) return Math.round(containerWidth * GRAPH_LEVEL1_RATIO);
-  if (level === 2) return GRAPH_FOLDED_WIDTH;
+  if (level === 2) return GRAPH_NARROW_WIDTH;
   return 0;
 }
 
 /**
  * 그래프 ↔ 파일 목록 ↔ diff를 옆으로 쌓는 칸(D47, 5.4). 네 단계:
  * 0 아무것도 안 고름(그래프 전체) → 1 골랐지만 파일은 아직(그래프 46% + 상세) →
- * 2 파일까지 고름(접힌 그래프 120px + 목록 + diff, 폭이 모자라면 이 단계만 가로 스크롤) →
+ * 2 파일까지 고름(좁은 커밋 목록 240px + 파일 목록 + diff. 창이 좁으면 파일 목록이 먼저 220px까지
+ * 줄고, 그래도 모자라면 이 단계만 가로 스크롤. 좁은 목록에서 다른 커밋을 고르면 2단계 그대로 따라
+ * 바뀌고, 목록 머리의 「그래프 펼치기」로 1단계 폭으로 돌아간다 — `usePaneStore.graphExpanded`) →
  * 3 크게 보기(그래프는 밀려 나가고 diff가 칸 전체, 파일 목록만 옆에 남는다). 칸은 `width`만
  * `--motion-pane`(240ms, 동작 줄이기에서 0)로 움직인다. `bottom`은 늘 마운트돼 있지 않다 —
  * 0단계에서 아예 없다가 나타날 때 `animate-content-in`으로 옅게 들어온다(폭을 늘리며 나타나지
  * 않는다 — 시안 `layout-explore.html`의 새로 뜨는 칸과 같다).
  */
-export function PaneStrip({ graph, hasSelection, bottom, onExpandGraph }: PaneStripProps) {
-  const { t } = useTranslation();
+export function PaneStrip({ graph, hasSelection, bottom }: PaneStripProps) {
   const maximized = useUIStore((s) => s.isDiffMaximized);
   const fileOpen = useUIStore((s) => s.diffFileOpen);
-  const level: 0 | 1 | 2 | 3 = !hasSelection ? 0 : maximized ? 3 : fileOpen ? 2 : 1;
+  const graphExpanded = usePaneStore((s) => s.graphExpanded);
+  const setGraphExpanded = usePaneStore((s) => s.setGraphExpanded);
+  const level: 0 | 1 | 2 | 3 = !hasSelection ? 0 : maximized ? 3 : fileOpen && !graphExpanded ? 2 : 1;
+
+  // 고른 행이 없어지면(0단계) 「그래프 펼치기」도 푼다 — 다음에 파일을 열면 다시 좁은 목록이 된다.
+  useEffect(() => {
+    if (!hasSelection && graphExpanded) setGraphExpanded(false);
+  }, [hasSelection, graphExpanded, setGraphExpanded]);
 
   const rowRef = useRef<HTMLDivElement>(null);
   const graphInnerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +90,7 @@ export function PaneStrip({ graph, hasSelection, bottom, onExpandGraph }: PaneSt
           "relative h-full shrink-0 pane-w",
           level === 2 && "sticky left-0 z-[1] bg-(--canvas)",
         )}
-        style={{ width: level === 0 ? "100%" : level === 1 ? `${GRAPH_LEVEL1_RATIO * 100}%` : level === 2 ? GRAPH_FOLDED_WIDTH : 0 }}
+        style={{ width: level === 0 ? "100%" : level === 1 ? `${GRAPH_LEVEL1_RATIO * 100}%` : level === 2 ? GRAPH_NARROW_WIDTH : 0 }}
         data-testid="graph-pane"
         data-pane-level={level}
       >
@@ -91,25 +98,17 @@ export function PaneStrip({ graph, hasSelection, bottom, onExpandGraph }: PaneSt
           ref={graphInnerRef}
           className={cn("h-full", sizing && "absolute inset-y-0 left-0")}
           style={sizing ? { width: frozenWidth } : { width: "100%" }}
-          // 2단계에서는 뒤로 눌러 접기·펼치기를 오갈 수 있는 칸이라 탭 순서에서 잠시 뺀다.
-          inert={level === 2 ? true : undefined}
         >
-          {graph}
+          <GraphNarrowContext.Provider value={level === 2}>{graph}</GraphNarrowContext.Provider>
         </div>
-        {level === 2 && (
-          <button
-            type="button"
-            onClick={onExpandGraph}
-            aria-label={t("layout.expandGraph")}
-            title={t("layout.expandGraph")}
-            className="absolute inset-0 flex items-center justify-center [writing-mode:vertical-rl] text-[12.5px] font-semibold text-(--fg2) bg-card hover:bg-accent hover:text-foreground transition-colors motion-reduce:transition-none tracking-[0.04em]"
-          >
-            {t("layout.graphFolded")}
-          </button>
-        )}
       </div>
       {hasSelection && (
-        <div className="flex flex-1 min-w-0 min-h-0 animate-content-in" data-testid="pane-strip-bottom">
+        <div
+          className="flex flex-1 min-w-0 min-h-0 animate-content-in"
+          // 2단계: 파일 목록(줄어들어 220) + 손잡이 간격 + diff(424)보다 좁아지지 않는다 — 더 좁으면 가로 스크롤.
+          style={level === 2 ? { minWidth: MIN_FILE_LIST_SQUEEZED_WIDTH + MIN_DIFF_PANE_WIDTH + 8 } : undefined}
+          data-testid="pane-strip-bottom"
+        >
           {bottom}
         </div>
       )}

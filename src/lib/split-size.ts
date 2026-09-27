@@ -20,8 +20,14 @@ export const MIN_DIFF_PANE_WIDTH = 424;
 /** 1단계(그래프 46% + 상세, diff 없음)에서 상세 칸의 최소 폭(시안 `layout-explore.html`). */
 export const LEVEL1_DETAIL_MIN_WIDTH = 360;
 
-/** 2단계에서 접힌 그래프 칸의 폭(px). 레인 점 + 고른 행 채움만 남고 늘 눌러 펼칠 수 있다. */
-export const GRAPH_FOLDED_WIDTH = 120;
+/**
+ * 2단계에서 그래프 칸의 폭(px). 좁은 커밋 목록(레인 점 + 제목 말줄임 + 시각)으로 남아, 커밋·파일·diff를
+ * 함께 오갈 수 있다(D47). 커밋 줄의 400px 이하 칸 단계(`NARROW_HIDDEN_CLASS`)가 이 폭에서 적용된다.
+ */
+export const GRAPH_NARROW_WIDTH = 240;
+
+/** 2단계에서 창이 좁으면 파일 목록이 먼저 이 폭까지 줄어든다. 그래도 모자라면 가로 스크롤(5.4). */
+export const MIN_FILE_LIST_SQUEEZED_WIDTH = 220;
 
 /** 1단계에서 그래프 칸이 차지하는 비율(나머지는 상세 칸). */
 export const GRAPH_LEVEL1_RATIO = 0.46;

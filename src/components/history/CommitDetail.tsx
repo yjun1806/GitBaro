@@ -235,7 +235,9 @@ export function CommitDetail({
   switcher,
 }: CommitDetailProps) {
   const { t } = useTranslation();
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  // 첫 파일을 첫 그림부터 고른 채로 둔다 — 비워 두고 효과에서 고르면 한 번 「파일 없음」으로 그려져
+  // 옆으로 쌓는 칸(2단계)이 1단계로 튀었다 돌아온다.
+  const [selectedPath, setSelectedPath] = useState<string | null>(() => changedFiles[0]?.path ?? null);
   const [copied, setCopied] = useState(false);
   // 접힘·펼침은 전역으로 기억한다(모든 커밋·화면에서 같은 선택).
   const infoExpanded = useUIStore((s) => s.commitInfoExpanded);

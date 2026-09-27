@@ -8,7 +8,7 @@ import { useSelectionStore } from "@/stores/selection";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { computeGraphLanes } from "@/lib/graph-lanes";
 import { getErrorMessage } from "@/lib/utils";
-import { GRAPH_COLUMNS, GraphRow } from "@/components/graph/GraphRow";
+import { GRAPH_COLUMNS, GraphRow, NARROW_HIDDEN_CLASS } from "@/components/graph/GraphRow";
 import { graphColumnWidth, laneColor } from "@/components/graph/graph-model";
 import { BranchMergeDialog } from "./BranchMergeDialog";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
@@ -126,9 +126,9 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
         aria-hidden="true"
       >
         <span className="pl-3.5">{t("graph.colDescription")}</span>
-        <span>{t("graph.colChange")}</span>
-        <span title={t("graph.colCi")}>{t("graph.colCi")}</span>
-        <span>{t("graph.colAuthor")}</span>
+        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colChange")}</span>
+        <span className={NARROW_HIDDEN_CLASS} title={t("graph.colCi")}>{t("graph.colCi")}</span>
+        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colAuthor")}</span>
         <span>{t("graph.colTime")}</span>
       </div>
 

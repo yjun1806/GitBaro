@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -7,13 +7,14 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useUIStore } from "@/stores/ui";
-import { useFollowStore } from "@/stores/follow";
 import { repoAccountsByPath } from "@/lib/repo-tree";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { FilterChip } from "@/components/ui/FilterChip";
 import { PaneStrip } from "@/components/layout/PaneStrip";
+import { NarrowPaneHeader } from "@/components/layout/NarrowPaneHeader";
+import { useGraphNarrow } from "@/components/layout/pane-state";
 import { RepoLaneCommitGraph } from "@/components/graph/CommitGraph";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
 import { useScopeStore } from "@/components/scope/scope-store";
@@ -50,7 +51,6 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   const repoShown = useScopeStore((s) => s.repoShown);
   const setRepoShown = useScopeStore((s) => s.setRepoShown);
   const rememberSelection = useScopeStore((s) => s.rememberSelection);
-  const stopFollow = useFollowStore((s) => s.stop);
   const [selection, setSelection] = useState<ReviewSelection>(null);
   const reviewView = useUIStore((s) => s.reviewFileView);
   // 저장소마다 마지막으로 고른 커밋. 「작업 중인 변경」으로 갔다가 「커밋」 칸으로 돌아올 때 쓴다.
@@ -112,20 +112,20 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
   };
 
   const graphCard = (
-    <section
-      aria-label={t("shell.graphTab")}
-      className="relative flex flex-col h-full min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
+    <WorkspaceGraphCard
+      filterBar={
+        <FilterBar
+          left={
+            <RepoChips
+              repos={data.repos}
+              visible={data.visible}
+              onToggle={(repo, shown) => setRepoShown(repo.path, shown)}
+            />
+          }
+          right={<ScopeViewToggle />}
+        />
+      }
     >
-      <FilterBar
-        left={
-          <RepoChips
-            repos={data.repos}
-            visible={data.visible}
-            onToggle={(repo, shown) => setRepoShown(repo.path, shown)}
-          />
-        }
-        right={<ScopeViewToggle />}
-      />
       {filesView ? (
         <FileTouchesView sources={fileSources} repoLabel={repoLabel} />
       ) : (
@@ -156,7 +156,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
           }
         />
       )}
-    </section>
+    </WorkspaceGraphCard>
   );
 
   return (
@@ -171,10 +171,6 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
           graph={graphCard}
           // 파일별 보기는 그래프 칸 안에 파일 목록과 diff를 함께 그리므로 옆 칸을 열지 않는다(5.4).
           hasSelection={!filesView && selection !== null}
-          onExpandGraph={() => {
-            stopFollow();
-            pick(null);
-          }}
           bottom={
             <Card className="flex-1">
               <ReviewFilesPanel
@@ -194,6 +190,24 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * 워크스페이스 그래프 카드. `PaneStrip` 안에서 그려져야 2단계(좁은 커밋 목록)인지 안다 — 그때는 필터
+ * 막대 대신 「그래프 펼치기」 머리 줄만 둔다(D47).
+ */
+function WorkspaceGraphCard({ filterBar, children }: { filterBar: ReactNode; children: ReactNode }) {
+  const { t } = useTranslation();
+  const narrow = useGraphNarrow();
+  return (
+    <section
+      aria-label={t("shell.graphTab")}
+      className="relative flex flex-col h-full min-h-0 bg-card rounded-(--radius-panel) shadow-(--shadow) overflow-hidden"
+    >
+      {narrow ? <NarrowPaneHeader label={t("shell.graphTab")} /> : filterBar}
+      {children}
+    </section>
   );
 }
 

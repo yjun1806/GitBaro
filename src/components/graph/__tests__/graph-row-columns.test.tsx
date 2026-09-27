@@ -122,6 +122,8 @@ describe("GRAPH_COLUMNS narrowing (container query, @container/graph)", () => {
     expect(GRAPH_COLUMNS).toContain("@max-[820px]/graph:grid-cols-[minmax(0,1fr)_128px_16px_36px_64px]");
     expect(GRAPH_COLUMNS).toContain("@max-[680px]/graph:grid-cols-[minmax(0,1fr)_64px_16px_36px_64px]");
     expect(GRAPH_COLUMNS).toContain("@max-[560px]/graph:grid-cols-[minmax(0,1fr)_0px_16px_36px_64px]");
+    // D47 2단계의 좁은 커밋 목록(240px): 설명·시각 두 칸만 남는다.
+    expect(GRAPH_COLUMNS).toContain("@max-[400px]/graph:grid-cols-[minmax(0,1fr)_auto]");
   });
 
   it("hides only the author's name text at the first stage — the avatar stays", () => {

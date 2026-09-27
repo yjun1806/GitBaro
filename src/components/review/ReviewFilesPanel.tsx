@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { RepoLaneTag } from "@/components/graph/CommitGraph";
 import { FollowPanel } from "@/components/live/FollowPanel";
 import { baseName } from "./review-model";
-import { LoadingState } from "@/components/ui/LoadingState";
+import { CommitDetailLoading } from "@/components/layout/CommitDetailLoading";
 
 /** 리뷰 화면 아래 칸이 보여 줄 것. */
 export type ReviewSelection =
@@ -70,7 +70,7 @@ function ReviewCommitFiles({ repoPath, oid, switcher }: { repoPath: string; oid:
     );
   }
   if (isLoading || !data) {
-    return <LoadingState label={t("history.loadingHistory")} />;
+    return <CommitDetailLoading label={t("history.loadingHistory")} />;
   }
   return (
     <CommitDetail
