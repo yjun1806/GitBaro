@@ -9,6 +9,8 @@ export interface SplitHandleProps {
   onDragStart: () => void;
   /** 끌기 시작점에서 움직인 거리(px). 오른쪽·아래가 +다. */
   onDrag: (deltaPx: number) => void;
+  /** 끌기를 마쳤을 때(포인터를 뗌·취소, 키보드로 한 번 옮긴 뒤). */
+  onDragEnd?: () => void;
   /** 두 번 누르면 기본 크기로 되돌린다. */
   onReset: () => void;
   /**
@@ -33,6 +35,7 @@ export function SplitHandle({
   "aria-label": ariaLabel,
   onDragStart,
   onDrag,
+  onDragEnd,
   onReset,
   variant = "gap",
   size,
@@ -57,11 +60,29 @@ export function SplitHandle({
     if (start.current === null) return;
     start.current = null;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
+    onDragEnd?.();
+  };
+  // 키보드: 화살표로 16px(Shift와 함께 64px)씩 옮기고, Enter로 기본 크기로 되돌린다.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const back = vertical ? "ArrowLeft" : "ArrowUp";
+    const forward = vertical ? "ArrowRight" : "ArrowDown";
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onReset();
+      return;
+    }
+    if (e.key !== back && e.key !== forward) return;
+    e.preventDefault();
+    const step = e.shiftKey ? 64 : 16;
+    onDragStart();
+    onDrag(e.key === forward ? step : -step);
+    onDragEnd?.();
   };
 
   return (
     <div
       role="separator"
+      tabIndex={0}
       aria-orientation={orientation}
       aria-label={ariaLabel}
       title={ariaLabel}
@@ -70,6 +91,7 @@ export function SplitHandle({
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
       onDoubleClick={onReset}
+      onKeyDown={handleKeyDown}
       style={
         overlay && at !== undefined
           ? vertical
@@ -82,7 +104,7 @@ export function SplitHandle({
             : undefined
       }
       className={cn(
-        "group touch-none select-none flex items-center justify-center",
+        "group touch-none select-none flex items-center justify-center outline-none",
         vertical ? "cursor-col-resize" : "cursor-row-resize",
         overlay
           ? cn("absolute z-40", vertical ? "inset-y-0" : "inset-x-0")
@@ -106,7 +128,7 @@ export function SplitHandle({
       <span
         aria-hidden="true"
         className={cn(
-          "rounded-full bg-transparent group-hover:bg-(--ln) group-active:bg-(--muted) transition-colors",
+          "rounded-full bg-transparent group-hover:bg-(--ln) group-active:bg-(--muted) group-focus-visible:bg-(--acc) transition-colors",
           vertical ? "w-[3px] h-10" : "h-[3px] w-10",
         )}
       />

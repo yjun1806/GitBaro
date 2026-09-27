@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useEffect } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import i18n from "@/i18n/config";
 import { useUIStore } from "@/stores/ui";
@@ -9,10 +9,23 @@ import { useGraphNarrow, usePaneStore } from "../pane-state";
 import { NarrowPaneHeader } from "../NarrowPaneHeader";
 import { PaneStrip } from "../PaneStrip";
 
+// jsdom에는 PointerEvent가 없다. 좌표·버튼은 MouseEvent가 싣고 있으니 그 위에 pointerId만 더한다.
+if (typeof window.PointerEvent === "undefined") {
+  class PointerEventPolyfill extends MouseEvent {
+    pointerId: number;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 0;
+    }
+  }
+  window.PointerEvent = PointerEventPolyfill as unknown as typeof PointerEvent;
+}
+
 beforeEach(async () => {
   await i18n.changeLanguage("en");
   useUIStore.setState({ isDiffMaximized: false, diffFileOpen: false });
   usePaneStore.setState({ graphExpanded: false });
+  useUIStore.setState({ paneGraphRatio: 0.46, narrowListWidth: GRAPH_NARROW_WIDTH });
 });
 afterEach(cleanup);
 
@@ -105,5 +118,83 @@ describe("PaneStrip (D47/5.4 stacked panes)", () => {
     act(() => useUIStore.getState().setDiffMaximized(true));
     rerender(<PaneStrip graph={<Graph />} hasSelection bottom={<div>bottom</div>} />);
     expect(mounts).toBe(1);
+  });
+});
+
+describe("PaneStrip resize handle (5.4)", () => {
+  function drag(handle: HTMLElement, dx: number) {
+    fireEvent.pointerDown(handle, { button: 0, clientX: 500, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 500 + dx, pointerId: 1 });
+  }
+
+  it("1단계: dragging changes and saves the graph ratio, from the width on screen, without the width transition", () => {
+    // 줄 폭 1000px, 그래프 칸이 화면에 460px로 보이는 상태.
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1000);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 460 } as DOMRect);
+    try {
+      renderStrip(true);
+      const pane = screen.getByTestId("graph-pane");
+      expect(pane.className).toContain("pane-w");
+      const handle = screen.getByRole("separator", { name: "Resize the graph pane (double-click to reset)" });
+      drag(handle, 100);
+      expect(useUIStore.getState().paneGraphRatio).toBeCloseTo(0.56);
+      expect(pane.style.width).toBe("56%");
+      // 끄는 동안에는 폭 전환 애니메이션이 없다. 놓으면 돌아온다.
+      expect(pane.className).not.toContain("pane-w");
+      fireEvent.pointerUp(handle, { clientX: 600, pointerId: 1 });
+      expect(pane.className).toContain("pane-w");
+
+      fireEvent.doubleClick(handle);
+      expect(useUIStore.getState().paneGraphRatio).toBe(0.46);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("1단계: keeps the graph at least 400px and the side pane at its minimum on screen, leaving the saved ratio alone", () => {
+    useUIStore.setState({ paneGraphRatio: 0.2 });
+    renderStrip(true);
+    const pane = screen.getByTestId("graph-pane");
+    expect(pane.style.width).toBe("20%");
+    expect(pane.style.minWidth).toBe("min(400px, calc(100% - 288px))");
+    expect(pane.style.maxWidth).toBe("calc(100% - 288px)");
+    expect(useUIStore.getState().paneGraphRatio).toBe(0.2);
+  });
+
+  it("2단계: dragging changes and saves the narrow list width within 180–400px, and resets on double-click", () => {
+    useUIStore.setState({ diffFileOpen: true });
+    renderStrip(true);
+    const pane = screen.getByTestId("graph-pane");
+    const handle = screen.getByRole("separator", { name: "Resize the graph pane (double-click to reset)" });
+    drag(handle, 40);
+    expect(useUIStore.getState().narrowListWidth).toBe(280);
+    expect(pane.style.width).toBe("280px");
+    fireEvent.pointerUp(handle, { clientX: 540, pointerId: 1 });
+    drag(handle, -500);
+    expect(useUIStore.getState().narrowListWidth).toBe(180);
+    fireEvent.pointerUp(handle, { clientX: 0, pointerId: 1 });
+    fireEvent.doubleClick(handle);
+    expect(useUIStore.getState().narrowListWidth).toBe(GRAPH_NARROW_WIDTH);
+  });
+
+  it("moves with the arrow keys and resets with Enter", () => {
+    useUIStore.setState({ diffFileOpen: true });
+    renderStrip(true);
+    const handle = screen.getByRole("separator", { name: "Resize the graph pane (double-click to reset)" });
+    fireEvent.keyDown(handle, { key: "ArrowRight" });
+    expect(useUIStore.getState().narrowListWidth).toBe(GRAPH_NARROW_WIDTH + 16);
+    fireEvent.keyDown(handle, { key: "ArrowLeft", shiftKey: true });
+    expect(useUIStore.getState().narrowListWidth).toBe(GRAPH_NARROW_WIDTH + 16 - 64);
+    fireEvent.keyDown(handle, { key: "Enter" });
+    expect(useUIStore.getState().narrowListWidth).toBe(GRAPH_NARROW_WIDTH);
+  });
+
+  it("has no handle at level 0 or while maximized", () => {
+    const { unmount } = renderStrip(false);
+    expect(screen.queryByRole("separator")).toBeNull();
+    unmount();
+    useUIStore.setState({ diffFileOpen: true, isDiffMaximized: true });
+    renderStrip(true);
+    expect(screen.queryByRole("separator")).toBeNull();
   });
 });

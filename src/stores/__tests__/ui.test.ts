@@ -36,6 +36,20 @@ describe("sanitizePersistedUI — split sizes", () => {
     expect(sanitizePersistedUI({ graphPanelRatio: Number.NaN })).toEqual({});
   });
 
+  it("keeps the stacked-pane sizes, clamps them into range, and drops malformed ones", () => {
+    expect(sanitizePersistedUI({ paneGraphRatio: 0.6, narrowListWidth: 300 })).toEqual({
+      paneGraphRatio: 0.6,
+      narrowListWidth: 300,
+    });
+    expect(sanitizePersistedUI({ paneGraphRatio: 2, narrowListWidth: 20 })).toEqual({
+      paneGraphRatio: 0.8,
+      narrowListWidth: 180,
+    });
+    expect(sanitizePersistedUI({ paneGraphRatio: "x", narrowListWidth: Number.NaN })).toEqual({});
+    // 옛 범위(280~640)로 저장한 파일 목록 폭은 새 범위(220~420)로 맞춘다.
+    expect(sanitizePersistedUI({ fileListWidth: 600 })).toEqual({ fileListWidth: 420 });
+  });
+
   it("keeps an existing v0 user's values when the new fields are missing", () => {
     // 이 필드가 생기기 전에 저장된 값: 사이드바 폭은 그대로 살고, 새 필드는 기본값을 쓴다.
     const v0 = { sidebarWidth: 380, diffLineMode: "split" };
@@ -46,6 +60,8 @@ describe("sanitizePersistedUI — split sizes", () => {
     expect(merged.sidebarWidth).toBe(380);
     expect(merged.graphPanelRatio).toBe(DEFAULT_GRAPH_RATIO);
     expect(merged.fileListWidth).toBe(DEFAULT_FILE_LIST_WIDTH);
+    expect(merged.paneGraphRatio).toBe(0.46);
+    expect(merged.narrowListWidth).toBe(240);
   });
 
   it("does not persist the maximized diff", () => {
@@ -104,6 +120,8 @@ describe("ui store after the two-column shell", () => {
       "fileListWidth",
       "graphPanelRatio",
       "maximizedFileListOpen",
+      "narrowListWidth",
+      "paneGraphRatio",
       "reviewFileView",
       "reviewFileViewByWorkspace",
       "sidebarHidden",

@@ -5,8 +5,12 @@ import { MIN_SIDEBAR_WIDTH } from "@/lib/sidebar-width";
 import {
   clampFileListWidth,
   clampGraphRatio,
+  clampNarrowListWidth,
+  clampPaneGraphRatio,
   DEFAULT_FILE_LIST_WIDTH,
   DEFAULT_GRAPH_RATIO,
+  GRAPH_LEVEL1_RATIO,
+  GRAPH_NARROW_WIDTH,
 } from "@/lib/split-size";
 import type { Theme } from "@/types";
 
@@ -33,6 +37,10 @@ interface UIState {
   graphPanelRatio: number;
   /** 파일 목록 ↔ diff 사이의 목록 폭(px, 손잡이로 조절, 저장). */
   fileListWidth: number;
+  /** 옆으로 쌓는 칸 1단계에서 그래프 칸이 차지하는 비율(손잡이로 조절, 저장, 5.4). */
+  paneGraphRatio: number;
+  /** 옆으로 쌓는 칸 2단계의 좁은 커밋 목록 폭(px, 손잡이로 조절, 저장, 5.4). */
+  narrowListWidth: number;
   /** diff를 메인 칸 전체로 키웠는가. 저장하지 않는다. */
   isDiffMaximized: boolean;
   /** 크게 보는 diff 왼쪽에 좁은 파일 목록을 둘지(diff 머리의 버튼, 저장). */
@@ -70,6 +78,8 @@ interface UIState {
   setDiffLineMode: (mode: DiffLineMode) => void;
   setGraphPanelRatio: (ratio: number) => void;
   setFileListWidth: (width: number) => void;
+  setPaneGraphRatio: (ratio: number) => void;
+  setNarrowListWidth: (width: number) => void;
   setDiffMaximized: (maximized: boolean) => void;
   setMaximizedFileListOpen: (open: boolean) => void;
   setDiffFileOpen: (open: boolean) => void;
@@ -94,6 +104,8 @@ type PersistedUI = Pick<
   | "diffLineMode"
   | "graphPanelRatio"
   | "fileListWidth"
+  | "paneGraphRatio"
+  | "narrowListWidth"
   | "maximizedFileListOpen"
   | "reviewFileViewByWorkspace"
   | "reviewFileView"
@@ -114,6 +126,9 @@ type PersistedUI = Pick<
  * 보게 하려는 것이다. `sanitizePersistedUI`는 `railMode`를 읽지 않으므로 `sidebarHidden`이 없는
  * 옛 저장값은 기본값(false)을 쓰고, 다음 저장 때 `partialize`가 `railMode`를 빼서 사라진다.
  * 다른 필드(`sidebarWidth` 등)는 그대로 살린다.
+ * `paneGraphRatio`·`narrowListWidth`(옆으로 쌓는 칸의 1단계 비율·2단계 좁은 목록 폭)도 나중에 더한 선택
+ * 필드다. 없으면 기본값을 쓰고 범위를 벗어나면 범위 안으로 맞춘다. `fileListWidth`의 범위가 280~640에서
+ * 220~420으로 바뀌었지만 뜻은 같아 버전을 올리지 않는다 — 옛 값은 `sanitizePersistedUI`가 새 범위로 맞춘다.
  * `graphPanelRatio`·`fileListWidth`·`maximizedFileListOpen`은 나중에 더한 선택 필드다. 없으면 기본값을 쓰므로
  * (`sanitizePersistedUI`) 버전을 올리지 않는다. 다른 필드의 뜻은 그대로라 옛 값을 지우지 않는다.
  * 없앤 `reviewBasis`(검토 기준 설정)도 버전을 올리지 않는다. 옛 저장값에 남은 그 필드는
@@ -158,6 +173,12 @@ export function sanitizePersistedUI(persisted: unknown): Partial<UIState> {
   if (typeof p.fileListWidth === "number" && Number.isFinite(p.fileListWidth)) {
     out.fileListWidth = clampFileListWidth(p.fileListWidth);
   }
+  if (typeof p.paneGraphRatio === "number" && Number.isFinite(p.paneGraphRatio)) {
+    out.paneGraphRatio = clampPaneGraphRatio(p.paneGraphRatio);
+  }
+  if (typeof p.narrowListWidth === "number" && Number.isFinite(p.narrowListWidth)) {
+    out.narrowListWidth = clampNarrowListWidth(p.narrowListWidth);
+  }
   if (typeof p.maximizedFileListOpen === "boolean") out.maximizedFileListOpen = p.maximizedFileListOpen;
   if (typeof p.reviewFileViewByWorkspace === "object" && p.reviewFileViewByWorkspace !== null) {
     const src = p.reviewFileViewByWorkspace as Record<string, unknown>;
@@ -189,6 +210,8 @@ export const useUIStore = create<UIState>()(
       diffLineMode: "unified",
       graphPanelRatio: DEFAULT_GRAPH_RATIO,
       fileListWidth: DEFAULT_FILE_LIST_WIDTH,
+      paneGraphRatio: GRAPH_LEVEL1_RATIO,
+      narrowListWidth: GRAPH_NARROW_WIDTH,
       isDiffMaximized: false,
       maximizedFileListOpen: true,
       diffFileOpen: false,
@@ -214,6 +237,8 @@ export const useUIStore = create<UIState>()(
       setDiffLineMode: (mode) => set({ diffLineMode: mode }),
       setGraphPanelRatio: (ratio) => set({ graphPanelRatio: clampGraphRatio(ratio) }),
       setFileListWidth: (width) => set({ fileListWidth: clampFileListWidth(width) }),
+      setPaneGraphRatio: (ratio) => set({ paneGraphRatio: clampPaneGraphRatio(ratio) }),
+      setNarrowListWidth: (width) => set({ narrowListWidth: clampNarrowListWidth(width) }),
       setDiffMaximized: (maximized) => set({ isDiffMaximized: maximized }),
       setMaximizedFileListOpen: (open) => set({ maximizedFileListOpen: open }),
       setDiffFileOpen: (open) => set({ diffFileOpen: open }),
@@ -242,6 +267,8 @@ export const useUIStore = create<UIState>()(
         diffLineMode: state.diffLineMode,
         graphPanelRatio: state.graphPanelRatio,
         fileListWidth: state.fileListWidth,
+        paneGraphRatio: state.paneGraphRatio,
+        narrowListWidth: state.narrowListWidth,
         maximizedFileListOpen: state.maximizedFileListOpen,
         reviewFileViewByWorkspace: state.reviewFileViewByWorkspace,
         reviewFileView: state.reviewFileView,

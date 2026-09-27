@@ -9,10 +9,10 @@ export const DEFAULT_GRAPH_RATIO = 0.42;
 export const MIN_GRAPH_RATIO = 0.15;
 export const MAX_GRAPH_RATIO = 0.8;
 
-/** 파일 목록(커밋 정보·스테이징 목록 포함) 폭(px). 2단계의 기본값이자 최소 폭(5.4 "상세 280"). */
+/** 파일 목록(커밋 정보·스테이징 목록 포함) 폭(px). 손잡이로 220~420 사이에서 바꾼다(5.4). */
 export const DEFAULT_FILE_LIST_WIDTH = 280;
-export const MIN_FILE_LIST_WIDTH = 280;
-export const MAX_FILE_LIST_WIDTH = 640;
+export const MIN_FILE_LIST_WIDTH = 220;
+export const MAX_FILE_LIST_WIDTH = 420;
 
 /** diff 칸의 최소 폭(5.4). 모자라면 2단계에서만 가로 스크롤을 허용한다. */
 export const MIN_DIFF_PANE_WIDTH = 424;
@@ -29,8 +29,20 @@ export const GRAPH_NARROW_WIDTH = 240;
 /** 2단계에서 창이 좁으면 파일 목록이 먼저 이 폭까지 줄어든다. 그래도 모자라면 가로 스크롤(5.4). */
 export const MIN_FILE_LIST_SQUEEZED_WIDTH = 220;
 
-/** 1단계에서 그래프 칸이 차지하는 비율(나머지는 상세 칸). */
+/** 1단계에서 그래프 칸이 차지하는 비율(나머지는 상세 칸)의 기본값. 손잡이로 바꾸고 저장한다. */
 export const GRAPH_LEVEL1_RATIO = 0.46;
+export const MIN_PANE_GRAPH_RATIO = 0.2;
+export const MAX_PANE_GRAPH_RATIO = 0.8;
+
+/** 1단계 그래프 칸의 최소 폭(px). 커밋 줄의 400px 칸 단계(좁은 목록과 같은 모양)까지만 줄어든다. */
+export const MIN_PANE_GRAPH_WIDTH = 400;
+
+/** 1단계 옆 칸(상세)의 최소 폭(px, 5.4 「상세 280」). 옆 칸에 diff까지 있으면 파일 목록 220 + diff 424. */
+export const MIN_PANE_DETAIL_WIDTH = 280;
+
+/** 2단계 좁은 커밋 목록 폭의 범위(px). 기본은 {@link GRAPH_NARROW_WIDTH}. */
+export const MIN_NARROW_LIST_WIDTH = 180;
+export const MAX_NARROW_LIST_WIDTH = 400;
 
 /** 크게 보기(3단계)에서 diff 옆에 남는 파일 목록의 폭(px, 펼침·접힘). */
 export const MAXIMIZED_LIST_WIDTH = 260;
@@ -58,4 +70,14 @@ export function clampFileListWidth(width: number): number {
 export function graphRatioAfterDrag(startRatio: number, deltaPx: number, containerPx: number): number {
   if (!(containerPx > 0)) return clampGraphRatio(startRatio);
   return clampGraphRatio(startRatio + deltaPx / containerPx);
+}
+
+export function clampPaneGraphRatio(ratio: number): number {
+  return Number.isFinite(ratio) ? clamp(ratio, MIN_PANE_GRAPH_RATIO, MAX_PANE_GRAPH_RATIO) : GRAPH_LEVEL1_RATIO;
+}
+
+export function clampNarrowListWidth(width: number): number {
+  return Number.isFinite(width)
+    ? Math.round(clamp(width, MIN_NARROW_LIST_WIDTH, MAX_NARROW_LIST_WIDTH))
+    : GRAPH_NARROW_WIDTH;
 }

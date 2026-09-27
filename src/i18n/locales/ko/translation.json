@@ -1216,7 +1216,8 @@
   "layout": {
     "resizeFileList": "파일 목록 폭 조절(두 번 누르면 기본 크기)",
     "resizeGraph": "그래프 패널 높이 조절(두 번 누르면 기본 크기)",
-    "expandGraph": "그래프 펼치기"
+    "expandGraph": "그래프 펼치기",
+    "resizeGraphPane": "그래프 칸 크기 조절(두 번 누르면 기본값)"
   },
   "historyView": {
     "current": "현재 체크아웃",

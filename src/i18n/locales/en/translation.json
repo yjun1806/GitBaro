@@ -1233,7 +1233,8 @@
   "layout": {
     "resizeFileList": "Resize file list (double-click to reset)",
     "resizeGraph": "Resize graph panel (double-click to reset)",
-    "expandGraph": "Expand the graph"
+    "expandGraph": "Expand the graph",
+    "resizeGraphPane": "Resize the graph pane (double-click to reset)"
   },
   "historyView": {
     "current": "Current checkout",
