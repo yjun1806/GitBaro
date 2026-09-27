@@ -125,6 +125,8 @@ function PrDetail({ pr, repoPath, accountId }: { pr: PullRequestDetail; repoPath
       variant="cards"
       className="animate-content-in"
       origin={origin}
+      // 파일을 고르기 전에도 오른쪽 칸은 비어 있지 않다(PR 개요) — 1단계(목록만)로 접지 않는다.
+      detailAlwaysOpen
       files={{
         items: fileList.map((f) => ({
           key: f.path,

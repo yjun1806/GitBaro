@@ -1236,7 +1236,9 @@
   },
   "layout": {
     "resizeFileList": "Resize file list (double-click to reset)",
-    "resizeGraph": "Resize graph panel (double-click to reset)"
+    "resizeGraph": "Resize graph panel (double-click to reset)",
+    "graphFolded": "Graph",
+    "expandGraph": "Back to the graph"
   },
   "historyView": {
     "current": "Current checkout",

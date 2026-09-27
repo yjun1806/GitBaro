@@ -13,8 +13,8 @@ import { usePrViewStore } from "@/components/pr/pr-view";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
-import { ContentArea } from "./ContentArea";
-import { GraphSplit } from "./GraphSplit";
+import { ContentArea, useExpandGraph } from "./ContentArea";
+import { PaneStrip } from "./PaneStrip";
 import { useDiffMaximizeReset } from "./useDiffMaximize";
 
 /** "All repositories" list, opened from the sidebar. Takes over the main column. */
@@ -54,9 +54,21 @@ export function MainColumn() {
   const repoListOpen = useUIStore((s) => s.repoListOpen);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const prOpen = usePrViewStore((s) => s.open);
+  const setPrOpen = usePrViewStore((s) => s.setOpen);
   const scope = useActiveScope();
   // 다른 저장소·워크스페이스로 옮기거나 목록을 열면 diff 크게 보기를 끝낸다(숨긴 목록으로 돌아올 길이 없어진다).
   useDiffMaximizeReset(`${scope?.kind === "workspace" ? scope.id : ""}:${activeRepoPath ?? ""}:${repoListOpen}`);
+
+  // 0단계(그래프 전체, D47)는 이 화면에서 아직 안 쓴다 — 네 탭(작업 중인 변경·이력·스태시·Actions)
+  // 모두 "아무것도 안 골랐음"에도 늘 무언가 보여 준다(스태시·Actions는 "고르지 않음" 안내, 작업 중인
+  // 변경은 스테이징 목록 자체가 내용이다 — 커밋 뒤 스테이징 목록으로 돌아가는 것도 이 경로다).
+  // `PaneStrip`은 이 능력을 갖고 있으니 그 가정이 바뀌면(예: 탭마다 진짜 빈 상태를 두면) 여기만 고치면 된다.
+  const hasSelection = true;
+  const expandContentTab = useExpandGraph(activeTab);
+  const handleExpandGraph = () => {
+    if (prOpen) setPrOpen(false);
+    else expandContentTab();
+  };
 
   return (
     <main className="relative flex flex-col flex-1 min-w-0 h-full bg-background">
@@ -69,8 +81,10 @@ export function MainColumn() {
           <RepoListCard />
         ) : scope?.kind === "repo" ? (
           // 저장소 전용 화면은 저장소를 골랐을 때만 마운트한다. 안쪽 파일은 null 경로를 보지 않는다.
-          <GraphSplit
-            top={<GraphPanel />}
+          <PaneStrip
+            graph={<GraphPanel />}
+            hasSelection={hasSelection}
+            onExpandGraph={handleExpandGraph}
             bottom={prOpen ? <PrDetailPane /> : <ContentArea activeTab={activeTab} />}
           />
         ) : scope?.kind === "workspace" ? (

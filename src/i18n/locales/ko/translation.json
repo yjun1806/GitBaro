@@ -1219,7 +1219,9 @@
   },
   "layout": {
     "resizeFileList": "파일 목록 폭 조절(두 번 누르면 기본 크기)",
-    "resizeGraph": "그래프 패널 높이 조절(두 번 누르면 기본 크기)"
+    "resizeGraph": "그래프 패널 높이 조절(두 번 누르면 기본 크기)",
+    "graphFolded": "그래프",
+    "expandGraph": "그래프로 돌아가기"
   },
   "historyView": {
     "current": "현재 체크아웃",

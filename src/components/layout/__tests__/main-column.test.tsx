@@ -184,6 +184,26 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getByText("changes-view")).toBeTruthy();
   });
 
+  it("D47/5.4: folds the graph once following opens a file, and unfolds it from the folded pane", () => {
+    renderShell();
+    const graphPane = screen.getByTestId("graph-pane");
+    expect(graphPane.dataset.paneLevel).toBe("1");
+    expect(graphPane.style.width).toBe("46%");
+
+    // 따라가기는 첫 파일을 스스로 고르므로(D49) 곧바로 2단계(접힌 그래프)로 간다.
+    fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · primary folder · 2 files$/ }));
+    expect(graphPane.dataset.paneLevel).toBe("2");
+    expect(graphPane.style.width).toBe("120px");
+    // 그래프 자체는 접혀도 그대로 화면에 있다(다시 마운트되지 않는다).
+    expect(screen.getByRole("tablist")).toBeTruthy();
+
+    // 접힌 그래프 칸을 누르면 지금 탭(변경)의 선택을 지우고 1단계로 되돌아간다.
+    fireEvent.click(screen.getByRole("button", { name: "Back to the graph" }));
+    expect(useFollowStore.getState().target).toBeNull();
+    expect(graphPane.dataset.paneLevel).toBe("1");
+    expect(graphPane.style.width).toBe("46%");
+  });
+
   it("stops following and shows the staging list (conflict banner) once a merge or pull stops on a conflict", () => {
     const view = renderShell();
     fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · primary folder · 2 files$/ }));
@@ -245,11 +265,13 @@ describe("MainColumn (two-column shell)", () => {
 
   it("blocks the staging list and the diff while a branch switch runs", () => {
     renderShell();
+    // D47/5.4: the diff pane only exists once a file is picked (2단계) — pick one first.
+    act(() => useSelectionStore.getState().selectFile("a.ts", false));
     act(() => useUIStore.getState().setSwitchingBranch(true));
     try {
       const changesCard = screen.getByText("changes-view").closest("section");
       expect(changesCard?.querySelector(".animate-spin")).toBeTruthy();
-      const diffCard = screen.getByText("No file selected").closest("section");
+      const diffCard = screen.getByText("diff-viewer").closest("section");
       expect(diffCard?.querySelector(".animate-spin")).toBeTruthy();
     } finally {
       act(() => useUIStore.getState().setSwitchingBranch(false));
