@@ -475,7 +475,8 @@
     "originStash": "스태시",
     "originRange": "올릴 내용",
     "originPr": "Pull Request",
-    "originFileTouches": "파일별 보기"
+    "originFileTouches": "파일별 보기",
+    "close": "diff 닫기"
   },
   "mdDiff": {
     "rendering": "문서 diff 계산 중...",

@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
-import { useHasMaximizedFiles, useHasMaximizedOrigin } from "@/components/layout/maximized-files";
+import { useDiffClose, useHasMaximizedFiles, useHasMaximizedOrigin } from "@/components/layout/maximized-files";
 import { Button } from "@/components/ui/Button";
 import { FileStatusLetter } from "@/components/ui/marks";
 import { Segmented } from "@/components/ui/Segmented";
@@ -99,8 +99,25 @@ export function DiffHeader({
         )}
         {maximizable && <FileListButton />}
         {maximizable && <MaximizeButton />}
+        <CloseButton />
       </div>
     </div>
+  );
+}
+
+/**
+ * diff 닫기: 파일 선택만 풀고 1단계(그래프 + 상세)로 돌아간다. diff를 감싼 목록이 닫는 법을 줄 때만
+ * 있다. 크게 보는 동안에는 두지 않는다 — 그때는 「원래 크기로」가 먼저다(Esc도 한 단계씩 돌아간다).
+ */
+function CloseButton() {
+  const { t } = useTranslation();
+  const close = useDiffClose();
+  const maximized = useUIStore((s) => s.isDiffMaximized);
+  if (close === null || maximized) return null;
+  return (
+    <Button iconOnly size="sm" variant="ghost" onClick={close} aria-label={t("diff.close")} title={t("diff.close")}>
+      <X className="w-3.5 h-3.5" />
+    </Button>
   );
 }
 

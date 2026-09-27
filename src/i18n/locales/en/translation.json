@@ -476,7 +476,8 @@
     "originStash": "Stash",
     "originRange": "What pushing will send",
     "originPr": "Pull request",
-    "originFileTouches": "By file"
+    "originFileTouches": "By file",
+    "close": "Close the diff"
   },
   "mdDiff": {
     "rendering": "Computing document diff...",

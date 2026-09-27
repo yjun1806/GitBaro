@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
@@ -211,6 +211,33 @@ describe("CommitDetail meta lines", () => {
       </QueryClientProvider>,
     );
     expect(screen.getByText("바뀐 파일 2")).toBeTruthy();
+  });
+});
+
+describe("CommitDetail closing the diff (5.4)", () => {
+  it("does not pick the first file again for the same commit once the diff is closed", async () => {
+    const { usePaneStore } = await import("@/components/layout/pane-state");
+    const { useUIStore } = await import("@/stores/ui");
+    usePaneStore.setState({ diffClosers: [] });
+    const files = [
+      { path: "a.ts", status: "modified" as const },
+      { path: "b.ts", status: "added" as const },
+    ];
+    const commit = makeCommit();
+    const view = (c: CommitInfo) => (
+      <QueryClientProvider client={client}>
+        <CommitDetail commit={c} changedFiles={files} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(view(commit));
+    expect(useUIStore.getState().diffFileOpen).toBe(true);
+    act(() => usePaneStore.getState().diffClosers[0]());
+    expect(useUIStore.getState().diffFileOpen).toBe(false);
+    rerender(view({ ...commit }));
+    expect(useUIStore.getState().diffFileOpen).toBe(false);
+    // 다른 커밋을 고르면 다시 첫 파일을 고른다.
+    rerender(view({ ...commit, id: "other-commit", shortId: "other" }));
+    expect(useUIStore.getState().diffFileOpen).toBe(true);
   });
 });
 

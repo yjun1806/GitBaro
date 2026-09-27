@@ -36,12 +36,15 @@ export function FileTouchesView({ sources, repoLabel }: FileTouchesViewProps) {
   // 고른 파일. 지워졌거나(다시 읽어 사라짐) 아직 고르지 않았으면 첫 묶음 첫 파일로 되돌아간다.
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedCommitOid, setSelectedCommitOid] = useState<string | null>(null);
+  // diff를 닫았는가. 닫은 뒤에는 첫 파일로 다시 돌아가지 않는다 — 파일을 다시 고르면 풀린다.
+  const [diffClosed, setDiffClosed] = useState(false);
   const currentRow = allRows.find((r) => r.key === selectedKey) ?? null;
-  const effectiveRow = currentRow ?? allRows[0] ?? null;
+  const effectiveRow = diffClosed ? null : (currentRow ?? allRows[0] ?? null);
 
   const selectRow = (row: FileTouchRow) => {
     setSelectedKey(row.key);
     setSelectedCommitOid(null);
+    setDiffClosed(false);
   };
 
   // 행 더블클릭: 편집기에서 연다. 그 행의 워크트리 경로 기준이고, 지운 파일은 열지 않고 알린다.
@@ -90,6 +93,8 @@ export function FileTouchesView({ sources, repoLabel }: FileTouchesViewProps) {
       variant="inline"
       className="animate-content-in"
       origin={origin}
+      fileOpen={effectiveRow !== null}
+      onCloseFile={() => setDiffClosed(true)}
       list={
         <FileTouchesList
           grouped={grouped}

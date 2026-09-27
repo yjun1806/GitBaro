@@ -56,6 +56,16 @@ export function useHasMaximizedOrigin(): boolean {
   return useContext(MaximizedOriginContext);
 }
 
+/**
+ * 지금 diff를 닫는 방법(파일 선택만 풀고 1단계로). diff를 감싼 `ListDiffSplit`이 `onCloseFile`을 받았을
+ * 때만 있다. `DiffHeader`의 닫기 버튼이 쓴다.
+ */
+export const DiffCloseContext = createContext<(() => void) | null>(null);
+
+export function useDiffClose(): (() => void) | null {
+  return useContext(DiffCloseContext);
+}
+
 /** 경로를 폴더와 파일 이름으로 나눈다. */
 export function splitFilePath(path: string): { dir: string; name: string } {
   const at = path.lastIndexOf("/");

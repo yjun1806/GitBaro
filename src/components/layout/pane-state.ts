@@ -11,11 +11,21 @@ import { PANE_MS } from "./maximize-motion";
 interface PaneState {
   graphExpanded: boolean;
   setGraphExpanded: (expanded: boolean) => void;
+  /**
+   * 지금 열린 diff를 닫는 함수들(나중에 연 것이 맨 뒤). `ListDiffSplit`이 파일을 열었고 닫는 법을 받았을
+   * 때 올리고, 닫거나 사라지면 내린다. Esc가 맨 뒤의 것을 부른다(`useDiffEscape`).
+   */
+  diffClosers: readonly (() => void)[];
+  pushDiffCloser: (close: () => void) => void;
+  removeDiffCloser: (close: () => void) => void;
 }
 
 export const usePaneStore = create<PaneState>()((set) => ({
   graphExpanded: false,
   setGraphExpanded: (expanded) => set({ graphExpanded: expanded }),
+  diffClosers: [],
+  pushDiffCloser: (close) => set((state) => ({ diffClosers: [...state.diffClosers, close] })),
+  removeDiffCloser: (close) => set((state) => ({ diffClosers: state.diffClosers.filter((c) => c !== close) })),
 }));
 
 /** 그래프 칸이 2단계의 좁은 커밋 목록인지. `PaneStrip`이 그래프 칸에 내려 준다. */

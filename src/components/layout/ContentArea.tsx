@@ -149,6 +149,7 @@ interface ContentAreaProps {
 export function ContentArea({ activeTab }: ContentAreaProps) {
   const { t } = useTranslation();
 
+  const clearFileSelection = useSelectionStore((s) => s.clearFileSelection);
   const selectedFile = useSelectionStore((s) => s.selectedFile);
   const selectedFileStaged = useSelectionStore((s) => s.selectedFileStaged);
   const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
@@ -199,6 +200,7 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
     return (
       <ListDiffSplit
         variant="cards"
+        onCloseFile={clearFileSelection}
         list={<ChangesView />}
         listOverlay={<SwitchingOverlay />}
         files={working.files}

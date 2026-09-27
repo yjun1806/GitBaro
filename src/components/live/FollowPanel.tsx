@@ -375,8 +375,15 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
   const pickedFile = useFollowStore((s) => s.file);
   const start = useFollowStore((s) => s.start);
   const pause = useFollowStore((s) => s.pause);
-  const pickFile = useFollowStore((s) => s.pickFile);
+  const pickFileInStore = useFollowStore((s) => s.pickFile);
   const resume = useFollowStore((s) => s.resume);
+  // diff를 닫았는가(닫기 버튼·Esc). 닫은 뒤에는 새 변경이 와도 diff를 다시 열지 않는다 — 파일을 다시
+  // 고르거나 다시 따라가면 풀린다.
+  const [diffClosed, setDiffClosed] = useState(false);
+  const pickFile = (filePath: string) => {
+    setDiffClosed(false);
+    pickFileInStore(filePath);
+  };
 
   const isTarget = target !== null && samePath(target, path);
   const following = isTarget && mode === "following";
@@ -401,7 +408,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
   const pausedOn = isTarget && mode === "paused" ? pickedFile : null;
   const pausedGone = pausedOn !== null && files !== undefined && !list.some((f) => f.path === pausedOn);
   const wanted = following ? list[0]?.path : pausedOn;
-  const shown = pausedGone ? null : (list.find((f) => f.path === wanted) ?? list[0] ?? null);
+  const shown = pausedGone || diffClosed ? null : (list.find((f) => f.path === wanted) ?? list[0] ?? null);
 
   // 일부만 스테이징한 파일은 diff 머리에서 어느 쪽을 볼지 고른다(기본은 스테이지 안 된 쪽).
   const [sidePick, setSidePick] = useState<{ path: string; staged: boolean } | null>(null);
@@ -452,7 +459,11 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
   const followLineNote = shown ? followNote(t, shown, shownTouches?.commits ?? []) : null;
 
   const handlePause = () => pause(shown?.path ?? pausedOn);
-  const handleResume = () => (isTarget ? resume() : start(path));
+  const handleResume = () => {
+    setDiffClosed(false);
+    if (isTarget) resume();
+    else start(path);
+  };
 
   // 사용자가 diff를 직접 움직이면(휠, 스크롤바·본문 누르기, 키) 따라가기를 멈춘다.
   // 따라가기가 줄을 옮기는 스크롤은 이 이벤트를 내지 않는다. 안내 상자 안의 누름과 diff 머리
@@ -677,6 +688,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
         listOverlay={<SwitchingOverlay />}
         files={maximizedFiles}
         origin={origin}
+        onCloseFile={() => setDiffClosed(true)}
         detail={diffPane}
         detailOverlay={<SwitchingOverlay />}
       >
@@ -693,6 +705,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
       detail={diffPane}
       files={maximizedFiles}
       origin={origin}
+      onCloseFile={() => setDiffClosed(true)}
     >
       {sideBySide}
       {fileMenu.element}

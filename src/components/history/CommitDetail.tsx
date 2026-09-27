@@ -512,6 +512,8 @@ export function CommitDetail({
     <ListDiffSplit
       variant="inline"
       className="animate-content-in"
+      // 닫으면 이 커밋에서는 다시 첫 파일을 고르지 않는다 — 자동 선택은 커밋이 바뀔 때만 돈다.
+      onCloseFile={() => setSelectedPath(null)}
       files={{
         items: changedFiles.map((f) => ({ key: f.path, path: f.path, status: f.status })),
         selectedKey: selectedPath,

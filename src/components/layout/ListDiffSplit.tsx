@@ -8,6 +8,7 @@ import { SplitHandle } from "./SplitHandle";
 import { useMaximizeFlip, usePaneExit } from "./maximize-motion";
 import { usePaneStore } from "./pane-state";
 import {
+  DiffCloseContext,
   MaximizedFilesContext,
   MaximizedOriginContext,
   splitFilePath,
@@ -50,6 +51,16 @@ export interface ListDiffSplitProps {
    * 화면만 켠다.
    */
   detailAlwaysOpen?: boolean;
+  /**
+   * 파일을 열었는지를 부르는 쪽이 직접 알린다. `files`를 넘기지 않는 화면(파일별 보기)이 diff를 닫을 수
+   * 있게 할 때 쓴다. 없으면 `files.selectedKey`로 정한다.
+   */
+  fileOpen?: boolean;
+  /**
+   * diff를 닫는다(파일 선택만 풀어 1단계로). 주면 diff 머리에 닫기 버튼이 생기고 Esc도 이것을 부른다.
+   * 고른 커밋·스태시 같은 바깥 선택은 그대로 둔다.
+   */
+  onCloseFile?: () => void;
 }
 
 // `Card`(ui/Card.tsx)와 같은 카드 겉모습(D27). `ListPane`은 `section`/`div`를 골라 쓰고 ref·aria
@@ -80,6 +91,8 @@ export function ListDiffSplit({
   className,
   "data-testid": testId,
   detailAlwaysOpen = false,
+  fileOpen,
+  onCloseFile,
 }: ListDiffSplitProps) {
   const { t } = useTranslation();
   const width = useUIStore((s) => s.fileListWidth);
@@ -96,7 +109,7 @@ export function ListDiffSplit({
   const cards = variant === "cards";
   // 파일을 골랐는지(2·3단계) 아직인지(1단계). `files`를 안 넘기는 화면(합쳐 보기·파일별 보기)은
   // 이 신호를 아직 안 쓰므로 늘 "골랐다"로 보아 지금 모습(목록 + diff 나란히)을 그대로 지킨다.
-  const hasFile = detailAlwaysOpen || (files ? files.selectedKey !== null : true);
+  const hasFile = detailAlwaysOpen || (fileOpen ?? (files ? files.selectedKey !== null : true));
   const selectedItem = files ? (files.items.find((f) => f.key === files.selectedKey) ?? null) : null;
   const selectedFileName = selectedItem ? splitFilePath(selectedItem.path).name : undefined;
 
@@ -115,6 +128,21 @@ export function ListDiffSplit({
     prevSelectedKey.current = selectedKey;
     if (selectedKey !== null) setGraphExpanded(false);
   }, [selectedKey, setGraphExpanded]);
+
+  // Esc로 닫을 수 있게 올려 둔다(크게 보기 → 2단계 → 1단계, `useDiffEscape`). 최신 함수를 부르도록 ref로 잇는다.
+  const closeRef = useRef(onCloseFile);
+  useEffect(() => {
+    closeRef.current = onCloseFile;
+  });
+  const canClose = onCloseFile !== undefined && hasFile;
+  const pushDiffCloser = usePaneStore((s) => s.pushDiffCloser);
+  const removeDiffCloser = usePaneStore((s) => s.removeDiffCloser);
+  useEffect(() => {
+    if (!canClose) return;
+    const close = () => closeRef.current?.();
+    pushDiffCloser(close);
+    return () => removeDiffCloser(close);
+  }, [canClose, pushDiffCloser, removeDiffCloser]);
 
   // 크게 보기를 벗어나면 파일 목록 접힘을 푼다("원래 크기로 돌아오면 풀린다", 5.4).
   const prevMaximized = useRef(maximized);
@@ -186,7 +214,9 @@ export function ListDiffSplit({
               다른 파일로 옮기는 것은(key가 그대로) 다시 재지 않는다. */}
           <div key={hasFile ? "open" : "closed"} className="flex flex-col flex-1 min-h-0 min-w-0 animate-content-in">
             <MaximizedOriginContext.Provider value={origin !== undefined}>
-              <MaximizedFilesContext.Provider value={files !== undefined}>{detail}</MaximizedFilesContext.Provider>
+              <MaximizedFilesContext.Provider value={files !== undefined}>
+                <DiffCloseContext.Provider value={canClose ? (onCloseFile ?? null) : null}>{detail}</DiffCloseContext.Provider>
+              </MaximizedFilesContext.Provider>
             </MaximizedOriginContext.Provider>
           </div>
         </div>

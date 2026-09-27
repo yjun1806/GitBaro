@@ -205,6 +205,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
       <ListDiffSplit
         variant="inline"
         origin={origin}
+        onCloseFile={() => setSelectedFilePath(null)}
         files={{
           items: files.map((f) => ({
             key: f.path,
