@@ -7,7 +7,7 @@ import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { useMenuActions } from "@/hooks/useMenuActions";
 import { ContextMenu, type ContextMenuSection } from "@/components/ui/ContextMenu";
 import { copyMenuItem, folderMenuItems } from "@/components/ui/menu-items";
-import type { WorktreeChip } from "@/components/worktree/WorktreeChips";
+import type { WorktreeChip } from "./WorktreeLaneChips";
 
 const ICON = "w-3.5 h-3.5";
 

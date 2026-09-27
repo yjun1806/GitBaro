@@ -16,6 +16,8 @@ export interface FileTouchSource {
   path: string;
   /** 메인 작업 트리가 아니면 워크트리를 가리키는 이름(브랜치, detached면 폴더 이름). 메인이면 null. */
   worktreeLabel: string | null;
+  /** 체크아웃하지 않은 로컬 브랜치를 볼 때 그 이름(브랜치 단계). 없으면 `path`의 HEAD 기준이다. */
+  branch?: string | null;
 }
 
 /**

@@ -381,11 +381,12 @@ function CommitGraphList({
         : null,
     [markRemote, commits, ownIds],
   );
-  // 「올리지 않은 작업」 머리 자리: 경계(boundaryIdx)를 그릴 수 있을 때만, 자신의 첫 미반영 커밋 위.
+  // 「올리지 않은 작업」 머리 자리: 경계(boundaryIdx)를 그릴 수 있을 때만, 첫 미반영 커밋 위. 저장소
+  // 단계에서 함께 그리는 다른 워크트리의 커밋도 센다 — 그 레인의 올리지 않은 커밋이 머리 위로 올라가지 않게.
   // 경계를 그리지 못하면(교정 규칙) 이 머리도 그리지 않는다 — 행 바탕 틴트만 남는다.
   const unpushedIdx = useMemo(
-    () => (boundaryIdx !== null ? commits.findIndex((c) => ownIds.has(c.id) && c.isUnpushed === true) : -1),
-    [boundaryIdx, commits, ownIds],
+    () => (boundaryIdx !== null ? commits.findIndex((c) => c.isUnpushed === true) : -1),
+    [boundaryIdx, commits],
   );
   // 머리 행의 이름표: 「원격에 없음」은 어느 원격에도 없다는 뜻이라, 원격이 여럿이면 이름을 고르지 않는다.
   const remotes = useRepositoryStore((s) => s.activeRepo?.remotes);

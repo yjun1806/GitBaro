@@ -15,10 +15,9 @@ import { CommitGraph, type WorktreeHead } from "./CommitGraph";
 import { useGraphReview } from "./useGraphReview";
 import { type GraphWip } from "./graph-model";
 import { worktreeColor } from "./worktree-history";
-import { useGraphWorktreesStore } from "./graph-worktrees";
 import { activeRange, useBranchRangeStore } from "@/components/branch/branch-range";
-import { WorktreeChips, type WorktreeChip } from "@/components/worktree/WorktreeChips";
-import type { WorktreeInfo } from "@/types";
+import { WorktreeLaneChips, type WorktreeChip } from "./WorktreeLaneChips";
+import type { ReviewWorktree, WorktreeInfo } from "@/types";
 import { StashView } from "@/components/stash/StashView";
 import { ActionsView } from "@/components/actions/ActionsView";
 import { PrListView } from "@/components/pr/PrListView";
@@ -32,6 +31,15 @@ import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { useHistoryView } from "./useHistoryView";
 import { trimTrailingSlash } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { useActiveRepoName } from "@/hooks/useRepoDisplay";
+import { useScopeSources } from "@/components/scope/useScopeSources";
+import { useScopeStore } from "@/components/scope/scope-store";
+import { visibleLaneSources, type LaneSource } from "@/components/scope/scope-lanes";
+import type { Scope } from "@/components/scope/scope";
+import { ScopeViewToggle } from "@/components/scope/ScopeViewToggle";
+import { FileTouchesView } from "@/components/review/FileTouchesView";
+import { fileTouchSources, type FileTouchSource } from "@/components/review/file-touches-model";
 
 /** Which graph-panel tab a `ui.activeTab` value belongs to. */
 export type GraphPanelTab = "graph" | "stash" | "actions";
@@ -93,8 +101,12 @@ export function GraphPanel() {
   }, [activeTab, merging, comparing, setPrOpen]);
   useEffect(() => () => setPrOpen(false), [setPrOpen]);
   const tab: ShownTab = prOpen ? "pr" : graphPanelTabOf(activeTab);
-  const worktreeFilter = useWorktreeFilter(review.wips);
+  const { scope, sources } = useScopeSources();
+  const worktreeFilter = useWorktreeFilter(review.wips, scope, sources);
   const chipMenu = useWorktreeChipMenu(worktreeFilter);
+  const filesView = useGraphFilesView();
+  const fileSources = useFileSources(scope, worktreeFilter.wips);
+  const repoName = useActiveRepoName();
 
   // 커밋을 새로 고를 때만 아래 칸을 커밋 상세로 바꾼다. 패널이 다시 마운트될 때
   // (저장소 목록을 열었다 닫을 때 등) 남아 있던 선택으로 스태시·Actions 탭에서
@@ -171,19 +183,26 @@ export function GraphPanel() {
           {/* 「작업 중인 변경 N」은 아래 WIP 행이 말한다(여기 배지를 두지 않는다). */}
         </div>
 
-        {tab === "graph" && graphListShown && !viewing && worktreeFilter.chips.length > 1 && (
-          <WorktreeChips
-            chips={worktreeFilter.chips}
-            visible={worktreeFilter.visible}
-            onToggle={worktreeFilter.toggle}
-            onShowAll={worktreeFilter.showAll}
-            onShowCurrentOnly={worktreeFilter.showCurrentOnly}
-            onContextMenu={(chip, e) => chipMenu.open(chip, contextMenuPoint(e))}
+        {tab === "graph" && graphListShown && (
+          <FilterBar
+            left={
+              worktreeFilter.chips.length > 1 ? (
+                <WorktreeLaneChips
+                  chips={worktreeFilter.chips}
+                  visible={worktreeFilter.visible}
+                  onToggle={worktreeFilter.toggle}
+                  onContextMenu={(chip, e) => chipMenu.open(chip, contextMenuPoint(e))}
+                />
+              ) : undefined
+            }
+            right={<ScopeViewToggle />}
           />
         )}
         {chipMenu.element}
         <div role="tabpanel" className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-          {tab === "graph" ? (
+          {tab === "graph" && filesView ? (
+            <FileTouchesView sources={fileSources} repoLabel={() => repoName} />
+          ) : tab === "graph" ? (
             <CommitGraph
               wips={viewing ? NO_WIPS : worktreeFilter.wips}
               worktreeHeads={viewing ? NO_HEADS : worktreeFilter.heads}
@@ -213,22 +232,20 @@ function chipOrder(a: GraphWip, b: GraphWip): number {
 }
 
 /**
- * 「함께 보는 워크트리」 칩 줄에서 그래프에 그릴 워크트리를 고른다(D5). 처음에는 지금 연 워크트리만
- * 그리고, 켠 워크트리는 저장소마다 앱을 켜는 동안 기억한다(`useGraphWorktreesStore`). 지금 연
- * 워크트리는 늘 보인다.
+ * 그래프에 그릴 워크트리를 고른다(5.1 레인). 브랜치 단계는 지금 연 워크트리 하나뿐이다. 저장소
+ * 단계는 워크트리마다 레인이고, 필터 막대의 칩으로 켜고 끈다 — 건드리지 않은 칩은 조용한 레인
+ * 규칙(`visibleLaneSources`)을 따르고, 건드린 것은 `useScopeStore.laneShown`이 기억한다. 지금 연
+ * 워크트리는 그래프 이력의 주인이라 늘 보인다.
  * - `wips`: 보이는 워크트리의 WIP 행만.
  * - `heads`: 보이는 다른 워크트리의 HEAD. 그래프가 그 이력을 함께 그린다.
  */
-function useWorktreeFilter(allWips: GraphWip[]) {
+function useWorktreeFilter(allWips: GraphWip[], scope: Scope | null, sources: readonly LaneSource[]) {
   const ownerPath = useRepositoryStore((s) => s.activeRepo?.path ?? s.activeRepoPath ?? null);
-  const { data: worktreeList } = useWorktrees(ownerPath);
-  const shownByRepo = useGraphWorktreesStore((s) => s.shownByRepo);
-  const toggleShown = useGraphWorktreesStore((s) => s.toggle);
-  const setShown = useGraphWorktreesStore((s) => s.setShown);
-  const shown = useMemo(
-    () => new Set(ownerPath ? (shownByRepo[ownerPath] ?? []) : []),
-    [shownByRepo, ownerPath],
-  );
+  const repoStage = scope?.kind === "repo";
+  const { data: worktreeList } = useWorktrees(repoStage ? ownerPath : null);
+  const laneShown = useScopeStore((s) => s.laneShown);
+  const setLaneShown = useScopeStore((s) => s.setLaneShown);
+  const setLanesShown = useScopeStore((s) => s.setLanesShown);
 
   const infoByPath = useMemo(() => {
     const map = new Map<string, WorktreeInfo>();
@@ -236,54 +253,100 @@ function useWorktreeFilter(allWips: GraphWip[]) {
     return map;
   }, [worktreeList]);
 
+  const shownLaneIds = useMemo(() => {
+    if (!repoStage || !scope) return new Set<string>();
+    const shown = visibleLaneSources(scope, sources, NO_OVERRIDES, new Map(Object.entries(laneShown)));
+    return new Set(shown.map((s) => trimTrailingSlash(s.id)));
+  }, [repoStage, scope, sources, laneShown]);
+
   const chips = useMemo<WorktreeChip[]>(
     () =>
-      [...allWips].sort(chipOrder).map((w) => {
-        const info = infoByPath.get(trimTrailingSlash(w.path));
-        return {
-          path: w.path,
-          branch: w.branch,
-          isMain: w.isMain,
-          isCurrent: w.isCurrent,
-          base: info?.base ?? null,
-          dirtyCount: w.count,
-          color: worktreeColor(w.path),
-        };
-      }),
-    [allWips, infoByPath],
+      repoStage
+        ? [...allWips].sort(chipOrder).map((w) => {
+            const info = infoByPath.get(trimTrailingSlash(w.path));
+            return {
+              path: w.path,
+              branch: w.branch,
+              isMain: w.isMain,
+              isCurrent: w.isCurrent,
+              base: info?.base ?? null,
+              dirtyCount: w.count,
+              color: worktreeColor(w.path),
+            };
+          })
+        : NO_CHIPS,
+    [repoStage, allWips, infoByPath],
   );
 
   const visible = useMemo(
-    () => new Set(allWips.filter((w) => w.isCurrent || shown.has(w.path)).map((w) => w.path)),
-    [allWips, shown],
+    () =>
+      new Set(allWips.filter((w) => w.isCurrent || shownLaneIds.has(trimTrailingSlash(w.path))).map((w) => w.path)),
+    [allWips, shownLaneIds],
   );
   const wips = useMemo(() => allWips.filter((w) => visible.has(w.path)), [allWips, visible]);
   const heads = useMemo(() => {
     const out = wips.flatMap((w) => {
-      const head = w.isCurrent ? null : infoByPath.get(trimTrailingSlash(w.path))?.head;
+      const head = w.isCurrent ? null : (infoByPath.get(trimTrailingSlash(w.path))?.head ?? w.headOid);
       return head ? [{ path: w.path, head }] : [];
     });
     return out.length > 0 ? out : NO_HEADS;
   }, [wips, infoByPath]);
 
   const toggle = useCallback(
-    (path: string) => {
-      if (ownerPath) toggleShown(ownerPath, path);
-    },
-    [ownerPath, toggleShown],
+    (path: string) => setLaneShown(path, !visible.has(path)),
+    [visible, setLaneShown],
   );
-  const showAll = useCallback(() => {
-    if (ownerPath) setShown(ownerPath, allWips.filter((w) => !w.isCurrent).map((w) => w.path));
-  }, [ownerPath, allWips, setShown]);
-  const showCurrentOnly = useCallback(() => {
-    if (ownerPath) setShown(ownerPath, []);
-  }, [ownerPath, setShown]);
   const showOnly = useCallback(
-    (path: string) => {
-      if (ownerPath) setShown(ownerPath, [path]);
-    },
-    [ownerPath, setShown],
+    (path: string) =>
+      setLanesShown(Object.fromEntries(allWips.filter((w) => !w.isCurrent).map((w) => [w.path, w.path === path]))),
+    [allWips, setLanesShown],
   );
 
-  return { chips, visible, wips, heads, toggle, showAll, showCurrentOnly, showOnly };
+  return { chips, visible, wips, heads, toggle, showOnly };
+}
+
+const NO_CHIPS: WorktreeChip[] = [];
+const NO_OVERRIDES: ReadonlyMap<string, boolean> = new Map();
+
+/**
+ * 그래프 탭이 「파일별」 보기인지(5.1, D44). 브랜치 비교 중에는 비교 그래프를 그대로 둔다.
+ * 메인 칸(`MainColumn`)도 이 값으로 옆 칸을 열지 않는다 — 파일별 보기는 그래프 칸 안에 파일 목록과
+ * diff를 함께 그린다(5.4 「첫 칸이 파일 목록」).
+ */
+export function useGraphFilesView(): boolean {
+  const activeTab = useUIStore((s) => s.activeTab);
+  const view = useUIStore((s) => s.reviewFileView);
+  const prOpen = usePrViewStore((s) => s.open);
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  const branchRange = useBranchRangeStore((s) => s.range);
+  return (
+    view === "files" && !prOpen && graphPanelTabOf(activeTab) === "graph" && activeRange(branchRange, activeRepoPath) === null
+  );
+}
+
+/**
+ * 파일별 보기가 읽을 워크트리(5.1 「파일별」). 저장소 단계는 보이는 워크트리 모두, 브랜치 단계는 그
+ * 브랜치 하나 — 체크아웃하지 않은 브랜치면 그 이름을 넘겨 브랜치 끝 기준으로 읽는다.
+ */
+function useFileSources(scope: Scope | null, shownWips: readonly GraphWip[]): FileTouchSource[] {
+  const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
+  let next: FileTouchSource[] = [];
+  if (scope?.kind === "repo") {
+    const worktrees: ReviewWorktree[] = shownWips.map((w) => ({
+      path: w.path,
+      branch: w.branch,
+      headOid: w.headOid ?? null,
+      isMain: w.isMain,
+    }));
+    next = fileTouchSources([{ path: scope.repoPath, worktrees }]);
+  } else if (scope?.kind === "branch") {
+    next =
+      scope.worktreePath !== null
+        ? [{ repoPath: scope.repoPath, path: activeRepoPath ?? scope.worktreePath, worktreeLabel: null }]
+        : [{ repoPath: scope.repoPath, path: scope.repoPath, worktreeLabel: scope.branch, branch: scope.branch }];
+  }
+  // 그릴 때마다 새 배열이라, 대상이 실제로 바뀔 때만 새 목록을 넘긴다(쿼리 목록이 흔들리지 않게).
+  const key = JSON.stringify(next);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- key가 next의 내용을 대신 비교한다
+  return useMemo(() => next, [key]);
 }

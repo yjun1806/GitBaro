@@ -37,3 +37,23 @@ describe("useScopeStore (「저장소」 단계 보기)", () => {
     expect(useScopeStore.getState().aggregateRepoPath).toBe("/r/a");
   });
 });
+
+describe("useScopeStore (레인 칩·선택)", () => {
+  beforeEach(() => {
+    useScopeStore.setState({ repoShown: {}, laneShown: {}, lastSelection: null });
+  });
+
+  it("keeps only the chips the user touched, without wiping the others", () => {
+    useScopeStore.getState().setLaneShown("/r/a", false);
+    useScopeStore.getState().setLaneShown("/r/b", true);
+    useScopeStore.getState().setLanesShown({ "/r/a": true, "/r/c": false });
+    expect(useScopeStore.getState().laneShown).toEqual({ "/r/a": true, "/r/b": true, "/r/c": false });
+    useScopeStore.getState().setRepoShown("/r/x", true);
+    expect(useScopeStore.getState().repoShown).toEqual({ "/r/x": true });
+  });
+
+  it("remembers the last picked lane and commit", () => {
+    useScopeStore.getState().rememberSelection({ laneId: "/r/a", commitOid: "c1" });
+    expect(useScopeStore.getState().lastSelection).toEqual({ laneId: "/r/a", commitOid: "c1" });
+  });
+});

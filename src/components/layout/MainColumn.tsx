@@ -6,7 +6,7 @@ import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { useActiveScope } from "@/hooks/useActiveScope";
 import { ToolbarRoot } from "@/components/toolbar";
 import { RepoListView } from "@/components/repository/RepoListView";
-import { GraphPanel } from "@/components/graph/GraphPanel";
+import { GraphPanel, useGraphFilesView } from "@/components/graph/GraphPanel";
 import { WorkspaceReview } from "@/components/review/WorkspaceReview";
 import { PrDetailPane } from "@/components/pr/PrDetailPane";
 import { usePrViewStore } from "@/components/pr/pr-view";
@@ -85,7 +85,9 @@ export function MainColumn() {
 
   // 0단계(그래프 전체, D47): 볼 것이 없으면 옆 칸을 열지 않는다. 작업 중인 변경은 파일이 있거나
   // 따라가는 중일 때만 상세 칸이 내용이고, 다른 탭은 무언가 골랐을 때만 연다.
-  const hasSelection = useHasPaneContent(activeTab, activeRepoPath, prOpen);
+  // 파일별 보기는 그래프 칸 안에 파일 목록과 diff를 함께 그리므로 옆 칸을 열지 않는다(5.4).
+  const filesView = useGraphFilesView();
+  const hasSelection = useHasPaneContent(activeTab, activeRepoPath, prOpen) && !filesView;
   const expandContentTab = useExpandGraph(activeTab);
   const handleExpandGraph = () => {
     if (prOpen) setPrOpen(false);
