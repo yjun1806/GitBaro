@@ -6,8 +6,9 @@ import i18n from "@/i18n/config";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useHistoryViewStore } from "@/stores/history-view";
+import { useScopeStore } from "@/components/scope/scope-store";
 import { useUIStore } from "@/stores/ui";
-import type { CommitInfo, RepoInfo, RepoReviewStatus, StatusEntry } from "@/types";
+import type { CommitInfo, RepoInfo, StatusEntry, WorktreeInfo } from "@/types";
 
 const REPO = "/work/app";
 const APP = "/w/xames-app";
@@ -29,21 +30,16 @@ function commit(id: string): CommitInfo {
   };
 }
 
-/** `GitStatusLine`(저장소 화면)이 읽는 값. 테스트마다 채운다. */
+/** `GitStatusLine`·`RepoScopeStatusLine`(저장소 화면)이 읽는 값. 테스트마다 채운다. */
 let branchList: { name: string; isHead: boolean; isRemote: boolean }[] = [];
 let statusEntries: StatusEntry[] = [];
-
-/** `useWorkspaceReview`(워크스페이스 화면)가 읽는 값. 테스트마다 채운다. */
-let reviewRepos: RepoReviewStatus[] = [];
-let statuses: Record<string, StatusEntry[]> = {};
-let syncByPath: Record<string, { unpushed: number }> = {};
+let worktreeList: WorktreeInfo[] = [];
 
 vi.mock("@/api/queries", () => ({
-  // GitStatusLine(저장소 화면)
   useBranches: () => ({ data: branchList }),
   useStatus: (path: string | null) => ({ data: path ? statusEntries : undefined }),
   useMergeState: () => ({ data: null }),
-  useWorktrees: () => ({ data: [] }),
+  useWorktrees: () => ({ data: worktreeList }),
   useCommitHistoryInfinite: () => ({
     data: { pages: [[commit("c1")]] },
     isLoading: false,
@@ -52,12 +48,6 @@ vi.mock("@/api/queries", () => ({
     fetchNextPage: vi.fn(),
   }),
   useUnpushedCommits: () => ({ data: undefined }),
-  // WorkspaceStatusLine → useWorkspaceReview(워크스페이스 화면)
-  useReviewStatusQuery: () => ({ data: reviewRepos, isLoading: false }),
-  useWorkspaceHistories: (repos: { path: string }[]) => repos.map(() => undefined),
-  useStatusMany: (paths: string[]) =>
-    Object.fromEntries(paths.filter((p) => statuses[p]).map((p) => [p, statuses[p]])),
-  useRepoSyncStatuses: () => ({ data: syncByPath }),
 }));
 
 const { StatusBar } = await import("@/components/layout/StatusBar");
@@ -77,12 +67,11 @@ beforeEach(async () => {
   await i18n.changeLanguage("en");
   branchList = [];
   statusEntries = [];
-  reviewRepos = [];
-  statuses = {};
-  syncByPath = {};
+  worktreeList = [];
   useHistoryViewStore.getState().reset();
   useRepositoryStore.setState({ repos: [], activeRepo: null, activeRepoPath: null, activeWorktrees: {} });
   useWorkspaceStore.setState({ workspaces: [], activeWorkspaceId: null });
+  useScopeStore.getState().viewRepoAggregate(null);
   useUIStore.setState({ isActivityLogOpen: false });
 });
 
@@ -117,33 +106,39 @@ describe("StatusBar", () => {
     expect(useHistoryViewStore.getState().target).toBeNull();
   });
 
-  it("workspace scope: says how many repositories have changes or commits to push", () => {
+  it("workspace scope: names the workspace and says the basis is each repository's own checkout (5.3)", () => {
     useWorkspaceStore.setState({
       workspaces: [{ id: "w1", name: "xames", accountKey: "local", repoPaths: [APP, API] }],
       activeWorkspaceId: "w1",
     });
     useRepositoryStore.setState({ repos: [repo(APP), repo(API)], activeRepo: null, activeRepoPath: null });
-    reviewRepos = [
-      { repoPath: APP, worktrees: [{ path: APP, branch: "feat/x", headOid: "a1", isMain: true }] },
-      { repoPath: API, worktrees: [{ path: API, branch: "main", headOid: "b1", isMain: true }] },
-    ];
-    statuses = { [APP]: [{ path: "a.ts", status: "modified", staged: false } as StatusEntry] };
-    syncByPath = { [API]: { unpushed: 2 } };
     renderBar();
     const bar = screen.getByRole("status");
     expect(bar.dataset.tone).toBe("normal");
-    expect(bar.textContent).toBe("1 repository has changes · 1 repository has commits to push");
+    expect(bar.textContent).toBe("Workspace xames · based on each repository's checked-out branch");
   });
 
-  it("workspace scope, nothing to do anywhere: says every repository is quiet", () => {
-    useWorkspaceStore.setState({
-      workspaces: [{ id: "w1", name: "xames", accountKey: "local", repoPaths: [APP] }],
-      activeWorkspaceId: "w1",
-    });
-    useRepositoryStore.setState({ repos: [repo(APP)], activeRepo: null, activeRepoPath: null });
-    reviewRepos = [{ repoPath: APP, worktrees: [{ path: APP, branch: "main", headOid: "a1", isMain: true }] }];
+  it("repository scope (every worktree): names the repository, its primary branch, and that lanes are worktrees (5.3)", () => {
+    branchList = [{ name: "main", isHead: true, isRemote: false }];
+    useRepositoryStore.setState({ repos: [repo(REPO)], activeRepo: repo(REPO), activeRepoPath: REPO });
+    useScopeStore.getState().viewRepoAggregate(REPO);
+    worktreeList = [
+      { path: REPO, isMain: true } as WorktreeInfo,
+      { path: "/work/app-feat", isMain: false } as WorktreeInfo,
+    ];
     renderBar();
-    expect(screen.getByRole("status").textContent).toBe("All repositories are quiet");
+    const bar = screen.getByRole("status");
+    expect(bar.dataset.tone).toBe("normal");
+    expect(bar.textContent).toBe("app · Primary folder ⎇ main · Lanes are worktrees");
+  });
+
+  it("repository scope, no linked worktrees: says so instead of 'lanes are worktrees' (5.3)", () => {
+    branchList = [{ name: "main", isHead: true, isRemote: false }];
+    useRepositoryStore.setState({ repos: [repo(REPO)], activeRepo: repo(REPO), activeRepoPath: REPO });
+    useScopeStore.getState().viewRepoAggregate(REPO);
+    worktreeList = [{ path: REPO, isMain: true } as WorktreeInfo];
+    renderBar();
+    expect(screen.getByRole("status").textContent).toBe("app · Primary folder ⎇ main · No linked worktrees");
   });
 
   it("no repository or workspace chosen: the bar stays, with only the activity log reachable", () => {

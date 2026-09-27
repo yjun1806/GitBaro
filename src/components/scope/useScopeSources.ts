@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useRepositoryStore } from "@/stores/repository";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useReviewStatus } from "@/hooks/useReviewStatus";
-import { useBranches, useDefaultBranches, useRepoSyncStatuses } from "@/api/queries";
+import { useDefaultBranches, useRepoSyncStatuses, useWorkingBranches } from "@/api/queries";
 import { dedupeReviewMembers } from "@/components/review/review-model";
 import { useScope } from "./useScope";
 import type { Scope } from "./scope";
@@ -75,20 +75,18 @@ function useRepoLaneSources(repoPaths: readonly string[]): { sources: LaneSource
 
 /**
  * 브랜치 단계인데 그 브랜치가 어느 워크트리에도 체크아웃되지 않았을 때(보는 브랜치 고르기로
- * 로컬 브랜치를 체크아웃 없이 보는 중) 쓸 레인 하나. `get_branches`의 upstream 대비 앞섬을
- * 원격에 없는 커밋 수의 근사로 쓴다 — 정확한 값(`rev-list <branch> --not --remotes`)은 체크아웃한
- * 브랜치에만 주는 조회(`repo_sync_status`)뿐이라, 체크아웃하지 않은 브랜치까지 저장소마다 따로
- * 조회를 늘리지 않는다.
+ * 로컬 브랜치를 체크아웃 없이 보는 중) 쓸 레인 하나. 원격에 없는 커밋 수는 사이드바 「작업 중인
+ * 브랜치」 줄과 같은 조회(`get_working_branches`)의 정확한 `unpushed` 값을 쓴다 — 추적 브랜치가
+ * 없어도 세고, 체크아웃 여부와 상관없이 저장소마다 한 번만 조회한다(5.2).
  */
 function useUncheckedBranchLane(scope: Scope | null): { lane: LaneSource | null; isLoading: boolean } {
   const needed = scope?.kind === "branch" && scope.worktreePath === null;
   const repoPath = needed && scope ? scope.repoPath : null;
-  const { data: branches, isLoading: loadingBranches } = useBranches(repoPath);
-  const { data: defaultByRepo, isLoading: loadingDefault } = useDefaultBranches(repoPath ? [repoPath] : []);
+  const [repoBranches] = useWorkingBranches(repoPath ? [repoPath] : []);
   const allRepos = useRepositoryStore((s) => s.repos);
 
   if (!needed || !scope || scope.kind !== "branch") return { lane: null, isLoading: false };
-  const info = branches?.find((b) => b.name === scope.branch && !b.isRemote);
+  const info = repoBranches?.branches.find((b) => b.name === scope.branch);
   const repo = allRepos.find((r) => r.path === scope.repoPath);
   const lane: LaneSource = {
     id: branchLaneId(scope.repoPath, scope.branch),
@@ -96,14 +94,14 @@ function useUncheckedBranchLane(scope: Scope | null): { lane: LaneSource | null;
     worktreePath: null,
     isMain: false,
     branch: scope.branch,
-    defaultBranch: defaultByRepo?.[scope.repoPath]?.name ?? null,
-    unpushedCount: info?.aheadBehind?.ahead ?? null,
+    defaultBranch: repoBranches?.defaultBranch ?? null,
+    unpushedCount: info?.unpushed ?? null,
     wipCount: 0,
     error: null,
     remotes: repo?.remotes.map((r) => r.name) ?? [],
     color: "",
   };
-  return { lane, isLoading: loadingBranches || loadingDefault };
+  return { lane, isLoading: repoBranches === undefined };
 }
 
 /**

@@ -39,6 +39,8 @@ export interface RepoActions {
   onSelectWorktree: (repo: RepoInfo, worktreePath: string) => void;
   /** 저장소의 기본 폴더를 열고 그 자리에서 브랜치를 체크아웃하지 않고 본다. */
   onViewBranch: (repo: RepoInfo, target: ViewTarget) => void;
+  /** 저장소 줄(카드 머리)을 눌렀을 때: 저장소를 열고 「저장소」 단계(모든 워크트리를 통틀어 봄, 5.1)로 들어간다. */
+  onOpenRepoScope: (repo: RepoInfo) => void;
   onContextMenu: (repo: RepoInfo, e: MouseEvent) => void;
   /** 작업 폴더 줄 우클릭(`useSidebarRowMenus`). */
   onFolderContextMenu?: (repo: RepoInfo, folder: FolderRow, e: MouseEvent) => void;
@@ -263,7 +265,7 @@ export function RepoCard({
             fetching={fetching}
             expanded={expanded}
             selected={headerSelected}
-            onSelect={() => actions.onSelectRepo(repo)}
+            onSelect={() => actions.onOpenRepoScope(repo)}
             onToggle={onToggle}
             onContextMenu={(e) => actions.onContextMenu(repo, e)}
           />

@@ -45,6 +45,7 @@ import {
   GRAPH_COLUMNS,
   GraphRow,
   GraphWipRow,
+  NowHeaderRow,
   RemoteHeaderRow,
   UnpushedHeaderRow,
   type CommitDot,
@@ -75,14 +76,6 @@ import { activeRange, isStaleRange, useBranchRangeStore } from "@/components/bra
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RefLabel as RefLabelMark, StatusChip } from "@/components/ui/marks";
-import {
-  activeUnpushedRange,
-  useUnpushedRangeViewStore,
-  type UnpushedRangeOwner,
-} from "./unpushed-range-view";
-
-/** `historyTarget`이 없을 때(단일 저장소 그래프의 기본값)의 소유자 값. */
-const HEAD_HISTORY_TARGET: HistoryTarget = { kind: "head" };
 
 export interface CommitGraphProps {
   /** 맨 위 WIP 행(`useGraphReview`가 순서까지 정한 목록). */
@@ -409,42 +402,6 @@ function CommitGraphList({
     return remoteRefs[0]?.name;
   }, [boundaryIdx, commits, remotes]);
 
-  // 「올릴 내용 합쳐 보기」: 아직 push 안 한 범위(경계가 앉은 커밋 → HEAD)의 diff를 아래 칸에 연다.
-  // 이 저장소(워크트리)·보는 대상(historyTarget)이 범위의 주인이다(#1) — 다른 화면으로 옮기면 닫는다.
-  const rangeOwner = useMemo<UnpushedRangeOwner>(
-    () => ({ repoPath: activeRepoPath ?? "", historyTarget: historyTarget ?? HEAD_HISTORY_TARGET }),
-    [activeRepoPath, historyTarget],
-  );
-  const rangeInStore = useUnpushedRangeViewStore((s) => s.range);
-  const openRange = useUnpushedRangeViewStore((s) => s.open);
-  const syncRange = useUnpushedRangeViewStore((s) => s.sync);
-  const closeRangeView = useUnpushedRangeViewStore((s) => s.close);
-  const rangeOpenHere = activeRepoPath !== null && activeUnpushedRange(rangeInStore, rangeOwner) !== null;
-  const handleToggleRange = useCallback(() => {
-    if (rangeOpenHere) {
-      closeRangeView();
-      return;
-    }
-    if (!activeRepoPath || !ownHead || boundaryIdx === null) return;
-    const baseOid = commits[boundaryIdx]?.id ?? null;
-    openRange({ ...rangeOwner, baseOid, headOid: ownHead });
-  }, [rangeOpenHere, closeRangeView, activeRepoPath, ownHead, boundaryIdx, commits, openRange, rangeOwner]);
-
-  // 열려 있는 동안은 지금 HEAD·경계를 따라간다(#2): 새 커밋이 쌓이면 head가, push하면 경계가
-  // 옮겨 간다. 더 올릴 것이 없어지면(모두 push됨) 칸을 닫는다.
-  const hasOwnUnpushed = useMemo(
-    () => commits.some((c) => ownIds.has(c.id) && c.isUnpushed === true),
-    [commits, ownIds],
-  );
-  useEffect(() => {
-    if (!rangeOpenHere || !ownHead) return;
-    if (!markRemote || !hasOwnUnpushed) {
-      closeRangeView();
-      return;
-    }
-    if (boundaryIdx === null) return; // 아직 경계를 못 찾음(다음 페이지 대기) — 그대로 둔다.
-    syncRange(rangeOwner, commits[boundaryIdx]?.id ?? null, ownHead);
-  }, [rangeOpenHere, ownHead, markRemote, hasOwnUnpushed, boundaryIdx, commits, rangeOwner, syncRange, closeRangeView]);
 
   // 줄기 강조(D6): 고른 커밋의 줄기, 없으면 마우스 올린 커밋의 줄기. 미리보기는 선택보다 앞선다.
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
@@ -584,14 +541,18 @@ function CommitGraphList({
         {viewing ? (
           <ViewingNote />
         ) : (
-          <WipRows
-            wips={wips}
-            selection={selection}
-            graphWidth={graphWidth}
-            lanes={layouts}
-            colorOf={colorOf}
-            currentHead={ownHead}
-          />
+          <>
+            {/* 「지금」 영역 머리(D48): 보일 WIP 행이 있을 때만 그 위에 둔다. */}
+            {wips.length > 0 && <NowHeaderRow graphWidth={graphWidth} through={[]} colorOf={colorOf} />}
+            <WipRows
+              wips={wips}
+              selection={selection}
+              graphWidth={graphWidth}
+              lanes={layouts}
+              colorOf={colorOf}
+              currentHead={ownHead}
+            />
+          </>
         )}
 
         {isLoading ? (
@@ -610,11 +571,10 @@ function CommitGraphList({
                     두 머리가 같은 커밋 위에 오면(새 브랜치를 아직 push 안 함) origin이 위, 기본 브랜치가 아래다. */}
                 {unpushedIdx === index && (
                   <UnpushedHeaderRow
+                    remote={remoteLabel}
                     graphWidth={graphWidth}
                     through={through}
                     colorOf={colorOf}
-                    rangeOpen={rangeOpenHere}
-                    onToggleRange={handleToggleRange}
                   />
                 )}
                 {boundaryIdx === index && (

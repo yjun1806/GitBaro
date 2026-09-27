@@ -656,25 +656,21 @@ interface RegionHeaderThrough {
 interface RegionHeaderRowProps extends RegionHeaderThrough {
   name: string;
   desc?: string;
-  /** 옅은 바탕(「올리지 않은 작업」 머리만, 시안 결정: 「옅게」 단계). */
+  /** 옅은 바탕(「올리지 않음」 머리만, 시안 결정: 「옅게」 단계). */
   tinted?: boolean;
-  /** 오른쪽 끝 텍스트 버튼(「올리지 않은 작업」 머리의 「올릴 내용 합쳐 보기」). */
-  action?: { label: string; pressed: boolean; onClick: () => void };
   testId: string;
 }
 
 /**
- * 영역 머리 행(개선안, 2026-09-26). 영역 아래 끝의 구분 줄 대신 영역 **위** 머리에 이름을 두어,
- * 이름을 먼저 읽고 그 아래 커밋을 보게 한다. 그래프 선은 끊기지 않고 지나간다. 개수는 넣지 않는다
- * (사이드바 ↑N·Push 버튼이 맡는다).
+ * 영역 머리 행(D48: 짧은 상태 말). 영역 아래 끝의 구분 줄 대신 영역 **위** 머리에 짧은 상태
+ * 문장을 두어, 상태를 먼저 읽고 그 아래 커밋을 보게 한다. 그래프 선은 끊기지 않고 지나간다.
+ * 개수는 넣지 않는다(사이드바 ↑N·Push 버튼이 맡는다).
  */
-function RegionHeaderRow({ name, desc, tinted = false, action, graphWidth, through, colorOf, testId }: RegionHeaderRowProps) {
+function RegionHeaderRow({ name, desc, tinted = false, graphWidth, through, colorOf, testId }: RegionHeaderRowProps) {
   const height = REGION_HEADER_HEIGHT;
   return (
     <div
-      // `role="separator"`는 자식을 장식으로 취급해 안의 버튼(`action`)을 보조기술에서 가린다(#5).
-      // 이름표가 붙은 묶음으로 노출해 버튼이 그대로 드러나게 한다. 시각은 그대로다.
-      role="group"
+      role="separator"
       aria-label={desc ? `${name} · ${desc}` : name}
       className={cn("flex items-center border-b border-(--line)", tinted && UNPUSHED_ROW_CLASS)}
       style={{ height }}
@@ -695,28 +691,25 @@ function RegionHeaderRow({ name, desc, tinted = false, action, graphWidth, throu
       <span className="flex items-center gap-2 flex-1 min-w-0 pl-2 pr-3">
         <StatusChip tone="neutral">{name}</StatusChip>
         {desc && <span className="flex-1 min-w-0 truncate text-[11.5px] text-muted-foreground">{desc}</span>}
-        {action && (
-          <button
-            type="button"
-            onClick={action.onClick}
-            aria-pressed={action.pressed}
-            className={cn(
-              "shrink-0 h-6 px-2 rounded-(--radius-chip) text-[11.5px] font-semibold text-primary transition-colors",
-              action.pressed ? "bg-(--acc-sel)" : "hover:bg-accent",
-            )}
-          >
-            {action.label}
-          </button>
-        )}
       </span>
     </div>
   );
 }
 
+/**
+ * 「지금」 영역 머리(D48). 커밋하지 않은 변경(WIP 행) 바로 위, 그래프 맨 위에 둔다. 보일 WIP
+ * 행이 하나도 없거나(모든 워크트리가 깨끗함) 체크아웃하지 않은 브랜치를 보는 중이면 그리지 않는다.
+ */
+export function NowHeaderRow(props: RegionHeaderThrough) {
+  const { t } = useTranslation();
+  return (
+    <RegionHeaderRow {...props} name={t("graph.nowHeader")} desc={t("graph.nowHeaderDesc")} testId="now-header-row" />
+  );
+}
+
 export interface UnpushedHeaderRowProps extends RegionHeaderThrough {
-  /** 「올릴 내용 합쳐 보기」 칸이 지금 이 범위를 보이는 중인지(누르면 토글). */
-  rangeOpen: boolean;
-  onToggleRange: () => void;
+  /** 이 레인이 커밋을 올리는 원격 이름(`origin`). 원격이 여럿이면 「원격」. */
+  remote: string;
 }
 
 /**
@@ -724,15 +717,14 @@ export interface UnpushedHeaderRowProps extends RegionHeaderThrough {
  * (`remoteBoundaryIndex`가 원격 경계를 그릴 수 있을 때만 — 못 그리면 이 머리도 없다. 행 바탕
  * 틴트만으로 표시한다).
  */
-export function UnpushedHeaderRow({ rangeOpen, onToggleRange, ...rest }: UnpushedHeaderRowProps) {
+export function UnpushedHeaderRow({ remote, ...rest }: UnpushedHeaderRowProps) {
   const { t } = useTranslation();
   return (
     <RegionHeaderRow
       {...rest}
       tinted
       name={t("graph.unpushedHeader")}
-      desc={t("graph.unpushedHeaderDesc")}
-      action={{ label: t("graph.openUnpushedRange"), pressed: rangeOpen, onClick: onToggleRange }}
+      desc={t("graph.unpushedHeaderDesc", { remote })}
       testId="unpushed-header-row"
     />
   );
@@ -772,7 +764,7 @@ export function BaseHeaderRow({ branch, timestamp, ...rest }: BaseHeaderRowProps
   return (
     <RegionHeaderRow
       {...rest}
-      name={branch}
+      name={t("graph.baseHeader", { branch })}
       desc={timestamp !== null ? t("graph.baseHeaderDesc", { time: formatRelativeTime(timestamp) }) : undefined}
       testId="base-header-row"
     />

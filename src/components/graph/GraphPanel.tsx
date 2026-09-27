@@ -23,14 +23,12 @@ import { StashView } from "@/components/stash/StashView";
 import { ActionsView } from "@/components/actions/ActionsView";
 import { PrListView } from "@/components/pr/PrListView";
 import { usePrViewStore } from "@/components/pr/pr-view";
-import { useUnpushedRangeViewStore } from "./unpushed-range-view";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
 import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import { activeRunCount, badgeCount } from "@/components/review/tab-counts";
 import { CompareChip } from "./CompareChip";
 import { useWorktreeChipMenu } from "./useWorktreeChipMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
-import { ViewBranchPicker } from "./ViewBranchPicker";
 import { useHistoryView } from "./useHistoryView";
 import { trimTrailingSlash } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
@@ -90,18 +88,10 @@ export function GraphPanel() {
   const comparing = !graphListShown;
   const prOpen = usePrViewStore((s) => s.open);
   const setPrOpen = usePrViewStore((s) => s.setOpen);
-  const closeRange = useUnpushedRangeViewStore((s) => s.close);
   useEffect(() => {
     setPrOpen(false);
-    closeRange();
-  }, [activeTab, merging, comparing, setPrOpen, closeRange]);
-  useEffect(
-    () => () => {
-      setPrOpen(false);
-      closeRange();
-    },
-    [setPrOpen, closeRange],
-  );
+  }, [activeTab, merging, comparing, setPrOpen]);
+  useEffect(() => () => setPrOpen(false), [setPrOpen]);
   const tab: ShownTab = prOpen ? "pr" : graphPanelTabOf(activeTab);
   const worktreeFilter = useWorktreeFilter(review.wips);
   const chipMenu = useWorktreeChipMenu(worktreeFilter);
@@ -125,16 +115,13 @@ export function GraphPanel() {
 
   const openGraphTab = () => {
     setPrOpen(false);
-    closeRange();
     setActiveTab(selectedCommitId ? "history" : "changes");
   };
   const openStoredTab = (next: "stash" | "actions") => {
     setPrOpen(false);
-    closeRange();
     setActiveTab(next);
   };
   const openPrTab = () => {
-    closeRange();
     setPrOpen(true);
   };
 
@@ -180,7 +167,6 @@ export function GraphPanel() {
               </Tab>
             )}
           </TabGroup>
-          {tab === "graph" && <ViewBranchPicker />}
           {tab === "graph" && <CompareChip />}
           {/* 「작업 중인 변경 N」은 아래 WIP 행이 말한다(여기 배지를 두지 않는다). */}
         </div>

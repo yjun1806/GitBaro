@@ -9,6 +9,7 @@ import { useRepoName } from "@/hooks/useRepoDisplay";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { useHistoryViewStore, viewTargetFor, type ViewTarget } from "@/stores/history-view";
 import { useSetHistoryView } from "@/components/graph/useHistoryView";
+import { useScopeStore } from "@/components/scope/scope-store";
 import type { RepoInfo } from "@/types";
 import { AccountHeader } from "./AccountHeader";
 import { AddRepoButton } from "./AddRepoButton";
@@ -164,8 +165,15 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
   };
   // 작업 폴더 줄·보기 줄의 우클릭 메뉴. 저장소 머리 줄 메뉴는 사이드바(`RepoRail`)가 그린다.
   const rowMenus = useSidebarRowMenus(rowActions, activePath);
+  // 저장소 줄(카드 머리)을 누르면 저장소를 열고 「저장소」 단계로 들어간다(5.1). 작업 폴더 줄
+  // (`onSelectRepo`)은 그 워크트리의 체크아웃한 브랜치, 즉 「브랜치」 단계로 그대로 둔다.
+  const openRepoScope = (repo: RepoInfo) => {
+    selectRepo(repo);
+    useScopeStore.getState().viewRepoAggregate(repo.path);
+  };
   const actions: RepoActions = {
     ...rowActions,
+    onOpenRepoScope: openRepoScope,
     onContextMenu: onRepoContextMenu,
     onFolderContextMenu: rowMenus.openFolder,
     onViewContextMenu: rowMenus.openView,
@@ -220,6 +228,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
             selected={!open && activeOwnerPath === node.repo.path}
             onSelect={() => {
               selectRepo(node.repo);
+              useScopeStore.getState().viewRepoAggregate(node.repo.path);
               if (!open) toggleWsRepo(key);
             }}
             onToggle={() => toggleWsRepo(key)}
