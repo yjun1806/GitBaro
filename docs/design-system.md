@@ -429,7 +429,7 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 **접근성.** `FilterChip`은 `aria-pressed`(눌러서 켜고 끄는 토글). `FilterDropdown`의 트리거는 `aria-haspopup="menu"` + `aria-expanded`, 메뉴는 `ContextMenu`의 `role="menu"` + 체크 표시를 그대로 쓴다.
 
-**지금 쓰는 곳.** 디자인 시스템 아트팩트(`FilterChipGallery`·`FilterDropdownDemo`·`FilterBarDemo`)뿐이다 — 화면(그래프의 레인 칩, PR 상태 필터 등)에 실제로 놓는 것은 뒤 단계에서 한다.
+**지금 쓰는 곳.** 그래프 탭(워크스페이스의 저장소 칩 `WorkspaceReview.tsx`, 저장소 단계의 워크트리 칩 `WorktreeLaneChips.tsx`, 오른쪽 「커밋 순서 | 파일별」 `ScopeViewToggle.tsx`), Actions·PR 탭의 「이 브랜치만」(`BranchOnlyChip.tsx`, 브랜치 단계만), PR 탭의 「상태 ▾」. 디자인 시스템 아트팩트의 `FilterChipGallery`·`FilterDropdownDemo`·`FilterBarDemo`.
 
 ### 3.15 커밋 줄의 칸
 
@@ -581,7 +581,7 @@ D47의 네 단계. 칸은 폭(`width`)과 `transform`만 240ms ease-out으로 �
 | `Tooltip`, `SidebarHoverCard` | `ui/Tooltip.tsx`, `sidebar/SidebarHoverCard.tsx` | 있음 |
 | `Tab`, `TabGroup` | `ui/Tabs.tsx` | 있음 |
 | `Segmented` | `ui/Segmented.tsx` | 있음 |
-| `FilterBar`, `FilterChip`, `FilterDropdown` | `ui/FilterBar.tsx`, `ui/FilterChip.tsx`, `ui/FilterDropdown.tsx` | 있음(화면 적용은 뒤 단계) |
+| `FilterBar`, `FilterChip`, `FilterDropdown` | `ui/FilterBar.tsx`, `ui/FilterChip.tsx`, `ui/FilterDropdown.tsx` | 있음 |
 | `Switch` | `settings/ui/Switch.tsx` | 있음 |
 | `TextInput`, `SearchInput`, `Textarea` | `ui/TextInput.tsx` | 있음 |
 | `Select`, `BranchCombobox` | `ui/` | 있음 |
