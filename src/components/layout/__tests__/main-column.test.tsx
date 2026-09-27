@@ -249,7 +249,8 @@ describe("MainColumn (two-column shell)", () => {
     fireEvent.click(tabs[1]);
     expect(screen.getByText("stash-list")).toBeTruthy();
     expect(screen.queryByText("history-list")).toBeNull();
-    expect(screen.getByText("No stash selected")).toBeTruthy();
+    // 0단계(D47): nothing picked, so the graph-side list takes the full width and no detail pane opens.
+    expect(screen.queryByText("No stash selected")).toBeNull();
 
     fireEvent.click(screen.getAllByRole("tab")[2]);
     expect(screen.getByText("actions-list")).toBeTruthy();

@@ -16,6 +16,30 @@ import { Button } from "@/components/ui/Button";
 import { ContentArea, useExpandGraph } from "./ContentArea";
 import { PaneStrip } from "./PaneStrip";
 import { useDiffMaximizeReset } from "./useDiffMaximize";
+import { useSelectionStore } from "@/stores/selection";
+import { useFollowStore } from "@/stores/follow";
+import { useStatus } from "@/api/queries";
+import type { MainTab } from "./ContentArea";
+
+function useHasPaneContent(activeTab: MainTab, repoPath: string | null, prOpen: boolean): boolean {
+  const selectedFile = useSelectionStore((s) => s.selectedFile);
+  const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
+  const selectedStashIndex = useSelectionStore((s) => s.selectedStashIndex);
+  const selectedRunId = useSelectionStore((s) => s.selectedRunId);
+  const following = useFollowStore((s) => s.target !== null);
+  const { data: status } = useStatus(repoPath);
+  if (prOpen) return true;
+  switch (activeTab) {
+    case "changes":
+      return selectedFile !== null || following || (status?.length ?? 0) > 0;
+    case "history":
+      return selectedCommitId !== null;
+    case "stash":
+      return selectedStashIndex !== null;
+    default:
+      return selectedRunId !== null;
+  }
+}
 
 /** "All repositories" list, opened from the sidebar. Takes over the main column. */
 function RepoListCard() {
@@ -59,11 +83,9 @@ export function MainColumn() {
   // 다른 저장소·워크스페이스로 옮기거나 목록을 열면 diff 크게 보기를 끝낸다(숨긴 목록으로 돌아올 길이 없어진다).
   useDiffMaximizeReset(`${scope?.kind === "workspace" ? scope.id : ""}:${activeRepoPath ?? ""}:${repoListOpen}`);
 
-  // 0단계(그래프 전체, D47)는 이 화면에서 아직 안 쓴다 — 네 탭(작업 중인 변경·이력·스태시·Actions)
-  // 모두 "아무것도 안 골랐음"에도 늘 무언가 보여 준다(스태시·Actions는 "고르지 않음" 안내, 작업 중인
-  // 변경은 스테이징 목록 자체가 내용이다 — 커밋 뒤 스테이징 목록으로 돌아가는 것도 이 경로다).
-  // `PaneStrip`은 이 능력을 갖고 있으니 그 가정이 바뀌면(예: 탭마다 진짜 빈 상태를 두면) 여기만 고치면 된다.
-  const hasSelection = true;
+  // 0단계(그래프 전체, D47): 볼 것이 없으면 옆 칸을 열지 않는다. 작업 중인 변경은 파일이 있거나
+  // 따라가는 중일 때만 상세 칸이 내용이고, 다른 탭은 무언가 골랐을 때만 연다.
+  const hasSelection = useHasPaneContent(activeTab, activeRepoPath, prOpen);
   const expandContentTab = useExpandGraph(activeTab);
   const handleExpandGraph = () => {
     if (prOpen) setPrOpen(false);

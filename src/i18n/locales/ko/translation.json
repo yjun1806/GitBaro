@@ -943,7 +943,7 @@
     "nowHeader": "지금",
     "nowHeaderDesc": "고치는 중",
     "unpushedHeader": "올리지 않음",
-    "unpushedHeaderDesc": "push하면 {{remote}}(으)로",
+    "unpushedHeaderDesc": "push하면 {{remote}}에 올라감",
     "remoteHeader": "{{remote}}에 있음",
     "baseHeader": "{{branch}}와 같음",
     "baseHeaderDesc": "{{time}} 갈라짐",

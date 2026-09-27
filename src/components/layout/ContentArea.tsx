@@ -36,7 +36,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 // `Card`·`EmptyState`는 `ui/`로 옮겼다. 옛 경로를 쓰는 곳이 있어 재수출로 남겨 둔다.
 export { Card, EmptyState };
 
-type MainTab = "changes" | "history" | "stash" | "actions";
+export type MainTab = "changes" | "history" | "stash" | "actions";
 
 /**
  * 2단계의 접힌 그래프 칸(`PaneStrip`)을 눌렀을 때 지금 탭의 파일 선택을 지운다(1단계로). 네 탭 모두
