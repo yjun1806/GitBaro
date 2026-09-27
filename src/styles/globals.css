@@ -404,9 +404,19 @@
   --motion-fast: 120ms;
   --motion-base: 160ms;
   --motion-slow: 220ms;
+  /* 그래프 ↔ 목록 ↔ diff 칸이 넓어지고 좁아지는 길이(D47/5.4). 폭·transform만 이 길이로 움직인다. */
+  --motion-pane: 240ms;
   /* 그래프 WIP 원의 정지 테(동작 줄이기 전용). 기본은 숨김 — 기어가기·테 퍼짐이 그 뜻을 대신한다.
      아래 reduced-motion 블록에서만 1로 켠다. */
   --wip-halo-opacity: 0;
+}
+
+/* 칸 배치(D47/5.4): 그래프·목록 칸의 폭만 이 길이로 움직인다. 옆 칸(diff)은 flex로 따라 늘어나 따로
+   전환을 두지 않는다. 동작 줄이기에서는 --motion-pane이 0이 되어 그대로 즉시 바뀐다. */
+.pane-w {
+  transition-property: width;
+  transition-duration: var(--motion-pane);
+  transition-timing-function: var(--ease-enter);
 }
 
 @keyframes motion-fade-in {
@@ -513,6 +523,7 @@
     /* 기어가기·테 퍼짐 대신 정지한 3px 테 하나로 「지금 쓰는 중」을 보인다(사이드바 점의 정적 테와 같다). */
     --wip-halo-opacity: 1;
     /* --animate-maximize-origin-in은 그대로 둔다: 자리를 옮기지 않고 흐려지기만 한다. */
+    --motion-pane: 0s;
   }
   .transition-transform {
     transition-duration: 0s;

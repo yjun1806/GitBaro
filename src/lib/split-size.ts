@@ -1,18 +1,37 @@
 /**
- * 메인 칸을 나누는 두 크기: 그래프 패널 ↕ 아래 칸, 파일 목록 ↔ diff.
- * 사용자가 손잡이를 끌어 정하고 `gitbaro-ui`에 저장한다. 저장값이 망가졌거나 창보다 커도
+ * 메인 칸을 나누는 크기들: (옛) 그래프 패널 ↕ 아래 칸, 파일 목록 ↔ diff, (새) 옆으로 쌓는 칸(D47/5.4)의
+ * 단계별 폭. 사용자가 손잡이를 끌어 정하고 `gitbaro-ui`에 저장한다. 저장값이 망가졌거나 창보다 커도
  * 레이아웃이 무너지지 않게 여기서 범위를 맞춘다.
  */
 
-/** 그래프 패널이 메인 칸(그래프 + 아래 칸) 높이에서 차지하는 비율. */
+/** 그래프 패널이 메인 칸(그래프 + 아래 칸) 높이에서 차지하는 비율. `GraphSplit`(옛 위아래 나누기)만 쓴다. */
 export const DEFAULT_GRAPH_RATIO = 0.42;
 export const MIN_GRAPH_RATIO = 0.15;
 export const MAX_GRAPH_RATIO = 0.8;
 
-/** 파일 목록(커밋 정보·스테이징 목록 포함) 폭(px). */
-export const DEFAULT_FILE_LIST_WIDTH = 320;
-export const MIN_FILE_LIST_WIDTH = 200;
+/** 파일 목록(커밋 정보·스테이징 목록 포함) 폭(px). 2단계의 기본값이자 최소 폭(5.4 "상세 280"). */
+export const DEFAULT_FILE_LIST_WIDTH = 280;
+export const MIN_FILE_LIST_WIDTH = 280;
 export const MAX_FILE_LIST_WIDTH = 640;
+
+/** diff 칸의 최소 폭(5.4). 모자라면 2단계에서만 가로 스크롤을 허용한다. */
+export const MIN_DIFF_PANE_WIDTH = 424;
+
+/** 1단계(그래프 46% + 상세, diff 없음)에서 상세 칸의 최소 폭(시안 `layout-explore.html`). */
+export const LEVEL1_DETAIL_MIN_WIDTH = 360;
+
+/** 2단계에서 접힌 그래프 칸의 폭(px). 레인 점 + 고른 행 채움만 남고 늘 눌러 펼칠 수 있다. */
+export const GRAPH_FOLDED_WIDTH = 120;
+
+/** 1단계에서 그래프 칸이 차지하는 비율(나머지는 상세 칸). */
+export const GRAPH_LEVEL1_RATIO = 0.46;
+
+/** 크게 보기(3단계)에서 diff 옆에 남는 파일 목록의 폭(px, 펼침·접힘). */
+export const MAXIMIZED_LIST_WIDTH = 260;
+export const MAXIMIZED_LIST_FOLDED_WIDTH = 36;
+
+/** 칸 사이 간격(px). `--g` 토큰과 같은 값(2.3). */
+export const PANE_GAP = 8;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));

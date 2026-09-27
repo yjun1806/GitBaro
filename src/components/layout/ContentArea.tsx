@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { FileText, GitCommit, Archive, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
@@ -35,6 +35,35 @@ import { LoadingState } from "@/components/ui/LoadingState";
 
 // `Card`·`EmptyState`는 `ui/`로 옮겼다. 옛 경로를 쓰는 곳이 있어 재수출로 남겨 둔다.
 export { Card, EmptyState };
+
+type MainTab = "changes" | "history" | "stash" | "actions";
+
+/**
+ * 2단계의 접힌 그래프 칸(`PaneStrip`)을 눌렀을 때 지금 탭의 파일 선택을 지운다(1단계로). 네 탭 모두
+ * "아무것도 안 골랐음"에도 늘 무언가 보여 주므로(스태시·Actions의 "고르지 않음" 안내, 스테이징
+ * 목록 자체) 0단계(그래프 전체)로 돌아가지는 않는다 — `CommitDetail` 등 상세 화면이 파일 선택을
+ * 안에 갇힌 상태로 들고 있어 그 화면만 골라 파일을 닫는 것도 못 하므로, 변경 탭은 따라가기를
+ * 끝내고(스테이징 목록으로) 이력 탭은 커밋 자체를 지운다.
+ */
+export function useExpandGraph(activeTab: MainTab): () => void {
+  const stopFollow = useFollowStore((s) => s.stop);
+  const clearFileSelection = useSelectionStore((s) => s.clearFileSelection);
+  const clearCommitSelection = useSelectionStore((s) => s.clearCommitSelection);
+  const clearStashSelection = useSelectionStore((s) => s.clearStashSelection);
+  const clearRunSelection = useSelectionStore((s) => s.clearRunSelection);
+  return useCallback(() => {
+    if (activeTab === "changes") {
+      stopFollow();
+      clearFileSelection();
+    } else if (activeTab === "history") {
+      clearCommitSelection();
+    } else if (activeTab === "stash") {
+      clearStashSelection();
+    } else {
+      clearRunSelection();
+    }
+  }, [activeTab, stopFollow, clearFileSelection, clearCommitSelection, clearStashSelection, clearRunSelection]);
+}
 
 function DiffContent({ filePath, staged }: { filePath: string; staged: boolean }) {
   const { t } = useTranslation();

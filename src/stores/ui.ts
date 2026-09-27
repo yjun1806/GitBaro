@@ -38,6 +38,12 @@ interface UIState {
   /** 크게 보는 diff 왼쪽에 좁은 파일 목록을 둘지(diff 머리의 버튼, 저장). */
   maximizedFileListOpen: boolean;
   /**
+   * 지금 화면의 `ListDiffSplit`이 파일을 열었는지(2·3단계) 아닌지(1단계, D47/5.4). `ListDiffSplit`이
+   * 스스로 알리고, `PaneStrip`(그래프 칸)이 읽어 그래프 폭을 정한다 — 둘 사이에 트리를 거슬러 prop을
+   * 내려보낼 길이 없어서 store로 잇는다. 저장하지 않는다.
+   */
+  diffFileOpen: boolean;
+  /**
    * 「작업 중인 변경」을 연 시각(epoch ms). 스테이징 목록(`ChangesView`)이 마운트되거나 이 값이 바뀌면
    * 파일 목록에 포커스를 옮기고 지운다. 저장하지 않는다.
    */
@@ -66,6 +72,7 @@ interface UIState {
   setFileListWidth: (width: number) => void;
   setDiffMaximized: (maximized: boolean) => void;
   setMaximizedFileListOpen: (open: boolean) => void;
+  setDiffFileOpen: (open: boolean) => void;
   setWorkingFocusAt: (at: number | null) => void;
   /** @deprecated {@link UIState.setScopeFileView}를 쓴다. */
   setReviewFileView: (workspaceId: string, view: ReviewFileView) => void;
@@ -184,6 +191,7 @@ export const useUIStore = create<UIState>()(
       fileListWidth: DEFAULT_FILE_LIST_WIDTH,
       isDiffMaximized: false,
       maximizedFileListOpen: true,
+      diffFileOpen: false,
       workingFocusAt: null,
       reviewFileViewByWorkspace: {},
       reviewFileView: "commits",
@@ -208,6 +216,7 @@ export const useUIStore = create<UIState>()(
       setFileListWidth: (width) => set({ fileListWidth: clampFileListWidth(width) }),
       setDiffMaximized: (maximized) => set({ isDiffMaximized: maximized }),
       setMaximizedFileListOpen: (open) => set({ maximizedFileListOpen: open }),
+      setDiffFileOpen: (open) => set({ diffFileOpen: open }),
       setWorkingFocusAt: (at) => set({ workingFocusAt: at }),
       setReviewFileView: (workspaceId, view) =>
         set((state) => ({
