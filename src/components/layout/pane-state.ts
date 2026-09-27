@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, type RefObject } from "react";
 import { create } from "zustand";
 import { useUIStore } from "@/stores/ui";
 
@@ -35,4 +35,27 @@ export function useHoldDiffFileOpen(): void {
   useEffect(() => {
     if (wasOpen) setDiffFileOpen(true);
   }, [wasOpen, setDiffFileOpen]);
+}
+
+/**
+ * 좁은 커밋 목록(2단계)으로 들어오면 고른 줄이 보이게 스크롤한다. 전환이 끝난 뒤 폭이 자리 잡은 다음에
+ * 재도록 한 프레임 늦춘다. 동작 줄이기 설정이면 부드럽게 굴리지 않는다. 화살표로 옮길 때는 목록의
+ * 키보드 이동(`useListKeyboardNav`)이 이미 고른 줄을 보이게 한다.
+ */
+export function useRevealSelectedWhenNarrow(
+  narrow: boolean,
+  container: RefObject<HTMLElement | null>,
+  selectedId: string | null,
+): void {
+  useEffect(() => {
+    if (!narrow || selectedId === null) return;
+    const frame = requestAnimationFrame(() => {
+      const rows = container.current?.querySelectorAll<HTMLElement>("[data-commit-id]") ?? [];
+      const row = [...rows].find((el) => el.dataset.commitId === selectedId);
+      if (!row || typeof row.scrollIntoView !== "function") return;
+      const smooth = typeof window.matchMedia === "function" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      row.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [narrow, container, selectedId]);
 }

@@ -323,7 +323,7 @@ describe("FollowPanel", () => {
     expect(screen.getByTestId("follow-badge").textContent).toBe("따라가는 중");
     backend.contents["src/b.ts"] = lines(30, { 23: ["a", "b", "c"] });
     await emit(WT);
-    expect((await screen.findByRole("status")).textContent).toContain("방금 24–26행이 추가됐어요");
+    expect((await screen.findByRole("status")).textContent).toContain("방금 24–26행 추가");
   });
 });
 

@@ -73,6 +73,7 @@ import {
 } from "./graph-paint";
 import { branchColorOf, MUTED_LANE } from "./lane-style";
 import { BranchRangeGraph } from "@/components/branch/BranchRangeGraph";
+import { useGraphNarrow, useRevealSelectedWhenNarrow } from "@/components/layout/pane-state";
 import { activeRange, isStaleRange, useBranchRangeStore } from "@/components/branch/branch-range";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -496,6 +497,7 @@ function CommitGraphList({
   // 무한 스크롤: 맨 아래 표시가 보이면 다음 페이지를 불러온다.
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  useRevealSelectedWhenNarrow(useGraphNarrow(), scrollRef, selectedCommitId);
   const loadState = useRef({ hasNextPage, isFetchingNextPage, fetchNextPage });
   useEffect(() => {
     loadState.current = { hasNextPage, isFetchingNextPage, fetchNextPage };
@@ -930,6 +932,10 @@ export function RepoLaneCommitGraph({
     [onSelectCommit],
   );
 
+  const laneScrollRef = useRef<HTMLDivElement | null>(null);
+  const selectedCommitOid = selectedIdx >= 0 ? commitRows[selectedIdx].commit.id : null;
+  useRevealSelectedWhenNarrow(useGraphNarrow(), laneScrollRef, selectedCommitOid);
+
   return (
     <div className="@container/graph flex flex-col flex-1 min-h-0 overflow-hidden">
       <div
@@ -943,7 +949,7 @@ export function RepoLaneCommitGraph({
         <span className={NARROW_HIDDEN_CLASS}>{t("graph.colAuthor")}</span>
         <span>{t("graph.colTime")}</span>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
+      <div ref={laneScrollRef} className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
         {isLoading && graph.rows.length === 0 ? (
           <LoadingState label={t("history.loadingHistory")} />
         ) : graph.rows.length === 0 ? (

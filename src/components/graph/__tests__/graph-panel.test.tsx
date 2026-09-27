@@ -357,7 +357,7 @@ describe("GraphPanel worktree chips (D5)", () => {
     renderPanel();
     const chips = screen.getByRole("group", { name: "Worktrees to show together in the graph" });
     const buttons = within(chips).getAllByRole("button").filter((b) => b.hasAttribute("aria-pressed"));
-    expect(buttons.map((b) => b.textContent)).toEqual(["main●1", "feat/x●4"]);
+    expect(buttons.map((b) => b.textContent)).toEqual(["main", "feat/x"]);
     expect(buttons[0].getAttribute("aria-pressed")).toBe("true");
     expect(buttons[1].getAttribute("title")).toBe(`${FEAT} · from main`);
     expect(rowLabels()).toEqual([

@@ -105,6 +105,23 @@ describe("GraphRow columns (design-system.md 3.15)", () => {
     expect(screen.queryByText(/^\+/)).toBeNull();
   });
 
+  it("leaves the change cell empty for a commit that changed no files", () => {
+    const c = commit();
+    render(<GraphRow {...baseProps} commit={c} stats={stats({ filesChanged: 0, additions: 0, deletions: 0 })} />);
+    const text = screen.getByRole("button").textContent ?? "";
+    expect(text).not.toContain("+0");
+    expect(text).not.toContain("−0");
+    expect(text).not.toMatch(/0 files?/);
+  });
+
+  it("drops the side that is zero: +7 −0 reads +7", () => {
+    const c = commit();
+    render(<GraphRow {...baseProps} commit={c} stats={stats({ filesChanged: 1, additions: 7, deletions: 0 })} />);
+    const text = screen.getByRole("button").textContent ?? "";
+    expect(text).toContain("+7");
+    expect(text).not.toContain("−0");
+  });
+
   it("shows the CI icon only when a run exists for this commit", () => {
     const c = commit();
     const ci: CiSummary = { state: "failed", names: ["build"] };

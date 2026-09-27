@@ -66,7 +66,8 @@ function ChangeCell({ stats }: { stats: CommitStats | undefined }) {
     );
   }
   const { filesChanged, additions, deletions } = stats;
-  if (filesChanged === null) return <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />;
+  // 바뀐 파일이 없는 커밋(빈 커밋)은 칸을 비운다 — 「파일 0 · +0 −0」은 읽을 거리가 없다.
+  if (filesChanged === null || filesChanged === 0) return <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />;
   const hasLines = additions !== null && deletions !== null;
   const bar = hasLines ? changeBarWidths(additions, deletions) : null;
   return (
@@ -83,9 +84,12 @@ function ChangeCell({ stats }: { stats: CommitStats | undefined }) {
           <i className="block h-full bg-danger" style={{ width: bar.delWidth }} />
         </span>
       )}
-      {hasLines && (
+      {/* 0인 쪽은 뺀다(+7 −0 → +7). 둘 다 0이면(이름만 바뀜·바이너리) 숫자를 두지 않는다. */}
+      {hasLines && (additions > 0 || deletions > 0) && (
         <span className="shrink-0 font-mono text-[11.5px]">
-          <span className="text-(--diff-add-fg)">+{additions}</span> <span className="text-(--diff-del-fg)">−{deletions}</span>
+          {additions > 0 && <span className="text-(--diff-add-fg)">+{additions}</span>}
+          {additions > 0 && deletions > 0 && " "}
+          {deletions > 0 && <span className="text-(--diff-del-fg)">−{deletions}</span>}
         </span>
       )}
     </span>

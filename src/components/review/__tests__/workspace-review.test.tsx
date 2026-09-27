@@ -221,7 +221,7 @@ describe("WorkspaceReview", () => {
   it("draws WIP rows and the base row", () => {
     renderReview();
     expect(screen.getByRole("button", { name: /^xames-backend · Uncommitted changes · .* branch · .* · 1 file$/ })).toBeTruthy();
-    expect(screen.getByText("Same as main")).toBeTruthy();
+    expect(screen.getByText("On main")).toBeTruthy();
   });
 
   it("does not repeat the unpushed commit count on the chips (the sidebar and Push show it)", () => {

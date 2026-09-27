@@ -1,7 +1,6 @@
 import type { MouseEvent } from "react";
 import { FolderGit2, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Count } from "@/components/ui/marks";
 import { FilterChip } from "@/components/ui/FilterChip";
 import type { WorktreeBase } from "@/types";
 
@@ -15,8 +14,6 @@ export interface WorktreeChip {
   isCurrent: boolean;
   /** 어디서 갈라졌는지. 메인·detached·아직 모름이면 null. */
   base: WorktreeBase | null;
-  /** 커밋하지 않은 파일 수. 모르면 null. */
-  dirtyCount: number | null;
   /** 견본 색(그래프에서 그 워크트리의 레인·WIP 행·브랜치 이름표와 같은 색). */
   color: string;
 }
@@ -35,6 +32,7 @@ export interface WorktreeLaneChipsProps {
 
 /**
  * 저장소 단계 필터 막대의 워크트리 칩(3.14, 5.1). 견본 색이 그래프에서 그 워크트리의 레인 색이다.
+ * 수는 싣지 않는다 — 커밋 안 한 파일 수는 사이드바와 WIP 행이 말한다(One owner per number).
  * 지금 연 워크트리는 그래프 이력의 주인이라 늘 켜져 있다(`locked`).
  */
 export function WorktreeLaneChips({ chips, visible, onToggle, onContextMenu }: WorktreeLaneChipsProps) {
@@ -66,13 +64,6 @@ export function WorktreeLaneChips({ chips, visible, onToggle, onContextMenu }: W
               title={[chip.isCurrent ? t("overlap.chipCurrent", { path: chip.path }) : chip.path, from]
                 .filter(Boolean)
                 .join(" · ")}
-              count={
-                chip.dirtyCount !== null && chip.dirtyCount > 0 ? (
-                  <span title={t("overlap.chipDirty", { count: chip.dirtyCount })}>
-                    <Count value={chip.dirtyCount} prefix="●" tone="live" />
-                  </span>
-                ) : undefined
-              }
               onClick={() => onToggle(chip.path)}
             >
               <span className="font-mono">{worktreeChipName(chip)}</span>

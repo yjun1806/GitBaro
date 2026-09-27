@@ -63,7 +63,7 @@ export const FOLLOW_WATCH_KEY = FOLLOW_KEY;
 export const OVERFLOW_POLL_MS = 5_000;
 /** 따라가기를 시작할 때 비교 기준으로 내용을 기억해 두는 파일 수의 상한(최근 수정 순). */
 const BASELINE_LIMIT = 30;
-/** 「방금 N행이 추가됐어요」 안내를 띄워 두는 시간. 줄 강조는 다음 변경까지 남는다. */
+/** 「방금 N행 추가」 안내를 띄워 두는 시간. 줄 강조는 다음 변경까지 남는다. */
 const TOAST_MS = 8_000;
 
 function samePath(a: string, b: string): boolean {

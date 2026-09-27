@@ -283,7 +283,6 @@ function useWorktreeFilter(allWips: GraphWip[], scope: Scope | null, sources: re
               isMain: w.isMain,
               isCurrent: w.isCurrent,
               base: info?.base ?? null,
-              dirtyCount: w.count,
               color: worktreeColor(w.path),
             };
           })
