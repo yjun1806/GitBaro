@@ -105,6 +105,8 @@ vi.mock("@/api/queries", () => ({
   }),
   fetchFileDiff: () => new Promise(() => {}),
   useStashMutations: () => ({ push: { mutateAsync: vi.fn() } }),
+  // 따라가기 줄의 「눈여겨볼 것」(D49)
+  useUnpushedFileTouches: () => [{ status: "pending" }],
   // W6-T2 워크트리 칩·겹침 경고
   useWorktreeHeadHistories: () => [],
   useWipFilesMany: () => [],

@@ -9,7 +9,7 @@ import { useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { useUIStore } from "@/stores/ui";
 import { DiffHeader } from "@/components/diff/DiffHeader";
-import type { ActivityEvent, DiffHunk, DiffOutput, RepoInfo, RepoReviewStatus, WipFile } from "@/types";
+import type { ActivityEvent, CommitTouch, DiffHunk, DiffOutput, RepoInfo, RepoReviewStatus, WipFile } from "@/types";
 
 const REPO = "/work/app";
 /** 활성 저장소가 아닌 워크트리. 따라가기는 이 경로를 연 적 없이 따라간다. */
@@ -32,6 +32,22 @@ const lines = (n: number, extra: Record<number, string[]> = {}) =>
     .flat()
     .join("\n") + "\n";
 
+/** 파일별 보기(`useUnpushedFileTouches`)가 돌려줄 커밋 하나(따라가기 줄의 「눈여겨볼 것」용). */
+const commitTouch = (subject: string, authorTime: number): CommitTouch => ({
+  oid: "deadbeef",
+  shortOid: "deadbee",
+  subject,
+  authorTime,
+  parentOid: null,
+  path: "",
+  oldPath: null,
+  status: "modified",
+  additions: 1,
+  deletions: 0,
+  isBinary: false,
+  tooLarge: false,
+});
+
 /** 가짜 백엔드 상태. 테스트가 바꾼 뒤 `repo:activity`를 보내면 다음 조회에 반영된다. */
 const backend = {
   files: [] as WipFile[],
@@ -44,6 +60,8 @@ const backend = {
   hunks: {} as Record<string, DiffHunk[]>,
   /** `review_status` 응답(같은 저장소의 워크트리 목록). */
   scan: [] as RepoReviewStatus[],
+  /** 파일 경로 → 그 파일을 건드린 원격에 없는 커밋(최신 순). 따라가기 줄의 「눈여겨볼 것」이 읽는다. */
+  touches: {} as Record<string, CommitTouch[]>,
 };
 
 const getWipFiles = vi.fn(async (path: string) => backend.filesByPath[path] ?? backend.files);
@@ -58,6 +76,26 @@ const getFileDiff = vi.fn(
 );
 const stageFiles = vi.fn(async (_repoPath: string, _paths: string[]) => {});
 const openWorktree = vi.fn(async (_path: string) => {});
+const getUnpushedFileTouches = vi.fn(async (paths: string[], _branch: string | null) =>
+  paths.map((p) => ({
+    path: p,
+    error: null,
+    truncated: false,
+    rangeBase: null,
+    head: null,
+    merges: 0,
+    files: Object.entries(backend.touches).map(([filePath, commits]) => ({
+      path: filePath,
+      oldPath: null,
+      status: "modified" as const,
+      additions: 0,
+      deletions: 0,
+      isBinary: false,
+      tooLarge: false,
+      commits,
+    })),
+  })),
+);
 
 vi.mock("@/api/commands", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/commands")>()),
@@ -66,6 +104,7 @@ vi.mock("@/api/commands", async (importOriginal) => ({
   stageFiles: (repoPath: string, paths: string[]) => stageFiles(repoPath, paths),
   getWorktrees: async () => [],
   reviewStatus: async () => backend.scan,
+  getUnpushedFileTouches: (paths: string[], branch: string | null) => getUnpushedFileTouches(paths, branch),
 }));
 
 vi.mock("@/hooks/useOpenWorktree", () => ({ useOpenWorktree: () => openWorktree }));
@@ -156,12 +195,14 @@ beforeEach(async () => {
   getFileDiff.mockClear();
   stageFiles.mockClear();
   openWorktree.mockClear();
+  getUnpushedFileTouches.mockClear();
   backend.files = [wipFile("src/b.ts", nowSecs() - 4), wipFile("src/a.ts", nowSecs() - 40)];
   backend.contents = { "src/a.ts": lines(10), "src/b.ts": lines(30) };
   backend.stagedContents = {};
   backend.filesByPath = {};
   backend.hunks = {};
   backend.scan = [];
+  backend.touches = {};
   useLiveChangesStore.setState({ watched: [], overflow: [] });
   useRepositoryStore.setState({ activeRepoPath: REPO, repos: [] });
   useActivityTargetsStore.setState({ extraByKey: {} });
@@ -282,6 +323,66 @@ describe("FollowPanel", () => {
     backend.contents["src/b.ts"] = lines(30, { 23: ["a", "b", "c"] });
     await emit(WT);
     expect((await screen.findByRole("status")).textContent).toContain("방금 24–26행이 추가됐어요");
+  });
+});
+
+describe("FollowPanel — follow line above the diff (D49)", () => {
+  it("shows nothing above the diff when there is no file to show", async () => {
+    backend.files = [];
+    renderFollow();
+    await screen.findByText("No uncommitted changes. Waiting for the next edit.");
+    expect(screen.queryByTestId("follow-line")).toBeNull();
+  });
+
+  it("says it is following while following, and disappears once following ends", async () => {
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.getByTestId("follow-line").textContent).toContain("Following the latest change");
+
+    act(() => useFollowStore.getState().stop());
+    await waitFor(() => expect(screen.queryByTestId("follow-line")).toBeNull());
+  });
+
+  it("shows pinned to the picked file, and following again on click", async () => {
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    fireEvent.click(screen.getByTitle("src/a.ts"));
+    await waitFor(() => expect(diffText()).toContain("src/a.ts"));
+    expect(screen.getByTestId("follow-line").textContent).toContain("Pinned · a.ts");
+
+    fireEvent.click(screen.getByRole("button", { name: /Pinned/ }));
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.getByTestId("follow-line").textContent).toContain("Following the latest change");
+  });
+
+  it("notes the most recent unpushed commit touching the file, by its leading ticket key", async () => {
+    backend.touches = {
+      "src/b.ts": [commitTouch("[XMS-371] tidy up the form", nowSecs() - 480), commitTouch("older", nowSecs() - 9_000)],
+    };
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.getByTestId("follow-line").textContent).toContain("also in commit XMS-371");
+  });
+
+  it("falls back to a short commit subject when it has no ticket key", async () => {
+    backend.touches = { "src/b.ts": [commitTouch("tidy up the login form", nowSecs() - 60)] };
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.getByTestId("follow-line").textContent).toContain('also in commit “tidy up the login form”');
+  });
+
+  it("notes the changed line count when the file has no unpushed commit yet", async () => {
+    backend.files = [wipFile("src/b.ts", nowSecs(), { insertions: 12, deletions: 3 })];
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.getByTestId("follow-line").textContent).toContain("+12 −3");
+  });
+
+  it("has nothing to note for a sizeless file with no commits", async () => {
+    backend.files = [wipFile("src/b.ts", nowSecs(), { insertions: 0, deletions: 0 })];
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(screen.queryByText("Worth noting")).toBeNull();
   });
 });
 
