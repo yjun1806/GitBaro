@@ -57,8 +57,6 @@ export interface ListDiffSplitProps {
 const CARD = cn("flex flex-col min-h-0 overflow-hidden", PANEL_SURFACE);
 /** 카드 모서리(`--radius-panel`). 커지는 움직임의 잘라내기 모서리에 쓴다. */
 const CARD_RADIUS = 14;
-/** 크게 보기로 숨을 때 목록이 밀려 나가는 쪽. */
-const LIST_EXIT = { x: -12, y: 0 };
 
 /**
  * 파일 목록 ↔ diff 두 칸(D47/5.4의 2·3단계). 파일을 아직 안 골랐으면(`files.selectedKey === null`,
@@ -126,7 +124,7 @@ export function ListDiffSplit({
   }, [maximized, setFileListOpen]);
 
   useMaximizeFlip(detailRef, cards ? CARD_RADIUS : 0);
-  const listLeaving = usePaneExit(listRef, maximized, LIST_EXIT);
+  const listLeaving = usePaneExit(listRef, maximized);
   const showFiles = maximized && hasFile && fileListOpen && files !== undefined;
   const showFoldedBand = maximized && hasFile && !fileListOpen && files !== undefined;
   return (

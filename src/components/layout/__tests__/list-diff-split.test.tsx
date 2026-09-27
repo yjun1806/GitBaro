@@ -6,14 +6,12 @@ import i18n from "@/i18n/config";
 import { useUIStore } from "@/stores/ui";
 import {
   DEFAULT_FILE_LIST_WIDTH,
-  DEFAULT_GRAPH_RATIO,
   LEVEL1_DETAIL_MIN_WIDTH,
   MAXIMIZED_LIST_FOLDED_WIDTH,
   MAXIMIZED_LIST_WIDTH,
 } from "@/lib/split-size";
 import type { MaximizedFiles } from "../maximized-files";
 import { ListDiffSplit } from "../ListDiffSplit";
-import { GraphSplit } from "../GraphSplit";
 
 // jsdom has no scrollIntoView; the maximized file list's keyboard nav scrolls the picked row into view.
 Element.prototype.scrollIntoView = () => {};
@@ -181,21 +179,3 @@ describe("ListDiffSplit", () => {
   });
 });
 
-describe("GraphSplit", () => {
-  it("gives the graph its stored share and resets it on double-click", () => {
-    render(<GraphSplit top={<div>graph</div>} bottom={<div>bottom</div>} />);
-    expect(screen.getByTestId("graph-pane").style.height).toBe("50%");
-    fireEvent.doubleClick(screen.getByRole("separator", { name: /Resize graph panel/ }));
-    expect(useUIStore.getState().graphPanelRatio).toBe(DEFAULT_GRAPH_RATIO);
-  });
-
-  it("keeps the graph mounted when collapsed to its header or hidden for a maximized diff", () => {
-    const { rerender } = render(<GraphSplit top={<Counted label="graph" />} bottom={<div>bottom</div>} />);
-    rerender(<GraphSplit topCollapsed top={<Counted label="graph" />} bottom={<div>bottom</div>} />);
-    expect(screen.queryByRole("separator")).toBeNull();
-    expect(screen.getByTestId("graph-pane").style.height).toBe("");
-    act(() => useUIStore.getState().setDiffMaximized(true));
-    expect(screen.getByTestId("graph-pane").className).toContain("hidden");
-    expect(mounts).toBe(1);
-  });
-});

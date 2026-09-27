@@ -1,8 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useUIStore } from "@/stores/ui";
 
-/** diff 크게 보기·되돌리기 움직임의 길이(ms). */
-export const MAXIMIZE_MS = 200;
+/**
+ * 칸 경계가 움직이는 길이(ms). CSS `--motion-pane`과 같은 값이다 — 1·2단계 폭 전환, 크게 보기 드나들기,
+ * 좁은 목록의 자동 스크롤을 미루는 시간이 모두 이 값 하나를 쓴다(5.4).
+ */
+export const PANE_MS = 180;
+/** diff 크게 보기·되돌리기 움직임의 길이(ms). 칸 전환과 같다. */
+export const MAXIMIZE_MS = PANE_MS;
+/** 크게 보기로 숨는 칸이 흐려지는 길이(ms, `--motion-fast`). */
+const FADE_MS = 120;
 const EASE_OUT = "cubic-bezier(0.2, 0, 0, 1)";
 
 /**
@@ -60,19 +67,14 @@ export function useMaximizeFlip(ref: RefObject<HTMLElement | null>, radius: numb
 }
 
 /**
- * 크게 보기로 숨는 칸(파일 목록·그래프). 숨을 때 바로 사라지지 않고 제자리에 떠서(`leaving`)
- * `offset` 쪽으로 밀리며 흐려진 뒤 숨는다. 떠 있는 동안 배치에서는 빠져 있어서 diff 칸은 곧바로
- * 새 크기를 갖는다. 다시 나타날 때는 흐린 데서 선명해진다.
+ * 크게 보기로 숨는 칸(파일 목록). 숨을 때 바로 사라지지 않고 제자리에 떠서(`leaving`) 짧게 흐려진 뒤
+ * 숨는다 — 밀리지는 않는다(움직이는 것은 diff 칸 경계 하나, 5.4). 떠 있는 동안 배치에서는 빠져 있어서
+ * diff 칸은 곧바로 새 크기를 갖는다. 다시 나타날 때는 투명도만 짧게 올린다.
  * 돌려주는 값이 참이면 칸을 숨기지 말고 떠 있는 모양으로 그린다.
  */
-export function usePaneExit(
-  ref: RefObject<HTMLElement | null>,
-  hidden: boolean,
-  offset: { x: number; y: number },
-): boolean {
+export function usePaneExit(ref: RefObject<HTMLElement | null>, hidden: boolean): boolean {
   const [leaving, setLeaving] = useState(false);
   const prev = useRef(hidden);
-  const { x, y } = offset;
 
   useLayoutEffect(() => {
     if (prev.current === hidden) return;
@@ -84,28 +86,16 @@ export function usePaneExit(
     }
     setLeaving(false);
     if (!canAnimate(el)) return;
-    el.animate(
-      [
-        { opacity: 0, transform: `translate(${x}px, ${y}px)` },
-        { opacity: 1, transform: "translate(0px, 0px)" },
-      ],
-      { duration: MAXIMIZE_MS, easing: EASE_OUT },
-    );
-  }, [hidden, ref, x, y]);
+    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, easing: EASE_OUT });
+  }, [hidden, ref]);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!leaving || el === null) return;
-    const animation = el.animate(
-      [
-        { opacity: 1, transform: "translate(0px, 0px)" },
-        { opacity: 0, transform: `translate(${x}px, ${y}px)` },
-      ],
-      { duration: MAXIMIZE_MS, easing: EASE_OUT, fill: "forwards" },
-    );
+    const animation = el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FADE_MS, easing: EASE_OUT, fill: "forwards" });
     animation.onfinish = () => setLeaving(false);
     return () => animation.cancel();
-  }, [leaving, ref, x, y]);
+  }, [leaving, ref]);
 
   return leaving && hidden;
 }

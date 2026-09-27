@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type RefObject } from "react";
 import { create } from "zustand";
 import { useUIStore } from "@/stores/ui";
+import { PANE_MS } from "./maximize-motion";
 
 /**
  * 옆으로 쌓는 칸(D47, `PaneStrip`)의 화면 상태. 저장하지 않는다.
@@ -38,9 +39,10 @@ export function useHoldDiffFileOpen(): void {
 }
 
 /**
- * 좁은 커밋 목록(2단계)으로 들어오면 고른 줄이 보이게 스크롤한다. 전환이 끝난 뒤 폭이 자리 잡은 다음에
- * 재도록 한 프레임 늦춘다. 동작 줄이기 설정이면 부드럽게 굴리지 않는다. 화살표로 옮길 때는 목록의
- * 키보드 이동(`useListKeyboardNav`)이 이미 고른 줄을 보이게 한다.
+ * 좁은 커밋 목록(2단계)으로 들어오면 고른 줄이 보이게 스크롤한다. 폭 전환(`PANE_MS`)이 끝나 칸 폭이
+ * 자리 잡은 뒤에 한 번, 부드럽게 굴리지 않고 곧바로 옮긴다 — 폭과 스크롤이 함께 움직이지 않게(5.4).
+ * 동작 줄이기에서는 기다리지도 않는다. 화살표로 옮길 때는 목록의 키보드 이동(`useListKeyboardNav`)이
+ * 이미 고른 줄을 보이게 한다.
  */
 export function useRevealSelectedWhenNarrow(
   narrow: boolean,
@@ -49,13 +51,13 @@ export function useRevealSelectedWhenNarrow(
 ): void {
   useEffect(() => {
     if (!narrow || selectedId === null) return;
-    const frame = requestAnimationFrame(() => {
+    const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = setTimeout(() => {
       const rows = container.current?.querySelectorAll<HTMLElement>("[data-commit-id]") ?? [];
       const row = [...rows].find((el) => el.dataset.commitId === selectedId);
       if (!row || typeof row.scrollIntoView !== "function") return;
-      const smooth = typeof window.matchMedia === "function" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      row.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" });
-    });
-    return () => cancelAnimationFrame(frame);
+      row.scrollIntoView({ block: "center", behavior: "auto" });
+    }, reduce ? 0 : PANE_MS);
+    return () => clearTimeout(timer);
   }, [narrow, container, selectedId]);
 }

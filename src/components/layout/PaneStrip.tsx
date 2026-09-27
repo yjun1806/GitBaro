@@ -10,7 +10,7 @@ import {
   MIN_PANE_DETAIL_WIDTH,
   MIN_PANE_GRAPH_WIDTH,
 } from "@/lib/split-size";
-import { canAnimate } from "./maximize-motion";
+import { canAnimate, PANE_MS } from "./maximize-motion";
 import { GraphNarrowContext, usePaneStore } from "./pane-state";
 import { SplitHandle } from "./SplitHandle";
 
@@ -30,8 +30,8 @@ export interface PaneStripProps {
   bottom: ReactNode;
 }
 
-/** 폭 전환이 도는 동안(240ms) 매 프레임 다시 재지 않게 자식을 목표 폭으로 못박아 두는 시간(ms). */
-const FREEZE_MS = 240;
+/** 폭 전환이 도는 동안 매 프레임 다시 재지 않게 자식의 폭을 못박아 두는 시간(ms). 전환 길이와 같다. */
+const FREEZE_MS = PANE_MS;
 
 /** 칸 사이 간격이자 손잡이 두께(px, `--g`). */
 const GAP = 8;
@@ -105,6 +105,14 @@ export function PaneStrip({ graph, hasSelection, bottom }: PaneStripProps) {
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ ratio, narrowWidth, graphPx: 0, rowPx: 0 });
 
+  // 마지막 단계 전환이 크게 보기(3단계)를 드나든 것인지. 그리는 중에 앞 단계와 견줘 정한다.
+  const [seenLevel, setSeenLevel] = useState(level);
+  const [crossedMaximize, setCrossedMaximize] = useState(false);
+  if (seenLevel !== level) {
+    setSeenLevel(level);
+    setCrossedMaximize(seenLevel === 3 || level === 3);
+  }
+
   const rowRef = useRef<HTMLDivElement>(null);
   const graphPaneRef = useRef<HTMLDivElement>(null);
   const graphInnerRef = useRef<HTMLDivElement>(null);
@@ -112,15 +120,22 @@ export function PaneStrip({ graph, hasSelection, bottom }: PaneStripProps) {
   const [frozenWidth, setFrozenWidth] = useState(0);
   const prevLevel = useRef(level);
 
-  // 그래프 안 커밋 줄의 칸 단계(3.15, `@container/graph`)가 폭이 바뀌는 240ms 동안 매 프레임
-  // 다시 재지 않게, 전환이 시작되는 순간 목표 폭을 못박아 절대 배치한다. 240ms 뒤(또는 동작
-  // 줄이기·테스트 환경처럼 애니메이션을 못 쓰면 곧바로) 풀어 다시 칸의 실제 폭을 따르게 한다.
+  // 그래프 안 커밋 줄의 칸 단계(3.15, `@container/graph`)가 폭이 바뀌는 동안 매 프레임 다시 재지 않게,
+  // 전환 내내 한 폭으로 못박아 절대 배치한다: 옛 폭과 목표 폭 중 좁은 쪽. 줄어들 때는 시작하자마자
+  // 좁은 칸 단계로 한 번 바뀌고, 늘어날 때는 끝날 때 한 번 바뀐다 — 어느 쪽이든 글이 칸 밖으로 넘치지
+  // 않는다. 전환 길이 뒤(또는 동작 줄이기·테스트 환경처럼 애니메이션을 못 쓰면 곧바로) 풀어 다시 칸의
+  // 실제 폭을 따른다. 전환 중에 또 바뀌면(빠른 클릭) 그 순간 보이던 폭에서 다시 잰다.
   useLayoutEffect(() => {
     if (prevLevel.current === level) return;
+    const intoOrOutOfMaximize = prevLevel.current === 3 || level === 3;
     prevLevel.current = level;
     const row = rowRef.current;
     if (!row) return;
-    setFrozenWidth(graphTargetWidth(level, row.clientWidth, ratio, narrowWidth, fileOpen));
+    const target = graphTargetWidth(level, row.clientWidth, ratio, narrowWidth, fileOpen);
+    const current = graphPaneRef.current?.getBoundingClientRect().width ?? target;
+    setFrozenWidth(Math.round(Math.min(current, target)));
+    // 크게 보기 드나들기는 diff 칸의 FLIP 하나가 움직임을 맡는다(그래프 칸은 곧바로 새 폭).
+    if (intoOrOutOfMaximize) return;
     if (!canAnimate(row)) return;
     setSizing(true);
     const timer = setTimeout(() => setSizing(false), FREEZE_MS);
@@ -171,8 +186,9 @@ export function PaneStrip({ graph, hasSelection, bottom }: PaneStripProps) {
         ref={graphPaneRef}
         className={cn(
           "relative h-full shrink-0",
-          // 끄는 동안에는 폭 전환 애니메이션을 끈다 — 포인터를 곧바로 따라가야 한다.
-          !dragging && "pane-w",
+          // 끄는 동안에는 폭 전환 애니메이션을 끈다 — 포인터를 곧바로 따라가야 한다. 크게 보기를 드나들 때도
+          // 끈다 — 그때는 diff 칸의 FLIP 하나만 움직인다(두 움직임이 겹치지 않게).
+          !dragging && !crossedMaximize && "pane-w",
           level === 2 && "sticky left-0 z-[1] bg-(--canvas)",
         )}
         style={graphStyle}

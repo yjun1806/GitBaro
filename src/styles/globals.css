@@ -105,7 +105,7 @@
   /* 펼친 트리 줄·카드: 위에서 살짝 내려오며 나타난다. 높이는 움직이지 않는다(목록이 출렁이지 않게). */
   --animate-reveal: motion-reveal var(--motion-base) var(--ease-enter) backwards;
   /* 내용 바꾸기(커밋·파일·스태시를 고를 때): 투명도만. 비었다가 차는 깜빡임이 없게 반쯤에서 시작한다. */
-  --animate-content-in: motion-content-in var(--motion-base) var(--ease-enter) backwards;
+  --animate-content-in: motion-content-in var(--motion-fast) var(--ease-enter) backwards;
   /* 읽는 중 표시: 짧게 끝나는 읽기에는 보이지 않게 조금 기다렸다가 나타난다. */
   --animate-loading-in: motion-fade-in var(--motion-base) var(--ease-enter) 200ms backwards;
   /* 활성 탭 밑줄: 가운데서 펴진다. */
@@ -404,15 +404,18 @@
   --motion-fast: 120ms;
   --motion-base: 160ms;
   --motion-slow: 220ms;
-  /* 그래프 ↔ 목록 ↔ diff 칸이 넓어지고 좁아지는 길이(D47/5.4). 폭·transform만 이 길이로 움직인다. */
-  --motion-pane: 240ms;
+  /* 그래프 ↔ 목록 ↔ diff 칸이 넓어지고 좁아지는 길이(D47/5.4). 칸 경계(폭) 하나만 이 길이로 움직인다.
+     TS의 `PANE_MS`(maximize-motion.ts)와 같은 값을 둔다. */
+  --motion-pane: 180ms;
   /* 그래프 WIP 원의 정지 테(동작 줄이기 전용). 기본은 숨김 — 기어가기·테 퍼짐이 그 뜻을 대신한다.
      아래 reduced-motion 블록에서만 1로 켠다. */
   --wip-halo-opacity: 0;
 }
 
 /* 칸 배치(D47/5.4): 그래프·목록 칸의 폭만 이 길이로 움직인다. 옆 칸(diff)은 flex로 따라 늘어나 따로
-   전환을 두지 않는다. 동작 줄이기에서는 --motion-pane이 0이 되어 그대로 즉시 바뀐다. */
+   전환을 두지 않는다. 폭은 「투명도·transform만 움직인다」의 예외다 — 칸 경계를 transform으로 옮기면
+   옆 칸 내용(diff 가상 스크롤·커밋 줄 칸 단계)이 전환 내내 옛 폭으로 잘려 보이고, 칸 안 요소를 따로
+   끌어야 해서 움직이는 것이 오히려 늘어난다. 동작 줄이기에서는 --motion-pane이 0이 되어 그대로 즉시 바뀐다. */
 .pane-w {
   transition-property: width;
   transition-duration: var(--motion-pane);
@@ -524,6 +527,8 @@
     --wip-halo-opacity: 1;
     /* --animate-maximize-origin-in은 그대로 둔다: 자리를 옮기지 않고 흐려지기만 한다. */
     --motion-pane: 0s;
+    /* 칸 전환은 동작 줄이기에서 전부 즉시다: 새로 나타나는 칸 내용도 흐려지지 않는다. */
+    --animate-content-in: none;
   }
   .transition-transform {
     transition-duration: 0s;

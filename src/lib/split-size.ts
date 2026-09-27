@@ -4,7 +4,7 @@
  * 레이아웃이 무너지지 않게 여기서 범위를 맞춘다.
  */
 
-/** 그래프 패널이 메인 칸(그래프 + 아래 칸) 높이에서 차지하는 비율. `GraphSplit`(옛 위아래 나누기)만 쓴다. */
+/** 옛 위아래 나누기(`GraphSplit`, 없앰)의 그래프 비율. 저장 필드 `graphPanelRatio`를 지우지 않으려고 범위만 남긴다. */
 export const DEFAULT_GRAPH_RATIO = 0.42;
 export const MIN_GRAPH_RATIO = 0.15;
 export const MAX_GRAPH_RATIO = 0.8;

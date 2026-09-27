@@ -198,3 +198,40 @@ describe("PaneStrip resize handle (5.4)", () => {
     expect(screen.queryByRole("separator")).toBeNull();
   });
 });
+
+describe("PaneStrip transition (5.4: calm, one moving edge)", () => {
+  function withAnimations(run: () => void) {
+    const animate = vi.fn();
+    Element.prototype.animate = animate as unknown as typeof Element.prototype.animate;
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false }) as unknown as typeof window.matchMedia;
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1200);
+    try {
+      run();
+    } finally {
+      vi.restoreAllMocks();
+      delete (Element.prototype as Partial<Element>).animate;
+    }
+  }
+  const inner = () => screen.getByText(/graph-content/).parentElement as HTMLElement;
+
+  it("pins the commit rows at the narrower width for the whole transition: the new width when shrinking", () => {
+    withAnimations(() => {
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 1200 } as DOMRect);
+      const { rerender } = renderStrip(false);
+      rerender(<PaneStrip graph={<NarrowAwareGraph />} hasSelection bottom={<div>bottom-content</div>} />);
+      // 0 → 1단계: 1200px에서 46%(552px)로 줄어든다 — 시작하자마자 줄어든 폭으로 한 번 바뀐다.
+      expect(inner().style.width).toBe("552px");
+    });
+  });
+
+  it("keeps the old width until the end when growing", () => {
+    withAnimations(() => {
+      useUIStore.setState({ diffFileOpen: true });
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 240 } as DOMRect);
+      renderStrip(true);
+      // 2 → 1단계(그래프 펼치기): 240px에서 넓어진다 — 끝날 때까지 240px 그대로라 글이 넘치지 않는다.
+      act(() => usePaneStore.getState().setGraphExpanded(true));
+      expect(inner().style.width).toBe("240px");
+    });
+  });
+});
