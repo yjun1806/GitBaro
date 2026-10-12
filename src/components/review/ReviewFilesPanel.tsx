@@ -24,6 +24,11 @@ export interface ReviewFilesPanelProps {
   repoLabel: (repoPath: string) => string;
   /** 목록 맨 위의 [작업 중인 변경 | 커밋] 전환(고른 저장소·워크트리 기준). */
   switcher?: ReactNode;
+  /**
+   * `selection.repoPath`(레인 id)가 속한 저장소 경로. 커밋하러 저장소 화면을 열 때 쓴다. 레인이 워크트리인
+   * 저장소 단계가 준다 — 없으면 레인 id가 곧 저장소 경로다(워크스페이스).
+   */
+  ownerOf?: (laneId: string) => string;
 }
 
 /**
@@ -31,7 +36,7 @@ export interface ReviewFilesPanelProps {
  * 커밋이면 기존 커밋 상세(`CommitDetail`)를 그 저장소 경로로 부른다. WIP 행이면 그
  * 워크트리를 따라가며(D4) 커밋하지 않은 파일과 diff를 읽기 전용으로 보여 주고, 커밋하려면 저장소 화면으로 연다.
  */
-export function ReviewFilesPanel({ selection, repoLabel, switcher }: ReviewFilesPanelProps) {
+export function ReviewFilesPanel({ selection, repoLabel, switcher, ownerOf }: ReviewFilesPanelProps) {
   const { t } = useTranslation();
   if (selection === null) {
     return (
@@ -47,6 +52,7 @@ export function ReviewFilesPanel({ selection, repoLabel, switcher }: ReviewFiles
     <ReviewWipFiles
       key={selection.key}
       repoPath={selection.repoPath}
+      ownerRepoPath={ownerOf?.(selection.repoPath) ?? selection.repoPath}
       path={selection.path}
       branch={selection.branch}
       isMain={selection.isMain}
@@ -87,6 +93,8 @@ function ReviewCommitFiles({ repoPath, oid, switcher }: { repoPath: string; oid:
 
 interface ReviewWipFilesProps {
   repoPath: string;
+  /** 커밋하러 열 저장소(`repoPath`가 워크트리 레인이면 그 워크트리의 저장소). */
+  ownerRepoPath: string;
   path: string;
   branch: string | null;
   isMain: boolean;
@@ -98,14 +106,14 @@ interface ReviewWipFilesProps {
  * WIP 행: 그 워크트리를 따라간다(D4, `FollowPanel`). 읽기 전용이고, 스테이징·커밋은
  * 저장소 화면에서 한다.
  */
-function ReviewWipFiles({ repoPath, path, branch, isMain, label, switcher }: ReviewWipFilesProps) {
+function ReviewWipFiles({ repoPath, ownerRepoPath, path, branch, isMain, label, switcher }: ReviewWipFilesProps) {
   const { t } = useTranslation();
   const { selectRepo } = useSelectRepo();
 
   // 스테이징·커밋은 저장소 화면에서 한다. 워크트리면 그 워크트리로 복원되게 기억해 둔 뒤 연다.
   const handleOpen = () => {
-    useRepositoryStore.getState().rememberWorktree(repoPath, isMain ? null : path);
-    selectRepo(repoPath);
+    useRepositoryStore.getState().rememberWorktree(ownerRepoPath, isMain ? null : path);
+    selectRepo(ownerRepoPath);
   };
 
   const header = (

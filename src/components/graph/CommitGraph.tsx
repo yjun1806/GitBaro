@@ -982,6 +982,15 @@ export interface RepoLaneCommitGraphProps {
   emptyMessage?: string;
   /** 영역 머리(「올리지 않음 · push하면 {원격}에」, 「{원격}에 있음」)에 쓸 원격 이름. 레인마다 다르면 「원격」. */
   remoteLabel: string;
+  /**
+   * 커밋 줄 「CI」 칸의 재료(이미 불러온 워크플로 실행 목록). 저장소마다 계정이 달라 워크스페이스는 주지 않고
+   * 비워 둔다. 레인이 모두 한 저장소의 워크트리인 저장소 단계가 준다.
+   */
+  ciRuns?: readonly WorkflowRun[];
+  /** 레인 id → 그 레인이 속한 저장소 경로(GitHub 주소를 찾는 데 쓴다). 없으면 레인 id가 저장소 경로다. */
+  ownerOf?: (laneId: string) => string;
+  /** WIP 행 우클릭. 없으면 메뉴를 두지 않는다. */
+  onWipContextMenu?: (wip: LaneWip, position: { x: number; y: number }) => void;
   onSelectCommit: (repoPath: string, commit: CommitInfo, key: string) => void;
   onSelectWip: (wip: LaneWip, key: string) => void;
 }
@@ -1006,6 +1015,9 @@ export function RepoLaneCommitGraph({
   isLoading,
   emptyMessage,
   remoteLabel,
+  ciRuns = NO_CI_RUNS,
+  ownerOf,
+  onWipContextMenu,
   onSelectCommit,
   onSelectWip,
 }: RepoLaneCommitGraphProps) {
@@ -1047,7 +1059,6 @@ export function RepoLaneCommitGraph({
   const virtualItems = virtualizer.getVirtualItems();
   // 커밋 줄 「변경」 칸(3.15). 저장소마다 다른 경로라 `useCommitStats`(단일 경로) 대신 경로+oid
   // 쌍으로 묻는 변형을 쓴다. 그리는 창 안의 커밋만 묻는다 — 창 밖 행은 조회(관찰자)를 쥐지 않는다.
-  // CI 칸은 저장소마다 계정이 다를 수 있어 이 화면에서는 비워 둔다.
   const visibleKey = virtualItems.map((v) => v.index).join(",");
   const statsPairs = useMemo(() => {
     const pairs: { path: string; oid: string }[] = [];
@@ -1060,6 +1071,13 @@ export function RepoLaneCommitGraph({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph.rows, visibleKey]);
   const commitStats = useCommitStatsAcrossRepos(statsPairs);
+  // 「CI」 칸. 이미 불러온 실행 목록에서 보이는 커밋마다 최신 상태만 뽑는다.
+  const ciByCommit = useMemo(() => {
+    const map = new Map<string, CiSummary | null>();
+    if (ciRuns.length === 0) return map;
+    for (const { oid } of statsPairs) map.set(oid, summarizeCi(ciRuns as WorkflowRun[], oid));
+    return map;
+  }, [ciRuns, statsPairs]);
   const selectedIdx = commitRows.findIndex((r) => r.key === selectedKey);
   // 키보드 이동은 커밋 행끼리만 오간다. 그 번호를 `graph.rows`의 자리로 바꿔 스크롤한다.
   const rowIndexByKey = useMemo(() => new Map(graph.rows.map((r, i) => [r.key, i])), [graph.rows]);
@@ -1119,6 +1137,7 @@ export function RepoLaneCommitGraph({
               startFollow(row.wip.path);
               onSelectWip(row.wip, row.key);
             }}
+            onContextMenu={onWipContextMenu ? (e) => onWipContextMenu(row.wip, contextMenuPoint(e)) : undefined}
             onToggleFollow={() => {
               if (followed === "following") {
                 stopFollow();
@@ -1144,6 +1163,7 @@ export function RepoLaneCommitGraph({
             colorOf={colorOf}
             avatarUrl={accountAvatarMap.get(emailKey) || undefined}
             stats={commitStats.get(commitStatsAcrossReposKey(row.repoPath, row.commit.id))}
+            ci={ciByCommit.get(row.commit.id) ?? null}
             isSelected={selectedKey === row.key}
             isHighlighted={activeIndex === idx}
             repoLabel={repoLabel}
@@ -1215,7 +1235,9 @@ export function RepoLaneCommitGraph({
       {commitMenu && (
         <CommitContextMenu
           commit={commitMenu.commit}
-          gitHubUrl={gitHubRepoUrl(repos.find((r) => r.path === commitMenu.repoPath)?.remotes ?? [])}
+          gitHubUrl={gitHubRepoUrl(
+            repos.find((r) => r.path === (ownerOf?.(commitMenu.repoPath) ?? commitMenu.repoPath))?.remotes ?? [],
+          )}
           position={{ x: commitMenu.x, y: commitMenu.y }}
           onClose={() => setCommitMenu(null)}
         />
@@ -1237,6 +1259,7 @@ function RepoLaneWipRow({
   selected,
   following,
   onSelect,
+  onContextMenu,
   onToggleFollow,
 }: {
   row: Extract<RepoLaneRow, { kind: "wip" }>;
@@ -1247,6 +1270,7 @@ function RepoLaneWipRow({
   selected: boolean;
   following: boolean;
   onSelect: () => void;
+  onContextMenu: ((e: MouseEvent) => void) | undefined;
   onToggleFollow: () => void;
 }) {
   const { t } = useTranslation();
@@ -1271,6 +1295,7 @@ function RepoLaneWipRow({
       action={followButton}
       live={live}
       onSelect={onSelect}
+      onContextMenu={onContextMenu}
     />
   );
 }
@@ -1283,8 +1308,10 @@ interface RepoLaneCommitRowProps {
   graphWidth: number;
   colorOf: (chain: number) => string;
   avatarUrl: string | undefined;
-  /** 「변경」 칸(3.15). 아직 모르면 비워 둔다. CI 칸은 이 화면에서는 늘 비운다(저장소마다 계정이 다를 수 있다). */
+  /** 「변경」 칸(3.15). 아직 모르면 비워 둔다. */
   stats: CommitStats | undefined;
+  /** 「CI」 칸. 실행 목록을 받지 않았거나 이 커밋에 실행이 없으면 null. */
+  ci: CiSummary | null;
   isSelected: boolean;
   isHighlighted: boolean;
   repoLabel: (repoPath: string) => string;
@@ -1305,6 +1332,7 @@ const RepoLaneCommitRow = memo(function RepoLaneCommitRow({
   colorOf,
   avatarUrl,
   stats,
+  ci,
   isSelected,
   isHighlighted,
   repoLabel,
@@ -1323,6 +1351,7 @@ const RepoLaneCommitRow = memo(function RepoLaneCommitRow({
       remoteTags={null}
       avatarUrl={avatarUrl}
       stats={stats}
+      ci={ci}
       isSelected={isSelected}
       isHighlighted={isHighlighted}
       wipAbove={false}
