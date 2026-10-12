@@ -110,6 +110,7 @@ export function useAutoSync() {
 
       running = true;
       try {
+        const syncedPaths: string[] = [];
         for (const repo of due) {
           if (!mounted) return;
           // 앞 저장소를 도는 사이 설정이 바뀌었을 수 있어 실행 직전에 다시 읽는다.
@@ -119,6 +120,7 @@ export function useAutoSync() {
             usePreferencesStore.getState().defaultAutoSync,
           );
           if (setting.mode === "off") continue;
+          syncedPaths.push(repo.path);
           const commits = await autoSyncRepo(repo, setting);
           if (commits > 0 && mounted) {
             useToastStore
@@ -129,7 +131,7 @@ export function useAutoSync() {
               );
           }
         }
-        if (mounted) await invalidateAfterSync(queryClient);
+        if (mounted) await invalidateAfterSync(queryClient, syncedPaths);
       } finally {
         running = false;
       }

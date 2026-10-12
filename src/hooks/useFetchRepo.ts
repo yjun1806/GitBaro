@@ -29,7 +29,7 @@ export function useFetchRepo(): (repo: RepoInfo) => Promise<void> {
       try {
         await gitFetch(repo.path, repo.accountId);
         useSyncStore.getState().markFetched(repo.path, Math.floor(Date.now() / 1000));
-        await invalidateAfterSync(queryClient);
+        await invalidateAfterSync(queryClient, [repo.path]);
         addToast(t("sync.fetchCompleted"), "success");
       } catch (err) {
         const signInAccount = signInErrorAccount(err);

@@ -36,7 +36,7 @@ import {
   abortMergeOrRebase,
   continueMergeOrRebase,
 } from "./commands";
-import type { DefaultBranch, HistoryTarget, RepoSyncStatus } from "@/types";
+import type { DefaultBranch, HistoryTarget, RepoReviewStatus, RepoSyncStatus } from "@/types";
 import { commitDiffKey, useDiffForceStore, workingDiffKey } from "@/stores/diff-force";
 import { useSelectionStore } from "@/stores/selection";
 import { selectionAfterStashPushed, selectionAfterStashRemoved } from "@/lib/stash-selection";
@@ -89,40 +89,78 @@ export function useBranchDivergence(repoPath: string | null, enabled: boolean) {
   });
 }
 
+/** 쿼리 키 둘째 자리가 이 경로들 중 하나이거나(`[key, path]`), 경로 목록에 하나라도 들어 있는가(`[key, [paths]]`). */
+function keyTouchesPaths(queryKey: readonly unknown[], paths: ReadonlySet<string>): boolean {
+  const scope = queryKey[1];
+  if (typeof scope === "string") return paths.has(scope);
+  return Array.isArray(scope) && scope.some((p) => typeof p === "string" && paths.has(p));
+}
+
 /**
- * fetch·pull·push 뒤 원격 상태와 작업 트리에 기대는 쿼리를 모두 무효화한다.
- * 툴바 동기화 버튼과 원격 자동 최신화가 함께 쓴다.
+ * 키의 첫 자리가 `keys` 중 하나이고 `paths`의 저장소·워크트리를 가리키는 쿼리만 무효화한다.
+ * 저장소 하나의 변화로 다른 저장소의 이력·태그까지 다시 읽지 않게 하려는 것이다.
+ */
+export function invalidateForPaths(
+  queryClient: QueryClient,
+  keys: readonly string[],
+  paths: readonly string[],
+): Promise<void> {
+  const scope = new Set(paths);
+  return queryClient.invalidateQueries({
+    predicate: ({ queryKey }) => keys.includes(String(queryKey[0])) && keyTouchesPaths(queryKey, scope),
+  });
+}
+
+/** 캐시된 `reviewStatus`로 알아낸, 이 저장소들의 워크트리 경로(저장소 경로 포함). */
+function withWorktreePaths(queryClient: QueryClient, repoPaths: readonly string[]): string[] {
+  const out = new Set(repoPaths);
+  for (const [, data] of queryClient.getQueriesData<RepoReviewStatus[]>({ queryKey: ["reviewStatus"] })) {
+    if (!Array.isArray(data)) continue;
+    for (const repo of data) {
+      if (!out.has(repo.repoPath)) continue;
+      for (const worktree of repo.worktrees) out.add(worktree.path);
+    }
+  }
+  return [...out];
+}
+
+const AFTER_SYNC_KEYS = [
+  "branches",
+  "repoSyncStatus",
+  "unpushedCommits",
+  "commitHistory",
+  "status",
+  "mergeState",
+  "remoteTags",
+  "reviewStatus",
+  "workspaceHistory",
+  // pull이 HEAD를, fetch가 origin/main을 옮기면 main과 갈라진 지점이 바뀐다.
+  "divergencePoint",
+  // fetch가 origin/HEAD를 바꾸거나 원격 기본 브랜치를 처음 받아 올 수 있다.
+  "defaultBranches",
+  // 그래프에 함께 그린 다른 워크트리의 이력. HEAD가 그대로여도 push·fetch 뒤 원격 라벨이 바뀐다.
+  "worktreeHeadHistory",
+  // push하면 원격에 없는 커밋이 줄고, pull은 HEAD를 옮긴다.
+  "unpushedFileTouches",
+  // 사이드바의 작업 중인 브랜치: push·fetch가 브랜치마다 원격에 없는 커밋·받을 커밋·병합 여부를 바꾼다.
+  "workingBranches",
+] as const;
+
+/**
+ * fetch·pull·push 뒤 원격 상태와 작업 트리에 기대는 쿼리를, 동기화한 저장소(와 그 워크트리)에 한해
+ * 무효화한다. 툴바 동기화 버튼·원격 자동 최신화·여러 저장소 원격 작업이 함께 쓴다.
  *
  * `reviewStatus`·`workspaceHistory`도 포함한다. 워크스페이스 리뷰 화면의 그래프는
  * `reviewStatus`(HEAD oid)와 `["workspaceHistory", path, headOid]`로 만드는데, 빠지면
  * pull·push 뒤에도 `REVIEW_POLL_MS`(20초)까지 옛 HEAD·원격 라벨·병합 기준점을 그대로
  * 보여 준다(W5 리뷰에서 찾음).
+ *
+ * diff 쿼리(`fileDiff` 등)는 넣지 않는다. 원격을 받아도 작업 트리 diff는 그대로고, pull이 파일을
+ * 바꾸면 `fs:change`가 따로 무효화한다. 커밋 diff는 oid마다 바뀌지 않는다.
  */
-export function invalidateAfterSync(queryClient: QueryClient): Promise<unknown> {
-  return Promise.all(
-    [
-      "branches",
-      "repoSyncStatus",
-      "unpushedCommits",
-      "commitHistory",
-      "status",
-      "mergeState",
-      "fileDiff",
-      "remoteTags",
-      "reviewStatus",
-      "workspaceHistory",
-      // pull이 HEAD를, fetch가 origin/main을 옮기면 main과 갈라진 지점이 바뀐다.
-      "divergencePoint",
-      // fetch가 origin/HEAD를 바꾸거나 원격 기본 브랜치를 처음 받아 올 수 있다.
-      "defaultBranches",
-      // 그래프에 함께 그린 다른 워크트리의 이력. HEAD가 그대로여도 push·fetch 뒤 원격 라벨이 바뀐다.
-      "worktreeHeadHistory",
-      // push하면 원격에 없는 커밋이 줄고, pull은 HEAD를 옮긴다.
-      "unpushedFileTouches",
-      // 사이드바의 작업 중인 브랜치: push·fetch가 브랜치마다 원격에 없는 커밋·받을 커밋·병합 여부를 바꾼다.
-      "workingBranches",
-    ].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
-  );
+export function invalidateAfterSync(queryClient: QueryClient, repoPaths: readonly string[]): Promise<void> {
+  if (repoPaths.length === 0) return Promise.resolve();
+  return invalidateForPaths(queryClient, AFTER_SYNC_KEYS, withWorktreePaths(queryClient, repoPaths));
 }
 
 /**
@@ -274,6 +312,12 @@ export function useSettings() {
   });
 }
 
+/**
+ * diff 쿼리는 파일 전체 내용과 구간을 들고 있어 파일 크기의 약 20배가 메모리에 남는다. 화면에서 떠난 diff는
+ * 기본 5분 대신 이만큼만 두고 비운다.
+ */
+export const DIFF_GC_TIME_MS = 30_000;
+
 export function useFileDiff(repoPath: string | null, filePath: string | null, staged: boolean) {
   const force = useDiffForceStore(
     (s) => repoPath !== null && filePath !== null && s.forced.has(workingDiffKey(repoPath, filePath, staged)),
@@ -283,6 +327,7 @@ export function useFileDiff(repoPath: string | null, filePath: string | null, st
     queryKey: force ? ["fileDiff", repoPath, filePath, staged, "force"] : ["fileDiff", repoPath, filePath, staged],
     queryFn: () => getFileDiff(repoPath!, filePath!, staged, force),
     enabled: repoPath !== null && filePath !== null,
+    gcTime: DIFF_GC_TIME_MS,
   });
 }
 
@@ -312,6 +357,7 @@ export function useCommitFileDiff(repoPath: string | null, oid: string | null, f
     queryKey: ["commitFileDiff", repoPath, oid, filePath, force],
     queryFn: () => getCommitFileDiff(repoPath!, oid!, filePath!, force),
     enabled: repoPath !== null && oid !== null && filePath !== null,
+    gcTime: DIFF_GC_TIME_MS,
   });
 }
 
@@ -790,6 +836,7 @@ export function fetchFileDiff(
   return queryClient.fetchQuery({
     queryKey: ["fileDiff", repoPath, filePath, staged],
     queryFn: () => getFileDiff(repoPath, filePath, staged),
+    gcTime: DIFF_GC_TIME_MS,
   });
 }
 
@@ -827,6 +874,7 @@ export function useSiblingFileDiffs(
       queryKey: ["fileDiff", path, filePath, staged],
       queryFn: () => getFileDiff(path, filePath!, staged),
       enabled: filePath !== null,
+      gcTime: DIFF_GC_TIME_MS,
       refetchInterval: SIBLING_WIP_POLL_MS,
       refetchIntervalInBackground: false,
     })),
@@ -898,6 +946,7 @@ export function useRangeFileDiff(
     queryFn: () => getRangeFileDiff(path!, baseOid, headOid!, file!.path, file!.oldPath),
     enabled: !!path && !!headOid && !!file,
     staleTime: Infinity,
+    gcTime: DIFF_GC_TIME_MS,
   });
 }
 
@@ -1026,6 +1075,7 @@ export function usePullRequestFileDiff(
     queryFn: () => getPullRequestFileDiff(repoPath!, target!.baseSha, target!.headSha, target!.path, target!.oldPath),
     enabled: repoPath !== null && target !== null,
     staleTime: Infinity,
+    gcTime: DIFF_GC_TIME_MS,
   });
 }
 

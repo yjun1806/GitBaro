@@ -124,6 +124,7 @@ vi.mock("@/api/queries", () => ({
       data: { path, error: null, truncated: false, rangeBase: null, head: null, merges: 0, files: [] },
     })),
   unpushedFileTouchesKey: (repoPath: string, path: string) => ["unpushedFileTouches", repoPath, path],
+  invalidateForPaths: () => Promise.resolve(),
   useRangeFileDiff: () => ({ data: null, isLoading: false, isError: false }),
   // 저장소별 레인 그래프의 「변경」 칸(3.15)
   useCommitStatsAcrossRepos: () => new Map(),

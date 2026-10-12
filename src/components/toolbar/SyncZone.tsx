@@ -188,8 +188,8 @@ function RepoSyncGroup() {
     return null;
   })();
 
-  const invalidateAll = (includeActions = false) => {
-    const queries = invalidateAfterSync(queryClient);
+  const invalidateAll = (repoPath: string, includeActions = false) => {
+    const queries = invalidateAfterSync(queryClient, [repoPath]);
     if (includeActions) {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["workflowRuns"] });
@@ -215,13 +215,13 @@ function RepoSyncGroup() {
       if (action !== "push" && action !== "publish") {
         markFetched(repoPath, Math.floor(Date.now() / 1000));
       }
-      await invalidateAll(action === "push" || action === "publish");
+      await invalidateAll(repoPath, action === "push" || action === "publish");
       addToast(successMessage, "success");
     } catch (err) {
       if (action === "pull") {
         // pull이 충돌로 멈춰도 작업 트리와 merge 상태는 이미 바뀌었다.
         // 목록을 갱신해야 merge 중단·계속 배너가 뜬다.
-        await invalidateAll();
+        await invalidateAll(repoPath);
       }
       if (isMergeConflictError(err)) {
         addToast(t("sync.pullConflict"), "warning");

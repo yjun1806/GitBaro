@@ -9,6 +9,9 @@ import { invalidateAfterSync } from "@/api/queries";
  * 그대로 보여 준다.
  */
 describe("invalidateAfterSync", () => {
+  const isStale = (queryClient: QueryClient, queryKey: unknown[]) =>
+    queryClient.getQueryState(queryKey as readonly unknown[])?.isInvalidated === true;
+
   it("invalidates reviewStatus and workspaceHistory along with the other sync-dependent queries", async () => {
     const queryClient = new QueryClient();
     const keysUsed = [
@@ -17,29 +20,63 @@ describe("invalidateAfterSync", () => {
       ["commitHistory", "/repo"],
       ["status", "/repo"],
       ["mergeState", "/repo"],
-      ["fileDiff", "/repo", "a"],
       ["remoteTags", "/repo"],
       ["reviewStatus", ["/repo"]],
       ["workspaceHistory", "/repo", "headOid", 50],
       ["worktreeHeadHistory", "/repo-feat", "headOid"],
       ["defaultBranches", ["/repo"]],
+      ["unpushedFileTouches", "/repo", "/repo"],
       // 이 무효화가 건드리면 안 되는 무관한 키.
       ["unrelatedQuery", "/repo"],
     ];
     for (const queryKey of keysUsed) {
       queryClient.setQueryData(queryKey, "cached");
     }
+    // 메인 작업 트리 `/repo`의 워크트리 `/repo-feat`는 reviewStatus 캐시로 알아낸다.
+    queryClient.setQueryData(["reviewStatus", ["/repo"]], [
+      { repoPath: "/repo", worktrees: [{ path: "/repo", isMain: true }, { path: "/repo-feat", isMain: false }] },
+    ]);
 
-    await invalidateAfterSync(queryClient);
+    await invalidateAfterSync(queryClient, ["/repo"]);
 
-    const isStale = (queryKey: unknown[]) =>
-      queryClient.getQueryState(queryKey as readonly unknown[])?.isInvalidated === true;
+    expect(isStale(queryClient, ["reviewStatus", ["/repo"]])).toBe(true);
+    expect(isStale(queryClient, ["workspaceHistory", "/repo", "headOid", 50])).toBe(true);
+    expect(isStale(queryClient, ["branches", "/repo"])).toBe(true);
+    expect(isStale(queryClient, ["worktreeHeadHistory", "/repo-feat", "headOid"])).toBe(true);
+    expect(isStale(queryClient, ["defaultBranches", ["/repo"]])).toBe(true);
+    expect(isStale(queryClient, ["unpushedFileTouches", "/repo", "/repo"])).toBe(true);
+    expect(isStale(queryClient, ["unrelatedQuery", "/repo"])).toBe(false);
+  });
 
-    expect(isStale(["reviewStatus", ["/repo"]])).toBe(true);
-    expect(isStale(["workspaceHistory", "/repo", "headOid", 50])).toBe(true);
-    expect(isStale(["branches", "/repo"])).toBe(true);
-    expect(isStale(["worktreeHeadHistory", "/repo-feat", "headOid"])).toBe(true);
-    expect(isStale(["defaultBranches", ["/repo"]])).toBe(true);
-    expect(isStale(["unrelatedQuery", "/repo"])).toBe(false);
+  it("invalidates only the synced repositories and never the file diffs", async () => {
+    const queryClient = new QueryClient();
+    const keys = [
+      ["branches", "/a"],
+      ["branches", "/b"],
+      ["workspaceHistory", "/a", "h", 100],
+      ["workspaceHistory", "/b", "h", 100],
+      ["commitHistory", "/a", "all"],
+      ["commitHistory", "/b"],
+      ["remoteTags", "/b", "acc"],
+      ["repoSyncStatus", ["/a", "/b"]],
+      ["fileDiff", "/a", "f.ts", false],
+      ["commitFileDiff", "/a", "oid", "f.ts", false],
+      ["rangeFileDiff", "/a", "x", "y", "f.ts", null],
+    ];
+    for (const queryKey of keys) queryClient.setQueryData(queryKey, "cached");
+
+    await invalidateAfterSync(queryClient, ["/a"]);
+
+    expect(isStale(queryClient, ["branches", "/a"])).toBe(true);
+    expect(isStale(queryClient, ["workspaceHistory", "/a", "h", 100])).toBe(true);
+    expect(isStale(queryClient, ["commitHistory", "/a", "all"])).toBe(true);
+    expect(isStale(queryClient, ["repoSyncStatus", ["/a", "/b"]])).toBe(true);
+    expect(isStale(queryClient, ["branches", "/b"])).toBe(false);
+    expect(isStale(queryClient, ["workspaceHistory", "/b", "h", 100])).toBe(false);
+    expect(isStale(queryClient, ["commitHistory", "/b"])).toBe(false);
+    expect(isStale(queryClient, ["remoteTags", "/b", "acc"])).toBe(false);
+    expect(isStale(queryClient, ["fileDiff", "/a", "f.ts", false])).toBe(false);
+    expect(isStale(queryClient, ["commitFileDiff", "/a", "oid", "f.ts", false])).toBe(false);
+    expect(isStale(queryClient, ["rangeFileDiff", "/a", "x", "y", "f.ts", null])).toBe(false);
   });
 });

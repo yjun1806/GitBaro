@@ -268,7 +268,7 @@ export function useMultiRepoRemote(paths: string[], op: RemoteOp) {
         setRows(prepared);
         setSelected(new Set(prepared.filter(isRunnable).map((r) => r.plan.path)));
         setPhase("ready");
-        if (fetchedPaths.length > 0) void invalidateAfterSync(queryClient);
+        if (fetchedPaths.length > 0) void invalidateAfterSync(queryClient, fetchedPaths);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -302,7 +302,10 @@ export function useMultiRepoRemote(paths: string[], op: RemoteOp) {
       if (result.status === "ok" && op !== "push") markFetched(path, Math.floor(Date.now() / 1000));
       setResults((prev) => ({ ...prev, [path]: result }));
     });
-    await invalidateAfterSync(queryClient);
+    await invalidateAfterSync(
+      queryClient,
+      chosen.map((r) => r.plan.path),
+    );
     setPhase("done");
   }, [phase, chosen, op, pullFirst, startSync, finishSync, markFetched, queryClient]);
 

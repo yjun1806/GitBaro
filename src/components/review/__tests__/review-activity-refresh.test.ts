@@ -51,4 +51,32 @@ describe("useReviewActivityRefresh — per-file view", () => {
     const invalidated = keys.map((k) => queryClient.getQueryState(k)?.isInvalidated);
     expect(invalidated).toEqual([false, true, false]);
   });
+
+  it("invalidates commit history and review state only for the repository that had a git event", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client: queryClient }, children);
+    renderHook(
+      () =>
+        useReviewActivityRefresh([
+          { repoPath: APP, worktreePaths: [APP, APP_FEAT] },
+          { repoPath: API, worktreePaths: [API] },
+        ]),
+      { wrapper },
+    );
+    const keys = [
+      ["commitHistory", APP],
+      ["commitHistory", APP, "all"],
+      ["commitHistory", API],
+      ["repoSyncStatus", [APP]],
+      ["repoSyncStatus", [API]],
+      ["reviewStatus", [APP, API]],
+    ];
+    for (const queryKey of keys) await queryClient.prefetchQuery({ queryKey, queryFn: async () => null });
+    await waitFor(() => expect(handlers.has("repo:activity")).toBe(true));
+
+    handlers.get("repo:activity")?.({ payload: { path: `${APP}/src/a.ts`, at: 1, kind: "git" } });
+
+    const invalidated = keys.map((k) => queryClient.getQueryState(k)?.isInvalidated);
+    expect(invalidated).toEqual([true, true, false, true, false, true]);
+  });
 });

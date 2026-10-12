@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { TAURI_EVENTS } from "@/api/events";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
-import { unpushedFileTouchesKey } from "@/api/queries";
+import { invalidateForPaths, unpushedFileTouchesKey } from "@/api/queries";
 import { activityInvalidationKeys, activityTargetOf, type ReviewRepoPaths } from "./review-model";
 
 /**
@@ -19,7 +19,8 @@ export function useReviewActivityRefresh(repos: readonly ReviewRepoPaths[]): voi
       void queryClient.invalidateQueries({ queryKey });
     }
     if (activity.kind === "git") {
-      for (const key of ["reviewStatus", "repoSyncStatus", "commitHistory"]) void queryClient.invalidateQueries({ queryKey: [key] });
+      // 이벤트를 낸 저장소(와 그 워크트리)만 — 다른 저장소의 이력은 다시 읽지 않는다.
+      void invalidateForPaths(queryClient, ["reviewStatus", "repoSyncStatus", "commitHistory"], [target.repoPath, target.root]);
       // 파일별 보기는 그 워크트리만(`unpushedFileTouchesKey(저장소, 워크트리)`).
       void queryClient.invalidateQueries({ queryKey: unpushedFileTouchesKey(target.repoPath, target.root) });
     }
