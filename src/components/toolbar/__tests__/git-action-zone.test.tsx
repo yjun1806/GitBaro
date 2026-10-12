@@ -12,6 +12,7 @@ const data = vi.hoisted(() => ({
   branchesLoading: false,
   syncByPath: {} as Record<string, unknown>,
   unpushed: undefined as unknown,
+  token: { valid: true, canPush: true } as Record<string, unknown>,
 }));
 const commands = vi.hoisted(() => ({
   gitFetch: vi.fn(() => Promise.resolve()),
@@ -34,7 +35,7 @@ vi.mock("@/api/queries", () => ({
   useRepoSyncStatuses: () => ({ data: data.syncByPath }),
   useUnpushedCommits: () => ({ data: data.unpushed }),
   useHeadDetached: () => ({ data: data.detached }),
-  useTokenValidation: () => ({ data: { valid: true, canPush: true }, isLoading: false }),
+  useTokenValidation: () => ({ data: data.token, isLoading: false }),
   useStatus: () => ({ data: [] }),
   useStashList: () => ({ data: data.stashes }),
   useStashMutations: () => ({ push: {}, pushPartial: {} }),
@@ -80,6 +81,7 @@ beforeEach(async () => {
   data.branchesLoading = false;
   data.unpushed = undefined;
   data.syncByPath = {};
+  data.token = { valid: true, canPush: true };
   dropdown.toggle.mockClear();
   Object.values(commands).forEach((fn) => fn.mockClear());
   useRepositoryStore.setState({ repos: [repo], activeRepoPath: repo.path, activeRepo: repo });
@@ -169,6 +171,50 @@ describe("GitActionZone — repository mode", () => {
     expect(screen.getByRole("button", { name: "Pull" })).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "Push" })).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: /^Fetch —/ })).toHaveProperty("disabled", false);
+  });
+});
+
+describe("GitActionZone — repository access", () => {
+  const fetchButton = () => screen.getByRole("button", { name: /^Fetch( —|$)/ });
+  const pullButton = () => screen.getByRole("button", { name: /^Pull( —|$)/ });
+  const pushButton = () => screen.getByRole("button", { name: /^Push( —|$)/ });
+  const isDisabled = (el: HTMLElement) => (el as HTMLButtonElement).disabled;
+
+  it("keeps Fetch and Pull on for a read-only repository and blocks only Push", async () => {
+    data.token = { valid: true, canPush: false };
+    data.branches = [branch({ aheadBehind: { ahead: 2, behind: 1 } })];
+    renderZone(<GitActionZone mode="repo" />);
+    expect(isDisabled(fetchButton())).toBe(false);
+    expect(isDisabled(pullButton())).toBe(false);
+    expect(isDisabled(pushButton())).toBe(true);
+    expect(screen.queryByRole("button", { name: /^Read-only access/ })).toBeNull();
+    expect(pushButton().getAttribute("aria-label")).toContain("No push permission");
+    fireEvent.click(pullButton());
+    await waitFor(() => expect(commands.gitPull).toHaveBeenCalled());
+  });
+
+  it("turns all three off when the repository is not found", () => {
+    data.token = { valid: true, canPush: false, reason: "repo_not_found" };
+    renderZone(<GitActionZone mode="repo" />);
+    expect(isDisabled(fetchButton())).toBe(true);
+    expect(isDisabled(pullButton())).toBe(true);
+    expect(isDisabled(pushButton())).toBe(true);
+  });
+
+  it("lets Fetch and Pull through when the permission check itself failed", () => {
+    data.token = { valid: true, canPush: false, reason: "repo_check_failed" };
+    renderZone(<GitActionZone mode="repo" />);
+    expect(isDisabled(fetchButton())).toBe(false);
+    expect(isDisabled(pullButton())).toBe(false);
+    expect(isDisabled(pushButton())).toBe(true);
+  });
+
+  it("turns all three off when the token is invalid", () => {
+    data.token = { valid: false, reason: "unauthorized" };
+    renderZone(<GitActionZone mode="repo" />);
+    expect(isDisabled(fetchButton())).toBe(true);
+    expect(isDisabled(pullButton())).toBe(true);
+    expect(isDisabled(pushButton())).toBe(true);
   });
 });
 

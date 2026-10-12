@@ -158,9 +158,14 @@ function RepoSyncGroup() {
   // pull it), so only fetch is offered there.
   const needsPublish = !hasUpstream && !isDetached;
 
+  // Reading (fetch, pull) needs a valid token and a repository the account can see.
+  // repo_check_failed means the permission check itself failed (5xx, rate limit): let reads through.
+  const canRead = tokenStatus?.valid === true && tokenStatus?.reason !== "repo_not_found";
   // canPush is null for non-GitHub remotes: push access is unknown, so let git decide.
-  const canSync = tokenStatus?.valid === true && tokenStatus?.canPush !== false;
-  const syncDisabled = isSyncing || !accountId || (!isValidating && !canSync);
+  const canPushRemote = canRead && tokenStatus?.canPush !== false;
+  const isReadOnly = canRead && !canPushRemote;
+  const syncDisabled = isSyncing || !accountId || (!isValidating && !canRead);
+  const pushGateDisabled = isSyncing || !accountId || (!isValidating && !canPushRemote);
 
   // Find this repo's active remote operation progress
   const activeRemoteOp = Object.values(activeOperations).find(
@@ -173,16 +178,13 @@ function RepoSyncGroup() {
   const syncError = (() => {
     // 계정이 지정되지 않은 저장소는 다른 저장소의 계정으로 동기화하지 않는다.
     if (activeRepoPath && !accountId) return { title: t("sync.noRepoAccount"), description: t("sync.noRepoAccountDesc") };
-    if (!accountId || isValidating || canSync) return null;
+    if (!accountId || isValidating || canRead) return null;
     if (!tokenStatus?.valid) {
       if (tokenStatus?.reason === "token_not_found") return { title: t("sync.tokenMissing"), description: t("sync.tokenMissingDesc") };
       if (tokenStatus?.reason === "network_error") return { title: t("sync.networkError"), description: t("sync.networkErrorDesc") };
       return { title: t("sync.sessionExpired"), description: t("sync.sessionExpiredDesc") };
     }
-    if (tokenStatus?.canPush === false) {
-      if (tokenStatus?.reason === "repo_not_found") return { title: t("sync.repoNotFound"), description: t("sync.repoNotFoundDesc") };
-      return { title: t("sync.readOnly"), description: t("sync.readOnlyDesc") };
-    }
+    if (tokenStatus?.reason === "repo_not_found") return { title: t("sync.repoNotFound"), description: t("sync.repoNotFoundDesc") };
     return null;
   })();
 
@@ -290,12 +292,14 @@ function RepoSyncGroup() {
     ? t("sync.lastFetched", { time: formatRelativeTime(lastFetchedAt) })
     : t("sync.neverFetched");
   // 분리된 HEAD는 올리거나 받을 브랜치가 없다(백엔드가 거부한다). Fetch만 연다.
-  const branchOpsDisabled = syncDisabled || isDetached;
+  // 읽기 전용 저장소는 받기(Fetch·Pull)만 열고 올리기만 막는다.
+  const pushOpsDisabled = pushGateDisabled || isDetached;
+  const pushHint = isReadOnly ? `${t("sync.readOnly")}: ${t("sync.readOnlyDesc")}` : undefined;
   const pushLabel = needsPublish ? t("gitActions.publish") : t("gitActions.push");
   // 올릴 커밋이 없으면 Push를 끈다. 추적 브랜치가 없으면 첫 push(publish)는 연다.
   // 커밋이 모두 다른 원격 브랜치에 있어도 추적 브랜치가 뒤처져 있으면 push할 것이 있다.
-  const pushDisabled = branchOpsDisabled || (!needsPublish && ahead === 0 && upstreamAhead === 0);
-  const pullDisabled = branchOpsDisabled || needsPublish;
+  const pushDisabled = pushOpsDisabled || (!needsPublish && ahead === 0 && upstreamAhead === 0);
+  const pullDisabled = syncDisabled || isDetached || needsPublish;
   const toggleMenu = (id: "fetch" | "pull" | "push") => setOpenMenu((prev) => (prev === id ? null : id));
 
   return (
@@ -360,6 +364,7 @@ function RepoSyncGroup() {
           }
           busy={syncingAction === "push" || syncingAction === "publish"}
           disabled={pushDisabled}
+          hint={pushHint}
           // 「Push 3」·「Publish 3」: 원격에 없는 커밋 수를 이름 뒤에 붙인다.
           badge={ahead}
           highlighted={ahead > 0 || needsPublish}
@@ -369,7 +374,7 @@ function RepoSyncGroup() {
             isOpen: openMenu === "push",
             onToggle: () => toggleMenu("push"),
             // 올릴 커밋이 없어도(ahead 0) force push는 필요할 수 있다. 이미 올린 커밋을 되돌린 뒤가 그렇다.
-            disabled: branchOpsDisabled,
+            disabled: pushOpsDisabled,
           }}
           menuTriggerRef={pushMenuTriggerRef}
         />
@@ -424,7 +429,7 @@ function RepoSyncGroup() {
                   key: "publish",
                   label: t("sync.publishBranch"),
                   description: t("sync.publishBranchDesc"),
-                  disabled: branchOpsDisabled,
+                  disabled: pushOpsDisabled,
                   onSelect: () => handlePush(false),
                 }
               : {
@@ -439,7 +444,7 @@ function RepoSyncGroup() {
               label: t("gitActions.forcePush"),
               description: t("gitActions.forcePushDesc"),
               danger: true,
-              disabled: branchOpsDisabled || needsPublish,
+              disabled: pushOpsDisabled || needsPublish,
               onSelect: () => handlePush(true),
             },
           ]}
