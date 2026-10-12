@@ -125,18 +125,27 @@ lucide만 쓴다. 크기는 곁의 글자에 맞춘다.
 
 ### 2.7 움직임
 
-`globals.css`의 이름 붙은 움직임만 쓴다. 길이·곡선을 컴포넌트에서 따로 정하지 않는다(`duration-300`, `transition-all` 금지).
+움직임 값은 transitions.dev 레시피에서 가져와 `globals.css`의 토큰(`--dropdown-*`, `--modal-*`, `--tt-*`, `--toast-*`, `--tabs-*`, `--acc-*`, `--toggle-*`, `--digit-*`, `--icon-swap-*`, `--text-swap-*`, `--shake-*`)으로 둔다. 이름 붙은 움직임만 쓰고 길이·곡선을 컴포넌트에서 따로 정하지 않는다(`duration-300`, `transition-all` 금지). 블러는 아이콘·짧은 글자·알림처럼 작은 요소에만 쓰고, 그래프·diff·파일 목록·칸 전체 같은 큰 면과 긴 목록의 줄마다에는 쓰지 않는다(그런 곳은 투명도·transform만). 레시피를 쓴 자리에는 `/* transitions.dev: <레시피> */` 주석을 단다.
+
+창·메뉴·툴팁은 호출하는 쪽이 `{open && …}`로 바로 떼어 내므로, 떼어지는 순간 `useExitGhost`(`lib/use-exit-ghost.ts`)가 모양을 복제해 닫히는 움직임(`.exit-pop`·`.exit-popover`·`.exit-dialog`·`.exit-tooltip`)을 보인 뒤 지운다. 복제본은 `inert`·`aria-hidden`이고 동작 줄이기에서는 만들지 않는다.
 
 | 이름 | 어디에 |
 |---|---|
-| `animate-pop-in` | 메뉴, 드롭다운, 팝오버 패널, 안내 띠 |
-| `animate-fade-in` | 툴팁, 정보 카드, 행 끝 신호 |
-| `animate-dialog-in` + `animate-overlay-in` | 창과 그 뒤의 막(`Dialog`가 붙인다) |
-| `animate-toast-in` / `animate-toast-out` | 알림 |
-| `animate-reveal` | 펼친 트리 줄, 새로 생긴 카드 |
+| `animate-pop-in` (menu-dropdown) | 메뉴, 드롭다운, 팝오버 패널, 안내 띠. 250ms 열림 / 150ms 닫힘, scale 0.97에서 트리거 쪽 원점으로 자란다 |
+| `animate-tooltip-in` (tooltip) | 툴팁, 정보 카드. 80ms 기다렸다 150ms에 나타나고 50ms에 사라진다 |
+| `animate-fade-in` | 활동 기록 칸, 행 끝 신호(레시피 아님) |
+| `animate-dialog-in` + `animate-overlay-in` (modal) | 창과 그 뒤의 막(`Dialog`가 붙인다). 250ms 열림 / 150ms 닫힘, scale 0.96 |
+| `animate-toast-in` / `animate-toast-out` (toast) | 알림. 350ms 열림 / 250ms 닫힘, 16px 올라오며 블러 2px |
+| `animate-reveal` (accordion의 길이·곡선) | 펼친 트리 줄, 새로 생긴 카드. 높이·블러는 움직이지 않는다 |
+| `motion-chevron` (accordion) | 접고 펴는 쉐브론 회전 250ms |
+| `motion-slide-indicator` (tabs-sliding) | 탭 밑줄(`TabGroup`)·`Segmented` 알약이 조각 사이를 미끄러짐 250ms |
+| `animate-switch-on` / `animate-switch-off` (toggle) | `Switch` 손잡이가 1px 넘었다 돌아옴 350ms, 트랙 색은 즉시 |
+| `animate-number-pop` (number-pop-in) | 툴바 배지 숫자가 바뀔 때 |
+| `animate-icon-in` (icon-swap) | `BusyIcon`이 아이콘 ↔ 회전 표시로 바뀔 때 |
+| `animate-swap-out` / `animate-swap-in` (text-states-swap) | `SwapText`: 버튼 이름·상태 칩 글자 바뀜 |
+| `animate-shake` (error-state-shake) | 거절된 입력칸(워크스페이스 이름) |
 | `animate-content-in` | 커밋·파일·스태시를 골라 내용이 바뀔 때 |
 | `animate-loading-in` | 불러오는 중 표시 |
-| `animate-indicator-x` | 활성 탭 밑줄 |
 | `animate-live-ring` / `animate-live-breathe` | 지금 바뀌는 중 점 / 따라가는 중 점 |
 | `animate-focus-flash`(`FocusFlash`) | 따라가는 중 방금 바뀐 diff 줄·그래프 행·파일 행을 1.2초 한 번 비춤 |
 | `animate-wip-crawl` / `animate-wip-ring` | 그래프 WIP 행의 점선 원: 에이전트가 지금 쓰는 중(60초 안)이면 기어감(8초 한 바퀴) / `changedAt`이 앞으로 갈 때마다 테가 한 번 퍼짐(사이드바 점의 `animate-live-ring`과 같은 뜻, 900ms) |

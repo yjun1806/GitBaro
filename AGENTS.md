@@ -268,7 +268,7 @@ cd src-tauri && cargo build          # Build
 - Never mark selection or emphasis with a vertical bar on the left edge (no `SelectionBar`, `border-l-*` accents, inset box-shadow bars, `before:` bars). Selection is a quiet fill (`--acc-sel` / `--panel-sel` / `--frame-sel`) plus a heavier label; a just-changed line is `FocusFlash` once, then a faint `--live-faint` tint with an orange line number. Component rules: `docs/design-system.md`.
 - Context menus: destructive items (`variant: "danger"`) go last, and the action asks for confirmation (`ConfirmCommandDialog` with `confirmVariant="destructive"`).
 - Loading: waiting for a panel's content is `LoadingState` (a list row: `layout="row"`); a busy button swaps its icon with `BusyIcon` and sets `disabled` + `aria-busy`; a small inline "working" mark is `Spinner` smoothed with `useSteadyFlag`. Never spin another icon or use `animate-pulse`. Details: `docs/loading-design.md`.
-- Motion: durations, easing, and enter animations (`animate-pop-in`, `animate-dialog-in`, `animate-reveal`, `animate-content-in`, ...) live in `src/styles/globals.css`. Animate opacity and transform only, and keep enter animations at `backwards` fill.
+- Motion: motion values come from transitions.dev recipes via tokens in `src/styles/globals.css` (`--dropdown-*`, `--modal-*`, `--toast-*`, ...; enter animations `animate-pop-in`, `animate-dialog-in`, ...). Blur only on small elements (icons, short labels, toasts); opacity and transform otherwise, never on large surfaces. Keep enter animations at `backwards` fill.
 
 ### Commit Messages
 
