@@ -18,6 +18,11 @@ use crate::git::engine::FileStatus;
 /// 파일은 diff 를 보도록 넉넉히 둔다.
 pub const TRACKED_DIFF_LIMIT: u64 = 8 * 1024 * 1024;
 
+/// 작업 트리·커밋 파일 diff(`get_file_diff`·`get_commit_file_diff`)가 한 번에 싣는 한쪽 크기의 한도.
+/// 전체 내용과 구간을 화면이 통째로 들고 있어 파일 크기의 약 20배가 메모리에 남으므로
+/// 범위·PR 비교(`TRACKED_DIFF_LIMIT`)보다 낮다. 넘으면 「그래도 보기」(force)로만 연다.
+pub const FILE_DIFF_LIMIT: u64 = 2 * 1024 * 1024;
+
 /// 저장소 루트 기준의 상대 경로만 받는다(`..`·절대 경로는 거부).
 pub fn ensure_relative(file_path: &str) -> Result<(), AppError> {
     let ok = !file_path.is_empty()
@@ -196,9 +201,9 @@ pub fn blob_size(repo: &Repository, id: Oid) -> u64 {
     repo.odb().and_then(|odb| odb.read_header(id)).map(|(size, _)| size as u64).unwrap_or(0)
 }
 
-/// 한쪽이라도 `TRACKED_DIFF_LIMIT` 보다 큰가. 없는 쪽(`None`)은 0 으로 본다.
+/// 한쪽이라도 `FILE_DIFF_LIMIT` 보다 큰가. 없는 쪽(`None`)은 0 으로 본다.
 pub fn exceeds_diff_limit(old_size: Option<u64>, new_size: Option<u64>) -> bool {
-    old_size.unwrap_or(0) > TRACKED_DIFF_LIMIT || new_size.unwrap_or(0) > TRACKED_DIFF_LIMIT
+    old_size.unwrap_or(0) > FILE_DIFF_LIMIT || new_size.unwrap_or(0) > FILE_DIFF_LIMIT
 }
 
 /// 읽지 않은 큰 파일의 `get_file_diff`·`get_commit_file_diff` 응답. 내용·구간은 비어 있고 `binary` 는 `true`,

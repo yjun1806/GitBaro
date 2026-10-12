@@ -377,6 +377,20 @@ mod tests {
         "x\n".repeat(crate::git::file_diff::TRACKED_DIFF_LIMIT as usize / 2 + 1)
     }
 
+    /// 2 MiB 를 넘고 8 MiB 는 안 넘는 파일도 force 없이는 싣지 않는다.
+    #[tokio::test]
+    async fn file_over_two_mib_is_too_large_without_force() {
+        let dir = temp_repo("two-mib");
+        let content = "x\n".repeat(crate::git::file_diff::FILE_DIFF_LIMIT as usize / 2 + 1);
+        assert!((content.len() as u64) < crate::git::file_diff::TRACKED_DIFF_LIMIT);
+        std::fs::write(dir.join("f.txt"), &content).unwrap();
+
+        let d = diff(&dir, "f.txt", false).await;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(d["binaryPreview"]["meta"]["tooLarge"], true);
+        assert_eq!(d["newContent"], "");
+    }
+
     async fn forced(dir: &std::path::Path, path: &str, staged: bool) -> Value {
         get_file_diff(dir.to_string_lossy().to_string(), path.to_string(), staged, Some(true))
             .await

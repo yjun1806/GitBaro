@@ -452,7 +452,7 @@
     "added": "Added",
     "deleted": "Deleted",
     "changed": "Changed",
-    "tooLarge": "File too large to preview (exceeds 8 MB)",
+    "tooLarge": "File too large to preview",
     "svgPreview": "SVG Preview",
     "sizeDiff": "Diff: {{diff}} ({{percent}}%)",
     "dimensions": "{{width}} × {{height}}",

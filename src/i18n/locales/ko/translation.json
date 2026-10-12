@@ -451,7 +451,7 @@
     "added": "추가됨",
     "deleted": "삭제됨",
     "changed": "변경됨",
-    "tooLarge": "미리보기하기에 파일이 너무 큽니다 (8 MB 초과)",
+    "tooLarge": "미리보기하기에 파일이 너무 큽니다",
     "svgPreview": "SVG 미리보기",
     "sizeDiff": "차이: {{diff}} ({{percent}}%)",
     "dimensions": "{{width}} × {{height}}",
