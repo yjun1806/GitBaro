@@ -1034,18 +1034,56 @@ export function RepoLaneCommitGraph({
     () => graph.rows.filter((r) => r.kind === "commit"),
     [graph.rows],
   );
+  const laneScrollRef = useRef<HTMLDivElement | null>(null);
+  // 행 수천 개를 그대로 그리면 DOM·조회가 행 수만큼 늘어난다 — 화면 안(+overscan) 행만 그린다.
+  // 모든 행의 높이가 고정이라 종류별로 어림만 하고 따로 재지 않는다.
+  const virtualizer = useVirtualizer({
+    count: graph.rows.length,
+    getScrollElement: () => laneScrollRef.current,
+    estimateSize: (i) => (graph.rows[i].kind === "header" ? REGION_HEADER_HEIGHT : GRAPH_ROW_HEIGHT),
+    getItemKey: (i) => graph.rows[i].key,
+    overscan: 12,
+  });
+  const virtualItems = virtualizer.getVirtualItems();
   // 커밋 줄 「변경」 칸(3.15). 저장소마다 다른 경로라 `useCommitStats`(단일 경로) 대신 경로+oid
-  // 쌍으로 묻는 변형을 쓴다. CI 칸은 저장소마다 계정이 다를 수 있어 이 화면에서는 비워 둔다.
-  const commitStats = useCommitStatsAcrossRepos(
-    useMemo(() => commitRows.map((r) => ({ path: r.repoPath, oid: r.commit.id })), [commitRows]),
-  );
+  // 쌍으로 묻는 변형을 쓴다. 그리는 창 안의 커밋만 묻는다 — 창 밖 행은 조회(관찰자)를 쥐지 않는다.
+  // CI 칸은 저장소마다 계정이 다를 수 있어 이 화면에서는 비워 둔다.
+  const visibleKey = virtualItems.map((v) => v.index).join(",");
+  const statsPairs = useMemo(() => {
+    const pairs: { path: string; oid: string }[] = [];
+    for (const v of virtualItems) {
+      const row = graph.rows[v.index];
+      if (row?.kind === "commit") pairs.push({ path: row.repoPath, oid: row.commit.id });
+    }
+    return pairs;
+    // visibleKey가 창의 내용을 대신 비교한다(virtualItems는 렌더마다 새 배열).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph.rows, visibleKey]);
+  const commitStats = useCommitStatsAcrossRepos(statsPairs);
   const selectedIdx = commitRows.findIndex((r) => r.key === selectedKey);
+  // 키보드 이동은 커밋 행끼리만 오간다. 그 번호를 `graph.rows`의 자리로 바꿔 스크롤한다.
+  const rowIndexByKey = useMemo(() => new Map(graph.rows.map((r, i) => [r.key, i])), [graph.rows]);
+  const scrollToCommit = useCallback(
+    (i: number) => {
+      const at = rowIndexByKey.get(commitRows[i].key);
+      if (at !== undefined) virtualizer.scrollToIndex(at, { align: "auto" });
+    },
+    [virtualizer, rowIndexByKey, commitRows],
+  );
+  const revealRow = useCallback(
+    (key: string) => {
+      const at = rowIndexByKey.get(key);
+      if (at !== undefined) virtualizer.scrollToIndex(at, { align: "center" });
+    },
+    [virtualizer, rowIndexByKey],
+  );
   const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
     items: commitRows,
     onSelect: (r) => onSelectCommit(r.repoPath, r.commit, r.key),
     selectedIndex: selectedIdx,
+    scrollToIndex: scrollToCommit,
   });
-  const navIndex = new Map(commitRows.map((r, i) => [r.key, i]));
+  const navIndex = useMemo(() => new Map(commitRows.map((r, i) => [r.key, i])), [commitRows]);
   // 커밋 행에 안정된 참조로 넘긴다(#4) — `.map()` 밖에서 한 번만 만들어야 `RepoLaneCommitRow`의
   // `memo`가 매 렌더 다시 그리지 않는다.
   const handleCommitContextMenu = useCallback(
@@ -1057,12 +1095,86 @@ export function RepoLaneCommitGraph({
     [onSelectCommit],
   );
 
-  const laneScrollRef = useRef<HTMLDivElement | null>(null);
-  const selectedCommitOid = selectedIdx >= 0 ? commitRows[selectedIdx].commit.id : null;
+  const selectedCommitKey = selectedIdx >= 0 ? commitRows[selectedIdx].key : null;
   const narrow = useGraphNarrow();
-  useRevealSelectedWhenNarrow(narrow, laneScrollRef, selectedCommitOid);
+  useRevealSelectedWhenNarrow(narrow, laneScrollRef, selectedCommitKey, revealRow);
   // 좁은 커밋 목록(D47 2단계)은 레인 하나 폭만 그린다.
   const drawWidth = narrow ? COMPACT_GRAPH_WIDTH : graphWidth;
+
+  const renderRow = (row: RepoLaneRow) => {
+    switch (row.kind) {
+      case "wip": {
+        const followed = selectedKey === row.key ? followModeOf(row.wip.path) : null;
+        return (
+          <RepoLaneWipRow
+            key={row.key}
+            row={row}
+            graphWidth={drawWidth}
+            compact={narrow}
+            colorOf={colorOf}
+            repoLabel={repoLabel}
+            selected={selectedKey === row.key}
+            following={followed === "following"}
+            onSelect={() => {
+              startFollow(row.wip.path);
+              onSelectWip(row.wip, row.key);
+            }}
+            onToggleFollow={() => {
+              if (followed === "following") {
+                stopFollow();
+                return;
+              }
+              startFollow(row.wip.path);
+              onSelectWip(row.wip, row.key);
+            }}
+          />
+        );
+      }
+      case "commit": {
+        const idx = navIndex.get(row.key) ?? -1;
+        const emailKey = row.commit.author.email?.toLowerCase() ?? "";
+        return (
+          <RepoLaneCommitRow
+            key={row.key}
+            row={row}
+            index={idx}
+            itemRef={itemRef}
+            graphWidth={drawWidth}
+            compact={narrow}
+            colorOf={colorOf}
+            avatarUrl={accountAvatarMap.get(emailKey) || undefined}
+            stats={commitStats.get(commitStatsAcrossReposKey(row.repoPath, row.commit.id))}
+            isSelected={selectedKey === row.key}
+            isHighlighted={activeIndex === idx}
+            repoLabel={repoLabel}
+            onSelect={onSelectCommit}
+            onContextMenu={handleCommitContextMenu}
+          />
+        );
+      }
+      case "header": {
+        const through = narrow ? NO_THROUGH : row.layout.edges.map((e) => ({ lane: e.fromLane, chain: e.chain }));
+        const common = { graphWidth: drawWidth, through, colorOf };
+        if (row.region === "now") return <NowHeaderRow key={row.key} {...common} />;
+        if (row.region === "unpushed") {
+          return <UnpushedHeaderRow key={row.key} {...common} remote={remoteLabel} />;
+        }
+        return <RemoteHeaderRow key={row.key} {...common} remote={remoteLabel} />;
+      }
+      case "base":
+        return (
+          <BaseRow
+            key={row.key}
+            row={row}
+            graphWidth={drawWidth}
+            compact={narrow}
+            colorOf={colorOf}
+            baseTime={baseTime}
+            branchLabel={baseBranchLabel}
+          />
+        );
+    }
+  };
 
   return (
     <div className="@container/graph flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -1083,80 +1195,21 @@ export function RepoLaneCommitGraph({
         ) : graph.rows.length === 0 ? (
           <EmptyState layout="row" title={emptyMessage ?? t("review.noCommits")} />
         ) : (
-          graph.rows.map((row) => {
-            switch (row.kind) {
-              case "wip": {
-                const followed = selectedKey === row.key ? followModeOf(row.wip.path) : null;
-                return (
-                  <RepoLaneWipRow
-                    key={row.key}
-                    row={row}
-                    graphWidth={drawWidth}
-                    compact={narrow}
-                    colorOf={colorOf}
-                    repoLabel={repoLabel}
-                    selected={selectedKey === row.key}
-                    following={followed === "following"}
-                    onSelect={() => {
-                      startFollow(row.wip.path);
-                      onSelectWip(row.wip, row.key);
-                    }}
-                    onToggleFollow={() => {
-                      if (followed === "following") {
-                        stopFollow();
-                        return;
-                      }
-                      startFollow(row.wip.path);
-                      onSelectWip(row.wip, row.key);
-                    }}
-                  />
-                );
-              }
-              case "commit": {
-                const idx = navIndex.get(row.key) ?? -1;
-                const emailKey = row.commit.author.email?.toLowerCase() ?? "";
-                return (
-                  <RepoLaneCommitRow
-                    key={row.key}
-                    row={row}
-                    index={idx}
-                    itemRef={itemRef}
-                    graphWidth={drawWidth}
-                    compact={narrow}
-                    colorOf={colorOf}
-                    avatarUrl={accountAvatarMap.get(emailKey) || undefined}
-                    stats={commitStats.get(commitStatsAcrossReposKey(row.repoPath, row.commit.id))}
-                    isSelected={selectedKey === row.key}
-                    isHighlighted={activeIndex === idx}
-                    repoLabel={repoLabel}
-                    onSelect={onSelectCommit}
-                    onContextMenu={handleCommitContextMenu}
-                  />
-                );
-              }
-              case "header": {
-                const through = narrow ? NO_THROUGH : row.layout.edges.map((e) => ({ lane: e.fromLane, chain: e.chain }));
-                const common = { graphWidth: drawWidth, through, colorOf };
-                if (row.region === "now") return <NowHeaderRow key={row.key} {...common} />;
-                if (row.region === "unpushed") {
-                  return <UnpushedHeaderRow key={row.key} {...common} remote={remoteLabel} />;
-                }
-                return <RemoteHeaderRow key={row.key} {...common} remote={remoteLabel} />;
-              }
-              case "base":
-                return (
-                  <BaseRow
-                    key={row.key}
-                    row={row}
-                    graphWidth={drawWidth}
-                    compact={narrow}
-                    colorOf={colorOf}
-                    baseTime={baseTime}
-                    branchLabel={baseBranchLabel}
-                  />
-                );
-            }
-          })
+          <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+            {virtualItems.map((vItem) => {
+              const row = graph.rows[vItem.index];
+              return (
+                <div
+                  key={vItem.key}
+                  data-index={vItem.index}
+                  className="absolute top-0 left-0 w-full"
+                  style={{ transform: `translateY(${vItem.start}px)` }}
+                >
+                  {renderRow(row)}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
       {commitMenu && (

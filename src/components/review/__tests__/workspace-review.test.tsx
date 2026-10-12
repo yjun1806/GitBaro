@@ -139,6 +139,8 @@ vi.mock("@/components/history/CommitDetail", () => ({
   ),
 }));
 vi.mock("@/components/diff/DiffViewer", () => ({ DiffViewer: () => <div>diff-viewer</div> }));
+// jsdom에는 레이아웃이 없어 가상화기가 행을 그리지 않는다 — 모든 행을 그리는 대역.
+vi.mock("@tanstack/react-virtual", async () => (await import("@/test/virtual-all")).virtualAllModule);
 
 type Handler = (event: { payload: ActivityEvent }) => void;
 const handlers: Handler[] = [];

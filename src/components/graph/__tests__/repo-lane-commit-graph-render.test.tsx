@@ -7,6 +7,8 @@ import { buildRepoLaneRows, type LaneRepo, type LaneWip } from "../repo-lanes";
 import type { CommitInfo } from "@/types";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
+// jsdom에는 레이아웃이 없어 가상화기가 행을 그리지 않는다 — 모든 행을 그리는 대역.
+vi.mock("@tanstack/react-virtual", async () => (await import("@/test/virtual-all")).virtualAllModule);
 // 저장소별 레인 그래프의 「변경」 칸(3.15)이 쓰는 조회. 이 스위트는 재렌더 횟수만 보므로 늘 빈 맵.
 vi.mock("@/api/queries", () => ({
   useCommitStatsAcrossRepos: () => new Map(),
