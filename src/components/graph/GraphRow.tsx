@@ -44,13 +44,41 @@ export const GRAPH_COLUMNS = cn(
   "@max-[400px]/graph:grid-cols-[minmax(0,1fr)_auto] @max-[400px]/graph:gap-2",
 );
 
+/**
+ * 칸 머리 줄(설명 · 변경 · CI · 작성자 · 시각). 줄과 같은 `GRAPH_COLUMNS`·같은 감춤 클래스를 쓰므로 어느 폭에서도
+ * 줄의 칸과 일대일로 맞는다. 글자는 줄바꿈하지 않는다.
+ */
+export function GraphColumnHeader({ graphWidth }: { graphWidth: number }) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className={cn(
+        GRAPH_COLUMNS,
+        "@max-[400px]/graph:hidden h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground whitespace-nowrap",
+      )}
+      style={{ paddingLeft: graphWidth + 8 }}
+      aria-hidden="true"
+    >
+      <span className="pl-3.5">{t("graph.colDescription")}</span>
+      <span className={cn(CHANGE_CELL_HIDDEN_CLASS, NARROW_HIDDEN_CLASS)}>{t("graph.colChange")}</span>
+      <span className={NARROW_HIDDEN_CLASS} title={t("graph.colCi")}>{t("graph.colCi")}</span>
+      <span className={NARROW_HIDDEN_CLASS}>{t("graph.colAuthor")}</span>
+      <span>{t("graph.colTime")}</span>
+    </div>
+  );
+}
+
 /** 좁은 커밋 목록(400px 이하)에서 감추는 칸·표시. 감춘 칸은 그리드에서 빠져 설명·시각 두 칸만 남는다. */
 export const NARROW_HIDDEN_CLASS = "@max-[400px]/graph:hidden";
 
 /** 「변경」 칸을 좁아짐 둘째 단계에서 줄이는 표시(파일 수·크기 막대를 감춘다, `+ −` 숫자만 남긴다). */
 const CHANGE_DETAIL_CLASS = "@max-[680px]/graph:hidden";
-/** 「변경」 칸을 좁아짐 셋째 단계에서 통째로 감추는 표시(그리드 칸은 이미 0px, 내용도 겹치지 않게 감춘다). */
-const CHANGE_CELL_HIDDEN_CLASS = "@max-[560px]/graph:hidden";
+/**
+ * 「변경」 칸을 좁아짐 셋째 단계에서 통째로 감추는 표시. `hidden`(display:none)이 아니라 `invisible`이다 —
+ * 칸이 그리드에서 빠지면 뒤 칸(CI·작성자·시각)이 0px 칸으로 한 칸씩 밀려 머리 줄과 어긋난다.
+ * 그리드 칸은 이미 0px이므로 자리는 그대로 두고 내용만 자른다.
+ */
+export const CHANGE_CELL_HIDDEN_CLASS = "@max-[560px]/graph:invisible @max-[560px]/graph:overflow-hidden";
 /** 「작성자」 칸의 이름을 좁아짐 첫 단계에서 감추는 표시(아바타만 남는다). */
 const AUTHOR_NAME_HIDDEN_CLASS = "@max-[820px]/graph:hidden";
 

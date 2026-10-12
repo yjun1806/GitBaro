@@ -8,7 +8,7 @@ import { useSelectionStore } from "@/stores/selection";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { computeGraphLanes } from "@/lib/graph-lanes";
 import { getErrorMessage } from "@/lib/utils";
-import { GRAPH_COLUMNS, GraphRow, NARROW_HIDDEN_CLASS } from "@/components/graph/GraphRow";
+import { GraphColumnHeader, GraphRow } from "@/components/graph/GraphRow";
 import { graphColumnWidth, laneColor } from "@/components/graph/graph-model";
 import { BranchMergeDialog } from "./BranchMergeDialog";
 import { CommitContextMenu } from "@/components/history/CommitContextMenu";
@@ -120,17 +120,7 @@ export function BranchRangeGraph({ range, currentBranch, top, onSelectCommit }: 
         </Button>
       </div>
 
-      <div
-        className={GRAPH_COLUMNS + " h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
-        style={{ paddingLeft: graphWidth + 8 }}
-        aria-hidden="true"
-      >
-        <span className="pl-3.5">{t("graph.colDescription")}</span>
-        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colChange")}</span>
-        <span className={NARROW_HIDDEN_CLASS} title={t("graph.colCi")}>{t("graph.colCi")}</span>
-        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colAuthor")}</span>
-        <span>{t("graph.colTime")}</span>
-      </div>
+      <GraphColumnHeader graphWidth={graphWidth} />
 
       <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
         {top}

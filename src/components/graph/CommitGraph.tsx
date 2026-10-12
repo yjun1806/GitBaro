@@ -44,8 +44,7 @@ import {
   edgePath,
   followRowParts,
   COMPACT_GRAPH_WIDTH,
-  GRAPH_COLUMNS,
-  NARROW_HIDDEN_CLASS,
+  GraphColumnHeader,
   GraphRow,
   GraphWipRow,
   NowHeaderRow,
@@ -684,17 +683,7 @@ function CommitGraphList({
 
   return (
     <div className="@container/graph flex flex-col flex-1 min-h-0 overflow-hidden">
-      <div
-        className={GRAPH_COLUMNS + " @max-[400px]/graph:hidden h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
-        style={{ paddingLeft: graphWidth + 8 }}
-        aria-hidden="true"
-      >
-        <span className="pl-3.5">{t("graph.colDescription")}</span>
-        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colChange")}</span>
-        <span className={NARROW_HIDDEN_CLASS} title={t("graph.colCi")}>{t("graph.colCi")}</span>
-        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colAuthor")}</span>
-        <span>{t("graph.colTime")}</span>
-      </div>
+      <GraphColumnHeader graphWidth={graphWidth} />
 
       <div ref={scrollRef} data-graph-list className="graph-hl flex-1 min-h-0 overflow-y-auto" {...containerProps}>
         <ChainHighlightStyle chain={highlightChain} />
@@ -1166,17 +1155,7 @@ export function RepoLaneCommitGraph({
 
   return (
     <div className="@container/graph flex flex-col flex-1 min-h-0 overflow-hidden">
-      <div
-        className={GRAPH_COLUMNS + " @max-[400px]/graph:hidden h-6 shrink-0 pr-3 border-b border-(--line) text-[11.5px] font-semibold text-muted-foreground"}
-        style={{ paddingLeft: graphWidth + 8 }}
-        aria-hidden="true"
-      >
-        <span className="pl-3.5">{t("graph.colDescription")}</span>
-        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colChange")}</span>
-        <span className={NARROW_HIDDEN_CLASS} title={t("graph.colCi")}>{t("graph.colCi")}</span>
-        <span className={NARROW_HIDDEN_CLASS}>{t("graph.colAuthor")}</span>
-        <span>{t("graph.colTime")}</span>
-      </div>
+      <GraphColumnHeader graphWidth={graphWidth} />
       <div ref={laneScrollRef} data-graph-list className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
         {isLoading && graph.rows.length === 0 ? (
           <LoadingState label={t("history.loadingHistory")} />

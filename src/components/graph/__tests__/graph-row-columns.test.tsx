@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import "@/i18n/config";
-import { GraphRow, GRAPH_COLUMNS } from "@/components/graph/GraphRow";
+import { GraphRow, GraphColumnHeader, GRAPH_COLUMNS } from "@/components/graph/GraphRow";
 import type { GraphRowLayout } from "@/lib/graph-lanes";
 import type { CommitInfo, CommitStats } from "@/types";
 import type { CiSummary } from "@/components/history/CommitDetail";
@@ -187,6 +187,46 @@ describe("GRAPH_COLUMNS narrowing (container query, @container/graph)", () => {
     render(<GraphRow {...baseProps} commit={c} stats={stats({ filesChanged: 3, additions: 12, deletions: 4 })} />);
     const fileCountEl = screen.getByText("3 files");
     const cell = fileCountEl.parentElement;
-    expect(cell?.className).toContain("@max-[560px]/graph:hidden");
+    // display:none 이면 뒤 칸이 0px 칸으로 밀려 머리 줄과 어긋난다 — 자리는 두고 보이지만 않게 한다.
+    expect(cell?.className).toContain("@max-[560px]/graph:invisible");
+    expect(cell?.className).not.toContain("@max-[560px]/graph:hidden");
+  });
+});
+
+describe("GraphColumnHeader stays in step with the row columns", () => {
+  const classesOf = (el: Element | null | undefined) => (el?.className ?? "").toString().split(/\s+/);
+
+  it("uses the same grid template as the rows (one source: GRAPH_COLUMNS)", () => {
+    const { container } = render(<GraphColumnHeader graphWidth={24} />);
+    const header = container.firstElementChild;
+    for (const cls of GRAPH_COLUMNS.split(/\s+/)) expect(classesOf(header)).toContain(cls);
+    expect(header?.children.length).toBe(5);
+  });
+
+  it("never wraps a label", () => {
+    const { container } = render(<GraphColumnHeader graphWidth={24} />);
+    expect(classesOf(container.firstElementChild)).toContain("whitespace-nowrap");
+  });
+
+  it("hides each column at the same step as its row cell", () => {
+    const { container: headerBox } = render(<GraphColumnHeader graphWidth={24} />);
+    const hc = [...(headerBox.firstElementChild?.children ?? [])];
+    const { container: rowBox } = render(
+      <GraphRow {...baseProps} commit={commit()} stats={stats()} ci={{ state: "failed", names: ["build"] }} />,
+    );
+    const rc = [...(rowBox.querySelector(".grid")?.children ?? [])];
+    expect(rc.length).toBe(5);
+    // 변경(1)·CI(2)·작성자(3): 400px 아래에서 줄과 머리가 함께 빠진다. 변경은 560px 아래에서 함께 비운다.
+    for (const i of [1, 2, 3]) {
+      expect(classesOf(hc[i])).toContain("@max-[400px]/graph:hidden");
+      expect(classesOf(rc[i])).toContain("@max-[400px]/graph:hidden");
+    }
+    expect(classesOf(hc[1])).toContain("@max-[560px]/graph:invisible");
+    expect(classesOf(rc[1])).toContain("@max-[560px]/graph:invisible");
+    // 설명·시각은 어느 폭에서도 남는다.
+    for (const i of [0, 4]) {
+      expect(classesOf(hc[i])).not.toContain("@max-[400px]/graph:hidden");
+      expect(classesOf(rc[i])).not.toContain("@max-[400px]/graph:hidden");
+    }
   });
 });
