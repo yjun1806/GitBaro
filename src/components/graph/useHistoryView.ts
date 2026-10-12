@@ -12,6 +12,7 @@ import {
 } from "@/stores/history-view";
 import { useBranches } from "@/api/queries";
 import { useBranchRangeStore } from "@/components/branch/branch-range";
+import { useScopeStore } from "@/components/scope/scope-store";
 import type { BranchInfo, HistoryTarget } from "@/types";
 
 export interface HistoryView {
@@ -68,6 +69,9 @@ export function useSetHistoryView(): (target: ViewTarget | null) => void {
       const store = useHistoryViewStore.getState();
       const before = viewTargetFor(store, activeRepoPath);
       store.view(activeRepoPath, target);
+      // 로컬 브랜치 하나를 고르면 그 브랜치 단계로 간다. 「저장소」 단계가 남아 있으면 resolveScope가
+      // 저장소 단계를 먼저 골라서 고른 브랜치가 범위에 반영되지 않는다.
+      if (target?.kind === "ref" && !target.isRemote) useScopeStore.getState().viewRepoAggregate(null);
       if (sameViewTarget(before, target)) return;
       useBranchRangeStore.getState().clear();
       useSelectionStore.getState().clearCommitSelection();
