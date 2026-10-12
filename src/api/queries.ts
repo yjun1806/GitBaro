@@ -158,8 +158,6 @@ const AFTER_SYNC_KEYS = [
   "divergencePoint",
   // fetch가 origin/HEAD를 바꾸거나 원격 기본 브랜치를 처음 받아 올 수 있다.
   "defaultBranches",
-  // 그래프에 함께 그린 다른 워크트리의 이력. HEAD가 그대로여도 push·fetch 뒤 원격 라벨이 바뀐다.
-  "worktreeHeadHistory",
   // push하면 원격에 없는 커밋이 줄고, pull은 HEAD를 옮긴다.
   "unpushedFileTouches",
   // 사이드바의 작업 중인 브랜치: push·fetch가 브랜치마다 원격에 없는 커밋·받을 커밋·병합 여부를 바꾼다.
@@ -897,20 +895,6 @@ export function useSiblingFileDiffs(
       gcTime: DIFF_GC_TIME_MS,
       refetchInterval: SIBLING_WIP_POLL_MS,
       refetchIntervalInBackground: false,
-    })),
-  });
-}
-
-/**
- * 워크트리마다 HEAD 이력의 첫 페이지. 그래프에 다른 워크트리의 커밋을 함께 그릴 때 쓴다.
- * HEAD가 바뀌면 키가 바뀌어 다시 읽는다(HEAD는 워크트리 목록 조회에서 온다).
- */
-export function useWorktreeHeadHistories(heads: readonly { path: string; head: string }[]) {
-  return useQueries({
-    queries: heads.map(({ path, head }) => ({
-      queryKey: ["worktreeHeadHistory", path, head],
-      queryFn: () => getCommitHistory(path, COMMIT_HISTORY_PAGE_SIZE, 0),
-      staleTime: 30_000,
     })),
   });
 }

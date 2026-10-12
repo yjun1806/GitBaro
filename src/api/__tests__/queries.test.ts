@@ -23,7 +23,7 @@ describe("invalidateAfterSync", () => {
       ["remoteTags", "/repo"],
       ["reviewStatus", ["/repo"]],
       ["workspaceHistory", "/repo", "headOid", 50],
-      ["worktreeHeadHistory", "/repo-feat", "headOid"],
+      ["commitHistory", "/repo-feat"],
       ["defaultBranches", ["/repo"]],
       ["unpushedFileTouches", "/repo", "/repo"],
       // 이 무효화가 건드리면 안 되는 무관한 키.
@@ -42,7 +42,7 @@ describe("invalidateAfterSync", () => {
     expect(isStale(queryClient, ["reviewStatus", ["/repo"]])).toBe(true);
     expect(isStale(queryClient, ["workspaceHistory", "/repo", "headOid", 50])).toBe(true);
     expect(isStale(queryClient, ["branches", "/repo"])).toBe(true);
-    expect(isStale(queryClient, ["worktreeHeadHistory", "/repo-feat", "headOid"])).toBe(true);
+    expect(isStale(queryClient, ["commitHistory", "/repo-feat"])).toBe(true);
     expect(isStale(queryClient, ["defaultBranches", ["/repo"]])).toBe(true);
     expect(isStale(queryClient, ["unpushedFileTouches", "/repo", "/repo"])).toBe(true);
     expect(isStale(queryClient, ["unrelatedQuery", "/repo"])).toBe(false);
