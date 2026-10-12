@@ -1,5 +1,5 @@
 import type { MouseEvent } from "react";
-import { GitBranch, Star } from "lucide-react";
+import { Check, GitBranch, Star } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepoAvatarColor, useRepoName } from "@/hooks/useRepoDisplay";
 import { middleEllipsis } from "@/lib/middle-ellipsis";
@@ -98,6 +98,8 @@ export function RepoFolderRows({ node, level, depth, data, selection, actions }:
     const head = data.reviewByPath[path]?.headOid;
     return head ? head.slice(0, 7) : t("sidebarTree.card.detached");
   };
+  const defaultBranch = data.defaultBranchOf(repo.path);
+  const isDefault = (path: string) => defaultBranch !== null && data.branchOf(path) === defaultBranch;
   const viewingHere = selection.activePath === repo.path ? selection.viewing : null;
 
   return (
@@ -119,11 +121,24 @@ export function RepoFolderRows({ node, level, depth, data, selection, actions }:
             onContextMenu={(e) => actions.onFolderContextMenu?.(repo, { path, isPrimary, branch: data.branchOf(path) }, e)}
           >
             <span className={ROW_ICON_SLOT}>
-              <GitBranch className="w-3 h-3" aria-hidden="true" />
+              {isPrimary ? (
+                <Check className="w-3 h-3" aria-hidden="true" />
+              ) : (
+                <GitBranch className="w-3 h-3" aria-hidden="true" />
+              )}
             </span>
-            <span className={cn(ROW_BRANCH, "text-foreground", selected ? "font-semibold" : "font-medium")}>
+            <span
+              className={cn(
+                ROW_BRANCH,
+                isPrimary || selected ? "text-foreground" : "text-(--fg2)",
+                isPrimary || selected ? "font-semibold" : "font-normal",
+              )}
+            >
               {middleEllipsis(label, BRANCH_MAX_CHARS)}
             </span>
+            {isDefault(path) && (
+              <span className="shrink-0 text-[10.5px] text-muted-foreground">{t("sidebarTree.card.defaultBranch")}</span>
+            )}
             <RowSignals values={signalValues([path], data)} now={data.now} />
           </TreeRowFrame>
         );

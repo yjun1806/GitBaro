@@ -49,6 +49,7 @@ function Harness() {
     overflow: [],
     now: 0,
     branchOf: () => null,
+    defaultBranchOf: () => null,
   };
   return (
     <RepoTree data={data} fetchingPath={null} onSelectRepo={vi.fn()} onRepoContextMenu={vi.fn()} />

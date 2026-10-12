@@ -853,6 +853,7 @@
     },
     "card": {
       "primaryFolder": "기본 폴더",
+      "defaultBranch": "기본",
       "detached": "분리된 HEAD",
       "forkedFrom": "{{base}}에서 갈라짐",
       "uncommitted_one": "커밋 안 한 파일 {{count}}개",

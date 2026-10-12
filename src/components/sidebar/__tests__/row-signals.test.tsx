@@ -124,6 +124,7 @@ describe("signalValues", () => {
       overflow: [],
       now: NOW,
       branchOf: () => null,
+      defaultBranchOf: () => null,
       ...over,
     };
   }

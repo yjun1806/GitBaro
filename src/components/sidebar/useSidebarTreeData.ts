@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRepoSyncStatuses } from "@/api/queries";
+import { useDefaultBranches, useRepoSyncStatuses } from "@/api/queries";
 import { useReviewStatus, type WorktreeReviewStatus } from "@/hooks/useReviewStatus";
 import { buildRepoTree, type AccountNode, type PathSignals, type WorktreeInput } from "@/lib/repo-tree";
 import { useAccountStore } from "@/stores/account";
@@ -44,6 +44,8 @@ export interface SidebarTreeData {
   now: number;
   /** 경로(저장소·워크트리)의 지금 브랜치. 모르면 null. */
   branchOf: (path: string) => string | null;
+  /** 저장소의 기본 브랜치 이름(`main`). 모르면 null. */
+  defaultBranchOf: (repoPath: string) => string | null;
 }
 
 /**
@@ -130,6 +132,12 @@ export function useSidebarTreeData(): SidebarTreeData {
     [syncByPath, reviewByPath],
   );
 
+  const { data: defaultBranches } = useDefaultBranches(repoPathList);
+  const defaultBranchOf = useCallback(
+    (repoPath: string) => defaultBranches?.[repoPath]?.name ?? null,
+    [defaultBranches],
+  );
+
   return {
     tree,
     signals,
@@ -142,6 +150,7 @@ export function useSidebarTreeData(): SidebarTreeData {
     overflow,
     now,
     branchOf,
+    defaultBranchOf,
   };
 }
 

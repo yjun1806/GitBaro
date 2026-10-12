@@ -39,6 +39,7 @@ vi.mock("@/api/queries", () => ({
     };
     return { data };
   },
+  useDefaultBranches: () => ({ data: {} }),
 }));
 
 vi.mock("@/hooks/useReviewStatus", () => ({

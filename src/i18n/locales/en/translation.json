@@ -854,6 +854,7 @@
     },
     "card": {
       "primaryFolder": "Primary folder",
+      "defaultBranch": "default",
       "detached": "Detached HEAD",
       "forkedFrom": "Branched from {{base}}",
       "uncommitted_one": "{{count}} uncommitted file",

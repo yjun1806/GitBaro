@@ -86,6 +86,7 @@ function makeData(
     overflow: opts.overflow ?? [],
     now: NOW,
     branchOf: (p) => branches[p] ?? null,
+    defaultBranchOf: (repoPath) => (repoPath === API ? "main" : repoPath === SOLO ? "dev" : null),
   };
 }
 
@@ -303,12 +304,36 @@ describe("RepoTree — worktree branches only", () => {
     expect(screen.queryByRole("treeitem", { name: /more branches|Show fewer/ })).toBeNull();
   });
 
-  it("marks folder rows with the branch icon and a brighter label", () => {
+  it("marks the primary folder row with a check icon and a semibold label", () => {
     renderTree(makeData(baseSignals));
     const row = item("dev · Primary folder");
-    expect(row.querySelector("svg.lucide-git-branch")).toBeTruthy();
-    expect(row.querySelector("svg.lucide-check")).toBeFalsy();
-    expect(row.querySelector(".font-mono")).toHaveClass("text-foreground", "font-medium");
+    expect(row.querySelector("svg.lucide-check")).toBeTruthy();
+    expect(row.querySelector("svg.lucide-git-branch")).toBeFalsy();
+    expect(row.querySelector(".font-mono")).toHaveClass("text-foreground", "font-semibold");
+  });
+
+  it("shows a linked worktree row with the branch icon and a regular, secondary label until selected", () => {
+    renderTree(makeData(baseSignals));
+    fireEvent.click(item("api"));
+    const label = item("feat/login").querySelector(".font-mono");
+    expect(item("feat/login").querySelector("svg.lucide-git-branch")).toBeTruthy();
+    expect(item("feat/login").querySelector("svg.lucide-check")).toBeFalsy();
+    expect(label).toHaveClass("font-normal", "text-(--fg2)");
+    expect(label).not.toHaveClass("font-semibold");
+  });
+
+  it("tags the row whose branch is the repository's default branch, and no other", () => {
+    renderTree(makeData(baseSignals));
+    fireEvent.click(item("api"));
+    expect(within(item(PRIMARY_MAIN)).getByText("default")).toBeInTheDocument();
+    expect(within(item("feat/login")).queryByText("default")).toBeNull();
+  });
+
+  it("keeps the primary folder row first, above the linked worktrees", () => {
+    renderTree(makeData(baseSignals));
+    fireEvent.click(item("api"));
+    const rows = screen.getAllByRole("treeitem").filter((el) => el.getAttribute("aria-level") === "4");
+    expect(rows[0]).toHaveAttribute("aria-label", PRIMARY_MAIN);
   });
 });
 
