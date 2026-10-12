@@ -214,30 +214,82 @@ describe("CommitDetail meta lines", () => {
   });
 });
 
-describe("CommitDetail closing the diff (5.4)", () => {
-  it("does not pick the first file again for the same commit once the diff is closed", async () => {
+describe("CommitDetail opens the diff only when a file is picked (5.4)", () => {
+  const files = [
+    { path: "a.ts", status: "modified" as const },
+    { path: "b.ts", status: "added" as const },
+  ];
+  const view = (c: CommitInfo, key?: string, onSelectFile?: (p: string) => void) => (
+    <QueryClientProvider client={client}>
+      <CommitDetail key={key} commit={c} changedFiles={files} onSelectFile={onSelectFile} />
+    </QueryClientProvider>
+  );
+
+  beforeEach(async () => {
     const { usePaneStore } = await import("@/components/layout/pane-state");
-    const { useUIStore } = await import("@/stores/ui");
     usePaneStore.setState({ diffClosers: [] });
-    const files = [
-      { path: "a.ts", status: "modified" as const },
-      { path: "b.ts", status: "added" as const },
-    ];
-    const commit = makeCommit();
-    const view = (c: CommitInfo) => (
-      <QueryClientProvider client={client}>
-        <CommitDetail commit={c} changedFiles={files} />
-      </QueryClientProvider>
-    );
-    const { rerender } = render(view(commit));
+    useUIStore.setState({ diffFileOpen: false });
+  });
+
+  it("picks no file and opens no diff when no diff was open", () => {
+    const onSelectFile = vi.fn();
+    render(view(makeCommit(), undefined, onSelectFile));
+    expect(onSelectFile).not.toHaveBeenCalled();
+    expect(useUIStore.getState().diffFileOpen).toBe(false);
+  });
+
+  it("opens the diff when the user picks a file", () => {
+    const onSelectFile = vi.fn();
+    render(view(makeCommit(), undefined, onSelectFile));
+    fireEvent.click(screen.getByTitle("b.ts"));
+    expect(onSelectFile).toHaveBeenCalledWith("b.ts");
     expect(useUIStore.getState().diffFileOpen).toBe(true);
+  });
+
+  it("keeps browsing commits at level 1 while no diff is open", () => {
+    const onSelectFile = vi.fn();
+    const commit = makeCommit();
+    const { rerender } = render(view(commit, "c1", onSelectFile));
+    rerender(view({ ...commit, id: "other", shortId: "other" }, "c2", onSelectFile));
+    expect(onSelectFile).not.toHaveBeenCalled();
+    expect(useUIStore.getState().diffFileOpen).toBe(false);
+  });
+
+  it("follows to the first file of the next commit while a diff is open, even across a remount", () => {
+    const onSelectFile = vi.fn();
+    const commit = makeCommit();
+    const { rerender } = render(view(commit, "c1", onSelectFile));
+    fireEvent.click(screen.getByTitle("b.ts"));
+    onSelectFile.mockClear();
+    // 커밋을 고르면 상세가 key로 다시 마운트된다. 앞 상세의 정리가 먼저 diffFileOpen을 꺼도 이어 가야 한다.
+    rerender(view({ ...commit, id: "other", shortId: "other" }, "c2", onSelectFile));
+    expect(onSelectFile).toHaveBeenCalledWith("a.ts");
+    expect(useUIStore.getState().diffFileOpen).toBe(true);
+  });
+
+  it("follows in the same instance when the commit changes with a diff open", () => {
+    const onSelectFile = vi.fn();
+    const commit = makeCommit();
+    const { rerender } = render(view(commit, undefined, onSelectFile));
+    fireEvent.click(screen.getByTitle("b.ts"));
+    onSelectFile.mockClear();
+    rerender(view({ ...commit, id: "other", shortId: "other" }, undefined, onSelectFile));
+    expect(onSelectFile).toHaveBeenCalledWith("a.ts");
+    expect(useUIStore.getState().diffFileOpen).toBe(true);
+  });
+
+  it("goes back to level 1 after the diff is closed, and the next commit opens no diff", async () => {
+    const { usePaneStore } = await import("@/components/layout/pane-state");
+    const onSelectFile = vi.fn();
+    const commit = makeCommit();
+    const { rerender } = render(view(commit, "c1", onSelectFile));
+    fireEvent.click(screen.getByTitle("a.ts"));
     act(() => usePaneStore.getState().diffClosers[0]());
     expect(useUIStore.getState().diffFileOpen).toBe(false);
-    rerender(view({ ...commit }));
+    onSelectFile.mockClear();
+    rerender(view({ ...commit, id: "other", shortId: "other" }, "c2", onSelectFile));
+    expect(onSelectFile).not.toHaveBeenCalled();
     expect(useUIStore.getState().diffFileOpen).toBe(false);
-    // 다른 커밋을 고르면 다시 첫 파일을 고른다.
-    rerender(view({ ...commit, id: "other-commit", shortId: "other" }));
-    expect(useUIStore.getState().diffFileOpen).toBe(true);
   });
 });
 
@@ -488,7 +540,8 @@ describe("CommitDetail collapsible info", () => {
         <CommitDetail commit={makeCommit()} changedFiles={files} onSelectFile={onSelectFile} />
       </QueryClientProvider>,
     );
-    onSelectFile.mockClear(); // auto-select of the first file on mount
+    fireEvent.click(screen.getByTitle("a.ts"));
+    onSelectFile.mockClear();
     fireEvent.keyDown(screen.getByTestId("commit-detail-scroll"), { key: "ArrowDown" });
     expect(onSelectFile).toHaveBeenCalledWith("b.ts");
   });

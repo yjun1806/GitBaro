@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Clock, Copy, Check, ChevronDown, Ban, CircleCheck, CircleDashed, XCircle } from "lucide-react";
 import { cn, formatDate, formatRelativeTime } from "@/lib/utils";
@@ -235,9 +235,15 @@ export function CommitDetail({
   switcher,
 }: CommitDetailProps) {
   const { t } = useTranslation();
-  // 첫 파일을 첫 그림부터 고른 채로 둔다 — 비워 두고 효과에서 고르면 한 번 「파일 없음」으로 그려져
-  // 옆으로 쌓는 칸(2단계)이 1단계로 튀었다 돌아온다.
-  const [selectedPath, setSelectedPath] = useState<string | null>(() => changedFiles[0]?.path ?? null);
+  // diff를 열어 둔 채(2단계) 이 커밋으로 넘어왔는지. 커밋을 고르면 상세가 다시 마운트되고 앞 상세의
+  // `ListDiffSplit`이 정리하며 `diffFileOpen`을 끄므로, 그 전에 그리는 중에 읽어 둔다(`useHoldDiffFileOpen`이
+  // 상세를 읽는 동안 켜 두는 값과 같은 것). 열어 둔 채였으면 첫 파일을 첫 그림부터 고른 채로 둔다 — 비워 두고
+  // 효과에서 고르면 한 번 「파일 없음」으로 그려져 2단계가 1단계로 튀었다 돌아온다. diff를 안 열었으면(1단계)
+  // 파일을 고르지 않는다: 커밋을 훑어볼 뿐인데 diff까지 열리지 않게.
+  const [followDiff] = useState(() => useUIStore.getState().diffFileOpen);
+  const [selectedPath, setSelectedPath] = useState<string | null>(() =>
+    followDiff ? (changedFiles[0]?.path ?? null) : null,
+  );
   const [copied, setCopied] = useState(false);
   // 접힘·펼침은 전역으로 기억한다(모든 커밋·화면에서 같은 선택).
   const infoExpanded = useUIStore((s) => s.commitInfoExpanded);
@@ -278,10 +284,15 @@ export function CommitDetail({
   useWorkflowRuns(needRuns ? repoPath : null, accountId, { polling: true });
   const showCi = ciEnabled && runs !== undefined;
 
-  // Auto-select first file when commit changes. Keyed on commit.id only: changedFiles and
-  // onSelectFile get new identities on unrelated re-renders, which would reset the user's pick.
+  // 커밋이 바뀌면 diff를 열어 둔 때만 새 커밋의 첫 파일로 따라간다. 처음 그릴 때는 위에서 읽어 둔 값을,
+  // 같은 인스턴스에서 커밋만 바뀔 때는 지금의 `diffFileOpen`을 본다(닫았다면 1단계 그대로).
+  // Keyed on commit.id only: changedFiles and onSelectFile get new identities on unrelated re-renders,
+  // which would reset the user's pick.
+  const mounted = useRef(false);
   useEffect(() => {
-    if (changedFiles.length > 0) {
+    const follow = mounted.current ? useUIStore.getState().diffFileOpen : followDiff;
+    mounted.current = true;
+    if (follow && changedFiles.length > 0) {
       const first = changedFiles[0].path;
       setSelectedPath(first);
       onSelectFile?.(first);
@@ -512,7 +523,7 @@ export function CommitDetail({
     <ListDiffSplit
       variant="inline"
       className="animate-content-in"
-      // 닫으면 이 커밋에서는 다시 첫 파일을 고르지 않는다 — 자동 선택은 커밋이 바뀔 때만 돈다.
+      // 닫으면 1단계로 돌아가 다음 커밋을 훑어도 diff가 열리지 않는다.
       onCloseFile={() => setSelectedPath(null)}
       files={{
         items: changedFiles.map((f) => ({ key: f.path, path: f.path, status: f.status })),
