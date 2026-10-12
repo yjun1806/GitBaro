@@ -58,16 +58,22 @@ export function useRevealSelectedWhenNarrow(
   narrow: boolean,
   container: RefObject<HTMLElement | null>,
   selectedId: string | null,
+  /** 목록이 가상화돼 고른 줄이 DOM에 없을 수 있으면, 그 줄을 가운데로 가져오는 함수. 주면 DOM 검색 대신 쓴다. */
+  reveal?: (id: string) => void,
 ): void {
   useEffect(() => {
     if (!narrow || selectedId === null) return;
     const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const timer = setTimeout(() => {
+      if (reveal) {
+        reveal(selectedId);
+        return;
+      }
       const rows = container.current?.querySelectorAll<HTMLElement>("[data-commit-id]") ?? [];
       const row = [...rows].find((el) => el.dataset.commitId === selectedId);
       if (!row || typeof row.scrollIntoView !== "function") return;
       row.scrollIntoView({ block: "center", behavior: "auto" });
     }, reduce ? 0 : PANE_MS);
     return () => clearTimeout(timer);
-  }, [narrow, container, selectedId]);
+  }, [narrow, container, selectedId, reveal]);
 }

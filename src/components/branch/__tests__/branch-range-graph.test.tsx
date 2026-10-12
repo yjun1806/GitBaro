@@ -9,6 +9,7 @@ import { useUIStore } from "@/stores/ui";
 import type { BranchCompareResult, BranchInfo, CommitInfo, RepoInfo } from "@/types";
 import { useBranchRangeStore } from "../branch-range";
 
+vi.mock("@tanstack/react-virtual", async () => (await import("@/test/virtual-all")).virtualAllModule);
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/hooks/useOpenWorktree", () => ({ useOpenWorktree: () => vi.fn() }));
 

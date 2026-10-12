@@ -134,7 +134,11 @@ interface GraphCellProps {
   dot: CommitDot;
   /** 줄기에 마우스를 올리면 보일 이름(회색 줄기: 브랜치 이름 또는 「merge됨」). 없으면 undefined. */
   laneTitle?: (chain: number) => string | undefined;
-  /** 지금 강조 중인 줄기(고른 커밋의 줄기, 없으면 마우스 올린 줄기). 없으면 강조 없음(모두 그대로). */
+  /**
+   * 지금 강조 중인 줄기(고른 커밋의 줄기, 없으면 마우스 올린 줄기). 없으면 강조 없음(모두 그대로).
+   * 다른 줄기를 흐리는 일은 목록 컨테이너의 CSS가 `data-chain`으로 하므로(`CommitGraph`), 강조가
+   * 바뀔 때 모든 행에 새 값을 내려 줄 필요가 없다 — 이 값은 고른 행(점 테)과 이름 칩 행에만 준다.
+   */
   highlightChain?: number | null;
   /** 이 행이 고른 커밋인지. 강조 중인 줄기 위에 있으면 점을 키우고 테를 두른다. */
   isSelected?: boolean;
@@ -179,6 +183,7 @@ function GraphCell({
           <path
             key={i}
             d={edgePath(edge, layout.lane)}
+            data-chain={edge.chain}
             stroke={colorOf(edge.chain)}
             strokeWidth={edgeStyle.strokeWidth}
             fill="none"
@@ -201,7 +206,7 @@ function GraphCell({
       {dotStyle.ring && (
         <circle cx={x} cy={MID} r={SELECTED_DOT_R + 2.5} fill="none" stroke={color} strokeOpacity={0.35} strokeWidth={1.5} />
       )}
-      <circle cx={x} cy={MID} r={dotRadius} data-dot={dot} fill={color} opacity={dotStyle.opacity}>
+      <circle cx={x} cy={MID} r={dotRadius} data-dot={dot} data-chain={layout.chain} fill={color} opacity={dotStyle.opacity}>
         {dotTitle && <title>{dotTitle}</title>}
       </circle>
     </svg>

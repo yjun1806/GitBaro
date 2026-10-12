@@ -24,6 +24,7 @@ import type {
   WorktreeInfo,
 } from "@/types";
 
+vi.mock("@tanstack/react-virtual", async () => (await import("@/test/virtual-all")).virtualAllModule);
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/components/stash/StashView", () => ({ StashView: () => <div>stash-list</div> }));
 vi.mock("@/components/actions/ActionsView", () => ({

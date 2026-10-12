@@ -8,6 +8,7 @@ import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import type { CommitInfo, RepoInfo } from "@/types";
 
+vi.mock("@tanstack/react-virtual", async () => (await import("@/test/virtual-all")).virtualAllModule);
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/hooks/useOpenWorktree", () => ({ useOpenWorktree: () => vi.fn() }));
 
@@ -83,10 +84,12 @@ describe("CommitGraph rows", () => {
       </QueryClientProvider>,
     );
     expect(renders.get("c4")).toBe(1);
-    // c1~c4는 한 줄기다. 첫 선택은 그 줄기 전체를 강조하므로(D6, 줄기 강조) 같은 줄기의 다른 행도
-    // 함께 다시 그려진다 — 강조 없음(null) → 있음(그 줄기)으로 모든 행의 강조 상태가 바뀌기 때문이다.
+    // 줄기 강조는 목록 컨테이너의 CSS 규칙 하나가 맡는다(다른 줄기를 흐림) — 같은 줄기의 다른 행에
+    // 새 강조 값을 내려 주지 않으니, 첫 선택에서도 고른 행만 다시 그려진다.
     act(() => useSelectionStore.getState().selectCommit("c2"));
     expect(renders.get("c2")).toBeGreaterThan(1);
+    expect(renders.get("c1")).toBe(1);
+    expect(renders.get("c4")).toBe(1);
     const c1AfterFirstSelect = renders.get("c1")!;
     const c4AfterFirstSelect = renders.get("c4")!;
     // 같은 줄기 안에서 고르는 커밋만 바꾸면(c2 → c3) 강조 줄기 번호는 그대로라, 관련 없는 행

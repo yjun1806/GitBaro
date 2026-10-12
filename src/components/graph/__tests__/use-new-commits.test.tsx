@@ -9,6 +9,7 @@ import { useFollowStore } from "@/stores/follow";
 import type { CommitInfo, RepoInfo } from "@/types";
 import { insertedCommitIds } from "../useNewCommits";
 
+vi.mock("@tanstack/react-virtual", async () => (await import("@/test/virtual-all")).virtualAllModule);
 vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 vi.mock("@/hooks/useOpenWorktree", () => ({ useOpenWorktree: () => vi.fn() }));
 

@@ -5,6 +5,11 @@ interface UseListKeyboardNavOptions<T> {
   onSelect: (item: T, index: number) => void;
   selectedIndex?: number;
   enabled?: boolean;
+  /**
+   * 목록이 가상화돼 활성 행이 DOM에 없을 수 있을 때 쓴다. 주면 행 요소의 `scrollIntoView` 대신
+   * 이 함수가 활성 행을 보이게 한다.
+   */
+  scrollToIndex?: (index: number) => void;
 }
 
 interface UseListKeyboardNavReturn {
@@ -23,9 +28,14 @@ export function useListKeyboardNav<T>({
   onSelect,
   selectedIndex = -1,
   enabled = true,
+  scrollToIndex,
 }: UseListKeyboardNavOptions<T>): UseListKeyboardNavReturn {
   const [activeIndex, setActiveIndex] = useState(-1);
   const itemRefs = useRef<Map<number, HTMLElement>>(new Map());
+  const scrollToIndexRef = useRef(scrollToIndex);
+  useEffect(() => {
+    scrollToIndexRef.current = scrollToIndex;
+  });
 
   // Sync activeIndex when selected item changes (e.g. mouse click, or the
   // selection being cleared to -1 elsewhere — e.g. switching to the
@@ -44,6 +54,10 @@ export function useListKeyboardNav<T>({
   // Scroll into view when activeIndex changes
   useEffect(() => {
     if (activeIndex < 0) return;
+    if (scrollToIndexRef.current) {
+      scrollToIndexRef.current(activeIndex);
+      return;
+    }
     const el = itemRefs.current.get(activeIndex);
     el?.scrollIntoView({ block: "nearest" });
   }, [activeIndex]);

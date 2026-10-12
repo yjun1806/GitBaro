@@ -12,6 +12,7 @@ import { usePaneStore } from "../pane-state";
 import type { RepoInfo, StatusEntry } from "@/types";
 
 // Heavy children talk to Tauri; the shell only decides which one to show.
+vi.mock("@tanstack/react-virtual", async () => (await import("@/test/virtual-all")).virtualAllModule);
 vi.mock("@/components/toolbar", () => ({ ToolbarRoot: () => <div>toolbar</div> }));
 // The commit graph renders for real; its one commit is titled "history-list"
 // so picking it reads the same as picking a row of the old list.

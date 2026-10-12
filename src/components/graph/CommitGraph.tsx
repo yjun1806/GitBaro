@@ -1,8 +1,9 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useRepositoryStore } from "@/stores/repository";
 import { useAccountStore } from "@/stores/account";
 import { useUIStore } from "@/stores/ui";
@@ -40,6 +41,7 @@ import type { CommitInfo, CommitStats, HistoryTarget, RefLabel, WorkflowRun } fr
 import type { GraphRowLayout } from "@/lib/graph-lanes";
 import {
   BaseHeaderRow,
+  REGION_HEADER_HEIGHT,
   edgePath,
   followRowParts,
   COMPACT_GRAPH_WIDTH,
@@ -281,6 +283,25 @@ function WipRows({ wips, selection, graphWidth, lanes, colorOf, currentHead = nu
   );
 }
 
+/** 가상 목록의 항목. `index`는 `commits`에서의 위치. */
+type ListItem =
+  | { kind: "top" }
+  | { kind: "unpushed" | "remote" | "base"; index: number }
+  | { kind: "commit"; index: number };
+
+/**
+ * 줄기 강조(D6)에서 강조 줄기가 아닌 선·점을 흐리고, 강조 줄기의 선을 굵게 한다. 행마다 새 값을 내려
+ * 주면 마우스를 옮길 때마다 불러온 모든 행이 다시 그려지므로, 선·점의 `data-chain`을 컨테이너(`.graph-hl`)
+ * 의 규칙 하나로 칠한다. 수치는 `chainEdgeStyle`·`chainDotStyle`과 같다.
+ */
+function ChainHighlightStyle({ chain }: { chain: number | null }) {
+  if (chain === null) return null;
+  const on = `[data-chain="${chain}"]`;
+  return (
+    <style>{`.graph-hl path[data-chain]:not(${on}){stroke-opacity:.45}.graph-hl path${on}{stroke-width:2.5}.graph-hl circle[data-chain]:not(${on}){opacity:.45}`}</style>
+  );
+}
+
 function CommitGraphList({
   wips,
   shownWips,
@@ -436,13 +457,15 @@ function CommitGraphList({
   }, [boundaryIdx, commits, remotes]);
 
 
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const narrow = useGraphNarrow();
   // 줄기 강조(D6): 고른 커밋의 줄기, 없으면 마우스 올린 커밋의 줄기. 미리보기는 선택보다 앞선다.
   const [hoveredCommitId, setHoveredCommitId] = useState<string | null>(null);
   const selectedChain = selectedCommitId ? (layouts.get(selectedCommitId)?.chain ?? null) : null;
   const hoveredChain = hoveredCommitId ? (layouts.get(hoveredCommitId)?.chain ?? null) : null;
   const highlightChain = hoveredChain ?? selectedChain;
   // 강조 칩의 이름: 그 줄기에 브랜치 이름표가 달린 커밋이 있으면 그 이름, 없으면(merge된 줄기)
-  // `laneTitle`이 이미 계산해 둔 이름. 선택이 바뀔 때만 다시 찾는다(가상화 없이도 값싸게 유지).
+  // `laneTitle`이 이미 계산해 둔 이름. 강조가 바뀔 때만 다시 찾는다.
   const chainLabel = useMemo(() => {
     if (highlightChain === null) return undefined;
     const named = commits.find(
@@ -476,6 +499,50 @@ function CommitGraphList({
     () => commits.findIndex((c) => c.id === selectedCommitId),
     [commits, selectedCommitId],
   );
+
+  // 가상 목록의 항목: 맨 위 묶음(안내·「지금」 머리·WIP 행, 높이를 잰다), 영역 머리, 커밋 행. 영역 머리는
+  // 그 영역 첫 커밋 위에 둔다: 올리지 않은 작업 → origin에 있음 → 기본 브랜치. 두 머리가 같은 커밋 위에
+  // 오면(새 브랜치를 아직 push 안 함) origin이 위, 기본 브랜치가 아래다.
+  const hasTop = viewing || wips.length > 0;
+  const hasBase = changes?.defaultBranch !== undefined && changes.defaultBranch !== "";
+  const { listItems, commitItemIndex } = useMemo(() => {
+    const items: ListItem[] = hasTop ? [{ kind: "top" }] : [];
+    const itemIndexOf: number[] = [];
+    commits.forEach((_, index) => {
+      if (unpushedIdx === index) items.push({ kind: "unpushed", index });
+      if (boundaryIdx === index) items.push({ kind: "remote", index });
+      if (forkIdx === index && hasBase) items.push({ kind: "base", index });
+      itemIndexOf[index] = items.length;
+      items.push({ kind: "commit", index });
+    });
+    return { listItems: items, commitItemIndex: itemIndexOf };
+  }, [hasTop, commits, unpushedIdx, boundaryIdx, forkIdx, hasBase]);
+  const topEstimate = (viewing ? 36 : 0) + (wips.length > 0 ? REGION_HEADER_HEIGHT + wips.length * GRAPH_ROW_HEIGHT : 0);
+  const listActive = !isLoading && commits.length > 0;
+  const virtualizer = useVirtualizer({
+    count: listActive ? listItems.length : 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (i) => {
+      const kind = listItems[i].kind;
+      return kind === "commit" ? GRAPH_ROW_HEIGHT : kind === "top" ? topEstimate : REGION_HEADER_HEIGHT;
+    },
+    getItemKey: (i) => {
+      const item = listItems[i];
+      return item.kind === "top" ? "top" : item.kind === "commit" ? commits[item.index].id : `header:${item.kind}`;
+    },
+    overscan: 12,
+  });
+  const scrollToCommit = useCallback(
+    (index: number) => virtualizer.scrollToIndex(commitItemIndex[index], { align: "auto" }),
+    [virtualizer, commitItemIndex],
+  );
+  const revealCommit = useCallback(
+    (id: string) => {
+      const index = commits.findIndex((c) => c.id === id);
+      if (index >= 0) virtualizer.scrollToIndex(commitItemIndex[index], { align: "center" });
+    },
+    [virtualizer, commits, commitItemIndex],
+  );
   const { activeIndex, containerProps, itemRef } = useListKeyboardNav({
     items: commits,
     // 방향키로 옮기면 마우스 미리보기를 지운다(#3) — 강조가 고른 행을 따라가게 한다.
@@ -484,6 +551,7 @@ function CommitGraphList({
       selectCommit(c.id);
     },
     selectedIndex: selectedIdx,
+    scrollToIndex: scrollToCommit,
   });
 
   // 따라가는 중에 새로 나타난 커밋(에이전트가 커밋함)을 한 번 비춘다. 다른 저장소·다른 브랜치 보기·
@@ -515,11 +583,9 @@ function CommitGraphList({
   );
 
   // 무한 스크롤: 맨 아래 표시가 보이면 다음 페이지를 불러온다.
-  const scrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
-  const narrow = useGraphNarrow();
-  useRevealSelectedWhenNarrow(narrow, scrollRef, selectedCommitId);
   // 좁은 커밋 목록(D47 2단계)은 레인 하나 폭만 그린다 — 제목 폭을 넓힌다.
+  useRevealSelectedWhenNarrow(narrow, scrollRef, selectedCommitId, revealCommit);
   const drawWidth = narrow ? COMPACT_GRAPH_WIDTH : graphWidth;
   const loadState = useRef({ hasNextPage, isFetchingNextPage, fetchNextPage });
   useEffect(() => {
@@ -560,6 +626,94 @@ function CommitGraphList({
     [openRefMenu],
   );
 
+  // 맨 위 묶음: 보는 중 안내, 또는 「지금」 영역 머리(D48, 보일 WIP 행이 있을 때만)와 WIP 행들.
+  const topSection = hasTop ? (
+    viewing ? (
+      <ViewingNote />
+    ) : (
+      <>
+        <NowHeaderRow graphWidth={drawWidth} through={[]} colorOf={colorOf} />
+        <WipRows
+          wips={wips}
+          selection={selection}
+          graphWidth={drawWidth}
+          lanes={narrow ? undefined : layouts}
+          compact={narrow}
+          colorOf={colorOf}
+          currentHead={ownHead}
+        />
+      </>
+    )
+  ) : null;
+
+  const renderItem = (item: ListItem) => {
+    if (item.kind === "top") return topSection;
+    const commit = commits[item.index];
+    const through = narrow ? NO_THROUGH : throughAt(item.index);
+    switch (item.kind) {
+      case "unpushed":
+        return <UnpushedHeaderRow remote={remoteLabel} graphWidth={drawWidth} through={through} colorOf={colorOf} />;
+      case "remote":
+        return (
+          <RemoteHeaderRow
+            remote={remoteLabel}
+            branch={boundaryRemoteRef}
+            graphWidth={drawWidth}
+            through={through}
+            colorOf={colorOf}
+          />
+        );
+      case "base":
+        return (
+          <BaseHeaderRow
+            branch={changes?.defaultBranch ?? ""}
+            timestamp={commit.timestamp}
+            graphWidth={drawWidth}
+            through={through}
+            colorOf={colorOf}
+          />
+        );
+      case "commit": {
+        const layout = layouts.get(commit.id);
+        if (!layout) return null;
+        const emailKey = commit.author.email?.toLowerCase() ?? "";
+        const isSelected = selectedCommitId === commit.id;
+        const chainLabelHere = commit.id === chainLabelAnchorId;
+        // 다른 줄기를 흐리는 일은 컨테이너 CSS(`ChainHighlightStyle`)가 한다 — 강조 값은 점 테를 두를
+        // 고른 행과 이름 칩 행에만 내려, 마우스를 옮길 때 이 둘만 다시 그린다.
+        const needsHighlight = isSelected || chainLabelHere;
+        return (
+          <HistoryGraphRow
+            index={item.index}
+            itemRef={itemRef}
+            commit={commit}
+            layout={layout}
+            graphWidth={drawWidth}
+            compact={narrow}
+            colorOf={colorOf}
+            remoteTags={remoteTags}
+            avatarUrl={accountAvatarMap.get(emailKey) || githubAvatarMap?.[emailKey] || undefined}
+            stats={commitStats.get(commit.id)}
+            ci={ciByCommit.get(commit.id) ?? null}
+            isSelected={isSelected}
+            isHighlighted={activeIndex === item.index}
+            dot={dotOf(commit)}
+            laneTitle={laneTitle}
+            refColor={refColor}
+            flash={newCommits.has(commit.id)}
+            highlightChain={needsHighlight ? highlightChain : null}
+            chainLabel={chainLabelHere ? chainLabel : undefined}
+            chainLabelHere={chainLabelHere}
+            onSelect={selectCommit}
+            onRowContextMenu={handleRowContextMenu}
+            onRefContextMenu={handleRefContextMenu}
+            onHoverChange={setHoveredCommitId}
+          />
+        );
+      }
+    }
+  };
+
   return (
     <div className="@container/graph flex flex-col flex-1 min-h-0 overflow-hidden">
       <div
@@ -574,97 +728,38 @@ function CommitGraphList({
         <span>{t("graph.colTime")}</span>
       </div>
 
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
-        {viewing ? (
-          <ViewingNote />
-        ) : (
+      <div ref={scrollRef} className="graph-hl flex-1 min-h-0 overflow-y-auto" {...containerProps}>
+        <ChainHighlightStyle chain={highlightChain} />
+        {isLoading ? (
           <>
-            {/* 「지금」 영역 머리(D48): 보일 WIP 행이 있을 때만 그 위에 둔다. */}
-            {wips.length > 0 && <NowHeaderRow graphWidth={drawWidth} through={[]} colorOf={colorOf} />}
-            <WipRows
-              wips={wips}
-              selection={selection}
-              graphWidth={drawWidth}
-              lanes={narrow ? undefined : layouts}
-              compact={narrow}
-              colorOf={colorOf}
-              currentHead={ownHead}
+            {topSection}
+            <LoadingState label={t("history.loadingHistory")} />
+          </>
+        ) : commits.length === 0 ? (
+          <>
+            {topSection}
+            <EmptyState
+              layout="row"
+              title={historyTarget?.kind !== "all" && historyTarget?.excludeDefault ? t("graph.noOwnCommits") : t("history.noCommits")}
             />
           </>
-        )}
-
-        {isLoading ? (
-          <LoadingState label={t("history.loadingHistory")} />
-        ) : commits.length === 0 ? (
-          <EmptyState
-            layout="row"
-            title={historyTarget?.kind !== "all" && historyTarget?.excludeDefault ? t("graph.noOwnCommits") : t("history.noCommits")}
-          />
         ) : (
-          commits.map((commit, index) => {
-            const layout = layouts.get(commit.id);
-            if (!layout) return null;
-            const emailKey = commit.author.email?.toLowerCase() ?? "";
-            const through = narrow ? NO_THROUGH : throughAt(index);
-            return (
-              <Fragment key={commit.id}>
-                {/* 영역 머리는 그 영역 맨 위에 둔다: 올리지 않은 작업 → origin에 있음 → 기본 브랜치.
-                    두 머리가 같은 커밋 위에 오면(새 브랜치를 아직 push 안 함) origin이 위, 기본 브랜치가 아래다. */}
-                {unpushedIdx === index && (
-                  <UnpushedHeaderRow
-                    remote={remoteLabel}
-                    graphWidth={drawWidth}
-                    through={through}
-                    colorOf={colorOf}
-                  />
-                )}
-                {boundaryIdx === index && (
-                  <RemoteHeaderRow
-                    remote={remoteLabel}
-                    branch={boundaryRemoteRef}
-                    graphWidth={drawWidth}
-                    through={through}
-                    colorOf={colorOf}
-                  />
-                )}
-                {forkIdx === index && changes?.defaultBranch && (
-                  <BaseHeaderRow
-                    branch={changes.defaultBranch}
-                    timestamp={commit.timestamp}
-                    graphWidth={drawWidth}
-                    through={through}
-                    colorOf={colorOf}
-                  />
-                )}
-                <HistoryGraphRow
-                  index={index}
-                  itemRef={itemRef}
-                  commit={commit}
-                  layout={layout}
-                  graphWidth={drawWidth}
-                  compact={narrow}
-                  colorOf={colorOf}
-                  remoteTags={remoteTags}
-                  avatarUrl={accountAvatarMap.get(emailKey) || githubAvatarMap?.[emailKey] || undefined}
-                  stats={commitStats.get(commit.id)}
-                  ci={ciByCommit.get(commit.id) ?? null}
-                  isSelected={selectedCommitId === commit.id}
-                  isHighlighted={activeIndex === index}
-                  dot={dotOf(commit)}
-                  laneTitle={laneTitle}
-                  refColor={refColor}
-                  flash={newCommits.has(commit.id)}
-                  highlightChain={highlightChain}
-                  chainLabel={chainLabel}
-                  chainLabelHere={commit.id === chainLabelAnchorId}
-                  onSelect={selectCommit}
-                  onRowContextMenu={handleRowContextMenu}
-                  onRefContextMenu={handleRefContextMenu}
-                  onHoverChange={setHoveredCommitId}
-                />
-              </Fragment>
-            );
-          })
+          <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+            {virtualizer.getVirtualItems().map((vItem) => {
+              const item = listItems[vItem.index];
+              return (
+                <div
+                  key={vItem.key}
+                  data-index={vItem.index}
+                  ref={item.kind === "top" ? virtualizer.measureElement : undefined}
+                  className="absolute top-0 left-0 w-full"
+                  style={{ transform: `translateY(${vItem.start}px)` }}
+                >
+                  {renderItem(item)}
+                </div>
+              );
+            })}
+          </div>
         )}
         <div ref={loadMoreRef} />
         {isFetchingNextPage && (
