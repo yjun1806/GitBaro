@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import i18n from "@/i18n/config";
 import { useUIStore } from "@/stores/ui";
 import { GRAPH_NARROW_WIDTH } from "@/lib/split-size";
-import { useGraphNarrow, usePaneStore } from "../pane-state";
+import { useGraphNarrow } from "../pane-state";
 import { NarrowPaneHeader } from "../NarrowPaneHeader";
 import { PaneStrip } from "../PaneStrip";
 
@@ -24,7 +24,6 @@ if (typeof window.PointerEvent === "undefined") {
 beforeEach(async () => {
   await i18n.changeLanguage("en");
   useUIStore.setState({ isDiffMaximized: false, diffFileOpen: false });
-  usePaneStore.setState({ graphExpanded: false });
   useUIStore.setState({ paneGraphRatio: 0.46, narrowListWidth: GRAPH_NARROW_WIDTH });
 });
 afterEach(cleanup);
@@ -34,7 +33,7 @@ function NarrowAwareGraph() {
   const narrow = useGraphNarrow();
   return (
     <div>
-      {narrow && <NarrowPaneHeader label="Commit graph" />}
+      {narrow && <NarrowPaneHeader label="Commit graph" onClose={() => {}} />}
       graph-content{narrow ? " (narrow)" : ""}
     </div>
   );
@@ -74,19 +73,38 @@ describe("PaneStrip (D47/5.4 stacked panes)", () => {
     expect(screen.getByTestId("pane-strip-bottom").style.minWidth).toBe("652px");
   });
 
-  it("goes back to the level-1 width from “Expand the graph”, keeping the file open, and narrows again on reset", () => {
+  it("closes the side panes from “Close and widen the graph”: level 0, graph at full width, bottom unmounted", () => {
     useUIStore.setState({ diffFileOpen: true });
-    const { rerender } = renderStrip(true);
-    fireEvent.click(screen.getByRole("button", { name: "Expand the graph" }));
+    function Harness() {
+      const [picked, setPicked] = useState(true);
+      return (
+        <PaneStrip
+          graph={<NarrowPaneHeader label="Commit graph" onClose={() => setPicked(false)} />}
+          hasSelection={picked}
+          bottom={<div>bottom-content</div>}
+        />
+      );
+    }
+    render(<Harness />);
+    expect(screen.getByTestId("graph-pane").dataset.paneLevel).toBe("2");
+    fireEvent.click(screen.getByRole("button", { name: "Close and widen the graph" }));
     const pane = screen.getByTestId("graph-pane");
-    expect(pane.dataset.paneLevel).toBe("1");
-    expect(pane.style.width).toBe("46%");
-    expect(screen.getByText("graph-content")).toBeTruthy();
-    expect(useUIStore.getState().diffFileOpen).toBe(true);
+    expect(pane.dataset.paneLevel).toBe("0");
+    expect(pane.style.width).toBe("100%");
+    expect(screen.queryByTestId("pane-strip-bottom")).toBeNull();
+  });
 
-    // 고른 행이 없어지면(0단계) 펼침도 풀려, 다음에 파일을 열면 다시 좁은 목록이다.
-    rerender(<PaneStrip graph={<NarrowAwareGraph />} hasSelection={false} bottom={<div>bottom-content</div>} />);
-    expect(usePaneStore.getState().graphExpanded).toBe(false);
+  it("moves keyboard focus to the graph list when the header button closes the panes", () => {
+    render(
+      <div data-pane-level="2">
+        <NarrowPaneHeader label="Commit graph" onClose={() => {}} />
+        <div data-graph-list tabIndex={0}>
+          list
+        </div>
+      </div>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close and widen the graph" }));
+    expect(document.activeElement).toBe(document.querySelector("[data-graph-list]"));
   });
 
   it("3단계: pushes the graph out to 0 width while maximized, keeping bottom mounted", () => {
@@ -97,7 +115,7 @@ describe("PaneStrip (D47/5.4 stacked panes)", () => {
     expect(pane.style.width).toBe("0px");
     expect(screen.getByTestId("pane-strip-bottom")).toBeTruthy();
     // 3단계에서는 그래프 자체가 밀려 나가 좁은 목록 머리 줄도 없다.
-    expect(screen.queryByRole("button", { name: "Expand the graph" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close and widen the graph" })).toBeNull();
   });
 
   it("never remounts the graph across level changes", () => {
@@ -257,9 +275,9 @@ describe("PaneStrip transition (5.4: calm, one moving edge)", () => {
     withAnimations(() => {
       useUIStore.setState({ diffFileOpen: true });
       vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 240 } as DOMRect);
-      renderStrip(true);
-      // 2 → 1단계(그래프 펼치기): 240px에서 넓어진다 — 끝날 때까지 240px 그대로라 글이 넘치지 않는다.
-      act(() => usePaneStore.getState().setGraphExpanded(true));
+      const { rerender } = renderStrip(true);
+      // 2 → 0단계(목록 닫기): 240px에서 넓어진다 — 끝날 때까지 240px 그대로라 글이 넘치지 않는다.
+      rerender(<PaneStrip graph={<NarrowAwareGraph />} hasSelection={false} bottom={<div>bottom-content</div>} />);
       expect(inner().style.width).toBe("240px");
     });
   });

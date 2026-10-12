@@ -5,12 +5,8 @@ import { PANE_MS } from "./maximize-motion";
 
 /**
  * 옆으로 쌓는 칸(D47, `PaneStrip`)의 화면 상태. 저장하지 않는다.
- * - `graphExpanded`: 2단계(파일을 연 뒤)에서 「그래프 펼치기」를 눌러 1단계 폭으로 돌아간 상태. 파일을
- *   다시 고르거나(`ListDiffSplit`) 고른 행이 없어지면 풀린다.
  */
 interface PaneState {
-  graphExpanded: boolean;
-  setGraphExpanded: (expanded: boolean) => void;
   /**
    * 지금 열린 diff를 닫는 함수들(나중에 연 것이 맨 뒤). `ListDiffSplit`이 파일을 열었고 닫는 법을 받았을
    * 때 올리고, 닫거나 사라지면 내린다. Esc가 맨 뒤의 것을 부른다(`useDiffEscape`).
@@ -21,8 +17,6 @@ interface PaneState {
 }
 
 export const usePaneStore = create<PaneState>()((set) => ({
-  graphExpanded: false,
-  setGraphExpanded: (expanded) => set({ graphExpanded: expanded }),
   diffClosers: [],
   pushDiffCloser: (close) => set((state) => ({ diffClosers: [...state.diffClosers, close] })),
   removeDiffCloser: (close) => set((state) => ({ diffClosers: state.diffClosers.filter((c) => c !== close) })),

@@ -119,16 +119,6 @@ export function ListDiffSplit({
     return () => setDiffFileOpen(false);
   }, [hasFile, setDiffFileOpen]);
 
-  // 다른 파일을 고르면 「그래프 펼치기」(1단계 폭)를 풀어 다시 좁은 커밋 목록(2단계)으로 간다.
-  const setGraphExpanded = usePaneStore((s) => s.setGraphExpanded);
-  const selectedKey = files?.selectedKey ?? null;
-  const prevSelectedKey = useRef(selectedKey);
-  useEffect(() => {
-    if (prevSelectedKey.current === selectedKey) return;
-    prevSelectedKey.current = selectedKey;
-    if (selectedKey !== null) setGraphExpanded(false);
-  }, [selectedKey, setGraphExpanded]);
-
   // Esc로 닫을 수 있게 올려 둔다(크게 보기 → 2단계 → 1단계, `useDiffEscape`). 최신 함수를 부르도록 ref로 잇는다.
   const closeRef = useRef(onCloseFile);
   useEffect(() => {

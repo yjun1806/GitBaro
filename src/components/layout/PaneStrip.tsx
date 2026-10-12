@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useUIStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
@@ -12,7 +12,7 @@ import {
   MIN_PANE_GRAPH_WIDTH,
 } from "@/lib/split-size";
 import { canAnimate, PANE_MS } from "./maximize-motion";
-import { GraphNarrowContext, usePaneStore } from "./pane-state";
+import { GraphNarrowContext } from "./pane-state";
 import { SplitHandle } from "./SplitHandle";
 
 export interface PaneStripProps {
@@ -92,7 +92,7 @@ function graphTargetWidth(
  * 0 아무것도 안 고름(그래프 전체) → 1 골랐지만 파일은 아직(그래프 46% + 상세) →
  * 2 파일까지 고름(좁은 커밋 목록 240px + 파일 목록 + diff. 창이 좁으면 파일 목록이 먼저 220px까지
  * 줄고, 그래도 모자라면 이 단계만 가로 스크롤. 좁은 목록에서 다른 커밋을 고르면 2단계 그대로 따라
- * 바뀌고, 목록 머리의 「그래프 펼치기」로 1단계 폭으로 돌아간다 — `usePaneStore.graphExpanded`) →
+ * 바뀌고, 목록 머리의 「목록 닫고 그래프 넓게 보기」는 고른 것을 모두 풀어 0단계로 간다) →
  * 3 크게 보기(그래프는 밀려 나가고 diff가 칸 전체, 파일 목록만 옆에 남는다). 칸은 `width`만
  * `--motion-pane`(240ms, 동작 줄이기에서 0)로 움직인다. `bottom`은 늘 마운트돼 있지 않다 —
  * 0단계에서 아예 없다가 나타날 때 `animate-content-in`으로 옅게 들어온다(폭을 늘리며 나타나지
@@ -105,14 +105,7 @@ function graphTargetWidth(
 export function PaneStrip({ graph, hasSelection, bottom }: PaneStripProps) {
   const maximized = useUIStore((s) => s.isDiffMaximized);
   const fileOpen = useUIStore((s) => s.diffFileOpen);
-  const graphExpanded = usePaneStore((s) => s.graphExpanded);
-  const setGraphExpanded = usePaneStore((s) => s.setGraphExpanded);
-  const level: 0 | 1 | 2 | 3 = !hasSelection ? 0 : maximized ? 3 : fileOpen && !graphExpanded ? 2 : 1;
-
-  // 고른 행이 없어지면(0단계) 「그래프 펼치기」도 푼다 — 다음에 파일을 열면 다시 좁은 목록이 된다.
-  useEffect(() => {
-    if (!hasSelection && graphExpanded) setGraphExpanded(false);
-  }, [hasSelection, graphExpanded, setGraphExpanded]);
+  const level: 0 | 1 | 2 | 3 = !hasSelection ? 0 : maximized ? 3 : fileOpen ? 2 : 1;
 
   const { t } = useTranslation();
   const ratio = useUIStore((s) => s.paneGraphRatio);

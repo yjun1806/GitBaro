@@ -4,6 +4,7 @@ import { Archive, GitCommitVertical, GitPullRequest, Play } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
+import { useFollowStore } from "@/stores/follow";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
 import {
   useMergeState,
@@ -75,6 +76,7 @@ export function GraphPanel() {
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
   const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
   const clearCommitSelection = useSelectionStore((s) => s.clearCommitSelection);
+  const clearAll = useSelectionStore((s) => s.clearAll);
   const repoAccountId = useRepoAccountId();
 
   const review = useGraphReview();
@@ -145,6 +147,15 @@ export function GraphPanel() {
     prevTab.current = activeTab;
   }, [activeTab, clearCommitSelection]);
 
+  // 좁은 목록 머리의 「목록 닫고 그래프 넓게 보기」: 옆 칸이 열려 있게 하는 선택을 모두 풀어 0단계로 간다.
+  // 커밋 안 한 변경 탭은 파일이 없어도 변경이 있으면 칸이 열리므로 커밋 탭으로 옮긴다.
+  const closeSidePanes = () => {
+    clearAll();
+    useFollowStore.getState().stop();
+    setPrOpen(false);
+    if (activeTab === "changes") setActiveTab("history");
+  };
+
   const openGraphTab = () => {
     setPrOpen(false);
     setActiveTab(selectedCommitId ? "history" : "changes");
@@ -160,7 +171,7 @@ export function GraphPanel() {
   return (
     <div role="region" aria-label={t("shell.panelTabs")} className="flex flex-col shrink-0 flex-1 h-full min-h-0">
       <Card className="relative flex-1 min-h-0">
-        {narrow && <NarrowPaneHeader label={tabLabel} />}
+        {narrow && <NarrowPaneHeader label={tabLabel} onClose={closeSidePanes} />}
         <div className={cn("flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)", narrow && "hidden")}>
           <TabGroup aria-label={t("shell.panelTabs")} className="flex-1 min-w-0 gap-2 px-3 border-b-0">
             <Tab

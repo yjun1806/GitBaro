@@ -728,7 +728,7 @@ function CommitGraphList({
         <span>{t("graph.colTime")}</span>
       </div>
 
-      <div ref={scrollRef} className="graph-hl flex-1 min-h-0 overflow-y-auto" {...containerProps}>
+      <div ref={scrollRef} data-graph-list className="graph-hl flex-1 min-h-0 overflow-y-auto" {...containerProps}>
         <ChainHighlightStyle chain={highlightChain} />
         {isLoading ? (
           <>
@@ -1077,7 +1077,7 @@ export function RepoLaneCommitGraph({
         <span className={NARROW_HIDDEN_CLASS}>{t("graph.colAuthor")}</span>
         <span>{t("graph.colTime")}</span>
       </div>
-      <div ref={laneScrollRef} className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
+      <div ref={laneScrollRef} data-graph-list className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
         {isLoading && graph.rows.length === 0 ? (
           <LoadingState label={t("history.loadingHistory")} />
         ) : graph.rows.length === 0 ? (

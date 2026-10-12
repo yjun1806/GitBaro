@@ -8,7 +8,6 @@ import { useUIStore } from "@/stores/ui";
 import { useSelectionStore } from "@/stores/selection";
 import { useFollowStore } from "@/stores/follow";
 import { useScopeStore } from "@/components/scope/scope-store";
-import { usePaneStore } from "../pane-state";
 import type { RepoInfo, StatusEntry } from "@/types";
 
 // Heavy children talk to Tauri; the shell only decides which one to show.
@@ -150,7 +149,6 @@ beforeEach(async () => {
   useUIStore.setState({ activeTab: "changes", repoListOpen: false });
   useSelectionStore.getState().clearAll();
   useScopeStore.setState({ aggregateRepoPath: null, lastSelection: null, laneShown: {}, repoShown: {} });
-  usePaneStore.setState({ graphExpanded: false });
   useRepositoryStore.setState({ repos: [repo], activeRepo: repo, activeRepoPath: repo.path });
   useFollowStore.getState().stop();
   mergeStateValue = null;
@@ -191,7 +189,7 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getByText("changes-view")).toBeTruthy();
   });
 
-  it("D47/5.4: picking the uncommitted row stays at level 1; picking a file opens the narrow commit list, and expanding goes back", () => {
+  it("D47/5.4: picking the uncommitted row stays at level 1; picking a file opens the narrow commit list, and closing the panes returns to level 0", () => {
     renderShell();
     const graphPane = screen.getByTestId("graph-pane");
     expect(graphPane.dataset.paneLevel).toBe("1");
@@ -211,11 +209,13 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getByRole("tablist")).toBeTruthy();
     expect(screen.getByText("history-list")).toBeTruthy();
 
-    // 「그래프 펼치기」는 선택을 지우지 않고 1단계 폭으로만 돌아간다.
-    fireEvent.click(screen.getByRole("button", { name: "Expand the graph" }));
-    expect(useFollowStore.getState().target).toBe(repo.path);
-    expect(graphPane.dataset.paneLevel).toBe("1");
-    expect(graphPane.style.width).toBe("46%");
+    // 「목록 닫고 그래프 넓게 보기」는 고른 것을 모두 풀어 옆 칸을 닫고 그래프를 전체 폭으로 둔다.
+    fireEvent.click(screen.getByRole("button", { name: "Close and widen the graph" }));
+    expect(useFollowStore.getState().target).toBeNull();
+    expect(useSelectionStore.getState().selectedCommitId).toBeNull();
+    expect(useUIStore.getState().diffFileOpen).toBe(false);
+    expect(graphPane.dataset.paneLevel).toBe("0");
+    expect(graphPane.style.width).toBe("100%");
   });
 
   it("D47: picking a commit in the narrow list keeps level 2 and switches what the panes show", () => {
