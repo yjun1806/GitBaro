@@ -173,8 +173,8 @@ export interface AuthorInfo {
  * - `all`: 모든 로컬·원격 브랜치 끝
  */
 export type HistoryTarget =
-  | { kind: "head" }
-  | { kind: "ref"; name: string }
+  | { kind: "head"; excludeDefault?: boolean }
+  | { kind: "ref"; name: string; excludeDefault?: boolean }
   | { kind: "all" };
 
 export interface BranchInfo {

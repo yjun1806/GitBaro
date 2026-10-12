@@ -932,6 +932,7 @@
     }
   },
   "graph": {
+    "noOwnCommits": "이 브랜치에는 아직 자기 커밋이 없습니다. 「이 브랜치만」을 끄면 전체 이력을 볼 수 있습니다.",
     "colDescription": "설명",
     "colChange": "변경",
     "colCi": "CI",

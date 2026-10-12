@@ -937,3 +937,63 @@ describe("GraphPanel tabs per scope step (5.1)", () => {
     branchList.length = 0;
   });
 });
+
+describe("GraphPanel branch-only history (5.1)", () => {
+  afterEach(() => {
+    branchList.length = 0;
+    useScopeStore.setState({ branchOnly: true });
+  });
+  const chipName = "This branch only";
+
+  it("asks for the checked-out branch's own commits in the branch step, with the chip on", () => {
+    useScopeStore.setState({ aggregateRepoPath: null, branchOnly: true });
+    branchList.push({ name: "main", isHead: true, isRemote: false });
+    renderPanel();
+    expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "head", excludeDefault: true });
+    const chip = screen.getByRole("button", { name: chipName });
+    expect(chip.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("asks for a viewed branch's own commits, and for the full history once the chip is off", () => {
+    useScopeStore.setState({ aggregateRepoPath: null, branchOnly: true });
+    branchList.push({ name: "main", isHead: true, isRemote: false }, { name: "feat/y", isHead: false, isRemote: false });
+    useHistoryViewStore.setState({ repoPath: REPO, target: { kind: "ref", name: "feat/y", isRemote: false } });
+    renderPanel();
+    expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "ref", name: "feat/y", excludeDefault: true });
+
+    fireEvent.click(screen.getByRole("button", { name: chipName }));
+    expect(useScopeStore.getState().branchOnly).toBe(false);
+    expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "ref", name: "feat/y" });
+  });
+
+  it("says the branch has no commits of its own when the cut list is empty", () => {
+    useScopeStore.setState({ aggregateRepoPath: null, branchOnly: true });
+    branchList.push({ name: "main", isHead: true, isRemote: false });
+    const saved = history.pages;
+    history.pages = [[]];
+    try {
+      renderPanel();
+      expect(screen.getByText(i18n.t("graph.noOwnCommits"))).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: chipName }));
+      expect(screen.getByText(i18n.t("history.noCommits"))).toBeTruthy();
+    } finally {
+      history.pages = saved;
+    }
+  });
+
+  it("has no chip and no flag in the repository step", () => {
+    useScopeStore.setState({ branchOnly: true });
+    renderPanel();
+    expect(screen.queryByRole("button", { name: chipName })).toBeNull();
+    expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "head" });
+  });
+
+  it("does not cut the history of a remote branch or of all branches", () => {
+    useScopeStore.setState({ aggregateRepoPath: null, branchOnly: true });
+    branchList.push({ name: "main", isHead: true, isRemote: false });
+    useHistoryViewStore.setState({ repoPath: REPO, target: { kind: "all" } });
+    renderPanel();
+    expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "all" });
+    expect(screen.queryByRole("button", { name: chipName })).toBeNull();
+  });
+});

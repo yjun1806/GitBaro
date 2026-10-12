@@ -527,7 +527,7 @@ export async function getCommitHistory(
     repoPath,
     limit,
     offset,
-    ...(target && target.kind !== "head" ? { target } : {}),
+    ...(target && (target.kind !== "head" || target.excludeDefault) ? { target } : {}),
   });
   return raw.map((c) => ({
     id: c.oid,

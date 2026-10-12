@@ -7,6 +7,7 @@ use crate::git::commit::{agent_attribution, parent_ids};
 use crate::git::commit_stats::{commit_stats, CommitStats};
 use crate::git::diff::{detect_renames, rename_source};
 use crate::git::remote::parse_github_url;
+use crate::git::worktree_base::default_branch_with_fallback;
 use crate::git::unpushed::{commits_not_on_any_remote, upstream_tip, UNPUSHED_LIMIT};
 use crate::github::client::GitHubClient;
 use crate::state::TokenStore;
@@ -23,10 +24,19 @@ fn gravatar_url(email: &str) -> String {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum HistoryTarget {
-    /// 지금 체크아웃된 HEAD(기본값).
-    Head,
+    /// 지금 체크아웃된 HEAD(기본값). `exclude_default`는 `Ref`와 같다(체크아웃한 브랜치의 단계).
+    Head {
+        #[serde(default, rename = "excludeDefault")]
+        exclude_default: bool,
+    },
     /// 로컬 브랜치(`feat/x`), 원격 브랜치(`origin/x`), 태그. 짧은 이름으로 찾는다.
-    Ref { name: String },
+    /// `exclude_default`가 참이면 기본 브랜치(로컬과 `origin/`)에서 닿는 커밋을 뺀다
+    /// (`git log <name> --not <기본 브랜치>`): 브랜치가 갈라진 뒤의 제 커밋만 남는다.
+    Ref {
+        name: String,
+        #[serde(default, rename = "excludeDefault")]
+        exclude_default: bool,
+    },
     /// 모든 로컬·원격 브랜치 끝과 HEAD.
     All,
 }
@@ -34,6 +44,8 @@ pub enum HistoryTarget {
 /// revwalk의 시작점과, 아직 push하지 않은 커밋을 가려낼 기준.
 struct HistoryTips {
     tips: Vec<git2::Oid>,
+    /// revwalk에서 뺄 끝(그 조상 전체가 가려진다). 기본 브랜치 제외에 쓴다.
+    hidden: Vec<git2::Oid>,
     /// 시작점이 로컬 브랜치(또는 HEAD)일 때 그 upstream 끝.
     upstream: Option<git2::Oid>,
     /// 원격 브랜치를 볼 때: 이미 원격에 있으니 push할 커밋이 없다.
@@ -49,7 +61,23 @@ fn head_tips(repo: &git2::Repository) -> HistoryTips {
         .and_then(|h| h.shorthand().map(str::to_string))
         .and_then(|name| repo.find_branch(&name, git2::BranchType::Local).ok())
         .and_then(|b| upstream_tip(&b));
-    HistoryTips { tips, upstream, on_remote: false }
+    HistoryTips { tips, hidden: Vec::new(), upstream, on_remote: false }
+}
+
+/// 기본 브랜치의 끝: 로컬과 `origin/` 사본 중 있는 것. 보는 ref가 기본 브랜치 자신이면 비어 있다
+/// (자기 이력을 통째로 가리면 안 된다). 기본 브랜치 규칙은 `git::worktree_base`와 같다.
+fn default_branch_tips(repo: &git2::Repository, viewed: Option<&str>) -> Vec<git2::Oid> {
+    let Some(default) = default_branch_with_fallback(repo) else {
+        return Vec::new();
+    };
+    let remote = format!("origin/{default}");
+    if viewed == Some(default.as_str()) || viewed == Some(remote.as_str()) {
+        return Vec::new();
+    }
+    [(default, git2::BranchType::Local), (remote, git2::BranchType::Remote)]
+        .into_iter()
+        .filter_map(|(name, kind)| repo.find_branch(&name, kind).ok()?.get().target())
+        .collect()
 }
 
 fn resolve_history_tips(
@@ -57,8 +85,16 @@ fn resolve_history_tips(
     target: &HistoryTarget,
 ) -> Result<HistoryTips, AppError> {
     match target {
-        HistoryTarget::Head => Ok(head_tips(repo)),
-        HistoryTarget::Ref { name } => {
+        HistoryTarget::Head { exclude_default } => {
+            let mut tips = head_tips(repo);
+            if *exclude_default {
+                let head = repo.head().ok();
+                let branch = head.as_ref().filter(|h| h.is_branch()).and_then(|h| h.shorthand());
+                tips.hidden = default_branch_tips(repo, branch);
+            }
+            Ok(tips)
+        }
+        HistoryTarget::Ref { name, exclude_default } => {
             let name = name.trim();
             // 브랜치·태그 이름은 `-`로 시작할 수 없다. 빈 이름과 함께 막는다.
             if name.is_empty() || name.starts_with('-') {
@@ -69,12 +105,17 @@ fn resolve_history_tips(
             let reference = repo.resolve_reference_from_short_name(name)?;
             let oid = reference.peel_to_commit()?.id();
             let on_remote = reference.is_remote();
+            let hidden = if *exclude_default {
+                default_branch_tips(repo, reference.shorthand())
+            } else {
+                Vec::new()
+            };
             let upstream = if reference.is_branch() {
                 upstream_tip(&git2::Branch::wrap(reference))
             } else {
                 None
             };
-            Ok(HistoryTips { tips: vec![oid], upstream, on_remote })
+            Ok(HistoryTips { tips: vec![oid], hidden, upstream, on_remote })
         }
         HistoryTarget::All => {
             let mut tips: Vec<git2::Oid> = head_tips(repo).tips;
@@ -86,7 +127,7 @@ fn resolve_history_tips(
                     }
                 }
             }
-            Ok(HistoryTips { tips, upstream: None, on_remote: false })
+            Ok(HistoryTips { tips, hidden: Vec::new(), upstream: None, on_remote: false })
         }
     }
 }
@@ -124,7 +165,7 @@ pub async fn get_commit_history(
     let result = tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
         let ref_map = crate::git::commit::build_ref_map(&repo);
-        let tips = resolve_history_tips(&repo, &target.unwrap_or(HistoryTarget::Head))?;
+        let tips = resolve_history_tips(&repo, &target.unwrap_or(HistoryTarget::Head { exclude_default: false }))?;
         // 시작점 기준 unpushed 커밋 집합.
         let unpushed = unpushed_from(&repo, &tips);
         let mut revwalk = repo.revwalk()?;
@@ -134,6 +175,9 @@ pub async fn get_commit_history(
         // (빈 저장소)면 시작점이 없어 빈 히스토리가 된다.
         for tip in &tips.tips {
             revwalk.push(*tip)?;
+        }
+        for hidden in &tips.hidden {
+            revwalk.hide(*hidden)?;
         }
         revwalk.set_sorting(git2::Sort::TIME)?;
 
@@ -930,7 +974,11 @@ mod tests {
     }
 
     fn named(name: &str) -> Option<HistoryTarget> {
-        Some(HistoryTarget::Ref { name: name.to_string() })
+        Some(HistoryTarget::Ref { name: name.to_string(), exclude_default: false })
+    }
+
+    fn named_own(name: &str) -> Option<HistoryTarget> {
+        Some(HistoryTarget::Ref { name: name.to_string(), exclude_default: true })
     }
 
     #[tokio::test]
@@ -991,10 +1039,113 @@ mod tests {
         assert!(unpushed(c3));
 
         // 기본값(None)과 Head는 체크아웃한 브랜치만.
-        let head = get_commit_history(path.clone(), Some(100), Some(0), Some(HistoryTarget::Head))
+        let head = get_commit_history(path.clone(), Some(100), Some(0), Some(HistoryTarget::Head { exclude_default: false }))
             .await
             .unwrap();
         assert_eq!(oids_of(&head), sorted(&[c2, c1]));
+    }
+
+    /// 기본 브랜치 제외: feature는 main(c2)에서 갈라져 제 커밋 c3만 남는다. 끄면 조상까지 전부.
+    #[tokio::test]
+    async fn branch_only_history_stops_at_the_fork_point() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        let (c1, c2, c3, _) = branchy_repo(&tmp);
+
+        let own = get_commit_history(path.clone(), Some(100), Some(0), named_own("feature"))
+            .await
+            .unwrap();
+        assert_eq!(oids_of(&own), sorted(&[c3]));
+        let full = get_commit_history(path, Some(100), Some(0), named("feature")).await.unwrap();
+        assert_eq!(oids_of(&full), sorted(&[c3, c2, c1]));
+    }
+
+    /// 체크아웃한 브랜치(HEAD)도 같다: 기본 브랜치에서 갈라진 뒤의 제 커밋만.
+    #[tokio::test]
+    async fn branch_only_history_of_the_checked_out_branch() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        let (c1, c2, c3, _) = branchy_repo(&tmp);
+        let repo = tmp.open();
+        repo.set_head("refs/heads/feature").unwrap();
+        let own = Some(HistoryTarget::Head { exclude_default: true });
+
+        let commits = get_commit_history(path.clone(), Some(100), Some(0), own).await.unwrap();
+        assert_eq!(oids_of(&commits), sorted(&[c3]));
+
+        // 기본 브랜치를 체크아웃했으면 전부.
+        let main_branch = ["main", "master"]
+            .into_iter()
+            .find(|n| repo.find_branch(n, git2::BranchType::Local).is_ok())
+            .unwrap();
+        repo.set_head(&format!("refs/heads/{main_branch}")).unwrap();
+        let own = Some(HistoryTarget::Head { exclude_default: true });
+        let commits = get_commit_history(path, Some(100), Some(0), own).await.unwrap();
+        assert_eq!(oids_of(&commits), sorted(&[c2, c1]));
+    }
+
+    #[tokio::test]
+    async fn branch_only_history_of_the_default_branch_is_full() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        let (c1, c2, _, _) = branchy_repo(&tmp);
+        let main_branch = head_branch(&tmp.open());
+
+        let commits = get_commit_history(path, Some(100), Some(0), named_own(&main_branch))
+            .await
+            .unwrap();
+        assert_eq!(oids_of(&commits), sorted(&[c2, c1]));
+    }
+
+    #[tokio::test]
+    async fn branch_only_history_of_a_merged_branch_is_empty() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        let (_, c2, _, _) = branchy_repo(&tmp);
+        let repo = tmp.open();
+        repo.branch("merged", &repo.find_commit(c2).unwrap(), false).unwrap();
+
+        let commits = get_commit_history(path, Some(100), Some(0), named_own("merged"))
+            .await
+            .unwrap();
+        assert!(commits.is_empty());
+    }
+
+    #[tokio::test]
+    async fn branch_only_history_also_hides_the_remote_default_branch() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        let (_, _, c3, _) = branchy_repo(&tmp);
+        // 원격 main이 로컬 main보다 앞서 feature의 제 커밋 c3까지 담았다고 하자.
+        let repo = tmp.open();
+        let main_branch = head_branch(&repo);
+        set_remote_ref(&repo, &format!("origin/{main_branch}"), c3);
+
+        let commits = get_commit_history(path, Some(100), Some(0), named_own("feature"))
+            .await
+            .unwrap();
+        assert!(commits.is_empty());
+    }
+
+    #[tokio::test]
+    async fn branch_only_history_paginates() {
+        let tmp = TempRepo::new();
+        let path = tmp.path.to_str().unwrap().to_string();
+        let (_, _, c3, _) = branchy_repo(&tmp);
+        let repo = tmp.open();
+        let main_branch = head_branch(&repo);
+        repo.set_head("refs/heads/feature").unwrap();
+        let c4 = commit(&repo, "c.txt", "4");
+        repo.set_head(&format!("refs/heads/{main_branch}")).unwrap();
+
+        let first = get_commit_history(path.clone(), Some(1), Some(0), named_own("feature"))
+            .await
+            .unwrap();
+        let second = get_commit_history(path, Some(1), Some(1), named_own("feature"))
+            .await
+            .unwrap();
+        let both: Vec<Value> = first.into_iter().chain(second).collect();
+        assert_eq!(oids_of(&both), sorted(&[c4, c3]));
     }
 
     #[tokio::test]
@@ -1029,11 +1180,19 @@ mod tests {
     #[test]
     fn history_target_deserializes_from_frontend_shape() {
         let head: HistoryTarget = serde_json::from_value(json!({ "kind": "head" })).unwrap();
+        let own_head: HistoryTarget =
+            serde_json::from_value(json!({ "kind": "head", "excludeDefault": true })).unwrap();
+        assert_eq!(own_head, HistoryTarget::Head { exclude_default: true });
         let all: HistoryTarget = serde_json::from_value(json!({ "kind": "all" })).unwrap();
         let named: HistoryTarget =
             serde_json::from_value(json!({ "kind": "ref", "name": "origin/x" })).unwrap();
-        assert_eq!(head, HistoryTarget::Head);
+        assert_eq!(head, HistoryTarget::Head { exclude_default: false });
         assert_eq!(all, HistoryTarget::All);
-        assert_eq!(named, HistoryTarget::Ref { name: "origin/x".into() });
+        assert_eq!(named, HistoryTarget::Ref { name: "origin/x".into(), exclude_default: false });
+        let own: HistoryTarget = serde_json::from_value(
+            json!({ "kind": "ref", "name": "x", "excludeDefault": true }),
+        )
+        .unwrap();
+        assert_eq!(own, HistoryTarget::Ref { name: "x".into(), exclude_default: true });
     }
 }

@@ -596,7 +596,10 @@ function CommitGraphList({
         {isLoading ? (
           <LoadingState label={t("history.loadingHistory")} />
         ) : commits.length === 0 ? (
-          <EmptyState layout="row" title={t("history.noCommits")} />
+          <EmptyState
+            layout="row"
+            title={historyTarget?.kind !== "all" && historyTarget?.excludeDefault ? t("graph.noOwnCommits") : t("history.noCommits")}
+          />
         ) : (
           commits.map((commit, index) => {
             const layout = layouts.get(commit.id);

@@ -17,7 +17,7 @@ import { type GraphWip } from "./graph-model";
 import { worktreeColor } from "./worktree-history";
 import { activeRange, useBranchRangeStore } from "@/components/branch/branch-range";
 import { WorktreeLaneChips, type WorktreeChip } from "./WorktreeLaneChips";
-import type { ReviewWorktree, WorktreeInfo } from "@/types";
+import type { HistoryTarget, ReviewWorktree, WorktreeInfo } from "@/types";
 import { StashView } from "@/components/stash/StashView";
 import { ActionsView } from "@/components/actions/ActionsView";
 import { PrListView } from "@/components/pr/PrListView";
@@ -38,6 +38,7 @@ import { useActiveRepoName } from "@/hooks/useRepoDisplay";
 import { useGraphFilesView } from "./graph-files-view";
 import { useScopeSources } from "@/components/scope/useScopeSources";
 import { useScopeStore } from "@/components/scope/scope-store";
+import { BranchOnlyChip } from "@/components/scope/BranchOnlyChip";
 import { openedLaneId, visibleLaneSources, type LaneSource } from "@/components/scope/scope-lanes";
 import { carrySelection } from "@/components/scope/scope-selection";
 import { sameScope, type Scope } from "@/components/scope/scope";
@@ -119,6 +120,13 @@ export function GraphPanel() {
   const setBranchOnly = useScopeStore((s) => s.setBranchOnly);
   const branchFilter =
     scope?.kind === "branch" ? { branch: scope.branch, on: branchOnly, onToggle: () => setBranchOnly(!branchOnly) } : undefined;
+  // 그래프의 「이 브랜치만」: 기본 브랜치에서 갈라진 뒤의 제 커밋만 읽는다. 원격 브랜치·모든 브랜치를
+  // 보는 중에는 브랜치 하나의 이력이 아니라서 걸지 않는다(칩도 감춘다).
+  const graphBranchFilter =
+    branchFilter && (viewTarget === null || (viewTarget.kind === "ref" && !viewTarget.isRemote)) ? branchFilter : undefined;
+  const showLaneChips = !narrow && worktreeFilter.chips.length > 1;
+  const graphHistoryTarget: HistoryTarget =
+    graphBranchFilter?.on && historyTarget.kind !== "all" ? { ...historyTarget, excludeDefault: true } : historyTarget;
 
   // 커밋을 새로 고를 때만 아래 칸을 커밋 상세로 바꾼다. 패널이 다시 마운트될 때
   // (저장소 목록을 열었다 닫을 때 등) 남아 있던 선택으로 스태시·Actions 탭에서
@@ -196,19 +204,24 @@ export function GraphPanel() {
           {/* 「작업 중인 변경 N」은 아래 WIP 행이 말한다(여기 배지를 두지 않는다). */}
         </div>
 
-        {tab === "graph" && graphListShown && !narrow && (
+        {tab === "graph" && graphListShown && (
           <FilterBar
             left={
-              worktreeFilter.chips.length > 1 ? (
-                <WorktreeLaneChips
-                  chips={worktreeFilter.chips}
-                  visible={worktreeFilter.visible}
-                  onToggle={worktreeFilter.toggle}
-                  onContextMenu={(chip, e) => chipMenu.open(chip, contextMenuPoint(e))}
-                />
+              showLaneChips || graphBranchFilter ? (
+                <>
+                  {showLaneChips && (
+                    <WorktreeLaneChips
+                      chips={worktreeFilter.chips}
+                      visible={worktreeFilter.visible}
+                      onToggle={worktreeFilter.toggle}
+                      onContextMenu={(chip, e) => chipMenu.open(chip, contextMenuPoint(e))}
+                    />
+                  )}
+                  {graphBranchFilter && <BranchOnlyChip filter={graphBranchFilter} />}
+                </>
               ) : undefined
             }
-            right={<ScopeViewToggle />}
+            right={narrow ? undefined : <ScopeViewToggle />}
           />
         )}
         {chipMenu.element}
@@ -219,7 +232,7 @@ export function GraphPanel() {
             <CommitGraph
               wips={viewing ? NO_WIPS : worktreeFilter.wips}
               worktreeHeads={viewing ? NO_HEADS : worktreeFilter.heads}
-              historyTarget={historyTarget}
+              historyTarget={graphHistoryTarget}
               ciRuns={workflowRuns}
             />
           ) : tab === "stash" ? (

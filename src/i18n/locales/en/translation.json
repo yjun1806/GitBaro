@@ -933,6 +933,7 @@
     }
   },
   "graph": {
+    "noOwnCommits": "This branch has no commits of its own yet. Turn off “This branch only” to see the full history.",
     "colDescription": "Description",
     "colChange": "Change",
     "colCi": "CI",

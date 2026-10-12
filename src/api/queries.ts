@@ -179,8 +179,10 @@ const COMMIT_HISTORY_PAGE_SIZE = 50;
  * 브랜치는 그 뒤에 붙여, 접두어 무효화(commit·fetch 등)가 함께 적용된다.
  */
 export function commitHistoryKey(repoPath: string | null, target?: HistoryTarget): readonly unknown[] {
-  if (!target || target.kind === "head") return ["commitHistory", repoPath];
-  return ["commitHistory", repoPath, target.kind === "all" ? "all" : `ref:${target.name}`];
+  if (!target || (target.kind === "head" && !target.excludeDefault)) return ["commitHistory", repoPath];
+  if (target.kind === "all") return ["commitHistory", repoPath, "all"];
+  const own = target.excludeDefault ? ":own" : "";
+  return ["commitHistory", repoPath, target.kind === "head" ? `head${own}` : `ref:${target.name}${own}`];
 }
 
 /**
