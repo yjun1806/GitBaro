@@ -1,10 +1,27 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MAX_ENTRIES,
-  reconcileRehydrated,
+  sanitizePersistedEntries,
   useActivityStore,
 } from "@/stores/activity";
+import { useLiveOperationsStore } from "@/stores/live-operations";
 import type { GitCommandEntry } from "@/types";
+
+// 테스트 환경(node)에는 localStorage가 없어 persist가 붙지 않는다. 스토어 모듈이 만들어지기 전에
+// 가짜 localStorage를 심어 실제 저장 경로(디바운스 래퍼 포함)를 탄다.
+const { backing, setItem } = vi.hoisted(() => {
+  const backing = new Map<string, string>();
+  const setItem = vi.fn((k: string, v: string) => void backing.set(k, v));
+  const fake = {
+    getItem: (k: string) => backing.get(k) ?? null,
+    setItem,
+    removeItem: (k: string) => void backing.delete(k),
+  };
+  Object.assign(globalThis, {
+    window: { localStorage: fake, addEventListener: () => {} },
+  });
+  return { backing, setItem };
+});
 
 function makeStart(
   id: string,
@@ -20,13 +37,25 @@ function makeStart(
   };
 }
 
+function entries2(): number {
+  return useActivityStore.getState().entries.length;
+}
+
 function entryIds(): string[] {
   return useActivityStore.getState().entries.map((e) => e.id);
 }
 
 describe("useActivityStore", () => {
   beforeEach(() => {
-    useActivityStore.setState({ entries: [], activeOperations: {} });
+    // 저장 디바운스 타이머가 테스트 사이로 새지 않도록 파일 전체를 가짜 타이머로 돈다.
+    vi.useFakeTimers();
+    useActivityStore.setState({ entries: [] });
+    useLiveOperationsStore.setState({ activeOperations: {} });
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
   });
 
   describe("사용자가 실행한 작업", () => {
@@ -44,7 +73,8 @@ describe("useActivityStore", () => {
 
       addComplete("a", { completedAt: 2_000, success: true, durationMs: 500 });
 
-      const { entries, activeOperations } = useActivityStore.getState();
+      const { entries } = useActivityStore.getState();
+      const { activeOperations } = useLiveOperationsStore.getState();
       expect(entries).toHaveLength(1);
       expect(entries[0]).toMatchObject({ id: "a", success: true, durationMs: 500 });
       expect(activeOperations).toEqual({});
@@ -63,7 +93,7 @@ describe("useActivityStore", () => {
     it("진행 표시용 activeOperations에는 등록된다", () => {
       useActivityStore.getState().addStart(makeStart("a", { automatic: true }));
 
-      expect(useActivityStore.getState().activeOperations["a"]).toBeDefined();
+      expect(useLiveOperationsStore.getState().activeOperations["a"]).toBeDefined();
     });
 
     it("성공하면 로그에 남기지 않는다", () => {
@@ -73,7 +103,7 @@ describe("useActivityStore", () => {
       addComplete("a", { completedAt: 2_000, success: true, durationMs: 100 });
 
       expect(entryIds()).toEqual([]);
-      expect(useActivityStore.getState().activeOperations).toEqual({});
+      expect(useLiveOperationsStore.getState().activeOperations).toEqual({});
     });
 
     it("실패하면 로그에 남긴다", () => {
@@ -86,7 +116,8 @@ describe("useActivityStore", () => {
         stderr: "authentication failed",
       });
 
-      const { entries, activeOperations } = useActivityStore.getState();
+      const { entries } = useActivityStore.getState();
+      const { activeOperations } = useLiveOperationsStore.getState();
       expect(entries).toHaveLength(1);
       expect(entries[0]).toMatchObject({ id: "a", success: false });
       expect(activeOperations).toEqual({});
@@ -98,7 +129,7 @@ describe("useActivityStore", () => {
 
       updateProgress("a", "receiving objects", 42);
 
-      expect(useActivityStore.getState().activeOperations["a"].progress).toEqual({
+      expect(useLiveOperationsStore.getState().activeOperations["a"].progress).toEqual({
         message: "receiving objects",
         percent: 42,
       });
@@ -135,31 +166,114 @@ describe("useActivityStore", () => {
     });
   });
 
-  // 상한은 메모리 액션에서만 적용된다. 저장된 값은 hydrate 때 그대로 올라오므로
-  // 여기서 자르지 않으면, 자동 작업만 도는 사용자에게는 상한이 영영 작동하지 않는다
-  // (자동 경로는 addStart·addComplete 양쪽에서 capEntries를 우회한다).
   describe("hydrate 보정", () => {
     it("저장된 로그가 상한을 넘으면 자른다", () => {
-      const state = {
-        entries: Array.from({ length: 3000 }, (_, i) => makeStart(`e${i}`)),
-      };
+      const entries = Array.from({ length: 3000 }, (_, i) => makeStart(`e${i}`));
 
-      reconcileRehydrated(state);
+      const result = sanitizePersistedEntries({ entries });
 
-      expect(state.entries).toHaveLength(MAX_ENTRIES);
-      expect(state.entries[0].id).toBe("e0");
+      expect(result).toHaveLength(MAX_ENTRIES);
+      expect(result[0].id).toBe("e0");
     });
 
-    it("상한 이하면 그대로 둔다", () => {
-      const state = { entries: [makeStart("a"), makeStart("b")] };
+    it("예전 형태(progress, 긴 stderr)를 읽어도 progress를 버리고 stderr를 자른다", () => {
+      const old = makeStart("a", {
+        completedAt: 2_000,
+        success: false,
+        progress: { message: "Receiving objects", percent: 5 },
+        stderr: "x".repeat(100_000) + "fatal: end",
+      });
 
-      reconcileRehydrated(state);
+      const [loaded] = sanitizePersistedEntries({ entries: [old] });
 
-      expect(state.entries).toHaveLength(2);
+      expect(loaded.progress).toBeUndefined();
+      expect(loaded.stderr!.length).toBeLessThanOrEqual(4097);
+      expect(loaded.stderr!.endsWith("fatal: end")).toBe(true);
     });
 
-    it("hydrate에 실패해 state가 없으면 아무 일도 하지 않는다", () => {
-      expect(() => reconcileRehydrated(undefined)).not.toThrow();
+    it("깨진 값이면 빈 로그로 시작한다", () => {
+      expect(sanitizePersistedEntries(undefined)).toEqual([]);
+      expect(sanitizePersistedEntries({ entries: "nope" })).toEqual([]);
+      expect(sanitizePersistedEntries({ entries: [null, 3, makeStart("ok")] })).toHaveLength(1);
+    });
+  });
+
+  describe("저장 부하", () => {
+    beforeEach(() => {
+      vi.runOnlyPendingTimers();
+      backing.clear();
+      setItem.mockClear();
+    });
+
+    it("진행률 갱신은 entries를 바꾸지 않고 저장도 일으키지 않는다", () => {
+      useActivityStore.getState().addStart(makeStart("a", { operation: "push" }));
+      vi.advanceTimersByTime(10_000);
+      const entriesBefore = useActivityStore.getState().entries;
+
+      for (let i = 0; i < 300; i++) {
+        useActivityStore.getState().updateProgress("a", "Receiving objects", i % 100);
+      }
+      vi.advanceTimersByTime(10_000);
+
+      expect(useActivityStore.getState().entries).toBe(entriesBefore);
+      expect(setItem).not.toHaveBeenCalled();
+    });
+
+    it("짧은 시간의 여러 변경은 쓰기 한 번으로 합쳐진다", () => {
+      for (let i = 0; i < 5; i++) {
+        useActivityStore.getState().addStart(makeStart(`p${i}`, { operation: "push" }));
+        useActivityStore.getState().addComplete(`p${i}`, { completedAt: 2_000 + i, success: true });
+      }
+      vi.advanceTimersByTime(10_000);
+
+      expect(setItem).toHaveBeenCalledTimes(1);
+    });
+
+    it("저장되는 stderr는 4KB 끝부분이고 메모리에는 전체가 남는다", () => {
+      const full = "a".repeat(50_000) + "fatal: boom";
+      useActivityStore.getState().addStart(makeStart("a", { operation: "push" }));
+      useActivityStore.getState().addComplete("a", { completedAt: 2_000, success: false, stderr: full });
+      vi.advanceTimersByTime(10_000);
+
+      const stored = JSON.parse(backing.get("gitbaro-activity-log")!);
+      const saved = stored.state.entries[0].stderr as string;
+      expect(saved.length).toBeLessThanOrEqual(4097);
+      expect(saved.endsWith("fatal: boom")).toBe(true);
+      expect(useActivityStore.getState().entries[0].stderr).toBe(full);
+    });
+  });
+
+  describe("반복되는 자동 실패", () => {
+    function autoFail(id: string, at: number, stderr = "fatal: repository not found") {
+      const { addStart, addComplete } = useActivityStore.getState();
+      addStart(makeStart(id, { automatic: true }));
+      addComplete(id, { completedAt: at, success: false, stderr });
+    }
+
+    it("같은 저장소·작업·오류면 한 항목에 횟수로 합친다", () => {
+      autoFail("a", 2_000);
+      autoFail("b", 3_000);
+      autoFail("c", 4_000);
+
+      const { entries } = useActivityStore.getState();
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({ id: "a", count: 3, completedAt: 4_000 });
+    });
+
+    it("오류가 다르면 새 항목이다", () => {
+      autoFail("a", 2_000);
+      autoFail("b", 3_000, "fatal: other");
+
+      expect(entryIds()).toEqual(["b", "a"]);
+    });
+
+    it("다른 저장소의 같은 오류는 합치지 않는다", () => {
+      autoFail("a", 2_000);
+      const { addStart, addComplete } = useActivityStore.getState();
+      addStart(makeStart("b", { automatic: true, repoPath: "/other" }));
+      addComplete("b", { completedAt: 3_000, success: false, stderr: "fatal: repository not found" });
+
+      expect(entries2()).toBe(2);
     });
   });
 

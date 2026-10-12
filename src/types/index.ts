@@ -505,6 +505,8 @@ export interface GitCommandEntry {
   exitCode?: number | null;
   resultSummary?: OperationSummary;
   progress?: { message: string; percent?: number };
+  /** 같은 자동 실패를 한 항목으로 합친 횟수. 없으면 1회. */
+  count?: number;
   /**
    * 사용자가 직접 실행한 작업이 아니라 앱이 주기적으로 도는 작업인지.
    * 성공한 자동 작업은 활동 로그에 남기지 않는다(백그라운드 fetch가 로그를

@@ -750,6 +750,7 @@
     "title": "Activity Log",
     "clear": "Clear",
     "noActivity": "No recent git operations",
+    "repeatCount": "×{{count}}",
     "running": "Running...",
     "completed": "Completed",
     "failed": "Failed",

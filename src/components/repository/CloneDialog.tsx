@@ -6,7 +6,7 @@ import type { GitHubAccount } from "@/types";
 import { searchGithubRepos, type GitHubRepoSearchResult } from "@/api/commands";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { TabGroup, Tab } from "@/components/ui/Tabs";
-import { useActivityStore } from "@/stores/activity";
+import { useLiveOperationsStore } from "@/stores/live-operations";
 import { DialogFrame } from "@/components/ui/DialogFrame";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
@@ -38,7 +38,7 @@ export function CloneDialog({
   const [localPath, setLocalPath] = useState("");
   const [isCloning, setIsCloning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const activeOperations = useActivityStore((s) => s.activeOperations);
+  const activeOperations = useLiveOperationsStore((s) => s.activeOperations);
   const activeClone = Object.values(activeOperations).find((op) => op.operation === "clone");
 
   // GitHub tab state

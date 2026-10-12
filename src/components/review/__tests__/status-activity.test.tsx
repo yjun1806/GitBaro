@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import i18n from "@/i18n/config";
-import { useActivityStore } from "@/stores/activity";
+import { useLiveOperationsStore } from "@/stores/live-operations";
 import { useUIStore } from "@/stores/ui";
 import type { GitCommandEntry } from "@/types";
 import { HOLD_MS, SHOW_AFTER_MS, StatusActivity } from "../StatusActivity";
@@ -24,7 +24,7 @@ beforeEach(async () => {
   await i18n.changeLanguage("en");
   setOnline(true);
   useUIStore.setState({ isActivityLogOpen: false });
-  useActivityStore.setState({ activeOperations: {} });
+  useLiveOperationsStore.setState({ activeOperations: {} });
 });
 
 afterEach(cleanup);
@@ -43,7 +43,7 @@ describe("StatusActivity", () => {
   it("shows the running git command and its progress in place of the icon", () => {
     vi.useFakeTimers();
     try {
-      useActivityStore.setState({ activeOperations: { a: op("a", 40) } });
+      useLiveOperationsStore.setState({ activeOperations: { a: op("a", 40) } });
       render(<StatusActivity />);
       act(() => void vi.advanceTimersByTime(SHOW_AFTER_MS));
       const button = screen.getByRole("button", { name: "Activity Log" });
@@ -61,24 +61,24 @@ describe("StatusActivity", () => {
     try {
       render(<StatusActivity />);
       // 짧게 끝나는 명령은 보이지 않는다.
-      act(() => useActivityStore.setState({ activeOperations: { a: op("a") } }));
+      act(() => useLiveOperationsStore.setState({ activeOperations: { a: op("a") } }));
       act(() => void vi.advanceTimersByTime(SHOW_AFTER_MS - 50));
-      act(() => useActivityStore.setState({ activeOperations: {} }));
+      act(() => useLiveOperationsStore.setState({ activeOperations: {} }));
       act(() => void vi.advanceTimersByTime(HOLD_MS));
       expect(screen.queryByTestId("running-op")).toBeNull();
 
       // 한 번 보이면, 명령 사이의 짧은 빈틈에도 계속 보인다.
-      act(() => useActivityStore.setState({ activeOperations: { b: op("b") } }));
+      act(() => useLiveOperationsStore.setState({ activeOperations: { b: op("b") } }));
       act(() => void vi.advanceTimersByTime(SHOW_AFTER_MS));
       expect(screen.getByTestId("running-op")).toBeTruthy();
-      act(() => useActivityStore.setState({ activeOperations: {} }));
+      act(() => useLiveOperationsStore.setState({ activeOperations: {} }));
       act(() => void vi.advanceTimersByTime(HOLD_MS - 100));
       expect(screen.getByTestId("running-op")).toBeTruthy();
-      act(() => useActivityStore.setState({ activeOperations: { c: op("c") } }));
+      act(() => useLiveOperationsStore.setState({ activeOperations: { c: op("c") } }));
       expect(screen.getByTestId("running-op")).toBeTruthy();
 
       // 모두 끝나고 HOLD_MS가 지나면 아이콘으로 돌아간다.
-      act(() => useActivityStore.setState({ activeOperations: {} }));
+      act(() => useLiveOperationsStore.setState({ activeOperations: {} }));
       act(() => void vi.advanceTimersByTime(HOLD_MS));
       expect(screen.queryByTestId("running-op")).toBeNull();
     } finally {

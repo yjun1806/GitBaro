@@ -5,7 +5,7 @@ import { TAURI_EVENTS } from "@/api/events";
 import { getHeadAdvance } from "@/api/commands";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { useBackgroundReviewStatus } from "@/hooks/useBackgroundReviewStatus";
-import { useActivityStore } from "@/stores/activity";
+import { useLiveOperationsStore } from "@/stores/live-operations";
 import { useRepositoryStore } from "@/stores/repository";
 import { repoNameNow } from "@/hooks/useRepoDisplay";
 import { truncateHash } from "@/lib/utils";
@@ -42,7 +42,7 @@ export function useCommitNotifications(enabled: boolean): void {
   // 앱 안 작업은 알림을 끈 동안에도 기록한다. 켜자마자 들어온 이동을 가려야 한다.
   useEffect(
     () =>
-      useActivityStore.subscribe((state, prev) => {
+      useLiveOperationsStore.subscribe((state, prev) => {
         if (state.activeOperations === prev.activeOperations) return;
         const now = Date.now();
         for (const [id, entry] of Object.entries(state.activeOperations)) {

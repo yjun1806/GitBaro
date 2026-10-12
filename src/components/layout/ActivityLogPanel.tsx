@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Trash2, CheckCircle, XCircle, ChevronDown, ChevronRight, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useActivityStore } from "@/stores/activity";
+import { useLiveOperationsStore } from "@/stores/live-operations";
 import { useUIStore } from "@/stores/ui";
 import { formatRelativeTime } from "@/lib/utils";
 import type { GitCommandEntry } from "@/types";
@@ -36,6 +37,7 @@ function EntryRow({ entry }: { entry: GitCommandEntry }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const isActive = entry.completedAt === undefined;
+  const progress = useLiveOperationsStore((s) => s.activeOperations[entry.id]?.progress);
   const hasOutput = (entry.stdout && entry.stdout.length > 0) || (entry.stderr && entry.stderr.length > 0);
 
   return (
@@ -61,6 +63,12 @@ function EntryRow({ entry }: { entry: GitCommandEntry }) {
           <span className="shrink-0 text-[11.5px] text-muted-foreground">{entry.durationMs}ms</span>
         )}
 
+        {entry.count !== undefined && entry.count > 1 && (
+          <span className="shrink-0 text-[11.5px] text-muted-foreground tabular-nums">
+            {t("activity.repeatCount", { count: entry.count })}
+          </span>
+        )}
+
         {entry.completedAt && (
           <span className="shrink-0 text-[11.5px] text-muted-foreground">{formatRelativeTime(entry.completedAt)}</span>
         )}
@@ -72,10 +80,10 @@ function EntryRow({ entry }: { entry: GitCommandEntry }) {
         )}
       </button>
 
-      {isActive && entry.progress && (
+      {isActive && progress && (
         <div className="px-8 pb-1.5 text-[11.5px] text-muted-foreground">
-          {entry.progress.message}
-          {entry.progress.percent !== undefined && ` (${entry.progress.percent}%)`}
+          {progress.message}
+          {progress.percent !== undefined && ` (${progress.percent}%)`}
         </div>
       )}
 

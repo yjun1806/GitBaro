@@ -3,7 +3,7 @@ import { RefreshCw, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepositoryStore } from "@/stores/repository";
 import { useUIStore } from "@/stores/ui";
-import { useActivityStore } from "@/stores/activity";
+import { useLiveOperationsStore } from "@/stores/live-operations";
 import { useSyncStore, type SyncAction } from "@/stores/sync";
 import {
   invalidateAfterSync,
@@ -130,7 +130,7 @@ function RepoSyncGroup() {
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.addToast);
   const setActiveTab = useUIStore((s) => s.setActiveTab);
-  const activeOperations = useActivityStore((s) => s.activeOperations);
+  const activeOperations = useLiveOperationsStore((s) => s.activeOperations);
 
   // 진행 상태와 마지막 fetch 시각은 저장소별이다. 다른 저장소의 push가 이 저장소를 막지 않는다.
   const syncingAction = useSyncStore((s) =>

@@ -1395,6 +1395,7 @@ impl GitCliEngine {
                 identity: None,
             };
             let mut splitter = ProgressSplitter::default();
+            let mut throttle = ProgressThrottle::default();
             let mut buf = [0u8; 8192];
             loop {
                 // 바이트 단위로 읽는다. 줄 단위(`lines()`)로 읽으면 UTF-8이 아닌 줄에서
@@ -1404,11 +1405,11 @@ impl GitCliEngine {
                     Ok(n) => n,
                 };
                 for segment in splitter.push(&buf[..n]) {
-                    record_progress_segment(&temp_engine, &stderr_clone, &self_id, &self_op, segment);
+                    record_progress_segment(&temp_engine, &mut throttle, &stderr_clone, &self_id, &self_op, segment);
                 }
             }
             if let Some(segment) = splitter.finish() {
-                record_progress_segment(&temp_engine, &stderr_clone, &self_id, &self_op, segment);
+                record_progress_segment(&temp_engine, &mut throttle, &stderr_clone, &self_id, &self_op, segment);
             }
         });
 
@@ -1783,10 +1784,38 @@ impl ProgressSplitter {
     }
 }
 
+/// 진행률 이벤트 사이의 최소 간격. git은 `\r` 조각을 초당 수백 번 내보낼 수 있다.
+const PROGRESS_EMIT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// 진행률 이벤트를 솎는다: 퍼센트가 바뀌었고 마지막 이벤트로부터 간격이 지났을 때만 내보내고,
+/// 확정된 줄(마지막 조각 포함)은 항상 내보낸다.
+#[derive(Default)]
+struct ProgressThrottle {
+    last: Option<(Option<u32>, Instant)>,
+}
+
+impl ProgressThrottle {
+    fn should_emit(&mut self, percent: Option<u32>, is_final_line: bool, now: Instant) -> bool {
+        let due = match self.last {
+            None => true,
+            Some((last_percent, at)) => {
+                percent != last_percent && now.duration_since(at) >= PROGRESS_EMIT_INTERVAL
+            }
+        };
+        if due || is_final_line {
+            self.last = Some((percent, now));
+            true
+        } else {
+            false
+        }
+    }
+}
+
 /// 진행률 조각을 이벤트로 내보내고, 확정된 줄만 오류 해석용 stderr에 모은다.
 /// 중간 진행률(`\r`)까지 모으면 stderr가 진행률 줄로 가득 찬다.
 fn record_progress_segment(
     engine: &GitCliEngine,
+    throttle: &mut ProgressThrottle,
     collected: &Mutex<Vec<String>>,
     id: &str,
     operation: &str,
@@ -1798,7 +1827,9 @@ fn record_progress_segment(
         }
     }
     let percent = parse_progress_percent(&segment.text);
-    engine.emit_progress(id, operation, &segment.text, percent);
+    if throttle.should_emit(percent, segment.is_final_line, Instant::now()) {
+        engine.emit_progress(id, operation, &segment.text, percent);
+    }
 }
 
 /// "Receiving objects: 45% (123/273)" → 45
@@ -2150,6 +2181,29 @@ fn first_hint_sentence(lines: &[&str]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::{ProgressThrottle, PROGRESS_EMIT_INTERVAL};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn progress_throttle_emits_first_then_only_changed_percent_after_interval() {
+        let mut t = ProgressThrottle::default();
+        let t0 = Instant::now();
+        assert!(t.should_emit(Some(1), false, t0));
+        // 간격 안: 퍼센트가 달라도 버린다.
+        assert!(!t.should_emit(Some(2), false, t0 + Duration::from_millis(10)));
+        // 간격 뒤라도 퍼센트가 같으면 버린다.
+        assert!(!t.should_emit(Some(1), false, t0 + PROGRESS_EMIT_INTERVAL * 2));
+        // 간격 뒤 + 퍼센트 변경.
+        assert!(t.should_emit(Some(5), false, t0 + PROGRESS_EMIT_INTERVAL * 2));
+    }
+
+    #[test]
+    fn progress_throttle_always_emits_final_line() {
+        let mut t = ProgressThrottle::default();
+        let t0 = Instant::now();
+        assert!(t.should_emit(Some(99), false, t0));
+        assert!(t.should_emit(Some(99), true, t0 + Duration::from_millis(1)));
+    }
     use super::*;
 
     fn run_askpass(script: &Path, prompt: &str) -> (bool, String) {

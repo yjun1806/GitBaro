@@ -749,6 +749,7 @@
     "title": "작업 기록",
     "clear": "지우기",
     "noActivity": "최근 Git 작업이 없습니다",
+    "repeatCount": "×{{count}}",
     "running": "실행 중...",
     "completed": "완료",
     "failed": "실패",
