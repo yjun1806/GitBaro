@@ -32,7 +32,6 @@ import { followNote } from "./follow-note";
 import { FocusFlash } from "@/components/ui/FocusFlash";
 import { cn, formatRelativeTime, getErrorMessage, trimTrailingSlash } from "@/lib/utils";
 import { DiffViewer } from "@/components/diff/DiffViewer";
-import { SwitchingOverlay } from "@/components/ui/SwitchingOverlay";
 import {
   OverlapBanner,
   OverlapMark,
@@ -352,13 +351,13 @@ function freshMessage(t: ReturnType<typeof useTranslation>["t"], delta: DiffDelt
 export interface FollowPanelProps {
   /** 따라가는 워크트리 경로(활성 저장소가 아니어도 된다). */
   path: string;
-  /** "cards": 저장소 화면처럼 파일 목록과 diff를 카드 두 장으로. "inline": 한 카드 안에 나란히. */
-  variant: "cards" | "inline";
+  /** "repo": 저장소 화면(스테이지·되돌리기를 하는 메뉴). "lane": 레인 뷰어의 옆 칸(읽기 전용 메뉴). 둘 다 카드 두 장이다. */
+  variant: "repo" | "lane";
   /** 목록 머리 아래에 둘 것(저장소 표시 등). */
   header?: ReactNode;
   /**
-   * 목록 맨 위의 [작업 중인 변경 | 커밋] 전환. 빼면 저장소 화면(`cards`)은 지금 연 저장소의 전환
-   * (`RepoWorkSwitcher`)을 쓰고, 한 카드 판(`inline`)은 두지 않는다.
+   * 목록 맨 위의 [작업 중인 변경 | 커밋] 전환. 빼면 저장소 화면(`repo`)은 지금 연 저장소의 전환
+   * (`RepoWorkSwitcher`)을 쓰고, 레인 뷰어(`lane`)는 두지 않는다.
    */
   switcher?: ReactNode;
   /** 목록 아래에 둘 것(스테이징·커밋으로 가는 버튼 등). */
@@ -481,18 +480,18 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
     handlePause();
   };
 
-  // 파일 우클릭: 그 파일을 고르고(따라가기가 멈춘다) 파일 메뉴를 연다. 저장소 화면(`cards`)은 스테이징 목록과
-  // 같은 메뉴(스테이지·되돌리기 포함), 워크스페이스 화면(`inline`)은 읽기 전용 메뉴다 — 거기서는 스테이징하지 않는다.
+  // 파일 우클릭: 그 파일을 고르고(따라가기가 멈춘다) 파일 메뉴를 연다. 저장소 화면(`repo`)은 스테이징 목록과
+  // 같은 메뉴(스테이지·되돌리기 포함), 레인 뷰어(`lane`)는 읽기 전용 메뉴다 — 거기서는 스테이징하지 않는다.
   const workingMenu = useWorkingFileMenu(path);
   const readOnlyMenu = useFileMenu();
-  const fileMenu = variant === "cards" ? workingMenu : readOnlyMenu;
+  const fileMenu = variant === "repo" ? workingMenu : readOnlyMenu;
   const openFileMenu = (filePath: string, e: React.MouseEvent) => {
     e.preventDefault();
     const file = list.find((f) => f.path === filePath);
     if (!file) return;
     pickFile(filePath);
     const point = contextMenuPoint(e);
-    if (variant === "cards") workingMenu.openMenu(wipEntry(file), point);
+    if (variant === "repo") workingMenu.openMenu(wipEntry(file), point);
     else readOnlyMenu.open({ repoPath: path, filePath, exists: file.status !== "deleted" }, point);
   };
 
@@ -536,7 +535,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
 
   const listPane = (
     <>
-      {switcher === undefined ? variant === "cards" ? <RepoWorkSwitcher mode="working" /> : null : switcher}
+      {switcher === undefined ? variant === "repo" ? <RepoWorkSwitcher mode="working" /> : null : switcher}
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5 shrink-0">
         <strong className="text-[12.5px] font-bold text-foreground">{t("live.uncommitted")}</strong>
         <span className="text-[11.5px] text-muted-foreground">{t("live.fileCount", { count: list.length })}</span>
@@ -687,27 +686,8 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
       />
     ) : null;
 
-  if (variant === "cards") {
-    return (
-      <ListDiffSplit
-        variant="cards"
-        data-testid="follow-panel"
-        list={listPane}
-        listOverlay={<SwitchingOverlay />}
-        files={maximizedFiles}
-        origin={origin}
-        onCloseFile={() => setDiffClosed(true)}
-        detail={diffPane}
-        detailOverlay={<SwitchingOverlay />}
-      >
-        {sideBySide}
-        {fileMenu.element}
-      </ListDiffSplit>
-    );
-  }
   return (
     <ListDiffSplit
-      variant="inline"
       data-testid="follow-panel"
       list={listPane}
       detail={diffPane}

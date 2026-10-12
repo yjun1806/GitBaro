@@ -11,6 +11,7 @@ import {
   MAXIMIZED_LIST_WIDTH,
 } from "@/lib/split-size";
 import type { MaximizedFiles } from "../maximized-files";
+import { PANEL_SURFACE } from "@/components/ui/layers";
 import { ListDiffSplit } from "../ListDiffSplit";
 
 // jsdom has no scrollIntoView; the maximized file list's keyboard nav scrolls the picked row into view.
@@ -50,27 +51,38 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe("ListDiffSplit", () => {
+  it("draws the list and the diff as two separate panel cards with a gap handle between them, never one card", () => {
+    render(<ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} />);
+    for (const id of ["list-pane", "detail-pane"]) {
+      const pane = screen.getByTestId(id);
+      expect(pane.tagName).toBe("SECTION");
+      for (const cls of PANEL_SURFACE.split(" ")) expect(pane.classList.contains(cls)).toBe(true);
+    }
+    expect(screen.getByTestId("list-pane").contains(screen.getByTestId("detail-pane"))).toBe(false);
+    expect(screen.getByRole("separator", { name: /Resize file list/ })).toBeTruthy();
+  });
+
   it("sizes the list from the shared width and resets it on double-click", () => {
-    render(<ListDiffSplit variant="cards" list={<div>list</div>} detail={<div>diff</div>} />);
+    render(<ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} />);
     expect(screen.getByTestId("list-pane").style.width).toBe("360px");
     fireEvent.doubleClick(screen.getByRole("separator", { name: /Resize file list/ }));
     expect(useUIStore.getState().fileListWidth).toBe(DEFAULT_FILE_LIST_WIDTH);
   });
 
   it("hides the list and handle while the diff is maximized, without remounting either pane", () => {
-    render(<ListDiffSplit variant="inline" list={<Counted label="list" />} detail={<Counted label="diff" />} />);
+    render(<ListDiffSplit list={<Counted label="list" />} detail={<Counted label="diff" />} />);
     expect(mounts).toBe(2);
     act(() => useUIStore.getState().setDiffMaximized(true));
-    expect(screen.getByTestId("list-pane").className).toContain("hidden");
+    expect(screen.getByTestId("list-pane").classList.contains("hidden")).toBe(true);
     expect(screen.queryByRole("separator")).toBeNull();
     act(() => useUIStore.getState().setDiffMaximized(false));
-    expect(screen.getByTestId("list-pane").className).not.toContain("hidden");
+    expect(screen.getByTestId("list-pane").classList.contains("hidden")).toBe(false);
     expect(mounts).toBe(2);
   });
 
   it("shows the origin header only while maximized, spanning the whole detail pane, and never without an origin", () => {
     const origin = { kind: "commit" as const, label: <span>c4cbaa5</span> };
-    render(<ListDiffSplit variant="inline" list={<div>list</div>} detail={<div>diff</div>} origin={origin} />);
+    render(<ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} origin={origin} />);
     expect(screen.queryByTestId("maximized-origin-header")).toBeNull();
     act(() => useUIStore.getState().setDiffMaximized(true));
     expect(screen.getByTestId("maximized-origin-header")).toBeTruthy();
@@ -80,7 +92,7 @@ describe("ListDiffSplit", () => {
 
   it("removes the origin header immediately on restore, with no exit animation", () => {
     const origin = { kind: "commit" as const, label: <span>c4cbaa5</span> };
-    render(<ListDiffSplit variant="inline" list={<div>list</div>} detail={<div>diff</div>} origin={origin} />);
+    render(<ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} origin={origin} />);
     act(() => useUIStore.getState().setDiffMaximized(true));
     expect(screen.getByTestId("maximized-origin-header")).toBeTruthy();
     act(() => useUIStore.getState().setDiffMaximized(false));
@@ -88,7 +100,7 @@ describe("ListDiffSplit", () => {
   });
 
   it("does not show an origin header when maximized without an origin prop", () => {
-    render(<ListDiffSplit variant="inline" list={<div>list</div>} detail={<div>diff</div>} />);
+    render(<ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} />);
     act(() => useUIStore.getState().setDiffMaximized(true));
     expect(screen.queryByTestId("maximized-origin-header")).toBeNull();
   });
@@ -96,7 +108,7 @@ describe("ListDiffSplit", () => {
   describe("1단계 ↔ 2단계 (D47/5.4, files.selectedKey)", () => {
     it("collapses to the list alone until a file is picked, and tells PaneStrip diffFileOpen is false", () => {
       render(
-        <ListDiffSplit variant="inline" list={<div>list</div>} detail={<div>diff</div>} files={makeFiles(null)} />,
+        <ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} files={makeFiles(null)} />,
       );
       expect(screen.getByTestId("list-pane").style.width).toBe("");
       expect(screen.getByTestId("list-pane").style.minWidth).toBe(`min(${LEVEL1_DETAIL_MIN_WIDTH}px, 100%)`);
@@ -108,10 +120,10 @@ describe("ListDiffSplit", () => {
 
     it("opens the diff pane and reports diffFileOpen once a file is picked", () => {
       const { rerender } = render(
-        <ListDiffSplit variant="inline" list={<div>list</div>} detail={<div>diff</div>} files={makeFiles(null)} />,
+        <ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} files={makeFiles(null)} />,
       );
       rerender(
-        <ListDiffSplit variant="inline" list={<div>list</div>} detail={<div>diff</div>} files={makeFiles("a")} />,
+        <ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} files={makeFiles("a")} />,
       );
       expect(screen.getByTestId("list-pane").style.width).toBe("360px");
       expect(screen.getByTestId("detail-pane").getAttribute("aria-hidden")).toBeNull();
@@ -120,7 +132,7 @@ describe("ListDiffSplit", () => {
     });
 
     it("stays open without files (screens that do not wire the signal yet)", () => {
-      render(<ListDiffSplit variant="inline" list={<div>list</div>} detail={<div>diff</div>} />);
+      render(<ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} />);
       expect(screen.getByTestId("detail-pane").getAttribute("aria-hidden")).toBeNull();
       expect(useUIStore.getState().diffFileOpen).toBe(true);
     });
@@ -128,7 +140,7 @@ describe("ListDiffSplit", () => {
     it("detailAlwaysOpen keeps the diff pane even with no file picked (PR overview)", () => {
       render(
         <ListDiffSplit
-          variant="cards"
+         
           list={<div>list</div>}
           detail={<div>overview</div>}
           files={makeFiles(null)}
@@ -145,7 +157,7 @@ describe("ListDiffSplit", () => {
     it("shows the picked file's name in the origin header, alongside the origin", () => {
       const origin = { kind: "commit" as const, label: <span>c4cbaa5</span> };
       render(
-        <ListDiffSplit variant="cards" list={<div>list</div>} detail={<div>diff</div>} origin={origin} files={makeFiles("a")} />,
+        <ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} origin={origin} files={makeFiles("a")} />,
       );
       act(() => useUIStore.getState().setDiffMaximized(true));
       expect(screen.getByTestId("maximized-origin-header").textContent).toContain("a.ts");
@@ -153,7 +165,7 @@ describe("ListDiffSplit", () => {
 
     it("narrows the file list to 260px while maximized, and to a 36px band once folded", () => {
       render(
-        <ListDiffSplit variant="cards" list={<div>list</div>} detail={<div>diff</div>} files={makeFiles("a")} />,
+        <ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} files={makeFiles("a")} />,
       );
       act(() => useUIStore.getState().setDiffMaximized(true));
       expect(screen.getByTestId("maximized-file-list").style.width).toBe(`${MAXIMIZED_LIST_WIDTH}px`);
@@ -168,7 +180,7 @@ describe("ListDiffSplit", () => {
 
     it("re-expands the folded file list on its own once you leave maximize (원래 크기로 돌아오면 풀린다)", () => {
       render(
-        <ListDiffSplit variant="cards" list={<div>list</div>} detail={<div>diff</div>} files={makeFiles("a")} />,
+        <ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} files={makeFiles("a")} />,
       );
       act(() => useUIStore.getState().setDiffMaximized(true));
       act(() => useUIStore.getState().setMaximizedFileListOpen(false));

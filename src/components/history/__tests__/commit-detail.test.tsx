@@ -546,3 +546,13 @@ describe("CommitDetail collapsible info", () => {
     expect(onSelectFile).toHaveBeenCalledWith("b.ts");
   });
 });
+
+describe("CommitDetail layout (5.4)", () => {
+  it("is a list card and a diff card side by side, with no card around both", () => {
+    renderDetail();
+    const list = screen.getByTestId("list-pane");
+    const detail = screen.getByTestId("detail-pane");
+    expect(list.contains(detail)).toBe(false);
+    expect(list.parentElement?.closest("section")).toBeNull();
+  });
+});

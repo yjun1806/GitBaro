@@ -53,7 +53,7 @@ afterEach(cleanup);
 
 describe("maximized diff file list", () => {
   it("appears only while the diff is maximized, with the source list's rows and selection", () => {
-    render(<ListDiffSplit variant="cards" list={<div>list</div>} detail={<Detail />} files={files()} />);
+    render(<ListDiffSplit list={<div>list</div>} detail={<Detail />} files={files()} />);
     expect(screen.queryByTestId("maximized-file-list")).toBeNull();
     act(() => useUIStore.getState().setDiffMaximized(true));
     const nav = screen.getByTestId("maximized-file-list");
@@ -70,7 +70,7 @@ describe("maximized diff file list", () => {
   it("switches file through the source list's selection", () => {
     const onSelect = vi.fn();
     useUIStore.setState({ isDiffMaximized: true });
-    render(<ListDiffSplit variant="inline" list={<div>list</div>} detail={<Detail />} files={files(onSelect)} />);
+    render(<ListDiffSplit list={<div>list</div>} detail={<Detail />} files={files(onSelect)} />);
     fireEvent.click(screen.getByTitle("README.md"));
     expect(onSelect).toHaveBeenCalledWith("b");
   });
@@ -78,7 +78,7 @@ describe("maximized diff file list", () => {
   it("moves with the arrow keys", () => {
     const onSelect = vi.fn();
     useUIStore.setState({ isDiffMaximized: true });
-    render(<ListDiffSplit variant="inline" list={<div>list</div>} detail={<Detail />} files={files(onSelect)} />);
+    render(<ListDiffSplit list={<div>list</div>} detail={<Detail />} files={files(onSelect)} />);
     const scroller = screen.getByTestId("maximized-file-list").querySelector("[tabindex='0']")!;
     fireEvent.keyDown(scroller, { key: "ArrowDown" });
     expect(onSelect).toHaveBeenCalledWith("b");
@@ -88,14 +88,14 @@ describe("maximized diff file list", () => {
     const onContextMenu = vi.fn();
     useUIStore.setState({ isDiffMaximized: true });
     render(
-      <ListDiffSplit variant="inline" list={<div>list</div>} detail={<Detail />} files={files(vi.fn(), onContextMenu)} />,
+      <ListDiffSplit list={<div>list</div>} detail={<Detail />} files={files(vi.fn(), onContextMenu)} />,
     );
     fireEvent.contextMenu(screen.getByTitle("src/a.ts"));
     expect(onContextMenu).toHaveBeenCalledWith("a", expect.anything());
   });
 
   it("is toggled from the diff header and remembered, without remounting the diff", () => {
-    render(<ListDiffSplit variant="cards" list={<div>list</div>} detail={<Detail />} files={files()} />);
+    render(<ListDiffSplit list={<div>list</div>} detail={<Detail />} files={files()} />);
     // 크게 보기 전에는 목록 버튼이 없다.
     expect(screen.queryByRole("button", { name: "Hide file list" })).toBeNull();
     act(() => useUIStore.getState().setDiffMaximized(true));
@@ -109,7 +109,7 @@ describe("maximized diff file list", () => {
 
   it("offers no list toggle when the screen has no file list to show", () => {
     useUIStore.setState({ isDiffMaximized: true });
-    render(<ListDiffSplit variant="cards" list={<div>list</div>} detail={<Detail />} />);
+    render(<ListDiffSplit list={<div>list</div>} detail={<Detail />} />);
     expect(screen.queryByTestId("maximized-file-list")).toBeNull();
     expect(screen.queryByRole("button", { name: "Hide file list" })).toBeNull();
     expect(screen.getByRole("button", { name: "Restore size" })).toBeTruthy();

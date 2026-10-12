@@ -17,7 +17,6 @@ function Screen() {
   const [selected, setSelected] = useState<string | null>("a");
   return (
     <ListDiffSplit
-      variant="cards"
       list={<input aria-label="message" />}
       files={{
         items: [

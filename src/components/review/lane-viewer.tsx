@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Card } from "@/components/ui/Card";
 import { RepoLaneCommitGraph } from "@/components/graph/CommitGraph";
 import type { LaneWip, RepoLaneGraph } from "@/components/graph/repo-lanes";
 import { WorkSwitcher } from "@/components/commit/WorkSwitcher";
@@ -152,21 +151,19 @@ export interface LaneViewerBottomProps {
 export function LaneViewerBottom({ lanes, graph, repoLabel, ownerOf }: LaneViewerBottomProps) {
   const { selection } = lanes;
   return (
-    <Card className="flex-1">
-      <ReviewFilesPanel
-        selection={selection}
-        repoLabel={repoLabel}
-        ownerOf={ownerOf}
-        switcher={
-          <LaneWorkSwitcher
-            selection={selection}
-            graph={graph}
-            lastCommit={selection ? (lanes.lastCommitByLane[selection.repoPath] ?? null) : null}
-            onSelect={lanes.pick}
-          />
-        }
-      />
-    </Card>
+    <ReviewFilesPanel
+      selection={selection}
+      repoLabel={repoLabel}
+      ownerOf={ownerOf}
+      switcher={
+        <LaneWorkSwitcher
+          selection={selection}
+          graph={graph}
+          lastCommit={selection ? (lanes.lastCommitByLane[selection.repoPath] ?? null) : null}
+          onSelect={lanes.pick}
+        />
+      }
+    />
   );
 }
 

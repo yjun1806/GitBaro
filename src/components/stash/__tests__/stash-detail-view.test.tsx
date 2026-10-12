@@ -58,3 +58,14 @@ describe("StashDetailView file double-click", () => {
     expect(toasts[toasts.length - 1]?.message).toBe(i18n.t("menu.cannotOpenDeleted"));
   });
 });
+
+describe("StashDetailView layout (5.4)", () => {
+  it("shows the file list and the diff as two separate cards, the stash actions inside the list card", () => {
+    render(<StashDetailView stashIndex={0} />);
+    const list = screen.getByTestId("list-pane");
+    const detail = screen.getByTestId("detail-pane");
+    expect(list.contains(detail)).toBe(false);
+    expect(list.contains(screen.getByText("Apply"))).toBe(true);
+    expect(list.parentElement?.closest("section")).toBeNull();
+  });
+});

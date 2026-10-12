@@ -37,6 +37,7 @@ vi.mock("@/components/diff/DiffViewer", () => ({
 }));
 
 const { FileTouchesView } = await import("../FileTouchesView");
+const { FilesViewTopContext } = await import("@/components/graph/graph-files-view");
 
 Element.prototype.scrollIntoView = vi.fn();
 
@@ -287,5 +288,20 @@ describe("FileTouchesView", () => {
     expect(invoke).not.toHaveBeenCalledWith("open_in_editor", expect.anything());
     const { toasts } = useToastStore.getState();
     expect(toasts[toasts.length - 1]?.message).toBe(i18n.t("menu.cannotOpenDeleted"));
+  });
+});
+
+describe("FileTouchesView layout (5.4)", () => {
+  it("draws the file list and the diff as two cards, with the host's header on top of the list card", () => {
+    render(
+      <FilesViewTopContext.Provider value={<div data-testid="host-top">tabs</div>}>
+        <FileTouchesView sources={SOURCES} repoLabel={repoLabel} />
+      </FilesViewTopContext.Provider>,
+    );
+    const list = screen.getByTestId("list-pane");
+    const detail = screen.getByTestId("detail-pane");
+    expect(list.contains(detail)).toBe(false);
+    expect(list.firstElementChild).toBe(screen.getByTestId("host-top"));
+    expect(detail.contains(screen.getByTestId("host-top"))).toBe(false);
   });
 });

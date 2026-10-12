@@ -26,7 +26,7 @@ import { FilterBar } from "@/components/ui/FilterBar";
 import { NarrowPaneHeader } from "@/components/layout/NarrowPaneHeader";
 import { useGraphNarrow } from "@/components/layout/pane-state";
 import { useActiveRepoName } from "@/hooks/useRepoDisplay";
-import { useGraphFilesView } from "./graph-files-view";
+import { FilesViewTopContext, useGraphFilesView } from "./graph-files-view";
 import type { GraphWip } from "./graph-model";
 import { useScopeSources } from "@/components/scope/useScopeSources";
 import { useScopeStore } from "@/components/scope/scope-store";
@@ -178,85 +178,101 @@ export function GraphPanel({ laneViewer = null }: GraphPanelProps) {
     setPrOpen(true);
   };
 
+  // 파일별 보기는 이 칸 자리에 파일 목록과 diff를 카드 두 장으로 그린다(5.4). 카드를 두르지 않고 머리를
+  // 목록 카드로 넘긴다(`FilesViewTopContext`).
+  const flat = tab === "graph" && filesView;
+  const top = (
+    <>
+      {narrow && <NarrowPaneHeader label={tabLabel} onClose={closeSidePanes} />}
+      <div className={cn("flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)", narrow && "hidden")}>
+        <TabGroup aria-label={t("shell.panelTabs")} className="flex-1 min-w-0 gap-2 px-3 border-b-0">
+          <Tab
+            variant="inline"
+            active={tab === "graph"}
+            onClick={openGraphTab}
+            icon={<GitCommitVertical className="w-3.5 h-3.5" />}
+          >
+            {t("shell.graphTab")}
+          </Tab>
+          <Tab
+            variant="inline"
+            active={tab === "stash"}
+            onClick={() => openStoredTab("stash")}
+            icon={<Archive className="w-3.5 h-3.5" />}
+            count={badgeCount(stashes.length)}
+          >
+            {t("shell.stashTab")}
+          </Tab>
+          <Tab
+            variant="inline"
+            active={tab === "actions"}
+            onClick={() => openStoredTab("actions")}
+            icon={<Play className="w-3.5 h-3.5" />}
+            count={badgeCount(runningCount)}
+          >
+            {t("actions.title")}
+          </Tab>
+          {hasRemote && (
+            <Tab
+              variant="inline"
+              active={tab === "pr"}
+              onClick={openPrTab}
+              icon={<GitPullRequest className="w-3.5 h-3.5" />}
+            >
+              {t("pr.tab")}
+            </Tab>
+          )}
+        </TabGroup>
+        {tab === "graph" && <CompareChip />}
+        {/* 「작업 중인 변경 N」은 아래 WIP 행이 말한다(여기 배지를 두지 않는다). */}
+      </div>
+
+      {laneViewerShown ? (
+        !narrow && laneViewer.filterBar
+      ) : (
+        tab === "graph" &&
+        graphListShown && (
+          <FilterBar
+            left={graphBranchFilter ? <BranchOnlyChip filter={graphBranchFilter} /> : undefined}
+            right={narrow ? undefined : <ScopeViewToggle />}
+          />
+        )
+      )}
+    </>
+  );
+  const tabpanel = (
+    <div role="tabpanel" className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+      {laneViewerShown ? (
+        laneViewer.body
+      ) : tab === "graph" && filesView ? (
+        <FileTouchesView sources={fileSources} repoLabel={() => repoName} />
+      ) : tab === "graph" ? (
+        <CommitGraph
+          wips={viewing ? NO_WIPS : currentWips}
+          historyTarget={graphHistoryTarget}
+          ciRuns={workflowRuns}
+        />
+      ) : tab === "stash" ? (
+        <StashView />
+      ) : tab === "pr" ? (
+        <PrListView branchFilter={branchFilter} />
+      ) : (
+        <ActionsView branchFilter={branchFilter} />
+      )}
+      {!flat && <SwitchingOverlay />}
+    </div>
+  );
+
   return (
     <div role="region" aria-label={t("shell.panelTabs")} className="flex flex-col shrink-0 flex-1 h-full min-h-0">
-      <Card className="relative flex-1 min-h-0">
-        {narrow && <NarrowPaneHeader label={tabLabel} onClose={closeSidePanes} />}
-        <div className={cn("flex items-center gap-2 pr-3 shrink-0 border-b border-(--line)", narrow && "hidden")}>
-          <TabGroup aria-label={t("shell.panelTabs")} className="flex-1 min-w-0 gap-2 px-3 border-b-0">
-            <Tab
-              variant="inline"
-              active={tab === "graph"}
-              onClick={openGraphTab}
-              icon={<GitCommitVertical className="w-3.5 h-3.5" />}
-            >
-              {t("shell.graphTab")}
-            </Tab>
-            <Tab
-              variant="inline"
-              active={tab === "stash"}
-              onClick={() => openStoredTab("stash")}
-              icon={<Archive className="w-3.5 h-3.5" />}
-              count={badgeCount(stashes.length)}
-            >
-              {t("shell.stashTab")}
-            </Tab>
-            <Tab
-              variant="inline"
-              active={tab === "actions"}
-              onClick={() => openStoredTab("actions")}
-              icon={<Play className="w-3.5 h-3.5" />}
-              count={badgeCount(runningCount)}
-            >
-              {t("actions.title")}
-            </Tab>
-            {hasRemote && (
-              <Tab
-                variant="inline"
-                active={tab === "pr"}
-                onClick={openPrTab}
-                icon={<GitPullRequest className="w-3.5 h-3.5" />}
-              >
-                {t("pr.tab")}
-              </Tab>
-            )}
-          </TabGroup>
-          {tab === "graph" && <CompareChip />}
-          {/* 「작업 중인 변경 N」은 아래 WIP 행이 말한다(여기 배지를 두지 않는다). */}
-        </div>
-
-        {laneViewerShown ? (
-          !narrow && laneViewer.filterBar
-        ) : (
-          tab === "graph" &&
-          graphListShown && (
-            <FilterBar
-              left={graphBranchFilter ? <BranchOnlyChip filter={graphBranchFilter} /> : undefined}
-              right={narrow ? undefined : <ScopeViewToggle />}
-            />
-          )
-        )}
-        <div role="tabpanel" className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-          {laneViewerShown ? (
-            laneViewer.body
-          ) : tab === "graph" && filesView ? (
-            <FileTouchesView sources={fileSources} repoLabel={() => repoName} />
-          ) : tab === "graph" ? (
-            <CommitGraph
-              wips={viewing ? NO_WIPS : currentWips}
-              historyTarget={graphHistoryTarget}
-              ciRuns={workflowRuns}
-            />
-          ) : tab === "stash" ? (
-            <StashView />
-          ) : tab === "pr" ? (
-            <PrListView branchFilter={branchFilter} />
-          ) : (
-            <ActionsView branchFilter={branchFilter} />
-          )}
-          <SwitchingOverlay />
-        </div>
-      </Card>
+      {flat ? (
+        <FilesViewTopContext.Provider value={top}>{tabpanel}</FilesViewTopContext.Provider>
+      ) : (
+        <Card className="relative flex-1 min-h-0">
+          {top}
+          {tabpanel}
+        </Card>
+      )}
     </div>
   );
 }

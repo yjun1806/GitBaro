@@ -175,7 +175,7 @@ function renderFollow(path = WT) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const utils = render(
     <QueryClientProvider client={client}>
-      <FollowPanel path={path} variant="inline" />
+      <FollowPanel path={path} variant="lane" />
     </QueryClientProvider>,
   );
   return { ...utils, client };

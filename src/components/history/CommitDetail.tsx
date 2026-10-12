@@ -521,7 +521,6 @@ export function CommitDetail({
 
   return (
     <ListDiffSplit
-      variant="inline"
       className="animate-content-in"
       // 닫으면 1단계로 돌아가 다음 커밋을 훑어도 diff가 열리지 않는다.
       onCloseFile={() => setSelectedPath(null)}

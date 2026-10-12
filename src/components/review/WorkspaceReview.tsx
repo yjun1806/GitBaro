@@ -15,6 +15,7 @@ import { FilterChip } from "@/components/ui/FilterChip";
 import { PaneStrip } from "@/components/layout/PaneStrip";
 import { NarrowPaneHeader } from "@/components/layout/NarrowPaneHeader";
 import { useGraphNarrow } from "@/components/layout/pane-state";
+import { FilesViewTopContext } from "@/components/graph/graph-files-view";
 import { repoLaneColor } from "@/components/graph/repo-lanes";
 import { useScopeStore } from "@/components/scope/scope-store";
 import { ScopeViewToggle } from "@/components/scope/ScopeViewToggle";
@@ -87,6 +88,7 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
 
   const graphCard = (
     <WorkspaceGraphCard
+      flat={filesView}
       onCloseNarrow={() => lanes.pick(null)}
       filterBar={
         <FilterBar
@@ -143,14 +145,26 @@ export function WorkspaceReview({ workspaceId, paths }: WorkspaceReviewProps) {
 function WorkspaceGraphCard({
   filterBar,
   onCloseNarrow,
+  flat,
   children,
 }: {
   filterBar: ReactNode;
+  /** 파일별 보기: 카드를 두르지 않고 필터 막대를 파일 목록 카드로 넘긴다(5.4, `FilesViewTopContext`). */
+  flat: boolean;
   onCloseNarrow: () => void;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
   const narrow = useGraphNarrow();
+  if (flat) {
+    return (
+      <FilesViewTopContext.Provider value={filterBar}>
+        <section aria-label={t("shell.graphTab")} className="relative flex flex-col h-full min-h-0">
+          {children}
+        </section>
+      </FilesViewTopContext.Provider>
+    );
+  }
   return (
     <section
       aria-label={t("shell.graphTab")}

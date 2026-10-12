@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useContext, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FileText } from "lucide-react";
 import { useUnpushedFileTouches } from "@/api/queries";
@@ -6,6 +6,8 @@ import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useRepoAvatarColor } from "@/hooks/useRepoDisplay";
 import { ListDiffSplit } from "@/components/layout/ListDiffSplit";
 import { splitFilePath, type MaximizedOrigin } from "@/components/layout/maximized-files";
+import { FilesViewTopContext } from "@/components/graph/graph-files-view";
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useOpenFileInEditor } from "@/hooks/useOpenFileInEditor";
@@ -28,6 +30,8 @@ export function FileTouchesView({ sources, repoLabel }: FileTouchesViewProps) {
   const { t } = useTranslation();
   const avatarColorOf = useRepoAvatarColor();
   const results = useUnpushedFileTouches(sources);
+  // 그래프 칸이 넘긴 머리(탭 줄·필터 막대). 목록 카드 맨 위에 둔다.
+  const top = useContext(FilesViewTopContext);
 
   const grouped = useMemo(() => groupFileTouches(sources, results), [sources, results]);
   const { multi, single, mergeOnly, pending, errors } = grouped;
@@ -68,10 +72,20 @@ export function FileTouchesView({ sources, repoLabel }: FileTouchesViewProps) {
   // 읽은 워크트리가 하나도 없을 때만 칸 전체를 읽는 중으로 둔다. 하나라도 읽었으면 그 파일을 먼저 보이고,
   // 나머지는 목록 위에 워크트리마다 「읽는 중」으로 둔다.
   if (allRows.length === 0 && errors.length === 0 && pending.length > 0) {
-    return <LoadingState label={t("review.fileView.loading")} />;
+    return (
+      <Card className="flex-1">
+        {top}
+        <LoadingState label={t("review.fileView.loading")} />
+      </Card>
+    );
   }
   if (allRows.length === 0 && errors.length === 0) {
-    return <EmptyState icon={FileText} title={t("review.fileView.emptyTitle")} />;
+    return (
+      <Card className="flex-1">
+        {top}
+        <EmptyState icon={FileText} title={t("review.fileView.emptyTitle")} />
+      </Card>
+    );
   }
 
   const origin: MaximizedOrigin | undefined = effectiveRow
@@ -90,23 +104,25 @@ export function FileTouchesView({ sources, repoLabel }: FileTouchesViewProps) {
 
   return (
     <ListDiffSplit
-      variant="inline"
       className="animate-content-in"
       origin={origin}
       fileOpen={effectiveRow !== null}
       onCloseFile={() => setDiffClosed(true)}
       list={
-        <FileTouchesList
-          grouped={grouped}
-          selectedKey={effectiveRow?.key ?? null}
-          activeIndex={activeIndex}
-          repoLabel={repoLabel}
-          avatarColorOf={avatarColorOf}
-          onSelect={selectRow}
-          onDoubleClick={handleRowDoubleClick}
-          containerProps={{ ...containerProps, onKeyDown: handleKeyDown }}
-          itemRef={itemRef}
-        />
+        <>
+          {top}
+          <FileTouchesList
+            grouped={grouped}
+            selectedKey={effectiveRow?.key ?? null}
+            activeIndex={activeIndex}
+            repoLabel={repoLabel}
+            avatarColorOf={avatarColorOf}
+            onSelect={selectRow}
+            onDoubleClick={handleRowDoubleClick}
+            containerProps={{ ...containerProps, onKeyDown: handleKeyDown }}
+            itemRef={itemRef}
+          />
+        </>
       }
       detail={
         effectiveRow ? (

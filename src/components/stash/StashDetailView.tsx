@@ -13,6 +13,7 @@ import { useFileMenu } from "@/components/commit/useFileMenu";
 import { contextMenuPoint } from "@/components/ui/ContextMenu";
 import { useOpenFileInEditor } from "@/hooks/useOpenFileInEditor";
 import type { FileStatus, StashFileSummary } from "@/types";
+import { Card } from "@/components/ui/Card";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Button } from "@/components/ui/Button";
 import { Code, Count, FileStatusLetter, LineDelta } from "@/components/ui/marks";
@@ -143,7 +144,11 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
   };
 
   if (isLoading || !showResult) {
-    return <LoadingState />;
+    return (
+      <Card className="flex-1">
+        <LoadingState />
+      </Card>
+    );
   }
 
   const { entry, files } = showResult;
@@ -160,40 +165,8 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
   };
 
   return (
-    <div className="flex flex-col h-full animate-content-in">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-(--line) space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold truncate">{entry.message}</p>
-            <div className="flex items-center gap-2 mt-1 text-[11.5px] text-muted-foreground">
-              {entry.branchName && (
-                <span>{t("stash.onBranch", { branch: entry.branchName })}</span>
-              )}
-              <span>{formatRelativeTime(entry.timestamp)}</span>
-              <span>
-                {files.length} {files.length === 1 ? "file" : "files"}
-              </span>
-              <LineDelta additions={totalInsertions} deletions={totalDeletions} />
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Button size="sm" variant="secondary" onClick={handleApply}>
-              {t("stash.apply")}
-            </Button>
-            <Button size="sm" variant="primary" onClick={handlePop}>
-              {t("stash.pop")}
-            </Button>
-            <Button size="sm" variant="secondary" tone="danger" onClick={handleDrop}>
-              {t("stash.drop")}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Content: file list + diff */}
       <ListDiffSplit
-        variant="inline"
+        className="animate-content-in"
         origin={origin}
         onCloseFile={() => setSelectedFilePath(null)}
         files={{
@@ -210,6 +183,35 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
           onDoubleClick: handleFileDoubleClick,
         }}
         list={
+          <>
+        <div className="px-4 py-3 border-b border-(--line) shrink-0">
+          <div className="flex flex-col gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-bold truncate">{entry.message}</p>
+              <div className="flex flex-wrap items-center gap-x-2 mt-1 text-[11.5px] text-muted-foreground">
+                {entry.branchName && (
+                  <span>{t("stash.onBranch", { branch: entry.branchName })}</span>
+                )}
+                <span>{formatRelativeTime(entry.timestamp)}</span>
+                <span>
+                  {files.length} {files.length === 1 ? "file" : "files"}
+                </span>
+                <LineDelta additions={totalInsertions} deletions={totalDeletions} />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button size="sm" variant="secondary" onClick={handleApply}>
+                {t("stash.apply")}
+              </Button>
+              <Button size="sm" variant="primary" onClick={handlePop}>
+                {t("stash.pop")}
+              </Button>
+              <Button size="sm" variant="secondary" tone="danger" onClick={handleDrop}>
+                {t("stash.drop")}
+              </Button>
+            </div>
+          </div>
+        </div>
           <div className="flex-1 min-h-0 overflow-y-auto" {...containerProps}>
           <SectionLabel title={t("stash.detail.files")} trailing={<Count value={files.length} tone="muted" />} />
           {files.length === 0 ? (
@@ -229,6 +231,7 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
             ))
           )}
           </div>
+          </>
         }
         detail={
           <>
@@ -243,6 +246,5 @@ export function StashDetailView({ stashIndex }: StashDetailViewProps) {
         {/* 메뉴는 목록 칸 밖에 둔다 — 크게 보는 동안 목록 칸은 숨겨져도 옆 목록에서 메뉴를 연다. */}
         {fileMenu.element}
       </ListDiffSplit>
-    </div>
   );
 }

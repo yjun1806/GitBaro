@@ -73,7 +73,11 @@ function CommitDetailView({ commitId }: { commitId: string }) {
   const { data: fileDiff } = useCommitFileDiff(activeRepoPath, commitId, selectedFilePath);
 
   if (isLoading || !data) {
-    return <CommitDetailLoading label={t("history.loadingHistory")} />;
+    return (
+      <Card className="flex-1">
+        <CommitDetailLoading label={t("history.loadingHistory")} />
+      </Card>
+    );
   }
 
   // GitHub avatar > gravatar fallback
@@ -180,7 +184,7 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
       <FollowPanel
         key={followTarget}
         path={followTarget}
-        variant="cards"
+        variant="repo"
         footer={<FollowRepoFooter path={followTarget} />}
       />
     );
@@ -199,10 +203,8 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
     };
     return (
       <ListDiffSplit
-        variant="cards"
         onCloseFile={clearFileSelection}
         list={<ChangesView />}
-        listOverlay={<SwitchingOverlay />}
         files={working.files}
         origin={origin}
         detail={
@@ -216,11 +218,18 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
             />
           )
         }
-        detailOverlay={<SwitchingOverlay />}
       >
         {working.menu}
       </ListDiffSplit>
     );
+  }
+
+  // 스태시·커밋 상세는 파일 목록과 diff가 따로 뜬 카드 두 장이라 바깥 `Card`를 두르지 않는다(5.4).
+  if (activeTab === "stash" && selectedStashIndex !== null) {
+    return <StashDetailView key={selectedStashIndex} stashIndex={selectedStashIndex} />;
+  }
+  if (activeTab !== "actions" && activeTab !== "stash" && selectedCommitId) {
+    return <CommitDetailView key={selectedCommitId} commitId={selectedCommitId} />;
   }
 
   return (
@@ -236,17 +245,11 @@ export function ContentArea({ activeTab }: ContentAreaProps) {
           />
         )
       ) : activeTab === "stash" ? (
-        selectedStashIndex !== null ? (
-          <StashDetailView key={selectedStashIndex} stashIndex={selectedStashIndex} />
-        ) : (
-          <EmptyState
-            icon={Archive}
-            title={t("stash.noStashSelected")}
-            description={t("stash.selectStash")}
-          />
-        )
-      ) : selectedCommitId ? (
-        <CommitDetailView key={selectedCommitId} commitId={selectedCommitId} />
+        <EmptyState
+          icon={Archive}
+          title={t("stash.noStashSelected")}
+          description={t("stash.selectStash")}
+        />
       ) : (
         <EmptyState
           icon={GitCommit}

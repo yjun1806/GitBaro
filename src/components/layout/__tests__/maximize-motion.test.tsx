@@ -42,7 +42,7 @@ function Screen() {
     <PaneStrip
       graph={<div>graph</div>}
       hasSelection
-      bottom={<ListDiffSplit variant="cards" list={<div>list</div>} detail={<div>diff</div>} />}
+      bottom={<ListDiffSplit list={<div>list</div>} detail={<div>diff</div>} />}
     />
   );
 }

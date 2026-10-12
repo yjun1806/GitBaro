@@ -5,6 +5,7 @@ import { useCommitDetail, useCommitFileDiff } from "@/api/queries";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { CommitDetail } from "@/components/history/CommitDetail";
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Notice } from "@/components/ui/Notice";
 import { Button } from "@/components/ui/Button";
@@ -40,7 +41,9 @@ export function ReviewFilesPanel({ selection, repoLabel, switcher, ownerOf }: Re
   const { t } = useTranslation();
   if (selection === null) {
     return (
-      <EmptyState icon={GitCommit} title={t("review.selectTitle")} description={t("review.selectHint")} />
+      <Card className="flex-1">
+        <EmptyState icon={GitCommit} title={t("review.selectTitle")} description={t("review.selectHint")} />
+      </Card>
     );
   }
   if (selection.kind === "commit") {
@@ -70,13 +73,17 @@ function ReviewCommitFiles({ repoPath, oid, switcher }: { repoPath: string; oid:
 
   if (isError) {
     return (
-      <div className="flex-1 flex items-center justify-center p-3">
+      <Card className="flex-1 items-center justify-center p-3">
         <Notice tone="danger">{t("diff.failedToLoad")}</Notice>
-      </div>
+      </Card>
     );
   }
   if (isLoading || !data) {
-    return <CommitDetailLoading label={t("history.loadingHistory")} />;
+    return (
+      <Card className="flex-1">
+        <CommitDetailLoading label={t("history.loadingHistory")} />
+      </Card>
+    );
   }
   return (
     <CommitDetail
@@ -139,5 +146,5 @@ function ReviewWipFiles({ repoPath, ownerRepoPath, path, branch, isMain, label, 
     </div>
   );
 
-  return <FollowPanel path={path} variant="inline" header={header} switcher={switcher} />;
+  return <FollowPanel path={path} variant="lane" header={header} switcher={switcher} />;
 }
