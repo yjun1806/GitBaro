@@ -496,6 +496,36 @@ export type OperationType =
   | "status"
   | "log";
 
+/** `git:command-start` 이벤트가 싣는 값. */
+export interface GitCommandStartPayload {
+  id: string;
+  command: string;
+  operation: string;
+  repoPath: string;
+  startedAt: number;
+  automatic: boolean;
+}
+
+/** `git:command-complete` 이벤트가 싣는 값. */
+export interface GitCommandCompletePayload {
+  id: string;
+  operation: string;
+  success: boolean;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  resultSummary?: GitCommandEntry["resultSummary"];
+}
+
+/** `git:command-progress` 이벤트가 싣는 값. */
+export interface GitCommandProgressPayload {
+  id: string;
+  operation: string;
+  message: string;
+  percent?: number;
+}
+
 export interface GitCommandEntry {
   id: string;
   command: string;

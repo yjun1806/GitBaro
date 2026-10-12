@@ -50,18 +50,24 @@ export function GhLoginDialog({ onClose, onSuccess, expectedUsername }: GhLoginD
     const cleanups: (() => void)[] = [];
     let mounted = true;
 
+    // 구독이 끝나기 전에 닫히면(StrictMode의 첫 정리 등) 도착한 해제 함수를 바로 부른다.
+    const track = async (subscription: Promise<() => void>) => {
+      const unlisten = await subscription;
+      if (mounted) cleanups.push(unlisten);
+      else unlisten();
+    };
+
     async function setup() {
-      const unlisten1 = await listen<{ userCode: string; verificationUri: string }>(
+      await track(listen<{ userCode: string; verificationUri: string }>(
         "gh-login:device-code",
         (event) => {
           if (!mounted) return;
           setUserCode(event.payload.userCode);
           setFlowState("code");
         },
-      );
-      cleanups.push(unlisten1);
+      ));
 
-      const unlisten2 = await listen<{ username: string }>(
+      await track(listen<{ username: string }>(
         "gh-login:complete",
         (event) => {
           if (!mounted) return;
@@ -70,18 +76,16 @@ export function GhLoginDialog({ onClose, onSuccess, expectedUsername }: GhLoginD
           // Account refresh is deferred to onClose/onSuccess to avoid
           // unmounting the dialog mid-flow (parent re-renders when accounts change).
         },
-      );
-      cleanups.push(unlisten2);
+      ));
 
-      const unlisten3 = await listen<{ message: string }>(
+      await track(listen<{ message: string }>(
         "gh-login:error",
         (event) => {
           if (!mounted) return;
           setErrorMessage(event.payload.message);
           setFlowState("error");
         },
-      );
-      cleanups.push(unlisten3);
+      ));
 
       if (!mounted) return;
       await startLogin();

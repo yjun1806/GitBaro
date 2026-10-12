@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 type Handler = (event: { payload: unknown }) => void;
@@ -17,6 +18,7 @@ vi.mock("@/api/commands", () => ({
   cancelGhLogin: vi.fn(async () => {}),
 }));
 
+import { listen } from "@tauri-apps/api/event";
 import { cancelGhLogin, startGhLogin } from "@/api/commands";
 import { GhLoginDialog } from "@/components/account/GhLoginDialog";
 
@@ -65,5 +67,27 @@ describe("GhLoginDialog", () => {
     unmount();
 
     expect(cancelGhLogin).toHaveBeenCalledWith(7);
+  });
+
+  it("leaves no listener behind after StrictMode's first cleanup and a real unmount", async () => {
+    let active = 0;
+    vi.mocked(listen).mockImplementation((async () => {
+      await Promise.resolve();
+      active += 1;
+      return () => {
+        active -= 1;
+      };
+    }) as unknown as typeof listen);
+
+    const { unmount } = render(
+      <StrictMode>
+        <GhLoginDialog onClose={vi.fn()} />
+      </StrictMode>,
+    );
+    await vi.waitFor(() => expect(startGhLogin).toHaveBeenCalled());
+    await act(async () => {});
+    expect(active).toBe(3);
+    unmount();
+    expect(active).toBe(0);
   });
 });
