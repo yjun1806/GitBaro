@@ -183,7 +183,8 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
     onContextMenu: onRepoContextMenu,
     onFolderContextMenu: rowMenus.openFolder,
   };
-  const selection: RepoSelection = { activePath, activeOwnerPath, viewing };
+  const aggregatePath = useScopeStore((s) => s.aggregateRepoPath);
+  const selection: RepoSelection = { activePath, activeOwnerPath, viewing, aggregatePath };
 
   const toggleQuiet = (accountKey: string) =>
     setOpenQuiet((prev) => (prev.includes(accountKey) ? prev.filter((k) => k !== accountKey) : [...prev, accountKey]));
@@ -230,7 +231,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
             favorite={favoriteRepos.includes(node.repo.path)}
             fetching={fetchingPath === node.repo.path}
             expanded={open}
-            selected={!open && activeOwnerPath === node.repo.path}
+            selected={aggregatePath === node.repo.path || (!open && activeOwnerPath === node.repo.path)}
             onSelect={() => {
               selectRepo(node.repo);
               useScopeStore.getState().viewRepoAggregate(node.repo.path);

@@ -429,6 +429,15 @@ describe("RepoTree — search and selection", () => {
     expect(useScopeStore.getState().aggregateRepoPath).toBeNull();
   });
 
+  it("selects the repository row, not its checked-out branch, in the 'repository' scope", () => {
+    renderTree(makeData(baseSignals));
+    fireEvent.click(item("api"));
+    expect(useScopeStore.getState().aggregateRepoPath).toBe(API);
+    expect(item("api")).toHaveAttribute("aria-selected", "true");
+    const folderRows = screen.getAllByRole("treeitem").filter((el) => /Primary folder|feat\/login/.test(el.getAttribute("aria-label") ?? ""));
+    for (const row of folderRows) expect(row).toHaveAttribute("aria-selected", "false");
+  });
+
   it("leaves the 'repository' scope for the branch step when a linked worktree line of the same repository is clicked", () => {
     renderTree(makeData(baseSignals));
     fireEvent.click(item("api"));

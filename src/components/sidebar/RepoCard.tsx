@@ -32,6 +32,8 @@ export interface RepoSelection {
   activeOwnerPath: string | null;
   /** 지금 경로에서 체크아웃하지 않고 보는 브랜치. 없으면 null. */
   viewing: ViewTarget | null;
+  /** 「저장소」 단계(모든 워크트리)로 보는 저장소. 이때는 저장소 줄이 선택이고 작업 폴더 줄은 아니다. */
+  aggregatePath: string | null;
 }
 
 export interface RepoActions {
@@ -106,7 +108,8 @@ export function RepoFolderRows({ node, level, depth, data, selection, actions }:
     <>
       {folders.map(({ path, isPrimary }) => {
         const label = branchLabel(path);
-        const selected = selection.activePath === path && !(isPrimary && viewingHere);
+        const selected =
+          selection.aggregatePath !== repo.path && selection.activePath === path && !(isPrimary && viewingHere);
         return (
           <TreeRowFrame
             key={path}
@@ -178,7 +181,8 @@ export function RepoCard({
   const { repo } = node;
   const repoName = useRepoName();
   const paths = repoPaths(node);
-  const headerSelected = !expanded && selection.activeOwnerPath === repo.path;
+  const headerSelected =
+    selection.aggregatePath === repo.path || (!expanded && selection.activeOwnerPath === repo.path);
   return (
     <>
       <div className={cn(SIDEBAR_CARD, "animate-reveal")} role="none" data-repo-card={repo.path}>
