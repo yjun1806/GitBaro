@@ -207,7 +207,8 @@ beforeEach(async () => {
   useLiveChangesStore.setState({ watched: [], overflow: [] });
   useRepositoryStore.setState({ activeRepoPath: REPO, repos: [] });
   useActivityTargetsStore.setState({ extraByKey: {} });
-  useUIStore.setState({ isDiffMaximized: false });
+  // 대부분의 시나리오는 diff를 연 채(2단계) 따라가는 중이다. 안 연 채 들어오는 경우는 따로 검사한다.
+  useUIStore.setState({ isDiffMaximized: false, diffFileOpen: true });
   useFollowStore.getState().start(WT);
 });
 
@@ -324,6 +325,48 @@ describe("FollowPanel", () => {
     backend.contents["src/b.ts"] = lines(30, { 23: ["a", "b", "c"] });
     await emit(WT);
     expect((await screen.findByRole("status")).textContent).toContain("방금 24–26행 추가");
+  });
+});
+
+describe("FollowPanel — opens the diff only when a file is picked (5.4)", () => {
+  it("shows the file list only, with no file picked and no diff read, when no diff was open", async () => {
+    useUIStore.setState({ diffFileOpen: false });
+    renderFollow();
+    await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(2));
+    expect(screen.queryByTestId("diff-viewer")).toBeNull();
+    expect(getFileDiff).not.toHaveBeenCalled();
+    expect(useUIStore.getState().diffFileOpen).toBe(false);
+  });
+
+  it("does not open the diff when a new edit arrives while the diff is not open", async () => {
+    useUIStore.setState({ diffFileOpen: false });
+    renderFollow();
+    await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(2));
+    backend.files = [wipFile("src/c.ts", nowSecs()), ...backend.files];
+    await emit(WT);
+    await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(3));
+    expect(screen.queryByTestId("diff-viewer")).toBeNull();
+    expect(getFileDiff).not.toHaveBeenCalled();
+  });
+
+  it("opens the diff when the user picks a file", async () => {
+    useUIStore.setState({ diffFileOpen: false });
+    renderFollow();
+    await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(2));
+    fireEvent.click(screen.getByTitle("src/a.ts"));
+    await waitFor(() => expect(diffText()).toContain("src/a.ts"));
+    expect(useUIStore.getState().diffFileOpen).toBe(true);
+  });
+
+  it("keeps the diff open on the newest file when one was already open, and keeps following", async () => {
+    useUIStore.setState({ diffFileOpen: true });
+    renderFollow();
+    await waitFor(() => expect(diffText()).toContain("src/b.ts"));
+    expect(useFollowStore.getState().mode).toBe("following");
+    backend.files = [wipFile("src/c.ts", nowSecs()), ...backend.files];
+    backend.contents["src/c.ts"] = lines(30);
+    await emit(WT);
+    await waitFor(() => expect(diffText()).toContain("src/c.ts"));
   });
 });
 

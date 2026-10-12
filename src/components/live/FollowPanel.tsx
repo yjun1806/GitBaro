@@ -17,6 +17,7 @@ import { stageFiles } from "@/api/commands";
 import { useRepositoryStore } from "@/stores/repository";
 import { useSelectionStore } from "@/stores/selection";
 import { useToastStore } from "@/stores/toast";
+import { useUIStore } from "@/stores/ui";
 import { useOpenWorktree } from "@/hooks/useOpenWorktree";
 import { useListKeyboardNav } from "@/hooks/useListKeyboardNav";
 import { useFollowStore, type FollowMode } from "@/stores/follow";
@@ -146,6 +147,7 @@ function useFreshLines(
   files: WipFile[] | undefined,
   key: string | null,
   diff: DiffOutput | undefined,
+  takeBaseline: boolean,
 ) {
   const queryClient = useQueryClient();
   // 파일마다 마지막으로 본 내용. 화면 상태가 아니라 비교용 기억이라 ref에 둔다.
@@ -169,6 +171,8 @@ function useFreshLines(
 
   // 시작할 때 이미 바뀌어 있던 파일의 지금 내용을 기억해 둔다. 그래야 그 파일이 나중에
   // 다시 바뀌어 화면에 올라올 때 처음부터 새 줄을 가려낼 수 있다(시안 D4의 첫 장면).
+  // diff를 보여 주는 따라가기에서만 읽는다(`takeBaseline`) — 목록만 보이는 1단계에서 줄을 고르는 것만으로
+  // 파일 30개의 diff를 읽지 않는다. 나중에 diff가 열린 채 따라가면 그때 읽는다.
   const baselineTaken = useRef(false);
   const alive = useRef(true);
   useEffect(() => {
@@ -178,7 +182,7 @@ function useFreshLines(
     };
   }, []);
   useEffect(() => {
-    if (!files || baselineTaken.current) return;
+    if (!files || !takeBaseline || baselineTaken.current) return;
     baselineTaken.current = true;
     for (const f of files.slice(0, BASELINE_LIMIT)) {
       if (f.status === "deleted") continue;
@@ -194,7 +198,7 @@ function useFreshLines(
           /* 기준을 못 읽은 파일은 다음 변경부터 강조한다 */
         });
     }
-  }, [files, path, queryClient]);
+  }, [files, path, queryClient, takeBaseline]);
 
   useEffect(() => {
     if (!key || !diff || diff.binary) return;
@@ -378,8 +382,11 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
   const pickFileInStore = useFollowStore((s) => s.pickFile);
   const resume = useFollowStore((s) => s.resume);
   // diff를 닫았는가(닫기 버튼·Esc). 닫은 뒤에는 새 변경이 와도 diff를 다시 열지 않는다 — 파일을 다시
-  // 고르거나 다시 따라가면 풀린다.
-  const [diffClosed, setDiffClosed] = useState(false);
+  // 고르거나 다시 따라가면 풀린다. 처음부터 닫아 두고 시작하는 때도 있다: diff를 열어 두지 않은 채
+  // (1단계) 커밋 안 한 변경 줄을 골랐으면 파일 목록만 보이고, diff는 파일을 직접 골라야 열린다.
+  // 열어 둔 채(2단계)였으면 최신 파일을 그대로 연다. 줄을 고르면 앞 상세가 다시 마운트되며 정리하는
+  // `diffFileOpen`보다 먼저 그리는 중에 읽어 둔다(`CommitDetail`과 같다).
+  const [diffClosed, setDiffClosed] = useState(() => !useUIStore.getState().diffFileOpen);
   const pickFile = (filePath: string) => {
     setDiffClosed(false);
     pickFileInStore(filePath);
@@ -425,7 +432,7 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
     staged,
   );
   const diffKey = shown ? sideKey(shown.path, staged) : null;
-  const fresh = useFreshLines(path, files, diffKey, diff);
+  const fresh = useFreshLines(path, files, diffKey, diff, following && shown !== null);
   const freshLines = useMemo(() => (fresh ? new Set(fresh.delta.added) : undefined), [fresh]);
 
   // 안내는 변경이 들어오면 바로 띄우고, 일정 시간이 지나면 그 변경의 안내만 닫는다.

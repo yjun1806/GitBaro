@@ -191,14 +191,20 @@ describe("MainColumn (two-column shell)", () => {
     expect(screen.getByText("changes-view")).toBeTruthy();
   });
 
-  it("D47/5.4: keeps a narrow commit list once following opens a file, and expands it back to level 1", () => {
+  it("D47/5.4: picking the uncommitted row stays at level 1; picking a file opens the narrow commit list, and expanding goes back", () => {
     renderShell();
     const graphPane = screen.getByTestId("graph-pane");
     expect(graphPane.dataset.paneLevel).toBe("1");
     expect(graphPane.style.width).toBe("46%");
 
-    // 따라가기는 첫 파일을 스스로 고르므로(D49) 곧바로 2단계(좁은 커밋 목록)로 간다.
+    // 줄을 골라도 diff는 열리지 않는다: 파일 목록만 보이고 1단계 그대로다.
     fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · primary folder · 2 files$/ }));
+    expect(screen.getByTestId("follow-panel")).toBeTruthy();
+    expect(graphPane.dataset.paneLevel).toBe("1");
+    expect(graphPane.style.width).toBe("46%");
+
+    // 파일을 고르면 2단계(좁은 커밋 목록)로 간다.
+    fireEvent.click(screen.getByTitle("a.ts"));
     expect(graphPane.dataset.paneLevel).toBe("2");
     expect(graphPane.style.width).toBe("240px");
     // 그래프 자체는 그대로 화면에 있다(다시 마운트되지 않는다). 탭 줄 대신 좁은 목록 머리 줄이 선다.
@@ -215,6 +221,7 @@ describe("MainColumn (two-column shell)", () => {
   it("D47: picking a commit in the narrow list keeps level 2 and switches what the panes show", () => {
     renderShell();
     fireEvent.click(screen.getByRole("button", { name: /^Uncommitted changes · .* · primary folder · 2 files$/ }));
+    fireEvent.click(screen.getByTitle("a.ts"));
     const graphPane = screen.getByTestId("graph-pane");
     expect(graphPane.dataset.paneLevel).toBe("2");
 
