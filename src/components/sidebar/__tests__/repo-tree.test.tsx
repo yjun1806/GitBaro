@@ -398,10 +398,18 @@ describe("RepoTree — search and selection", () => {
     expect(useScopeStore.getState().aggregateRepoPath).toBe(API);
     fireEvent.click(item("solo"));
     expect(useScopeStore.getState().aggregateRepoPath).toBe(SOLO);
-    // 작업 폴더 줄은 그 워크트리의 체크아웃한 브랜치(「브랜치」 단계)를 그대로 연다 — 저장소
-    // 전체를 보는 「저장소」 단계로 바꾸지 않는다.
+    // 작업 폴더 줄은 그 워크트리의 체크아웃한 브랜치(「브랜치」 단계)를 연다 — 같은 저장소의
+    // 「저장소」 단계에 있다가 눌러도 저장소 단계에 머물지 않는다.
     fireEvent.click(item("dev · Primary folder"));
-    expect(useScopeStore.getState().aggregateRepoPath).toBe(SOLO);
+    expect(useScopeStore.getState().aggregateRepoPath).toBeNull();
+  });
+
+  it("leaves the 'repository' scope for the branch step when a linked worktree line of the same repository is clicked", () => {
+    renderTree(makeData(baseSignals));
+    fireEvent.click(item("api"));
+    expect(useScopeStore.getState().aggregateRepoPath).toBe(API);
+    fireEvent.click(item("feat/login"));
+    expect(useScopeStore.getState().aggregateRepoPath).toBeNull();
   });
 
   it("opens a worktree from its line", () => {

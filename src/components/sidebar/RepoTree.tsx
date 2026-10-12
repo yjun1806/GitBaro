@@ -152,9 +152,15 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
     useRepositoryStore.getState().rememberWorktree(repo.path, null);
     onSelectRepo(repo.path);
   };
+  // 작업 폴더 줄은 「브랜치」 단계로 연다. 같은 저장소의 「저장소」 단계에 있었으면 그 보기를 끈다 —
+  // 소유 저장소가 그대로라 `scope-store`의 저장소 바뀜 구독은 끄지 않는다.
   const rowActions = {
-    onSelectRepo: selectRepo,
+    onSelectRepo: (repo: RepoInfo) => {
+      useScopeStore.getState().viewRepoAggregate(null);
+      selectRepo(repo);
+    },
     onSelectWorktree: (repo: RepoInfo, worktreePath: string) => {
+      useScopeStore.getState().viewRepoAggregate(null);
       useRepositoryStore.getState().rememberWorktree(repo.path, worktreePath);
       onSelectRepo(repo.path);
     },
