@@ -1991,13 +1991,26 @@ fn map_io_err(e: std::io::Error) -> AppError {
     }
 }
 
+/// 로그에 남기는 출력의 최대 줄 수. `ls-remote --tags` 는 매번 1,200줄 남짓을 찍는다.
+const LOG_OUTPUT_MAX_LINES: usize = 20;
+
+/// 긴 출력은 앞 `LOG_OUTPUT_MAX_LINES` 줄만 남기고 나머지는 「(N more lines)」로 줄인다.
+fn truncate_for_log(text: &str) -> String {
+    let total = text.lines().count();
+    if total <= LOG_OUTPUT_MAX_LINES {
+        return text.to_string();
+    }
+    let head: Vec<&str> = text.lines().take(LOG_OUTPUT_MAX_LINES).collect();
+    format!("{}\n({} more lines)", head.join("\n"), total - LOG_OUTPUT_MAX_LINES)
+}
+
 /// Log stdout/stderr from a git command for debugging.
 fn log_output(output: &std::process::Output) {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     if !stdout.trim().is_empty() {
-        tracing::info!("[git] stdout: {}", stdout.trim());
+        tracing::info!("[git] stdout: {}", truncate_for_log(stdout.trim()));
     }
     if !stderr.trim().is_empty() {
         if output.status.success() {
@@ -2181,8 +2194,21 @@ fn first_hint_sentence(lines: &[&str]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ProgressThrottle, PROGRESS_EMIT_INTERVAL};
+    use super::{truncate_for_log, ProgressThrottle, PROGRESS_EMIT_INTERVAL};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn log_output_keeps_short_text_and_cuts_long_text_to_twenty_lines() {
+        assert_eq!(truncate_for_log("a\nb"), "a\nb");
+        let twenty = (1..=20).map(|n| n.to_string()).collect::<Vec<_>>().join("\n");
+        assert_eq!(truncate_for_log(&twenty), twenty);
+
+        let long = (1..=1200).map(|n| n.to_string()).collect::<Vec<_>>().join("\n");
+        let cut = truncate_for_log(&long);
+        assert_eq!(cut.lines().count(), 21);
+        assert!(cut.starts_with("1\n2\n"));
+        assert!(cut.ends_with("20\n(1180 more lines)"));
+    }
 
     #[test]
     fn progress_throttle_emits_first_then_only_changed_percent_after_interval() {
