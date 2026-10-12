@@ -310,7 +310,8 @@ describe("WorkspaceReview", () => {
     fireEvent.click(screen.getByRole("button", { name: /^xames-backend · Uncommitted changes · .* branch · .* · 1 file$/ }));
     expect(useFollowStore.getState().target).toBe(API_WT);
     expect(screen.getByText("settings.ts")).toBeTruthy();
-    expect(screen.getByText("diff-viewer")).toBeTruthy();
+    // diff가 닫힌 채 줄을 고르면 파일 목록만 보인다(D47). 파일을 골라야 diff가 열린다.
+    expect(screen.queryByText("diff-viewer")).toBeNull();
     // 「따라가는 중」은 파일 목록 머리(FollowBadge)와 WIP 행의 따라가기 버튼에 각각 붙는다.
     expect(screen.getByTestId("follow-badge").textContent).toBe("Following");
     expect(screen.getByRole("button", { name: "Following · stop" })).toBeTruthy();
