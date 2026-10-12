@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FLOATING_SURFACE } from "./layers";
+import { useExitGhostRef } from "@/lib/use-exit-ghost";
 
 export interface SelectOption {
   value: string;
@@ -29,6 +30,7 @@ export function Select({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const ghostRef = useExitGhostRef("exit-pop"); // transitions.dev: menu-dropdown
 
   useEffect(() => {
     if (!open) return;
@@ -72,14 +74,14 @@ export function Select({
         </span>
         <ChevronDown
           className={cn(
-            "w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform",
+            "w-3.5 h-3.5 shrink-0 text-muted-foreground motion-chevron",
             open && "rotate-180",
           )}
         />
       </button>
 
       {open && (
-        <div className={cn("absolute left-0 right-0 top-full mt-1 rounded-(--radius-item) p-1 z-50 max-h-48 overflow-y-auto animate-pop-in", FLOATING_SURFACE)}>
+        <div ref={ghostRef} className={cn("absolute left-0 right-0 top-full mt-1 rounded-(--radius-item) p-1 z-50 max-h-48 overflow-y-auto origin-top animate-pop-in", FLOATING_SURFACE)}>
           {options.map((option) => (
             <button
               key={option.value}

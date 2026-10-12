@@ -13,6 +13,7 @@ import { Notice } from "@/components/ui/Notice";
 import { Select } from "@/components/ui/Select";
 import { SearchInput, TextInput } from "@/components/ui/TextInput";
 import { Spinner } from "@/components/ui/Spinner";
+import { SwapText } from "@/components/ui/SwapText";
 
 type CloneTab = "github" | "url";
 
@@ -146,7 +147,7 @@ export function CloneDialog({
             busy={isCloning}
             icon={<Download className="w-3.5 h-3.5" />}
           >
-            {isCloning ? t("clone.cloning") : t("clone.clone")}
+            <SwapText>{isCloning ? t("clone.cloning") : t("clone.clone")}</SwapText>
           </Button>
         </>
       }

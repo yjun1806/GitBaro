@@ -100,7 +100,7 @@ export function PrFileView({ pr, file, threads, repoPath, editorRepoPath, reveal
             aria-expanded={threadsOpen}
             className="flex items-center gap-1.5 h-7 px-3 shrink-0 text-[11.5px] font-semibold text-(--fg2) hover:text-foreground"
           >
-            <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", !threadsOpen && "-rotate-90")} />
+            <ChevronDown className={cn("w-3.5 h-3.5 motion-chevron", !threadsOpen && "-rotate-90")} />
             <MessageSquare className="w-3.5 h-3.5" />
             {t("pr.thread.count", { count: threadTotal })}
           </button>
@@ -123,7 +123,7 @@ export function PrFileView({ pr, file, threads, repoPath, editorRepoPath, reveal
                     size="sm"
                     onClick={() => setOutdatedOpen((v) => !v)}
                     aria-expanded={outdatedOpen}
-                    icon={<ChevronDown className={cn("w-3 h-3 transition-transform", !outdatedOpen && "-rotate-90")} />}
+                    icon={<ChevronDown className={cn("w-3 h-3 motion-chevron", !outdatedOpen && "-rotate-90")} />}
                     className="self-start"
                   >
                     {t("pr.thread.outdatedGroup", { count: outdated.length })}

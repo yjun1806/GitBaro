@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useChangeCount } from "./use-change-count";
 
 /**
  * 회전 표시의 크기. 곁에 놓이는 글자 크기에 맞춘다(docs/loading-design.md).
@@ -51,6 +52,17 @@ interface BusyIconProps {
  * 버튼 쪽에서는 `disabled`와 `aria-busy`를 함께 건다.
  */
 export function BusyIcon({ busy, icon, size = "md" }: BusyIconProps) {
-  if (busy) return <Spinner size={size} />;
-  return <>{icon ?? null}</>;
+  // transitions.dev: icon-swap — 아이콘 ↔ 회전 표시가 바뀐 뒤에만, 들어오는 쪽이 작고 흐린 데서 커진다.
+  // 처음 그릴 때(바뀐 적 없음)는 움직이지 않는다. 같은 자리의 한 요소만 바꿔 버튼 폭은 그대로다.
+  const swaps = useChangeCount(busy);
+  // 회전(`animate-spin`)과 들어오기가 같은 요소에서 겹치지 않게 바깥 span이 들어오기를 맡는다.
+  const content = busy ? <Spinner size={size} /> : (icon ?? null);
+  if (content === null) return null;
+  return swaps > 0 ? (
+    <span key={swaps} className="inline-flex shrink-0 animate-icon-in">
+      {content}
+    </span>
+  ) : (
+    <>{content}</>
+  );
 }

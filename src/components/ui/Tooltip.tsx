@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { FLOATING_SURFACE } from "./layers";
+import { useExitGhostRef } from "@/lib/use-exit-ghost";
 
 interface TooltipProps {
   label: string;
@@ -24,6 +25,7 @@ export function Tooltip({ label, children, side = "top", offset = 6, delayMs = 0
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ghostRef = useExitGhostRef("exit-tooltip"); // transitions.dev: tooltip
 
   const clearTimer = () => {
     if (timer.current !== null) clearTimeout(timer.current);
@@ -53,11 +55,12 @@ export function Tooltip({ label, children, side = "top", offset = 6, delayMs = 0
       {coords &&
         createPortal(
           <span
+            ref={ghostRef}
             role="tooltip"
             style={{ left: coords.x, top: coords.y }}
             className={cn(
-              "fixed z-[100] -translate-x-1/2 whitespace-nowrap rounded-(--radius-chip) px-2 py-1 text-[11.5px] pointer-events-none animate-fade-in",
-              side === "top" && "-translate-y-full",
+              "fixed z-[100] -translate-x-1/2 whitespace-nowrap rounded-(--radius-chip) px-2 py-1 text-[11.5px] pointer-events-none animate-tooltip-in",
+              side === "top" ? "-translate-y-full origin-bottom" : "origin-top",
               FLOATING_SURFACE,
             )}
           >

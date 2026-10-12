@@ -23,6 +23,8 @@ import { useFollowStore, type FollowMode } from "@/stores/follow";
 import { FOLLOW_KEY, useActivityTargetsStore } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
 import { diffDelta, type DiffDelta } from "@/lib/diff-delta";
+import { useExitGhostRef } from "@/lib/use-exit-ghost";
+import { SwapText } from "@/components/ui/SwapText";
 import { useJustChanged, type JustChanged } from "./useJustChanged";
 import { FollowLine } from "./FollowLine";
 import { followNote } from "./follow-note";
@@ -77,7 +79,7 @@ export function FollowBadge({ mode }: { mode: FollowMode }) {
   return (
     <span data-testid="follow-badge">
       <StatusChip tone={following ? "live" : "neutral"} icon={<Dot on={following} breathe={following} />}>
-        {following ? t("live.following") : t("live.paused")}
+        <SwapText>{following ? t("live.following") : t("live.paused")}</SwapText>
       </StatusChip>
     </span>
   );
@@ -367,6 +369,7 @@ export interface FollowPanelProps {
  */
 export function FollowPanel({ path, variant, header, footer, switcher }: FollowPanelProps) {
   const { t } = useTranslation();
+  const toastGhostRef = useExitGhostRef("exit-pop"); // transitions.dev: menu-dropdown
   const target = useFollowStore((s) => s.target);
   const mode = useFollowStore((s) => s.mode);
   const pickedFile = useFollowStore((s) => s.file);
@@ -648,11 +651,12 @@ export function FollowPanel({ path, variant, header, footer, switcher }: FollowP
       )}
       {toastOpen && fresh && (
         <div
+          ref={toastGhostRef}
           data-follow-toast
           role="status"
           className={cn(
             FLOATING_SURFACE,
-            "absolute right-4 top-12 z-10 flex items-center gap-2.5 py-2 pl-3 pr-2 rounded-(--radius-item) text-[12.5px] text-foreground animate-pop-in",
+            "absolute right-4 top-12 z-10 flex items-center gap-2.5 py-2 pl-3 pr-2 rounded-(--radius-item) text-[12.5px] text-foreground origin-top-right animate-pop-in",
           )}
         >
           <Dot on live />

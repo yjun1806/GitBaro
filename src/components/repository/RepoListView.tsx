@@ -327,7 +327,7 @@ export function RepoListView({ onSelectRepo }: RepoListViewProps) {
                 className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-(--radius-item) transition-colors motion-reduce:transition-none"
               >
                 <ChevronDown className={cn(
-                  "w-3 h-3 text-muted-foreground shrink-0 transition-transform motion-reduce:transition-none",
+                  "w-3 h-3 text-muted-foreground shrink-0 motion-chevron motion-reduce:transition-none",
                   collapsedGroups.includes(group.label) && "-rotate-90",
                 )} />
                 {(() => {

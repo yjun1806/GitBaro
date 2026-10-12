@@ -29,11 +29,16 @@ export function WorkspaceNameDialog({
   const errorId = `${titleId}-error`;
   const [name, setName] = useState(initialName);
   const [error, setError] = useState<WorkspaceError | null>(null);
+  // transitions.dev: error-state-shake — 거절될 때마다 입력칸이 한 번 흔들린다(같은 오류가 되풀이돼도 다시).
+  const [shaking, setShaking] = useState(false);
 
   const handleSubmit = () => {
     const result = onSubmit(name);
     if (result.ok) onClose();
-    else setError(result.reason);
+    else {
+      setError(result.reason);
+      setShaking(true);
+    }
   };
 
   const title =
@@ -75,6 +80,8 @@ export function WorkspaceNameDialog({
             }}
             placeholder={t("workspace.namePlaceholder")}
             aria-invalid={error !== null}
+            className={shaking ? "animate-shake" : undefined}
+            onAnimationEnd={() => setShaking(false)}
             aria-describedby={error ? errorId : undefined}
           />
           {error && (

@@ -2,6 +2,7 @@ import { useRef } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
+import { useExitGhost } from "@/lib/use-exit-ghost";
 
 interface DialogProps {
   /** Called on Escape (when `dismissible`) and, if `closeOnBackdrop`, on a backdrop click. Omit for a dialog the user must answer. */
@@ -22,7 +23,8 @@ interface DialogProps {
 }
 
 /**
- * Modal dialog shell: backdrop + panel with role="dialog", aria-modal and
+ * Modal dialog shell (transitions.dev: modal — opens by scaling up from the centre, and closes
+ * through `useExitGhost` because callers unmount it directly): backdrop + panel with role="dialog", aria-modal and
  * aria-labelledby. Escape closes it, focus moves into it on open and returns
  * to the opener on close, and Tab cycles inside it (all via `useDialogA11y`,
  * shared with the anchored popover panel `AnchoredPanel`). Visuals come
@@ -39,10 +41,13 @@ export function Dialog({
   children,
 }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useExitGhost(overlayRef, "exit-dialog"); // transitions.dev: modal
   const { handleKeyDown } = useDialogA11y(panelRef, { onClose, dismissible });
 
   return (
     <div
+      ref={overlayRef}
       className={cn("fixed inset-0 flex items-center justify-center animate-overlay-in", overlayClassName)}
       onClick={closeOnBackdrop ? () => onClose?.() : undefined}
     >

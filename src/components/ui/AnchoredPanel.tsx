@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { cn } from "@/lib/utils";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { clampPanelToViewport } from "@/lib/panel-position";
+import { unscaledRect, useExitGhost } from "@/lib/use-exit-ghost";
 
 export interface AnchoredPanelProps {
   /** The trigger button the panel opens from and is positioned under. */
@@ -46,8 +47,10 @@ export function AnchoredPanel({
   children,
 }: AnchoredPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useExitGhost(overlayRef, "exit-popover"); // transitions.dev: menu-dropdown
   const { handleKeyDown } = useDialogA11y(panelRef, { onClose, dismissible });
-  const [position, setPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number; maxHeight: number; above: boolean } | null>(null);
 
   useLayoutEffect(() => {
     const update = () => {
@@ -59,15 +62,14 @@ export function AnchoredPanel({
       // 내용이 늘었을 때 다시 커진다. 재고 나면 되돌린다(같은 값이면 React가 다시 쓰지 않는다).
       const applied = panel.style.maxHeight;
       panel.style.maxHeight = "";
-      const p = panel.getBoundingClientRect();
+      const p = unscaledRect(panel);
       panel.style.maxHeight = applied;
-      setPosition(
-        clampPanelToViewport(
-          { left: a.left, top: a.top, bottom: a.bottom, width: a.width },
-          { width: p.width, height: p.height },
-          { width: window.innerWidth, height: window.innerHeight },
-        ),
+      const clamped = clampPanelToViewport(
+        { left: a.left, top: a.top, bottom: a.bottom, width: a.width },
+        { width: p.width, height: p.height },
+        { width: window.innerWidth, height: window.innerHeight },
       );
+      setPosition({ ...clamped, above: clamped.top < a.top });
     };
     update();
     window.addEventListener("resize", update);
@@ -84,6 +86,7 @@ export function AnchoredPanel({
 
   return (
     <div
+      ref={overlayRef}
       className={cn("fixed inset-0", overlayClassName)}
       onClick={closeOnBackdrop ? () => onClose?.() : undefined}
     >
@@ -115,6 +118,8 @@ export function AnchoredPanel({
           top: position?.top ?? 0,
           left: position?.left ?? 0,
           maxHeight: position ? position.maxHeight : undefined,
+          // 트리거 쪽에서 자란다: 트리거 아래에 열리면 위 왼쪽, 위로 뒤집히면 아래 왼쪽.
+          transformOrigin: position?.above ? "bottom left" : "top left",
         }}
         className={cn("outline-none animate-pop-in", className)}
       >

@@ -95,7 +95,7 @@ export function BranchCombobox({
         </span>
         <ChevronDown
           className={cn(
-            "w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform",
+            "w-3.5 h-3.5 shrink-0 text-muted-foreground motion-chevron",
             open && "rotate-180",
           )}
         />

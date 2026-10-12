@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { FLOATING_SURFACE } from "./layers";
 import { useMenuKeyboard } from "@/hooks/useMenuKeyboard";
 import { clampPanelToViewport } from "@/lib/panel-position";
+import { unscaledRect, useExitGhost } from "@/lib/use-exit-ghost";
 
 export interface ContextMenuItem {
   label: string;
@@ -53,7 +54,7 @@ interface ContextMenuProps {
 
 /** `anchored`일 때 트리거 아래(또는 위) 자리를 잰다. 잴 수 없으면(테스트 등) 원점에 그대로 둔다. */
 function useAnchoredPosition(menuRef: RefObject<HTMLElement | null>, anchor: ContextMenuAnchor | undefined) {
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number; above: boolean } | null>(null);
 
   useLayoutEffect(() => {
     if (!anchor) return;
@@ -64,7 +65,7 @@ function useAnchoredPosition(menuRef: RefObject<HTMLElement | null>, anchor: Con
       const a = anchorEl.getBoundingClientRect();
       const applied = menu.style.maxHeight;
       menu.style.maxHeight = "";
-      const m = menu.getBoundingClientRect();
+      const m = unscaledRect(menu);
       menu.style.maxHeight = applied;
       const left = anchor.align === "end" ? a.right - m.width : a.left;
       const clamped = clampPanelToViewport(
@@ -72,7 +73,7 @@ function useAnchoredPosition(menuRef: RefObject<HTMLElement | null>, anchor: Con
         { width: m.width, height: m.height },
         { width: window.innerWidth, height: window.innerHeight },
       );
-      setPosition({ top: clamped.top, left: clamped.left });
+      setPosition({ top: clamped.top, left: clamped.left, above: clamped.top < a.top });
     };
     update();
     window.addEventListener("resize", update);
@@ -85,14 +86,17 @@ function useAnchoredPosition(menuRef: RefObject<HTMLElement | null>, anchor: Con
 
 export function ContextMenu({ sections, position, anchored, onClose, ariaLabel }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
+  useExitGhost(ref, "exit-pop"); // transitions.dev: menu-dropdown
   const anchoredPosition = useAnchoredPosition(ref, anchored);
   // anchored 메뉴는 자리를 잰 뒤(visibility: hidden이 풀린 뒤)에만 첫 항목에 포커스를 준다 —
   // 숨은 요소에 포커스를 주면 브라우저가 무시해서 그대로 포커스를 잃는다(D-high #2).
   const isPositioned = anchored ? anchoredPosition !== null : true;
   const { onKeyDown, restoreFocus } = useMenuKeyboard(ref, onClose, isPositioned);
   const fixedPoint = position ?? { x: 0, y: 0 };
-  const style: { left: number; top: number; visibility?: "visible" | "hidden" } = anchored
-    ? { left: (anchoredPosition ?? { top: 0, left: 0 }).left, top: (anchoredPosition ?? { top: 0, left: 0 }).top, visibility: anchoredPosition ? "visible" : "hidden" }
+  // 트리거 쪽에서 자란다(transitions.dev: menu-dropdown의 data-origin): 오른쪽 맞춤이면 오른쪽, 위로 뒤집히면 아래.
+  const anchoredOrigin = `${anchored?.align === "end" ? "right" : "left"} ${anchoredPosition?.above ? "bottom" : "top"}`;
+  const style: { left: number; top: number; visibility?: "visible" | "hidden"; transformOrigin?: string } = anchored
+    ? { left: (anchoredPosition ?? { top: 0, left: 0 }).left, top: (anchoredPosition ?? { top: 0, left: 0 }).top, visibility: anchoredPosition ? "visible" : "hidden", transformOrigin: anchoredOrigin }
     : { left: fixedPoint.x, top: fixedPoint.y };
 
   useEffect(() => {
@@ -131,17 +135,21 @@ export function ContextMenu({ sections, position, anchored, onClose, ariaLabel }
   useEffect(() => {
     if (anchored || !ref.current) return;
     const el = ref.current;
-    const rect = el.getBoundingClientRect();
+    const rect = unscaledRect(el);
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const p = position ?? { x: 0, y: 0 };
 
-    if (rect.right > vw) {
+    // 클릭한 점 쪽에서 자란다: 오른쪽·아래로 뒤집힌 만큼 원점도 뒤집는다.
+    const flipX = rect.right > vw;
+    const flipY = rect.bottom > vh;
+    if (flipX) {
       el.style.left = `${p.x - rect.width}px`;
     }
-    if (rect.bottom > vh) {
+    if (flipY) {
       el.style.top = `${p.y - rect.height}px`;
     }
+    el.style.transformOrigin = `${flipX ? "right" : "left"} ${flipY ? "bottom" : "top"}`;
   }, [position, anchored]);
 
   const hasChecks = sections.some((s) => s.items.some((item) => item.checked !== undefined));
@@ -153,7 +161,7 @@ export function ContextMenu({ sections, position, anchored, onClose, ariaLabel }
       aria-label={ariaLabel}
       tabIndex={-1}
       onKeyDown={onKeyDown}
-      className={cn("fixed outline-none rounded-(--radius-item) p-1 z-[100] min-w-[200px] animate-pop-in", FLOATING_SURFACE)}
+      className={cn("fixed outline-none rounded-(--radius-item) p-1 z-[100] min-w-[200px] origin-top-left animate-pop-in", FLOATING_SURFACE)}
       style={style}
     >
       {sections.map((section, si) => (

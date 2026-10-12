@@ -1,6 +1,7 @@
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useSettingsRowIds } from "@/components/settings/ui/row-context";
+import { useSlidingIndicator } from "./use-sliding-indicator";
 
 export interface SegmentedOption<T extends string> {
   value: T;
@@ -18,6 +19,12 @@ export type SegmentedSize = "md" | "sm";
 const PIECE_SIZE_CLASS: Record<SegmentedSize, string> = {
   md: "h-6 px-2.5 text-[12.5px]",
   sm: "h-5 px-2 text-[11.5px]",
+};
+
+/** 알약의 높이·위치: 조각과 같다(안쪽 여백 2px 아래, 위에서 2px). */
+const PILL_SIZE_CLASS: Record<SegmentedSize, string> = {
+  md: "top-0.5 h-6",
+  sm: "top-0.5 h-5",
 };
 
 interface SegmentedProps<T extends string> {
@@ -46,6 +53,13 @@ export function Segmented<T extends string>({
 }: SegmentedProps<T>) {
   const ids = useSettingsRowIds();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  // 고른 조각의 흰 알약은 조각마다 따로 칠하지 않고 하나가 미끄러진다(transitions.dev: tabs-sliding).
+  const groupRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLSpanElement>(null);
+  useSlidingIndicator(groupRef, pillRef, '[role="radio"][aria-checked="true"]', (piece) => ({
+    left: piece.offsetLeft,
+    width: piece.offsetWidth,
+  }));
   const current = Math.max(0, options.findIndex((o) => o.value === value));
   // 고른 조각이 꺼져 있으면(예: 보던 중 다른 브랜치로 바뀜) Tab이 닿을 곳이 없어진다 —
   // 그때는 첫 켜진 조각으로 옮겨 로빙 탭인덱스를 지킨다.
@@ -72,6 +86,7 @@ export function Segmented<T extends string>({
 
   return (
     <div
+      ref={groupRef}
       role="radiogroup"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabel ? undefined : ids?.labelId}
@@ -79,10 +94,19 @@ export function Segmented<T extends string>({
       aria-disabled={disabled || undefined}
       onKeyDown={handleKeyDown}
       className={cn(
-        "items-center gap-0.5 p-0.5 rounded-(--radius-item) bg-(--chip)",
+        "relative items-center gap-0.5 p-0.5 rounded-(--radius-item) bg-(--chip)",
         fill ? "flex w-full" : "inline-flex",
       )}
     >
+      <span
+        ref={pillRef}
+        aria-hidden="true"
+        data-segmented-pill=""
+        className={cn(
+          "absolute left-0 w-0 opacity-0 pointer-events-none rounded-(--radius-chip) bg-card shadow-(--shadow-sm) motion-slide-indicator",
+          PILL_SIZE_CLASS[size],
+        )}
+      />
       {options.map((option, i) => {
         const selected = i === current;
         // 채움 모드에서 조각이 좁아지면(fill) 글자가 넘친다 — 안쪽 span에서 줄이고, title이 없으면
@@ -102,14 +126,14 @@ export function Segmented<T extends string>({
             disabled={disabled || option.disabled}
             onClick={() => onChange(option.value)}
             className={cn(
-              "inline-flex items-center justify-center gap-1.5 rounded-(--radius-chip) outline-none",
-              "transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring/40",
+              "relative inline-flex items-center justify-center gap-1.5 rounded-(--radius-chip) outline-none",
+              "transition-colors duration-(--tabs-dur) ease-(--tabs-ease) motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring/40",
               // pointer-events-none이면 title 풍선말도 막힌다(끈 조각의 이유를 hover로 봐야 한다).
               "disabled:opacity-45 disabled:cursor-not-allowed",
               PIECE_SIZE_CLASS[size],
               fill && "flex-1 min-w-0",
               selected
-                ? "bg-card text-foreground font-semibold shadow-(--shadow-sm)"
+                ? "text-foreground font-semibold"
                 : "text-(--fg2) hover:text-foreground",
             )}
           >

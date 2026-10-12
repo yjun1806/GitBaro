@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
 import { cn } from "@/lib/utils";
+import { useExitGhostRef } from "@/lib/use-exit-ghost";
 import { useRepositoryStore } from "@/stores/repository";
 import { isLivePath } from "./tree-model";
 import { useWorktreeBases } from "./useWorktreeBases";
@@ -94,6 +95,7 @@ export function SidebarHoverCardProvider({ data, children }: { data: SidebarTree
   }, [placement, hide]);
 
   const api = useMemo(() => ({ show, hide }), [show, hide]);
+  const ghostRef = useExitGhostRef("exit-tooltip"); // transitions.dev: tooltip
 
   return (
     <HoverCardContext.Provider value={api}>
@@ -101,10 +103,11 @@ export function SidebarHoverCardProvider({ data, children }: { data: SidebarTree
       {placement &&
         createPortal(
           <div
+            ref={ghostRef}
             role="tooltip"
             data-testid="sidebar-hover-card"
             className={cn(
-              "fixed z-[90] pointer-events-none rounded-(--radius-item) px-3 py-2.5 flex flex-col gap-1 text-[12.5px] animate-fade-in",
+              "fixed z-[90] pointer-events-none rounded-(--radius-item) px-3 py-2.5 flex flex-col gap-1 text-[12.5px] animate-tooltip-in origin-top-left",
               FLOATING_SURFACE,
             )}
             style={{ top: placement.top, left: placement.left, width: CARD_WIDTH_PX }}

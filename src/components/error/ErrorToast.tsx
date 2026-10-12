@@ -13,8 +13,8 @@ const toastConfig: Record<ToastType, { icon: ReactNode; iconClass: string }> = {
   success: { icon: <CheckCircle className="w-4 h-4 shrink-0" />, iconClass: "text-success" },
 };
 
-/** 알림이 흐려지며 사라지는 시간(ms). globals.css의 --motion-fast와 같다. 끝나면 목록에서 뺀다. */
-const TOAST_EXIT_MS = 120;
+/** 알림이 사라지는 시간(ms). globals.css의 --toast-close(transitions.dev: toast)와 같다. 끝나면 목록에서 뺀다. */
+const TOAST_EXIT_MS = 250;
 
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) => void }) {
   const { t } = useTranslation();

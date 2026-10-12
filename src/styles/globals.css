@@ -93,23 +93,37 @@
 
      떠 있는 층 3(메뉴·드롭다운·팝오버): 흐린 데서 선명해지며 2px 내려앉는다. 크기는 바꾸지 않는다 —
      자리를 잡으려고 떠 있는 요소의 크기를 재는 곳(AnchoredPanel, ContextMenu)이 어긋나지 않게. */
-  --animate-pop-in: motion-pop-in var(--motion-fast) var(--ease-enter) backwards;
-  /* 툴팁·정보 카드: 흐린 데서 선명해지기만 한다. */
+  /* transitions.dev: menu-dropdown */
+  --animate-pop-in: motion-pop-in var(--dropdown-open-dur) var(--dropdown-ease) backwards;
+  /* 일반 흐려지기(활동 기록 칸·줄 안 신호). 레시피가 아니라 우리 값이다. */
   --animate-fade-in: motion-fade-in var(--motion-fast) var(--ease-enter) backwards;
-  /* 모달 창과 그 뒤의 막 */
-  --animate-dialog-in: motion-dialog-in var(--motion-base) var(--ease-enter) backwards;
-  --animate-overlay-in: motion-fade-in var(--motion-base) var(--ease-enter) backwards;
-  /* 알림: 아래에서 올라오고, 사라질 때는 더 빨리 흐려진다. */
-  --animate-toast-in: motion-toast-in var(--motion-slow) var(--ease-enter) backwards;
-  --animate-toast-out: motion-toast-out var(--motion-fast) var(--ease-exit) forwards;
-  /* 펼친 트리 줄·카드: 위에서 살짝 내려오며 나타난다. 높이는 움직이지 않는다(목록이 출렁이지 않게). */
-  --animate-reveal: motion-reveal var(--motion-base) var(--ease-enter) backwards;
+  /* transitions.dev: tooltip — 80ms 기다렸다가 150ms에 나타난다(사라질 때는 50ms, 아래 .exit-tooltip). */
+  --animate-tooltip-in: motion-tooltip-in var(--tt-in-dur) var(--tt-in-ease) var(--tt-delay) backwards;
+  /* transitions.dev: modal — 창은 가운데서 커지고, 그 뒤의 막은 같은 길이로 흐려지며 나타난다(막은 레시피에 없다). */
+  --animate-dialog-in: motion-dialog-in var(--modal-open-dur) var(--modal-ease) backwards;
+  --animate-overlay-in: motion-fade-in var(--modal-open-dur) var(--modal-ease) backwards;
+  /* transitions.dev: toast — 아래에서 올라오며 선명해지고, 사라질 때는 더 빠른 시계로 되돌아간다. */
+  --animate-toast-in: motion-toast-in var(--toast-open) var(--toast-ease) backwards;
+  --animate-toast-out: motion-toast-out var(--toast-close) var(--toast-ease) forwards;
+  /* transitions.dev: accordion(펼침 길이·곡선) — 펼친 트리 줄·카드: 위에서 살짝 내려오며 나타난다.
+     높이·블러는 움직이지 않는다(트리 줄이 많고, 목록이 출렁이지 않게). */
+  --animate-reveal: motion-reveal var(--acc-expand) var(--acc-ease) backwards;
   /* 내용 바꾸기(커밋·파일·스태시를 고를 때): 투명도만. 비었다가 차는 깜빡임이 없게 반쯤에서 시작한다. */
   --animate-content-in: motion-content-in var(--motion-fast) var(--ease-enter) backwards;
   /* 읽는 중 표시: 짧게 끝나는 읽기에는 보이지 않게 조금 기다렸다가 나타난다. */
   --animate-loading-in: motion-fade-in var(--motion-base) var(--ease-enter) 200ms backwards;
-  /* 활성 탭 밑줄: 가운데서 펴진다. */
-  --animate-indicator-x: motion-indicator-x var(--motion-base) var(--ease-enter) backwards;
+  /* transitions.dev: number-pop-in — 숫자가 바뀌면 아래에서 흐릿하게 올라온다. */
+  --animate-number-pop: motion-number-pop var(--digit-dur) var(--digit-ease) backwards;
+  /* transitions.dev: text-states-swap — 옛 글자는 위로 흐려지며 나가고, 새 글자는 아래에서 올라온다. */
+  --animate-swap-out: motion-swap-out var(--text-swap-dur) var(--text-swap-ease) forwards;
+  --animate-swap-in: motion-swap-in var(--text-swap-dur) var(--text-swap-ease) backwards;
+  /* transitions.dev: icon-swap — 아이콘이 바뀌어 들어올 때 작고 흐린 데서 커진다. */
+  --animate-icon-in: motion-icon-in var(--icon-swap-dur) var(--icon-swap-ease) backwards;
+  /* transitions.dev: error-state-shake — 입력이 거절되면 좌우로 한 번 흔들린다. */
+  --animate-shake: motion-shake calc(var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2) linear;
+  /* transitions.dev: toggle — 손잡이가 목표를 살짝 넘었다 돌아온다. */
+  --animate-switch-on: motion-switch-on var(--toggle-dur) var(--toggle-ease) both;
+  --animate-switch-off: motion-switch-off var(--toggle-dur) var(--toggle-ease) both;
   /* 「지금 바뀌는 중」 점: 그렇게 된 순간 테가 한 번 퍼진다. */
   --animate-live-ring: motion-live-ring 900ms var(--ease-enter) 1;
   /* 「따라가는 중」 점: 천천히 숨 쉰다. */
@@ -412,6 +426,75 @@
   --wip-halo-opacity: 0;
 }
 
+/* ── transitions.dev 레시피 값 ──
+   움직임의 길이·곡선·크기는 아래 값에서 온다(레시피마다 이름 접두사가 하나다). 위 --motion-*는 hover·칸 전환처럼
+   레시피가 없는 곳에 남긴다. 큰 면(그래프·diff·파일 목록·칸 전체)에는 블러·높이·너비 전환을 쓰지 않는다 —
+   블러는 아이콘·짧은 글자·알림·메뉴처럼 작은 요소에만 둔다. */
+:root {
+  /* transitions.dev: menu-dropdown (메뉴·팝오버·드롭다운, 트리거 쪽에서 자란다) */
+  --dropdown-open-dur: 250ms;
+  --dropdown-close-dur: 150ms;
+  --dropdown-pre-scale: 0.97;
+  --dropdown-closing-scale: 0.99;
+  --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* transitions.dev: modal */
+  --modal-open-dur: 250ms;
+  --modal-close-dur: 150ms;
+  --modal-scale: 0.96;
+  --modal-scale-close: 0.96;
+  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* transitions.dev: tooltip */
+  --tt-in-dur: 150ms;
+  --tt-out-dur: 50ms;
+  --tt-scale: 0.98;
+  --tt-delay: 80ms;
+  --tt-in-ease: ease-out;
+  --tt-out-ease: ease-out;
+  /* transitions.dev: toast */
+  --toast-open: 350ms;
+  --toast-close: 250ms;
+  --toast-distance: 16px;
+  --toast-blur: 2px;
+  --toast-scale: 0.97;
+  --toast-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* transitions.dev: tabs-sliding */
+  --tabs-dur: 250ms;
+  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* transitions.dev: accordion */
+  --acc-expand: 250ms;
+  --acc-collapse: 250ms;
+  --acc-chevron: 250ms;
+  --acc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* transitions.dev: toggle (이동 거리는 우리 스위치 값: 트랙 34 − 손잡이 16 − 안쪽 여백 2×2) */
+  --toggle-dur: 350ms;
+  --toggle-travel: 14px;
+  --toggle-ov1: 1px;
+  --toggle-ov2: 0px;
+  --toggle-track: 0ms;
+  --toggle-ease: cubic-bezier(0.34, 1.35, 0.64, 1);
+  /* transitions.dev: number-pop-in */
+  --digit-dur: 500ms;
+  --digit-distance: 8px;
+  --digit-blur: 2px;
+  --digit-ease: cubic-bezier(0.34, 1.45, 0.64, 1);
+  /* transitions.dev: text-states-swap */
+  --text-swap-dur: 150ms;
+  --text-swap-translate-y: 4px;
+  --text-swap-blur: 2px;
+  --text-swap-ease: ease-in-out;
+  /* transitions.dev: icon-swap */
+  --icon-swap-dur: 250ms;
+  --icon-swap-blur: 2px;
+  --icon-swap-start-scale: 0.25;
+  --icon-swap-ease: ease-in-out;
+  /* transitions.dev: error-state-shake */
+  --shake-distance: 6px;
+  --shake-overshoot: 4px;
+  --shake-dur-a: 80ms;
+  --shake-dur-b: 60ms;
+  --shake-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* 칸 배치(D47/5.4): 그래프·목록 칸의 폭만 이 길이로 움직인다. 옆 칸(diff)은 flex로 따라 늘어나 따로
    전환을 두지 않는다. 폭은 「투명도·transform만 움직인다」의 예외다 — 칸 경계를 transform으로 옮기면
    옆 칸 내용(diff 가상 스크롤·커밋 줄 칸 단계)이 전환 내내 옛 폭으로 잘려 보이고, 칸 안 요소를 따로
@@ -427,28 +510,122 @@
     opacity: 0;
   }
 }
+/* transitions.dev: menu-dropdown — 레시피는 transition이지만 마운트마다 한 번 도는 keyframes로 옮겼다(fill은 backwards). */
 @keyframes motion-pop-in {
   from {
     opacity: 0;
-    transform: translateY(-2px);
+    transform: scale(var(--dropdown-pre-scale));
   }
 }
+/* transitions.dev: modal */
 @keyframes motion-dialog-in {
   from {
     opacity: 0;
-    transform: translateY(4px) scale(0.98);
+    transform: scale(var(--modal-scale));
   }
 }
+/* transitions.dev: tooltip */
+@keyframes motion-tooltip-in {
+  from {
+    opacity: 0;
+    transform: scale(var(--tt-scale));
+  }
+}
+/* transitions.dev: toast — 블러는 알림(작은 요소)에만 쓴다. */
 @keyframes motion-toast-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(var(--toast-distance)) scale(var(--toast-scale));
+    filter: blur(var(--toast-blur));
   }
 }
 @keyframes motion-toast-out {
   to {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(var(--toast-distance)) scale(var(--toast-scale));
+    filter: blur(var(--toast-blur));
+  }
+}
+/* transitions.dev: number-pop-in */
+@keyframes motion-number-pop {
+  from {
+    opacity: 0;
+    transform: translateY(var(--digit-distance));
+    filter: blur(var(--digit-blur));
+  }
+}
+/* transitions.dev: text-states-swap */
+@keyframes motion-swap-out {
+  to {
+    opacity: 0;
+    transform: translateY(calc(var(--text-swap-translate-y) * -1));
+    filter: blur(var(--text-swap-blur));
+  }
+}
+@keyframes motion-swap-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--text-swap-translate-y));
+    filter: blur(var(--text-swap-blur));
+  }
+}
+/* transitions.dev: icon-swap */
+@keyframes motion-icon-in {
+  from {
+    opacity: 0;
+    transform: scale(var(--icon-swap-start-scale));
+    filter: blur(var(--icon-swap-blur));
+  }
+}
+/* transitions.dev: error-state-shake — 구간마다 곡선이 따로라 %는 (80, 60, 80, 60ms)의 누적 비율이다. */
+@keyframes motion-shake {
+  0% {
+    transform: translateX(0);
+    animation-timing-function: var(--shake-ease);
+  }
+  28.57% {
+    transform: translateX(var(--shake-distance));
+    animation-timing-function: var(--shake-ease);
+  }
+  57.14% {
+    transform: translateX(calc(var(--shake-distance) * -1));
+    animation-timing-function: var(--shake-ease);
+  }
+  78.57% {
+    transform: translateX(var(--shake-overshoot));
+    animation-timing-function: var(--shake-ease);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+/* transitions.dev: toggle */
+@keyframes motion-switch-on {
+  0% {
+    translate: 0 0;
+  }
+  55% {
+    translate: calc(var(--toggle-travel) + var(--toggle-ov1)) 0;
+  }
+  80% {
+    translate: calc(var(--toggle-travel) - var(--toggle-ov2)) 0;
+  }
+  100% {
+    translate: var(--toggle-travel) 0;
+  }
+}
+@keyframes motion-switch-off {
+  0% {
+    translate: var(--toggle-travel) 0;
+  }
+  55% {
+    translate: calc(0px - var(--toggle-ov1)) 0;
+  }
+  80% {
+    translate: var(--toggle-ov2) 0;
+  }
+  100% {
+    translate: 0 0;
   }
 }
 @keyframes motion-reveal {
@@ -460,12 +637,6 @@
 @keyframes motion-content-in {
   from {
     opacity: 0.4;
-  }
-}
-@keyframes motion-indicator-x {
-  from {
-    opacity: 0;
-    transform: scaleX(0.4);
   }
 }
 @keyframes motion-live-ring {
@@ -507,17 +678,88 @@
   }
 }
 
+/* 닫히는 움직임. 창·메뉴는 호출하는 쪽이 `{open && <… />}`로 곧바로 떼어 내므로, 떼어 내는 순간
+   `useExitGhost`가 모양만 복제해 같은 자리에 남기고 이 클래스로 사라지게 한다(눌러도 닿지 않는다). */
+/* transitions.dev: menu-dropdown */
+.exit-pop {
+  animation: motion-pop-out var(--dropdown-close-dur) var(--dropdown-ease) forwards;
+}
+/* transitions.dev: menu-dropdown — 막(투명)은 그대로 두고 패널만 줄며 사라진다. */
+.exit-popover > [role="dialog"] {
+  animation: motion-pop-out var(--dropdown-close-dur) var(--dropdown-ease) forwards;
+}
+/* transitions.dev: modal — 막은 흐려지고, 창은 scale-close로 줄며 사라진다. */
+.exit-dialog {
+  animation: motion-fade-out var(--modal-close-dur) var(--modal-ease) forwards;
+}
+.exit-dialog > [role="dialog"] {
+  animation: motion-dialog-out var(--modal-close-dur) var(--modal-ease) forwards;
+}
+/* transitions.dev: tooltip — 사라질 때는 기다리지 않는다. */
+.exit-tooltip {
+  animation: motion-tooltip-out var(--tt-out-dur) var(--tt-out-ease) forwards;
+}
+@keyframes motion-pop-out {
+  to {
+    opacity: 0;
+    transform: scale(var(--dropdown-closing-scale));
+  }
+}
+@keyframes motion-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes motion-dialog-out {
+  to {
+    opacity: 0;
+    transform: scale(var(--modal-scale-close));
+  }
+}
+@keyframes motion-tooltip-out {
+  to {
+    opacity: 0;
+    transform: scale(var(--tt-scale));
+  }
+}
+
+/* transitions.dev: accordion — 펼침 표시(쉐브론)의 길이·곡선. 쉐브론은 v/^ 뒤집기가 아니라 ▸/▾ 회전이라 레시피의
+   scaleY 대신 우리 회전에 같은 길이·곡선을 쓴다. */
+/* transitions.dev: tabs-sliding — 표시(탭 밑줄·Segmented 알약)의 이동. 자리·너비는 JS가 inline으로 쓴다. */
+@utility motion-slide-indicator {
+  transition-property: transform, width;
+  transition-duration: var(--tabs-dur);
+  transition-timing-function: var(--tabs-ease);
+}
+
+@utility motion-chevron {
+  transition-property: transform;
+  transition-duration: var(--acc-chevron);
+  transition-timing-function: var(--acc-ease);
+}
+
 /* 「동작 줄이기」: 자리를 옮기거나 크기를 바꾸는 움직임은 모두 흐려지기만으로 바꾸고, 계속 도는 표시(점)는 멈춘다.
    읽는 중 회전(animate-spin)은 진행 중이라는 정보라서 남긴다. */
 @media (prefers-reduced-motion: reduce) {
   :root {
+    /* transitions.dev 레시피의 reduced-motion 보호: 크기·위치·블러는 모두 걷고 흐려지기만 남긴다(우리 규칙). */
     --animate-pop-in: motion-fade-in var(--motion-fast) linear backwards;
+    --animate-tooltip-in: motion-fade-in var(--motion-fast) linear backwards;
     --animate-dialog-in: motion-fade-in var(--motion-fast) linear backwards;
     --animate-overlay-in: motion-fade-in var(--motion-fast) linear backwards;
     --animate-toast-in: motion-fade-in var(--motion-fast) linear backwards;
     --animate-toast-out: motion-toast-fade-out var(--motion-fast) linear forwards;
     --animate-reveal: motion-fade-in var(--motion-fast) linear backwards;
-    --animate-indicator-x: motion-fade-in var(--motion-fast) linear backwards;
+    --animate-swap-out: none;
+    --animate-swap-in: none;
+    --animate-number-pop: none;
+    --animate-icon-in: none;
+    --animate-shake: none;
+    --animate-switch-on: none;
+    --animate-switch-off: none;
+    --tabs-dur: 0s;
+    --acc-chevron: 0s;
+    --toggle-dur: 0s;
     --animate-live-ring: none;
     --animate-live-breathe: none;
     /* --animate-focus-flash는 그대로 둔다: 자리를 옮기지 않고 한 번 흐려지기만 한다. */
@@ -532,6 +774,15 @@
   }
   .transition-transform {
     transition-duration: 0s;
+  }
+  /* 닫히는 모양 복제는 쓰지 않는다(useExitGhost도 건너뛴다). */
+  .exit-pop,
+  .exit-popover,
+  .exit-dialog,
+  .exit-dialog > [role="dialog"],
+  .exit-tooltip {
+    animation: none;
+    display: none;
   }
 }
 @keyframes motion-toast-fade-out {

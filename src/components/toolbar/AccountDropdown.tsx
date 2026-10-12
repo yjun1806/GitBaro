@@ -6,6 +6,7 @@ import { ContextMenu, type ContextMenuSection } from "@/components/ui/ContextMen
 import { Button } from "@/components/ui/Button";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
 import { cn } from "@/lib/utils";
+import { useExitGhostRef } from "@/lib/use-exit-ghost";
 import { useRepoAccountId, useAssignRepoAccount } from "@/hooks/useRepoAccountId";
 
 interface AccountDropdownProps {
@@ -22,11 +23,12 @@ export function AccountDropdown({ anchorRef, onClose, onSignIn, onManageAccounts
   // 열린 저장소의 계정을 보여주고, 고르면 그 저장소에 지정한다.
   const repoAccountId = useRepoAccountId();
   const assignAccount = useAssignRepoAccount();
+  const ghostRef = useExitGhostRef("exit-pop"); // transitions.dev: menu-dropdown
 
   // 계정이 없으면 메뉴 항목이 아니라 안내 + 로그인 버튼이라 목록 메뉴(`ContextMenu`) 모양이 아니다.
   if (accounts.length === 0) {
     return (
-      <div className={cn("absolute right-0 top-full mt-2 w-56 rounded-(--radius-item) p-3 z-50 animate-pop-in", FLOATING_SURFACE)}>
+      <div ref={ghostRef} className={cn("absolute right-0 top-full mt-2 w-56 rounded-(--radius-item) p-3 z-50 origin-top-right animate-pop-in", FLOATING_SURFACE)}>
         <p className="text-[12.5px] text-muted-foreground">{t("account.noAccountsLinked")}</p>
         <Button
           variant="primary"

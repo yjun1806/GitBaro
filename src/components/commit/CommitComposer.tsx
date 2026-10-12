@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
+import { SwapText } from "@/components/ui/SwapText";
 import { TextInput, Textarea } from "@/components/ui/TextInput";
 
 /** 요약 글자 수를 보이기 시작하는 길이와, 넘으면 경고하는 길이(git 관례의 한 줄 72자). */
@@ -114,7 +115,9 @@ export function CommitComposer({
           className="max-w-full min-w-0 ml-auto"
           onClick={onCommit}
         >
-          {isCommitting ? t("commit.committing") : <span className="min-w-0 truncate">{t("commit.submit", { branch: branchLabel })}</span>}
+          <SwapText className="min-w-0 truncate">
+            {isCommitting ? t("commit.committing") : t("commit.submit", { branch: branchLabel })}
+          </SwapText>
         </Button>
       </div>
     </div>

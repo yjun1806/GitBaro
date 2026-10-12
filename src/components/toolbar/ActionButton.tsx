@@ -3,6 +3,7 @@ import { ChevronDown, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TOOLBAR_BADGE, TOOLBAR_GROUP, TOOLBAR_ICON, toolbarButtonClass } from "./toolbar-button";
 import { BusyIcon } from "@/components/ui/Spinner";
+import { useChangeCount } from "@/components/ui/use-change-count";
 import { ContextMenu, type ContextMenuSection } from "@/components/ui/ContextMenu";
 
 /**
@@ -79,6 +80,8 @@ export function ActionButton({
   caret = false,
 }: ActionButtonProps) {
   const showBadge = badge !== undefined && badge > 0;
+  // transitions.dev: number-pop-in — 숫자가 바뀌면(나타날 때 포함) 아래에서 흐릿하게 올라온다. 처음 그릴 때는 가만히 있다.
+  const badgePops = useChangeCount(badge ?? 0);
   const accessibleLabel = [label, showBadge ? `${badgePrefix}${badge}` : null, hint]
     .filter(Boolean)
     .join(" — ");
@@ -102,8 +105,9 @@ export function ActionButton({
         <span className={cn("whitespace-nowrap", TOOLBAR_LABEL_CLASS)}>{label}</span>
         {showBadge && (
           <span
+            key={badgePops}
             aria-hidden="true"
-            className={TOOLBAR_BADGE}
+            className={cn(TOOLBAR_BADGE, badgePops > 0 && "animate-number-pop")}
           >
             {badgePrefix}
             {badge}

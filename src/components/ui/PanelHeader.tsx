@@ -101,7 +101,7 @@ export function SectionLabel({
           aria-hidden="true"
           data-testid="section-label-chevron"
           className={cn(
-            "w-2.5 h-2.5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none",
+            "w-2.5 h-2.5 shrink-0 text-muted-foreground motion-chevron motion-reduce:transition-none",
             collapsed && "-rotate-90",
           )}
           strokeWidth={2.6}
