@@ -163,7 +163,7 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
       setPendingView({ repoPath: repo.path, target });
     },
   };
-  // 작업 폴더 줄·보기 줄의 우클릭 메뉴. 저장소 머리 줄 메뉴는 사이드바(`RepoRail`)가 그린다.
+  // 작업 폴더 줄의 우클릭 메뉴. 저장소 머리 줄 메뉴는 사이드바(`RepoRail`)가 그린다.
   const rowMenus = useSidebarRowMenus(rowActions, activePath);
   // 저장소 줄(카드 머리)을 누르면 저장소를 열고 「저장소」 단계로 들어간다(5.1). 작업 폴더 줄
   // (`onSelectRepo`)은 그 워크트리의 체크아웃한 브랜치, 즉 「브랜치」 단계로 그대로 둔다.
@@ -176,7 +176,6 @@ export function RepoTree({ data, fetchingPath, onSelectRepo, onRepoContextMenu }
     onOpenRepoScope: openRepoScope,
     onContextMenu: onRepoContextMenu,
     onFolderContextMenu: rowMenus.openFolder,
-    onViewContextMenu: rowMenus.openView,
   };
   const selection: RepoSelection = { activePath, activeOwnerPath, viewing };
 

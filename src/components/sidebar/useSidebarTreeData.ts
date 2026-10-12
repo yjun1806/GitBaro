@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useCachedOpenPrsByRepo, useRepoSyncStatuses, useSettings, useWorkingBranches } from "@/api/queries";
+import { useRepoSyncStatuses } from "@/api/queries";
 import { useReviewStatus, type WorktreeReviewStatus } from "@/hooks/useReviewStatus";
 import { buildRepoTree, type AccountNode, type PathSignals, type WorktreeInput } from "@/lib/repo-tree";
-import { workingBranchRecentDays } from "@/lib/working-branches";
 import { useAccountStore } from "@/stores/account";
 import { pathsFromWatchKey, useActivityTargetsStore, watchPathsKey } from "@/stores/activity-targets";
 import { useLiveChangesStore } from "@/stores/live-changes";
@@ -11,9 +10,7 @@ import { useWorkspaceStore } from "@/stores/workspace";
 import { usePreferencesStore } from "@/stores/preferences";
 import { useRepoName } from "@/hooks/useRepoDisplay";
 import type { RepoReviewStatus, RepoSyncStatus } from "@/types";
-import { buildSignals, syncStatusPaths, workingBranchRows, worktreesByRepoFrom, type WorkingBranchRow } from "./tree-model";
-
-const EMPTY_WORKING_BRANCH_ROWS: WorkingBranchRow[] = [];
+import { buildSignals, syncStatusPaths, worktreesByRepoFrom } from "./tree-model";
 
 /** 사이드바가 활동 감시 대상에 경로를 더할 때 쓰는 키. */
 export const SIDEBAR_WATCH_KEY = "sidebar";
@@ -31,7 +28,6 @@ function useNow(intervalMs: number): number {
 }
 
 const EMPTY_SYNC: Record<string, RepoSyncStatus> = {};
-const EMPTY_PR_MAP: ReadonlyMap<string, number> = new Map();
 
 export interface SidebarTreeData {
   tree: AccountNode[];
@@ -48,8 +44,6 @@ export interface SidebarTreeData {
   now: number;
   /** 경로(저장소·워크트리)의 지금 브랜치. 모르면 null. */
   branchOf: (path: string) => string | null;
-  /** 저장소 카드에 작업 폴더 줄과 별도로 보일 작업 중인 브랜치 줄(체크아웃한 브랜치는 뺀다). */
-  workingBranchRowsOf: (repoPath: string) => WorkingBranchRow[];
 }
 
 /**
@@ -92,27 +86,6 @@ export function useSidebarTreeData(): SidebarTreeData {
   // 표시가 깜박이지 않게 한다.
   const { data: syncData } = useRepoSyncStatuses(statusPaths, { keepPrevious: true });
   const syncByPath = syncData ?? EMPTY_SYNC;
-
-  const { data: settings } = useSettings();
-  const recentDays = workingBranchRecentDays(settings);
-  const workingBranchResults = useWorkingBranches(repoPathList);
-  const accountIdOf = useMemo(() => new Map(repos.map((r) => [r.path, r.accountId])), [repos]);
-  const prRepoList = useMemo(
-    () => repoPathList.map((path) => ({ path, accountId: accountIdOf.get(path) ?? null })),
-    [repoPathList, accountIdOf],
-  );
-  const openPrsByRepo = useCachedOpenPrsByRepo(prRepoList);
-  const workingBranchRowsByRepo = useMemo(() => {
-    const out: Record<string, WorkingBranchRow[]> = {};
-    repoPathList.forEach((path, i) => {
-      out[path] = workingBranchRows(workingBranchResults[i], { recentDays, now }, openPrsByRepo[path] ?? EMPTY_PR_MAP);
-    });
-    return out;
-  }, [repoPathList, workingBranchResults, recentDays, now, openPrsByRepo]);
-  const workingBranchRowsOf = useCallback(
-    (repoPath: string) => workingBranchRowsByRepo[repoPath] ?? EMPTY_WORKING_BRANCH_ROWS,
-    [workingBranchRowsByRepo],
-  );
 
   const signals = useMemo(
     () => buildSignals(syncByPath, review.byPath, lastChangedAt),
@@ -169,7 +142,6 @@ export function useSidebarTreeData(): SidebarTreeData {
     overflow,
     now,
     branchOf,
-    workingBranchRowsOf,
   };
 }
 

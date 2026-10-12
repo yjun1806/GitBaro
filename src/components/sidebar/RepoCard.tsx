@@ -1,5 +1,5 @@
 import type { MouseEvent } from "react";
-import { GitBranch, GitPullRequest, Star } from "lucide-react";
+import { GitBranch, Star } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRepoAvatarColor, useRepoName } from "@/hooks/useRepoDisplay";
 import { middleEllipsis } from "@/lib/middle-ellipsis";
@@ -18,7 +18,7 @@ import {
 import { DraggableRow, DropAfterLine } from "./TreeDnd";
 import { TreeRowFrame } from "./TreeRowFrame";
 import type { FolderRow } from "./useSidebarRowMenus";
-import { isLivePath, isWatchedPath, repoPaths, sumDedupedByRepo, type WorkingBranchRow } from "./tree-model";
+import { isLivePath, isWatchedPath, repoPaths, sumDedupedByRepo } from "./tree-model";
 import type { SidebarTreeData } from "./useSidebarTreeData";
 import { Spinner } from "@/components/ui/Spinner";
 import { useSteadyFlag } from "@/hooks/useSteadyValue";
@@ -44,8 +44,6 @@ export interface RepoActions {
   onContextMenu: (repo: RepoInfo, e: MouseEvent) => void;
   /** 작업 폴더 줄 우클릭(`useSidebarRowMenus`). */
   onFolderContextMenu?: (repo: RepoInfo, folder: FolderRow, e: MouseEvent) => void;
-  /** 체크아웃하지 않은 작업 중인 브랜치 줄 우클릭. */
-  onViewContextMenu?: (repo: RepoInfo, target: Extract<ViewTarget, { kind: "ref" }>, e: MouseEvent) => void;
 }
 
 /**
@@ -83,69 +81,9 @@ interface FolderRowsProps {
   actions: RepoActions;
 }
 
-/** 체크아웃하지 않은 작업 중인 브랜치 줄 하나(`RepoFolderRows` 안에서만 쓴다). */
-function WorkingBranchRowView({
-  repo,
-  row,
-  level,
-  depth,
-  now,
-  selected,
-  onSelect,
-  onContextMenu,
-}: {
-  repo: RepoInfo;
-  row: WorkingBranchRow;
-  level: number;
-  depth: number;
-  now: number;
-  selected: boolean;
-  onSelect: () => void;
-  onContextMenu: (e: MouseEvent) => void;
-}) {
-  const { branch, reasons, prNumber } = row;
-  const hasPr = reasons.includes("openPr");
-  return (
-    <TreeRowFrame
-      level={level}
-      depth={depth}
-      label={branch.name}
-      selected={selected}
-      hover={{
-        kind: "branch",
-        repoPath: repo.path,
-        branch: branch.name,
-        reasons,
-        prNumber,
-        unpushed: branch.unpushed,
-        behind: branch.behind,
-      }}
-      className="animate-reveal"
-      onSelect={onSelect}
-      onContextMenu={onContextMenu}
-    >
-      <span className={ROW_ICON_SLOT}>
-        {hasPr ? (
-          <GitPullRequest className="w-3 h-3" aria-hidden="true" />
-        ) : (
-          <GitBranch className="w-3 h-3" aria-hidden="true" />
-        )}
-      </span>
-      <span className={cn(ROW_BRANCH, "text-muted-foreground")}>
-        {middleEllipsis(branch.name, BRANCH_MAX_CHARS)}
-      </span>
-      <RowSignals
-        values={{ dirty: 0, live: false, watched: false, changedAt: 0, ahead: branch.unpushed, behind: branch.behind }}
-        now={now}
-      />
-    </TreeRowFrame>
-  );
-}
-
 /**
- * 저장소 카드 안 줄: 기본 폴더, 링크된 워크트리마다 한 줄, 그리고 그 밖의 작업 중인 브랜치 줄
- * (체크아웃하지 않았지만 원격에 없는 커밋이 있거나, 열린 PR이 있거나, 최근에 커밋했고 병합되지 않은 것 —
- * `workingBranchRowsOf`, 5.2). 모두 한 줄 28px이고, 이름은 폴더가 아니라 브랜치다(detached면 짧은 커밋).
+ * 저장소 카드 안 줄: 기본 폴더와 링크된 워크트리마다 한 줄(5.2). 한 줄 28px이고,
+ * 이름은 폴더가 아니라 체크아웃한 브랜치다(detached면 짧은 커밋).
  */
 export function RepoFolderRows({ node, level, depth, data, selection, actions }: FolderRowsProps) {
   const { t } = useTranslation();
@@ -183,27 +121,11 @@ export function RepoFolderRows({ node, level, depth, data, selection, actions }:
             <span className={ROW_ICON_SLOT}>
               <GitBranch className="w-3 h-3" aria-hidden="true" />
             </span>
-            <span className={cn(ROW_BRANCH, selected ? "text-foreground font-semibold" : "text-(--fg2)")}>
+            <span className={cn(ROW_BRANCH, "text-foreground", selected ? "font-semibold" : "font-medium")}>
               {middleEllipsis(label, BRANCH_MAX_CHARS)}
             </span>
             <RowSignals values={signalValues([path], data)} now={data.now} />
           </TreeRowFrame>
-        );
-      })}
-      {data.workingBranchRowsOf(repo.path).map((row) => {
-        const target: Extract<ViewTarget, { kind: "ref" }> = { kind: "ref", name: row.branch.name, isRemote: false };
-        return (
-          <WorkingBranchRowView
-            key={row.branch.name}
-            repo={repo}
-            row={row}
-            level={level}
-            depth={depth}
-            now={data.now}
-            selected={viewingHere?.kind === "ref" && viewingHere.name === row.branch.name}
-            onSelect={() => actions.onViewBranch(repo, target)}
-            onContextMenu={(e) => actions.onViewContextMenu?.(repo, target, e)}
-          />
         );
       })}
     </>
@@ -225,7 +147,7 @@ interface RepoCardProps {
 
 /**
  * 계정 바로 아래 저장소 하나 = 흰 카드 하나. 머리 줄(아바타 · 이름 · 즐겨찾기)을 누르면 기본 폴더를 연다.
- * 펼치면 작업 폴더 줄과 그 밖의 작업 중인 브랜치 줄이 이어진다. 접으면 머리 줄에 전체 합계 표시를 둔다.
+ * 펼치면 작업 폴더 줄이 이어진다. 접으면 머리 줄에 전체 합계 표시를 둔다.
  */
 export function RepoCard({
   node,

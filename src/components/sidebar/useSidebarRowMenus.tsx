@@ -1,13 +1,12 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { Eye, FolderGit2, GitBranch, Trash2 } from "lucide-react";
+import { Eye, FolderGit2, Trash2 } from "lucide-react";
 import { removeWorktree } from "@/api/commands";
 import { useMenuActions } from "@/hooks/useMenuActions";
 import { useToastStore } from "@/stores/toast";
 import { useRepositoryStore } from "@/stores/repository";
-import { useCheckoutBranch } from "@/components/branch/useCheckoutBranch";
 import { ContextMenu, contextMenuPoint, type ContextMenuSection } from "@/components/ui/ContextMenu";
 import { copyMenuItem, folderMenuItems } from "@/components/ui/menu-items";
 import { getErrorMessage } from "@/lib/utils";
@@ -30,27 +29,21 @@ interface RowMenuActions {
   onViewBranch: (repo: RepoInfo, target: ViewTarget) => void;
 }
 
-type OpenMenu =
-  | { kind: "folder"; repo: RepoInfo; folder: FolderRow; x: number; y: number }
-  | { kind: "view"; repo: RepoInfo; target: Extract<ViewTarget, { kind: "ref" }>; x: number; y: number };
+type OpenMenu = { kind: "folder"; repo: RepoInfo; folder: FolderRow; x: number; y: number };
 
 /**
  * 사이드바 저장소 카드 안 줄의 우클릭 메뉴.
  * - 작업 폴더 줄: 열기, (워크트리면) 기본 폴더에서 그 브랜치를 체크아웃하지 않고 보기, 폴더 열기,
  *   경로·브랜치 복사, 맨 아래에 워크트리 제거(확인 창).
- * - 체크아웃하지 않은 작업 중인 브랜치 줄: 보기, 기본 폴더가 열려 있으면 여기서 체크아웃(변경이 있으면 묻는다), 이름 복사.
  */
 export function useSidebarRowMenus(
   actions: RowMenuActions,
   activePath: string | null,
 ): {
   openFolder: (repo: RepoInfo, folder: FolderRow, e: MouseEvent) => void;
-  openView: (repo: RepoInfo, target: Extract<ViewTarget, { kind: "ref" }>, e: MouseEvent) => void;
   element: ReactNode;
 } {
   const [menu, setMenu] = useState<OpenMenu | null>(null);
-  // 체크아웃은 확인 창이 메뉴보다 오래 남으므로 따로 둔다. 처음 쓸 때 붙이고 그 뒤로는 남겨 둔다.
-  const [checkoutRequest, setCheckoutRequest] = useState<{ branch: string; id: number } | null>(null);
 
   const close = () => setMenu(null);
   const element = (
@@ -58,16 +51,6 @@ export function useSidebarRowMenus(
       {menu?.kind === "folder" && (
         <FolderRowMenu menu={menu} actions={actions} activePath={activePath} onClose={close} />
       )}
-      {menu?.kind === "view" && (
-        <ViewRowMenu
-          menu={menu}
-          actions={actions}
-          canCheckout={activePath === menu.repo.path}
-          onCheckout={(branch) => setCheckoutRequest((prev) => ({ branch, id: (prev?.id ?? 0) + 1 }))}
-          onClose={close}
-        />
-      )}
-      {checkoutRequest && <CheckoutRunner key={checkoutRequest.id} branch={checkoutRequest.branch} />}
     </>
   );
 
@@ -75,10 +58,6 @@ export function useSidebarRowMenus(
     openFolder: (repo, folder, e) => {
       e.preventDefault();
       setMenu({ kind: "folder", repo, folder, ...contextMenuPoint(e) });
-    },
-    openView: (repo, target, e) => {
-      e.preventDefault();
-      setMenu({ kind: "view", repo, target, ...contextMenuPoint(e) });
     },
     element,
   };
@@ -168,57 +147,4 @@ function FolderRowMenu({
     });
   }
   return <ContextMenu sections={sections} position={menu} onClose={onClose} ariaLabel={t("menu.worktreeMenu")} />;
-}
-
-function ViewRowMenu({
-  menu,
-  actions,
-  canCheckout,
-  onCheckout,
-  onClose,
-}: {
-  menu: Extract<OpenMenu, { kind: "view" }>;
-  actions: RowMenuActions;
-  canCheckout: boolean;
-  onCheckout: (branch: string) => void;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation();
-  const menuActions = useMenuActions();
-  const { repo, target } = menu;
-  const sections: ContextMenuSection[] = [
-    {
-      items: [
-        {
-          label: t("menu.viewBranch"),
-          icon: <Eye className={ICON} />,
-          onClick: () => actions.onViewBranch(repo, target),
-        },
-        {
-          label: t("menu.checkoutHere"),
-          icon: <GitBranch className={ICON} />,
-          onClick: () => onCheckout(target.name),
-          // 기본 폴더가 열려 있을 때만 그 자리에서 체크아웃한다(다른 저장소를 몰래 바꾸지 않는다).
-          disabled: !canCheckout,
-        },
-      ],
-    },
-    { items: [copyMenuItem(t("branch.contextMenu.copyName"), target.name, menuActions)] },
-  ];
-  return <ContextMenu sections={sections} position={menu} onClose={onClose} ariaLabel={t("menu.branchMenu")} />;
-}
-
-/**
- * 붙은 뒤 목록(브랜치·변경·워크트리)을 다 읽으면 체크아웃을 시작하고, 확인 창(커밋 안 한 변경이 있을 때)을
- * 그린다. 목록을 읽기 전에 시작하면 변경이 없는 것으로 보고 묻지 않고 바꿔 버린다.
- */
-function CheckoutRunner({ branch }: { branch: string }) {
-  const { checkout, element, ready } = useCheckoutBranch();
-  const [started, setStarted] = useState(false);
-  useEffect(() => {
-    if (started || !ready) return;
-    setStarted(true);
-    checkout(branch);
-  }, [started, ready, checkout, branch]);
-  return <>{element}</>;
 }

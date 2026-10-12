@@ -5,7 +5,7 @@ import "@testing-library/jest-dom/vitest";
 import i18n from "@/i18n/config";
 import type { WorktreeReviewStatus } from "@/hooks/useReviewStatus";
 import type { SidebarTreeData } from "../useSidebarTreeData";
-import { formatAgo, liveDotLabel, workingBranchReasonText } from "../row-meta";
+import { formatAgo, liveDotLabel } from "../row-meta";
 import { RowSignals, pulseBucket, type RowSignalValues } from "../RowSignals";
 import { changedAgoText } from "../SidebarHoverCard";
 import { signalValues } from "../RepoCard";
@@ -124,7 +124,6 @@ describe("signalValues", () => {
       overflow: [],
       now: NOW,
       branchOf: () => null,
-      workingBranchRowsOf: () => [],
       ...over,
     };
   }
@@ -145,19 +144,5 @@ describe("signalValues", () => {
       signals: { [MAIN]: { behind: 3 }, [OTHER]: { behind: 2 } },
     });
     expect(signalValues([MAIN, OTHER], d).behind).toBe(5);
-  });
-});
-
-describe("workingBranchReasonText", () => {
-  it("names each reason and joins more than one with a middle dot", () => {
-    expect(workingBranchReasonText(en, ["unpushed"], null)).toBe("Has commits not on any remote");
-    expect(workingBranchReasonText(en, ["unpushed", "recent"], null)).toBe(
-      "Has commits not on any remote · Committed recently, not yet merged into the default branch",
-    );
-  });
-
-  it("names the PR number when it's known, and falls back when it isn't", () => {
-    expect(workingBranchReasonText(en, ["openPr"], 58)).toBe("Open PR #58");
-    expect(workingBranchReasonText(en, ["openPr"], null)).toBe("Has an open PR");
   });
 });

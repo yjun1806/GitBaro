@@ -84,7 +84,6 @@ function data(): SidebarTreeData {
     overflow: [],
     now: 0,
     branchOf: () => null,
-    workingBranchRowsOf: () => [],
   };
 }
 

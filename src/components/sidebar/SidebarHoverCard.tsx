@@ -4,9 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { FLOATING_SURFACE } from "@/components/ui/layers";
 import { cn } from "@/lib/utils";
-import type { WorkingBranchReason } from "@/lib/working-branches";
 import { useRepositoryStore } from "@/stores/repository";
-import { workingBranchReasonText } from "./row-meta";
 import { isLivePath } from "./tree-model";
 import { useWorktreeBases } from "./useWorktreeBases";
 import type { SidebarTreeData } from "./useSidebarTreeData";
@@ -20,20 +18,7 @@ const CARD_WIDTH_PX = 260;
 /** 자세한 정보 카드가 설명하는 대상. */
 export type HoverSubject =
   | { kind: "repo"; repoPath: string; paths: string[] }
-  | { kind: "worktree"; repoPath: string; path: string; isPrimary: boolean }
-  | {
-      kind: "branch";
-      repoPath: string;
-      branch: string;
-      /** 이 줄이 생긴 이유(`workingBranchReasons`의 순서). */
-      reasons: WorkingBranchReason[];
-      /** 열린 PR 번호. 모르면 null. */
-      prNumber: number | null;
-      /** 올릴 커밋 수(어느 원격에도 없는 커밋). */
-      unpushed: number;
-      /** 추적 브랜치에만 있는 커밋 수(받을 커밋). */
-      behind: number;
-    };
+  | { kind: "worktree"; repoPath: string; path: string; isPrimary: boolean };
 
 interface HoverCardApi {
   show: (subject: HoverSubject, anchor: HTMLElement) => void;
@@ -158,8 +143,6 @@ function HoverCardBody({ subject, data }: { subject: HoverSubject; data: Sidebar
   switch (subject.kind) {
     case "worktree":
       return <WorktreeDetails subject={subject} data={data} />;
-    case "branch":
-      return <BranchDetails subject={subject} />;
     case "repo":
       return <RepoDetails subject={subject} data={data} />;
   }
@@ -217,21 +200,6 @@ function WorktreeDetails({
       {dirty === 0 && ahead === 0 && behind === 0 && !notPublished && !live && (
         <Line muted>{t("sidebarTree.card.clean")}</Line>
       )}
-    </>
-  );
-}
-
-/** 체크아웃하지 않은 작업 중인 브랜치 줄. */
-function BranchDetails({ subject }: { subject: Extract<HoverSubject, { kind: "branch" }> }) {
-  const { t } = useTranslation();
-  const { branch, reasons, prNumber, unpushed, behind } = subject;
-  return (
-    <>
-      <p className="font-mono text-[12.5px] font-semibold text-foreground break-all">{branch}</p>
-      <Line>{workingBranchReasonText(t, reasons, prNumber)}</Line>
-      {unpushed > 0 && <Line>{t("sidebarTree.card.toPush", { count: unpushed })}</Line>}
-      {behind > 0 && <Line>{t("sidebarTree.badge.behind", { count: behind })}</Line>}
-      <Line muted>{t("sidebarTree.card.viewOnly")}</Line>
     </>
   );
 }
