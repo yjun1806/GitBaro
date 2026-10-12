@@ -104,3 +104,30 @@ describe("useRepoWatcher — fs:git-dir-change invalidation", () => {
     expect(keys.map((k) => queryClient.getQueryState(k)?.isInvalidated)).toEqual([true, true, false]);
   });
 });
+
+describe("useRepoWatcher — fs:change invalidation scope", () => {
+  const WORKTREE = "/repos/app-feat";
+  const OTHER = "/repos/other";
+
+  beforeEach(() => handlers.clear());
+  afterEach(cleanup);
+
+  it("refreshes repoSyncStatus only for the changed repository and its worktrees", async () => {
+    const { queryClient } = renderWatcher(REPO);
+    await waitFor(() => expect(handlers.has("fs:change")).toBe(true));
+
+    await queryClient.prefetchQuery({
+      queryKey: ["reviewStatus", [REPO]],
+      queryFn: async () => [{ repoPath: REPO, worktrees: [{ path: REPO }, { path: WORKTREE }] }],
+    });
+    await queryClient.prefetchQuery({ queryKey: ["repoSyncStatus", [REPO]], queryFn: async () => [] });
+    await queryClient.prefetchQuery({ queryKey: ["repoSyncStatus", [WORKTREE]], queryFn: async () => [] });
+    await queryClient.prefetchQuery({ queryKey: ["repoSyncStatus", [OTHER]], queryFn: async () => [] });
+
+    handlers.get("fs:change")?.({ payload: { repoPath: REPO } });
+
+    await waitFor(() => expect(queryClient.getQueryState(["repoSyncStatus", [REPO]])?.isInvalidated).toBe(true));
+    expect(queryClient.getQueryState(["repoSyncStatus", [WORKTREE]])?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(["repoSyncStatus", [OTHER]])?.isInvalidated).toBe(false);
+  });
+});

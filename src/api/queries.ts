@@ -112,7 +112,7 @@ export function invalidateForPaths(
 }
 
 /** 캐시된 `reviewStatus`로 알아낸, 이 저장소들의 워크트리 경로(저장소 경로 포함). */
-function withWorktreePaths(queryClient: QueryClient, repoPaths: readonly string[]): string[] {
+export function withWorktreePaths(queryClient: QueryClient, repoPaths: readonly string[]): string[] {
   const out = new Set(repoPaths);
   for (const [, data] of queryClient.getQueriesData<RepoReviewStatus[]>({ queryKey: ["reviewStatus"] })) {
     if (!Array.isArray(data)) continue;
@@ -122,6 +122,26 @@ function withWorktreePaths(queryClient: QueryClient, repoPaths: readonly string[
     }
   }
   return [...out];
+}
+
+/**
+ * 워크트리(또는 저장소) 하나에서 git 활동이 있을 때 그 저장소의 `reviewStatus`만 무효화한다.
+ * 이벤트 경로는 링크된 워크트리일 수 있어, 캐시된 `reviewStatus`로 소유 저장소를 찾는다.
+ * 캐시가 소유 저장소를 알려 주지 못하면 범위를 좁힐 근거가 없으므로 전체를 무효화한다.
+ */
+export function invalidateReviewStatusFor(queryClient: QueryClient, path: string): Promise<void> {
+  const target = trimTrailingSlash(path);
+  const owners = new Set<string>();
+  for (const [, data] of queryClient.getQueriesData<RepoReviewStatus[]>({ queryKey: ["reviewStatus"] })) {
+    if (!Array.isArray(data)) continue;
+    for (const repo of data) {
+      if (trimTrailingSlash(repo.repoPath) === target || repo.worktrees.some((w) => trimTrailingSlash(w.path) === target)) {
+        owners.add(repo.repoPath);
+      }
+    }
+  }
+  if (owners.size === 0) return queryClient.invalidateQueries({ queryKey: ["reviewStatus"] });
+  return invalidateForPaths(queryClient, ["reviewStatus"], withWorktreePaths(queryClient, [...owners]));
 }
 
 const AFTER_SYNC_KEYS = [
@@ -952,7 +972,7 @@ export function useRangeFileDiff(
 
 // 원격에 없는 커밋을 파일별로 묶은 것(워크스페이스 리뷰의 「파일별 보기」)
 import { getUnpushedFileTouches } from "@/api/commands";
-import { getErrorMessage } from "@/lib/utils";
+import { getErrorMessage, trimTrailingSlash } from "@/lib/utils";
 import type { RepoFileTouches } from "@/types";
 
 /**

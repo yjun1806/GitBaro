@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { TAURI_EVENTS } from "@/api/events";
 import { getHeadAdvance } from "@/api/commands";
+import { invalidateReviewStatusFor } from "@/api/queries";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { useBackgroundReviewStatus } from "@/hooks/useBackgroundReviewStatus";
 import { useLiveOperationsStore } from "@/stores/live-operations";
@@ -58,7 +59,7 @@ export function useCommitNotifications(enabled: boolean): void {
   useTauriEvent(
     TAURI_EVENTS.repoActivity,
     (activity) => {
-      if (activity.kind === "git") void queryClient.invalidateQueries({ queryKey: ["reviewStatus"] });
+      if (activity.kind === "git") void invalidateReviewStatusFor(queryClient, activity.path);
     },
     enabled,
   );

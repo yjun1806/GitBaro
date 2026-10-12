@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { TAURI_EVENTS } from "@/api/events";
 import { startRepoWatch, stopRepoWatch } from "@/api/commands";
+import { invalidateForPaths, withWorktreePaths } from "@/api/queries";
 import { useAutoSyncStore } from "@/stores/auto-sync";
 import { useTauriEvent } from "./useTauriEvent";
 
@@ -82,8 +83,9 @@ export function useRepoWatcher(repoPath: string | null) {
     // 열려 있는 diff도 디스크 내용을 따라가야 한다. 이벤트는 백엔드에서 이미 디바운스돼
     // 오고, 화면에 붙은 쿼리만 다시 조회된다(나머지는 stale 표시만).
     queryClient.invalidateQueries({ queryKey: ["fileDiff", changedPath] });
-    // rail/목록의 dirty·ahead/behind 인디케이터도 함께 갱신 (오프라인 계산)
-    queryClient.invalidateQueries({ queryKey: ["repoSyncStatus"] });
+    // rail/목록의 dirty·ahead/behind 인디케이터도 함께 갱신 (오프라인 계산).
+    // 바뀐 저장소(와 그 워크트리)를 가리키는 쿼리만 — 다른 저장소의 목록은 그대로 둔다.
+    void invalidateForPaths(queryClient, ["repoSyncStatus"], withWorktreePaths(queryClient, [changedPath]));
   });
 
   // A commit or rebase touches the git dir many times; refetch history and
