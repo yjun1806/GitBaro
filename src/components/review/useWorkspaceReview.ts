@@ -206,6 +206,6 @@ export function useWorkspaceReview(
 }
 
 /** 그래프 캐시 키에 넣는 커밋 하나: SHA와 참조 표시. */
-function commitKey(c: CommitInfo): string {
+export function commitKey(c: CommitInfo): string {
   return `${c.id}|${c.refs.map((r) => `${r.kind}:${r.name}`).join(",")}`;
 }

@@ -181,8 +181,9 @@ Element.prototype.scrollIntoView = vi.fn();
 
 beforeEach(async () => {
   await i18n.changeLanguage("en");
-  // 기존 시나리오는 저장소 단계(모든 워크트리를 레인으로)다. 브랜치 단계(지금 워크트리만)는 따로 본다.
-  useScopeStore.setState({ aggregateRepoPath: REPO, laneShown: {}, lastSelection: null });
+  // 이 패널의 그래프는 브랜치 단계의 것이다(지금 연 워크트리만). 저장소 단계(워크트리마다 레인)의 그래프
+  // 탭은 레인 뷰어라 `repo-step.test.tsx`가 다룬다.
+  useScopeStore.setState({ aggregateRepoPath: null, laneShown: {}, lastSelection: null });
   openWorktree.mockReset();
   openWorktree.mockImplementation(switchTo);
   worktreeState.list = [];
@@ -202,10 +203,9 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe("GraphPanel commit graph", () => {
-  it("puts a WIP row per worktree on top of the commits", () => {
+  it("puts the open worktree's WIP row on top of the commits, and no other worktree's", () => {
     renderPanel();
     expect(rowLabels()).toEqual([
-      "Uncommitted changes · feat/x branch · app-feat · 4 files",
       "Uncommitted changes · main branch · primary folder · 1 file",
       "c1",
       "c2",
@@ -229,21 +229,6 @@ describe("GraphPanel commit graph", () => {
     expect(openWorktree).not.toHaveBeenCalled();
   });
 
-  it("follows another worktree in place from its WIP row, without opening it", () => {
-    renderPanel();
-    const row = screen.getByRole("button", { name: "Uncommitted changes · feat/x branch · app-feat · 4 files" });
-    fireEvent.click(row);
-    expect(useUIStore.getState().activeTab).toBe("changes");
-    expect(useFollowStore.getState()).toMatchObject({ target: FEAT, mode: "following" });
-    expect(openWorktree).not.toHaveBeenCalled();
-    expect(useRepositoryStore.getState().activeRepoPath).toBe(REPO);
-    // Only the followed row is picked, and it carries the "following" pill.
-    expect(row.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Uncommitted changes · main branch · primary folder · 1 file" }).getAttribute("aria-pressed")).toBe("false");
-    const container = row.closest('[data-testid="wip-row"]') as HTMLElement;
-    expect(within(container).getByRole("button", { name: "Following · stop" })).toBeTruthy();
-  });
-
   it("stops following when a commit is picked or another repository is opened", () => {
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes · main branch · primary folder · 1 file" }));
@@ -252,34 +237,10 @@ describe("GraphPanel commit graph", () => {
     expect(useUIStore.getState().activeTab).toBe("history");
     expect(useFollowStore.getState().target).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes · feat/x branch · app-feat · 4 files" }));
-    expect(useFollowStore.getState().target).toBe(FEAT);
+    fireEvent.click(screen.getByRole("button", { name: "Uncommitted changes · main branch · primary folder · 1 file" }));
+    expect(useFollowStore.getState().target).toBe(REPO);
     useRepositoryStore.setState({ activeRepoPath: FEAT });
     expect(useFollowStore.getState().target).toBeNull();
-  });
-
-  it("shows when another worktree's files last changed", () => {
-    renderPanel();
-    const row = screen.getByRole("button", { name: "Uncommitted changes · feat/x branch · app-feat · 4 files" });
-    expect(row.textContent).toContain("modified 5 minutes ago");
-  });
-
-  it("hides the 'changed just now' pill on a followed worktree once its files are gone (#7)", () => {
-    // 배경에서 다른 워크트리를 따라가는 중(paused)에 그 워크트리의 변경이 모두 사라져도(커밋됨 등)
-    // mtime은 최근으로 남을 수 있다 — 파일이 0개면 「방금 바뀜」 안내를 보이면 안 된다.
-    useUIStore.setState({ activeTab: "changes" });
-    useFollowStore.setState({ target: FEAT, mode: "paused", file: "some.ts" });
-    const original = syncByPath[FEAT];
-    syncByPath[FEAT] = { path: FEAT, dirtyCount: 0, dirtyLatestMtime: Date.now() - 1_000 };
-    try {
-      renderPanel();
-      const rows = screen.getAllByTestId("wip-row");
-      const featRow = rows.find((r) => r.textContent?.includes("feat/x"));
-      expect(featRow).toBeTruthy();
-      expect(within(featRow!).queryByText(/^Changed/)).toBeNull();
-    } finally {
-      syncByPath[FEAT] = original;
-    }
   });
 
   it("keeps the commit context menu items on graph rows", () => {
@@ -354,71 +315,6 @@ describe("GraphPanel worktree chips (D5)", () => {
     };
   });
 
-  it("shows a chip per worktree and draws the other worktree's commits in the same graph", async () => {
-    renderPanel();
-    const chips = screen.getByRole("group", { name: "Worktrees to show together in the graph" });
-    const buttons = within(chips).getAllByRole("button").filter((b) => b.hasAttribute("aria-pressed"));
-    expect(buttons.map((b) => b.textContent)).toEqual(["main", "feat/x"]);
-    expect(buttons[0].getAttribute("aria-pressed")).toBe("true");
-    expect(buttons[1].getAttribute("title")).toBe(`${FEAT} · from main`);
-    expect(rowLabels()).toEqual([
-      "Uncommitted changes · feat/x branch · app-feat · 4 files",
-      "Uncommitted changes · main branch · primary folder · 1 file",
-      "f1",
-      "c1",
-      "c2",
-      "c3",
-      "c4",
-    ]);
-  });
-
-  it("hides a worktree's WIP row and commits when its chip is turned off, and brings them back", async () => {
-    renderPanel();
-    const chips = screen.getByRole("group", { name: "Worktrees to show together in the graph" });
-    const feat = within(chips).getByRole("button", { name: /feat\/x/ });
-    fireEvent.click(feat);
-    expect(feat.getAttribute("aria-pressed")).toBe("false");
-    expect(rowLabels()).toEqual(["Uncommitted changes · main branch · primary folder · 1 file", "c1", "c2", "c3", "c4"]);
-    expect(useScopeStore.getState().laneShown).toEqual({ [FEAT]: false });
-
-    fireEvent.click(feat);
-    expect(rowLabels()).toContain("f1");
-    expect(rowLabels()).toContain("Uncommitted changes · feat/x branch · app-feat · 4 files");
-  });
-
-  it("draws each worktree's WIP row in its own lane down to its commits, in the chip's color", async () => {
-    renderPanel();
-    const featColor = worktreeColor(FEAT);
-    const chips = screen.getByRole("group", { name: "Worktrees to show together in the graph" });
-    const swatch = within(within(chips).getByRole("button", { name: /feat\/x/ })).getByTestId("filter-chip-swatch");
-    // jsdom writes inline colors as rgb(); convert the same way before comparing.
-    const probe = document.createElement("span");
-    probe.style.background = featColor;
-    expect(swatch.style.background).toBe(probe.style.background);
-    const wip = screen.getByRole("button", { name: "Uncommitted changes · feat/x branch · app-feat · 4 files" });
-    expect(wip.querySelector("circle")?.getAttribute("stroke")).toBe(featColor);
-    // The line leaving the WIP row reaches f1, which is drawn in the same color.
-    const f1 = document.querySelector('[data-commit-id="f1"]') as HTMLElement;
-    expect(f1.querySelector("circle")?.getAttribute("fill")).toBe(featColor);
-    expect([...f1.querySelectorAll("path")].some((p) => p.getAttribute("stroke") === featColor)).toBe(true);
-  });
-
-  it("does not offer reset or revert on another worktree's commit", async () => {
-    renderPanel();
-    const disabledOf = (id: string) => {
-      fireEvent.contextMenu(document.querySelector(`[data-commit-id="${id}"]`) as HTMLElement);
-      const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
-      // 이 저장소에는 GitHub 원격이 없어 「GitHub에서 보기」는 늘 막혀 있다. 여기서는 reset·revert만 본다.
-      const out = items
-        .filter((m) => (m as HTMLButtonElement).disabled && m.textContent !== i18n.t("menu.viewOnGitHub"))
-        .map((m) => m.textContent);
-      fireEvent.keyDown(document, { key: "Escape" });
-      return out;
-    };
-    expect(disabledOf("f1")).toEqual([i18n.t("history.contextMenu.revert"), i18n.t("history.contextMenu.reset")]);
-    expect(disabledOf("c1")).toEqual([]);
-  });
-
   it("hides the chips while the graph shows a branch comparison", () => {
     branchList.push({ name: "main", isHead: true, isRemote: false }, { name: "feat/x", isHead: false, isRemote: false });
     useBranchRangeStore.getState().setRange({ repoPath: REPO, base: "main", target: "feat/x", head: "main" });
@@ -427,7 +323,6 @@ describe("GraphPanel worktree chips (D5)", () => {
   });
 
   it("draws only the open worktree and no chips in the branch step", () => {
-    useScopeStore.setState({ aggregateRepoPath: null });
     branchList.push({ name: "main", isHead: true, isRemote: false });
     renderPanel();
     expect(screen.queryByRole("group", { name: "Worktrees to show together in the graph" })).toBeNull();
@@ -460,14 +355,6 @@ describe("GraphPanel worktree chips (D5)", () => {
     }
   });
 
-  it("keeps the open worktree on: its chip cannot be turned off", () => {
-    renderPanel();
-    const chips = screen.getByRole("group", { name: "Worktrees to show together in the graph" });
-    const main = within(chips).getByRole("button", { name: /^main/ });
-    fireEvent.click(main);
-    expect(main.getAttribute("aria-pressed")).toBe("true");
-    expect(rowLabels()).toContain("Uncommitted changes · main branch · primary folder · 1 file");
-  });
 });
 
 describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry, compare chip)", () => {
@@ -519,8 +406,6 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     statusEntries.splice(0, statusEntries.length);
     const { rerender } = renderPanel();
     expect(screen.queryByRole("button", { name: /· primary folder ·/ })).toBeNull();
-    // 다른 워크트리(파일 4개)의 행은 남는다.
-    expect(screen.getByRole("button", { name: /feat\/x branch · app-feat · 4 files/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Working changes/ })).toBeNull();
 
     statusEntries.push({ path: "b.ts", status: "added", staged: false } as StatusEntry);
@@ -535,10 +420,9 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
   it("names the branch and worktree on every WIP row", () => {
     renderPanel();
     const rows = screen.getAllByTestId("wip-row").map((r) => r.textContent ?? "");
-    expect(rows[0]).toContain("feat/x branch");
-    expect(rows[0]).toContain("app-feat");
-    expect(rows[1]).toContain("main branch");
-    expect(rows[1]).toContain("primary folder");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain("main branch");
+    expect(rows[0]).toContain("primary folder");
   });
 
   it("offers Working changes on the open worktree's row only, which opens the staging list", () => {
@@ -549,10 +433,6 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
     const buttons = screen.getAllByRole("button", { name: "Working changes" });
     expect(buttons).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /^Commit/ })).toBeNull();
-    // 다른 워크트리 행에는 없다(그 워크트리를 열어야 스테이징할 수 있다).
-    const featRow = screen.getAllByTestId("wip-row")[0];
-    expect(within(featRow).queryByRole("button", { name: /^Working changes/ })).toBeNull();
-
     useFollowStore.getState().start(FEAT);
     fireEvent.click(buttons[0]);
     expect(useUIStore.getState().activeTab).toBe("changes");
@@ -580,8 +460,10 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
 
   it("views another branch without checking it out: no WIP rows, a notice instead", () => {
     branchList.push({ name: "main", isHead: true, isRemote: false }, { name: "feat/x", isHead: false, isRemote: false });
+    // 이 시나리오는 저장소 단계다(브랜치 단계의 「이 브랜치만」은 목록 시작점을 따로 자른다).
+    useScopeStore.setState({ aggregateRepoPath: REPO });
     renderPanel();
-    expect(screen.getAllByTestId("wip-row")).toHaveLength(2);
+    expect(screen.getAllByTestId("wip-row")).toHaveLength(1);
 
     act(() => useHistoryViewStore.getState().view(REPO, { kind: "ref", name: "feat/x", isRemote: false }));
     // 커밋 목록은 그 브랜치에서 읽는다.
@@ -598,7 +480,7 @@ describe("GraphPanel UI feedback (tab badges, fork point, WIP row, commit entry,
 
     act(() => useHistoryViewStore.getState().reset());
     expect(useHistoryViewStore.getState().target).toBeNull();
-    expect(screen.getAllByTestId("wip-row")).toHaveLength(2);
+    expect(screen.getAllByTestId("wip-row")).toHaveLength(1);
     expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "head" });
   });
 
@@ -760,43 +642,6 @@ describe("GraphPanel right-click menus", () => {
   const menuItems = () => within(screen.getByRole("menu")).getAllByRole("menuitem");
   const item = (name: string) => within(screen.getByRole("menu")).getByRole("menuitem", { name });
 
-  it("opens another worktree from its WIP row, and offers staging and stash only on the open one", () => {
-    renderPanel();
-    const other = screen.getByRole("button", { name: "Uncommitted changes · feat/x branch · app-feat · 4 files" });
-    fireEvent.contextMenu(other);
-    expect(menuItems().map((m) => m.textContent)).toEqual([
-      "Show changes",
-      "Open this worktree",
-      "Reveal in Finder",
-      "Open in Terminal",
-      "Open in editor",
-      "Copy path",
-      "Copy branch name",
-    ]);
-    fireEvent.keyDown(document, { key: "Escape" });
-
-    const own = screen.getByRole("button", { name: "Uncommitted changes · main branch · primary folder · 1 file" });
-    fireEvent.contextMenu(own);
-    expect(menuItems().map((m) => m.textContent).slice(0, 3)).toEqual([
-      "Show changes",
-      "Stage and commit…",
-      "Stash Changes",
-    ]);
-    fireEvent.click(item("Stage and commit…"));
-    expect(useUIStore.getState().activeTab).toBe("changes");
-
-    fireEvent.contextMenu(other);
-    fireEvent.click(item("Open this worktree"));
-    expect(openWorktree).toHaveBeenCalledWith(FEAT);
-  });
-
-  it("follows the worktree from “Show changes”, like a click on the row", () => {
-    renderPanel();
-    fireEvent.contextMenu(screen.getByRole("button", { name: "Uncommitted changes · feat/x branch · app-feat · 4 files" }));
-    fireEvent.click(item("Show changes"));
-    expect(useFollowStore.getState().target).toBe(FEAT);
-  });
-
   it("gives branch labels their own menu: view, checkout, compare, copy, and delete last", () => {
     branchList.push(
       { name: "main", isHead: true, isRemote: false },
@@ -854,41 +699,12 @@ describe("GraphPanel right-click menus", () => {
     }
   });
 
-  it("shows only one other worktree from its chip's menu", () => {
-    worktreeState.list = [
-      { path: REPO, head: "c1", branch: "main", isMain: true, isBare: false, isLocked: false, lockReason: null, isDirty: false, isPrunable: false, base: null },
-      { path: FEAT, head: "f1", branch: "feat/x", isMain: false, isBare: false, isLocked: false, lockReason: null, isDirty: false, isPrunable: false, base: null },
-    ];
-    useScopeStore.setState({ laneShown: { [FEAT]: false } });
-    renderPanel();
-    const chips = screen.getByRole("group", { name: "Worktrees to show together in the graph" });
-    const featChip = within(chips).getAllByRole("button").find((b) => b.textContent?.startsWith("feat/x"))!;
-    fireEvent.contextMenu(featChip);
-    fireEvent.click(item("Show only this one"));
-    expect(useScopeStore.getState().laneShown[FEAT]).toBe(true);
-    // 지금 연 워크트리 칩은 늘 보이므로 켜고 끄는 항목을 막는다.
-    const mainChip = within(chips).getAllByRole("button").find((b) => b.textContent?.startsWith("main"))!;
-    fireEvent.contextMenu(mainChip);
-    expect((item("Show only this one") as HTMLButtonElement).disabled).toBe(true);
-    expect((item("Open this worktree") as HTMLButtonElement).disabled).toBe(true);
-  });
 });
 
 describe("GraphPanel by-file view (5.1)", () => {
   afterEach(() => {
     useUIStore.setState({ reviewFileView: "commits" });
     branchList.length = 0;
-  });
-
-  it("reads every shown worktree in the repository step", () => {
-    useUIStore.setState({ reviewFileView: "files" });
-    fileTouchTargets.length = 0;
-    renderPanel();
-    expect(document.querySelector("[data-commit-id]")).toBeNull();
-    expect(fileTouchTargets[fileTouchTargets.length - 1]).toEqual([
-      { repoPath: REPO, path: REPO, worktreeLabel: null },
-      { repoPath: REPO, path: FEAT, worktreeLabel: "feat/x" },
-    ]);
   });
 
   it("reads the viewed branch by name when it is not checked out", () => {
@@ -906,18 +722,21 @@ describe("GraphPanel by-file view (5.1)", () => {
 
 describe("GraphPanel selection across scope steps (5.1)", () => {
   it("keeps the commit picked in the previous step when its lane is here", () => {
+    branchList.push({ name: "main", isHead: true, isRemote: false });
     useScopeStore.setState({ lastSelection: { laneId: REPO, commitOid: "c3" } });
     renderPanel();
     expect(useSelectionStore.getState().selectedCommitId).toBe("c3");
   });
 
   it("does not pick anything when the lane is not in this step", () => {
+    branchList.push({ name: "main", isHead: true, isRemote: false });
     useScopeStore.setState({ lastSelection: { laneId: "/elsewhere", commitOid: "c3" } });
     renderPanel();
     expect(useSelectionStore.getState().selectedCommitId).toBeNull();
   });
 
   it("remembers a commit picked here for the next step", () => {
+    branchList.push({ name: "main", isHead: true, isRemote: false });
     renderPanel();
     fireEvent.click(document.querySelector('[data-commit-id="c2"]') as HTMLElement);
     expect(useScopeStore.getState().lastSelection).toEqual({ laneId: REPO, commitOid: "c2" });
@@ -927,6 +746,7 @@ describe("GraphPanel selection across scope steps (5.1)", () => {
 describe("GraphPanel tabs per scope step (5.1)", () => {
   it("offers 'this branch only' on Actions in the branch step, and nothing in the repository step", () => {
     useUIStore.setState({ activeTab: "actions" });
+    useScopeStore.setState({ aggregateRepoPath: REPO });
     const { unmount } = renderPanel();
     expect(screen.getByText("actions-list")).toBeTruthy();
     unmount();
@@ -983,7 +803,7 @@ describe("GraphPanel branch-only history (5.1)", () => {
   });
 
   it("has no chip and no flag in the repository step", () => {
-    useScopeStore.setState({ branchOnly: true });
+    useScopeStore.setState({ aggregateRepoPath: REPO, branchOnly: true });
     renderPanel();
     expect(screen.queryByRole("button", { name: chipName })).toBeNull();
     expect(historyTargets[historyTargets.length - 1]).toEqual({ kind: "head" });

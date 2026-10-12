@@ -145,6 +145,28 @@ describe("buildRepoLaneRows — other worktrees' uncommitted changes", () => {
   });
 });
 
+describe("buildRepoLaneRows — worktree lanes (repository step)", () => {
+  // 레인 하나가 워크트리 하나다: 레인 id가 곧 워크트리 경로이고, 링크된 워크트리의 WIP도 자기 레인 위에 놓인다.
+  const feat: LaneRepo = { path: "/w/a-feat", commits: [commit("f2", 60), commit("f1", 20)], hasBase: true };
+  const wipFeat: LaneWip = {
+    repoPath: "/w/a-feat",
+    path: "/w/a-feat",
+    branch: "feat/b",
+    isMain: false,
+    count: 3,
+    changedAt: 2000,
+  };
+
+  it("keeps a linked worktree's WIP on its own lane, with a line down into its commits", () => {
+    const { rows, laneCount } = buildRepoLaneRows([A, feat], [wipFeat]);
+    expect(laneCount).toBe(2);
+    const wip = rows.find((r) => r.kind === "wip");
+    if (!wip || wip.kind !== "wip") throw new Error("missing WIP");
+    expect(wip.layout.lane).toBe(1);
+    expect(wip.layout.edges.some((e) => e.kind === "out" && e.fromLane === 1)).toBe(true);
+  });
+});
+
 describe("repoLaneColor", () => {
   it("is fixed per repository, whatever lane it lands in", () => {
     const first = buildRepoLaneRows([A, B], []);

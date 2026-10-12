@@ -63,7 +63,8 @@ vi.mock("@/api/queries", () => ({
     isFetchingNextPage: false,
     fetchNextPage: vi.fn(),
   }),
-  useBranches: () => ({ data: [] }),
+  // 체크아웃한 브랜치가 있어야 브랜치 단계다(없으면 저장소 단계의 레인 뷰어, `repo-step.test.tsx`).
+  useBranches: () => ({ data: [{ name: "main", isHead: true, isRemote: false }] }),
   useRemoteTags: () => ({ data: undefined }),
   useWorktrees: () => ({ data: [] }),
   useRepoSyncStatuses: () => ({ data: undefined }),
@@ -111,6 +112,7 @@ vi.mock("@/api/queries", () => ({
   useStashMutations: () => ({ push: { mutateAsync: vi.fn() } }),
   // 따라가기 줄의 「눈여겨볼 것」(D49)
   useUnpushedFileTouches: () => [{ status: "pending" }],
+  // W6-T2 워크트리 칩·겹침 경고
   // W6-T2 워크트리 칩·겹침 경고
   useWorktreeHeadHistories: () => [],
   useWipFilesMany: () => [],

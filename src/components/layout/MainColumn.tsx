@@ -6,41 +6,12 @@ import { useSelectRepo } from "@/hooks/useSelectRepo";
 import { useActiveScope } from "@/hooks/useActiveScope";
 import { ToolbarRoot } from "@/components/toolbar";
 import { RepoListView } from "@/components/repository/RepoListView";
-import { GraphPanel } from "@/components/graph/GraphPanel";
-import { useGraphFilesView } from "@/components/graph/graph-files-view";
 import { WorkspaceReview } from "@/components/review/WorkspaceReview";
-import { PrDetailPane } from "@/components/pr/PrDetailPane";
-import { usePrViewStore } from "@/components/pr/pr-view";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
-import { ContentArea } from "./ContentArea";
-import { PaneStrip } from "./PaneStrip";
+import { RepoStep } from "./RepoStep";
 import { useDiffMaximizeReset } from "./useDiffMaximize";
-import { useSelectionStore } from "@/stores/selection";
-import { useFollowStore } from "@/stores/follow";
-import { useStatus } from "@/api/queries";
-import type { MainTab } from "./ContentArea";
-
-function useHasPaneContent(activeTab: MainTab, repoPath: string | null, prOpen: boolean): boolean {
-  const selectedFile = useSelectionStore((s) => s.selectedFile);
-  const selectedCommitId = useSelectionStore((s) => s.selectedCommitId);
-  const selectedStashIndex = useSelectionStore((s) => s.selectedStashIndex);
-  const selectedRunId = useSelectionStore((s) => s.selectedRunId);
-  const following = useFollowStore((s) => s.target !== null);
-  const { data: status } = useStatus(repoPath);
-  if (prOpen) return true;
-  switch (activeTab) {
-    case "changes":
-      return selectedFile !== null || following || (status?.length ?? 0) > 0;
-    case "history":
-      return selectedCommitId !== null;
-    case "stash":
-      return selectedStashIndex !== null;
-    default:
-      return selectedRunId !== null;
-  }
-}
 
 /** "All repositories" list, opened from the sidebar. Takes over the main column. */
 function RepoListCard() {
@@ -75,19 +46,11 @@ function RepoListCard() {
  */
 export function MainColumn() {
   const { t } = useTranslation();
-  const activeTab = useUIStore((s) => s.activeTab);
   const repoListOpen = useUIStore((s) => s.repoListOpen);
   const activeRepoPath = useRepositoryStore((s) => s.activeRepoPath);
-  const prOpen = usePrViewStore((s) => s.open);
   const scope = useActiveScope();
   // 다른 저장소·워크스페이스로 옮기거나 목록을 열면 diff 크게 보기를 끝낸다(숨긴 목록으로 돌아올 길이 없어진다).
   useDiffMaximizeReset(`${scope?.kind === "workspace" ? scope.id : ""}:${activeRepoPath ?? ""}:${repoListOpen}`);
-
-  // 0단계(그래프 전체, D47): 볼 것이 없으면 옆 칸을 열지 않는다. 작업 중인 변경은 파일이 있거나
-  // 따라가는 중일 때만 상세 칸이 내용이고, 다른 탭은 무언가 골랐을 때만 연다.
-  // 파일별 보기는 그래프 칸 안에 파일 목록과 diff를 함께 그리므로 옆 칸을 열지 않는다(5.4).
-  const filesView = useGraphFilesView();
-  const hasSelection = useHasPaneContent(activeTab, activeRepoPath, prOpen) && !filesView;
 
   return (
     <main className="relative flex flex-col flex-1 min-w-0 h-full bg-background">
@@ -100,11 +63,7 @@ export function MainColumn() {
           <RepoListCard />
         ) : scope?.kind === "repo" ? (
           // 저장소 전용 화면은 저장소를 골랐을 때만 마운트한다. 안쪽 파일은 null 경로를 보지 않는다.
-          <PaneStrip
-            graph={<GraphPanel />}
-            hasSelection={hasSelection}
-            bottom={prOpen ? <PrDetailPane /> : <ContentArea activeTab={activeTab} />}
-          />
+          <RepoStep />
         ) : scope?.kind === "workspace" ? (
           <WorkspaceReview key={scope.id} workspaceId={scope.id} paths={scope.paths} />
         ) : (

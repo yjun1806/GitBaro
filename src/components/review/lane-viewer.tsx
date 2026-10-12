@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { RepoLaneCommitGraph } from "@/components/graph/CommitGraph";
 import type { LaneWip, RepoLaneGraph } from "@/components/graph/repo-lanes";
 import { WorkSwitcher } from "@/components/commit/WorkSwitcher";
+import { useFollowStore } from "@/stores/follow";
 import { useScopeStore } from "@/components/scope/scope-store";
 import type { CommitInfo, WorkflowRun } from "@/types";
 import { ReviewFilesPanel, type ReviewSelection } from "./ReviewFilesPanel";
@@ -23,6 +24,8 @@ export interface LaneSelectionApi {
   /** 레인마다 마지막으로 고른 커밋. 「작업 중인 변경」으로 갔다가 「커밋」 칸으로 돌아올 때 쓴다. */
   lastCommitByLane: Readonly<Record<string, CommitSelection>>;
   pick: (next: ReviewSelection) => void;
+  /** 고른 행을 비우고, 이어받을 커밋을 다시 찾게 한다(화면에 다시 들어올 때). */
+  reset: () => void;
   pickCommit: (laneId: string, commit: CommitInfo, key: string) => void;
   pickWip: (wip: LaneWip, key: string) => void;
 }
@@ -30,15 +33,16 @@ export interface LaneSelectionApi {
 /**
  * 고른 행과 그것을 단계 사이로 잇는 기억. 커밋을 고르면 (레인, 커밋)을 `lastSelection`에 적어, 아래 단계로
  * 내려가도 같은 커밋을 고른 채로 있게 한다(`carrySelection`과 같은 규칙). 처음 그래프를 읽었을 때 이어받을
- * 커밋이 이 그래프에 있으면 그 행을 고른 채로 들어온다.
+ * 커밋이 이 그래프에 있으면 그 행을 고른 채로 들어온다. `ready`가 false인 동안(커밋을 아직 읽는 중)에는
+ * 찾지 않는다 — WIP 행만 먼저 그려진 그래프에서 이어받을 기회를 놓치지 않게 한다.
  */
-export function useLaneSelection(graph: RepoLaneGraph): LaneSelectionApi {
+export function useLaneSelection(graph: RepoLaneGraph, ready = true): LaneSelectionApi {
   const rememberSelection = useScopeStore((s) => s.rememberSelection);
   const [selection, setSelection] = useState<ReviewSelection>(null);
   const [lastCommitByLane, setLastCommitByLane] = useState<Readonly<Record<string, CommitSelection>>>({});
 
   const [carryChecked, setCarryChecked] = useState(false);
-  if (!carryChecked && graph.rows.length > 0) {
+  if (!carryChecked && ready && graph.rows.length > 0) {
     setCarryChecked(true);
     const last = useScopeStore.getState().lastSelection;
     const row = last?.commitOid
@@ -54,6 +58,11 @@ export function useLaneSelection(graph: RepoLaneGraph): LaneSelectionApi {
     },
     [rememberSelection],
   );
+  const reset = useCallback(() => {
+    setSelection(null);
+    setLastCommitByLane({});
+    setCarryChecked(false);
+  }, []);
   const pickCommit = useCallback(
     (laneId: string, commit: CommitInfo, key: string) => {
       const picked: CommitSelection = { kind: "commit", key, repoPath: laneId, oid: commit.id };
@@ -67,7 +76,7 @@ export function useLaneSelection(graph: RepoLaneGraph): LaneSelectionApi {
       pick({ kind: "wip", key, repoPath: wip.repoPath, path: wip.path, branch: wip.branch, isMain: wip.isMain }),
     [pick],
   );
-  return { selection, lastCommitByLane, pick, pickCommit, pickWip };
+  return { selection, lastCommitByLane, pick, reset, pickCommit, pickWip };
 }
 
 export interface LaneGraphBodyProps {
@@ -79,6 +88,8 @@ export interface LaneGraphBodyProps {
   lanePaths: readonly string[];
   /** 레인 id → 행 앞에 붙일 짧은 이름. 파일별 보기에서는 저장소 경로를 받는다. */
   repoLabel: (laneId: string) => string;
+  /** 파일별 보기가 쓰는 이름표(저장소 경로 → 이름). 없으면 `repoLabel`. */
+  fileRepoLabel?: (repoPath: string) => string;
   baseTime: number | null;
   baseBranchLabel: string;
   remoteName: string | null;
@@ -97,6 +108,7 @@ export function LaneGraphBody({
   graph,
   lanePaths,
   repoLabel,
+  fileRepoLabel = repoLabel,
   baseTime,
   baseBranchLabel,
   remoteName,
@@ -107,7 +119,7 @@ export function LaneGraphBody({
   onWipContextMenu,
 }: LaneGraphBodyProps) {
   const { t } = useTranslation();
-  if (filesView) return <FileTouchesView sources={fileSources} repoLabel={repoLabel} />;
+  if (filesView) return <FileTouchesView sources={fileSources} repoLabel={fileRepoLabel} />;
   return (
     <RepoLaneCommitGraph
       graph={graph}
@@ -191,6 +203,8 @@ function LaneWorkSwitcher({
       commitShortId={commit ? commit.oid.slice(0, 7) : null}
       onWorking={() => {
         if (!wipRow) return;
+        // WIP 행을 누른 것과 같다: 그 워크트리를 따라가며 보여 준다.
+        useFollowStore.getState().start(wipRow.wip.path);
         onSelect({
           kind: "wip",
           key: wipRow.key,

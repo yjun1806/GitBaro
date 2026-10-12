@@ -114,12 +114,12 @@ type Draft =
 export function buildRepoLaneRows(repos: readonly LaneRepo[], wips: readonly LaneWip[]): RepoLaneGraph {
   const laneOf = new Map(repos.map((r, i) => [r.path, i]));
 
-  // 메인 작업 트리의 WIP는 그 저장소 레인 위에 둔다(부모가 레인의 HEAD다). 다른 워크트리의
-  // WIP는 부모가 이 레인에 없으므로 저장소 레인들 오른쪽의 따로 떨어진 칸에 선 없이 둔다.
-  // 워크트리마다 레인을 나누는 일은 D5(W6-T2)가 맡는다.
+  // 레인 자신의 작업 트리의 WIP는 그 레인 위에 둔다(부모가 레인의 HEAD다): 저장소 레인이면 메인 작업
+  // 트리, 워크트리 레인(저장소 단계)이면 `path === repoPath`인 그 워크트리. 다른 워크트리의 WIP는 부모가
+  // 이 레인에 없으므로 레인들 오른쪽의 따로 떨어진 칸에 선 없이 둔다.
   const detachedLane = new Map<string, number>();
   for (const w of wips) {
-    if (!laneOf.has(w.repoPath) || w.isMain || detachedLane.has(w.path)) continue;
+    if (!laneOf.has(w.repoPath) || w.isMain || w.path === w.repoPath || detachedLane.has(w.path)) continue;
     detachedLane.set(w.path, repos.length + detachedLane.size);
   }
   const wipDrafts: Draft[] = wips
