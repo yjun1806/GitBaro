@@ -97,13 +97,13 @@ export function CommitComposer({
           className="resize-none"
         />
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5" data-testid="commit-actions">
         {!showDescription && (
           <Button variant="ghost" size="sm" icon={<Plus className="w-3 h-3" aria-hidden="true" />} onClick={() => setDescOpen(true)}>
             {t("commit.addDescription")}
           </Button>
         )}
-        <span className="flex-1" />
+        <span className="flex-1 min-w-0" />
         <Button
           variant="primary"
           size="md"
@@ -111,10 +111,10 @@ export function CommitComposer({
           disabled={!canCommit}
           title={targetTitle}
           data-testid="commit-target"
-          className="max-w-full min-w-0"
+          className="max-w-full min-w-0 ml-auto"
           onClick={onCommit}
         >
-          {isCommitting ? t("commit.committing") : <span className="truncate">{t("commit.submit", { branch: branchLabel })}</span>}
+          {isCommitting ? t("commit.committing") : <span className="min-w-0 truncate">{t("commit.submit", { branch: branchLabel })}</span>}
         </Button>
       </div>
     </div>

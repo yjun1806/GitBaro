@@ -163,7 +163,7 @@ export function ListDiffSplit({
       <ListPane
         ref={listRef}
         cards={cards}
-        style={hasFile ? { width } : { minWidth: LEVEL1_DETAIL_MIN_WIDTH }}
+        style={hasFile ? { width } : { minWidth: `min(${LEVEL1_DETAIL_MIN_WIDTH}px, 100%)` }}
         className={cn(
           cards ? CARD : "flex flex-col min-h-0",
           listLeaving ? "absolute top-0 bottom-0 left-0 pointer-events-none" : "relative",

@@ -68,7 +68,7 @@ function FileEntryComponent({
       }}
       onContextMenu={onContextMenu}
       className={cn(
-        "group flex items-center gap-2 px-3 h-7 cursor-pointer transition-colors select-none border-b border-border",
+        "@container/file group flex items-center gap-2 px-3 h-7 cursor-pointer transition-colors select-none border-b border-border",
         isSelected
           ? "bg-(--acc-sel)"
           : !isSelected && isHighlighted
@@ -88,16 +88,16 @@ function FileEntryComponent({
       />
       <FileStatusLetter status={entry.status as FileStatus} />
       <span
-        className="text-[12.5px] font-medium text-foreground truncate"
+        className="min-w-0 text-[12.5px] font-medium text-foreground truncate"
         title={entry.origPath ? `${entry.origPath} → ${entry.path}` : undefined}
       >
         {previousName && <span className="text-muted-foreground">{previousName} → </span>}
         {filename}
       </span>
-      <LineDelta additions={entry.insertions} deletions={entry.deletions} className="text-[11.5px]" />
-      <span className="flex-1" />
+      <LineDelta additions={entry.insertions} deletions={entry.deletions} className="shrink-0 text-[11.5px]" />
+      <span className="flex-1 min-w-0" />
       {entry.modifiedAt != null && (
-        <span className="text-[11.5px] text-muted-foreground shrink-0">{formatRelativeTime(entry.modifiedAt)}</span>
+        <span className="hidden @min-[260px]/file:inline text-[11.5px] text-muted-foreground shrink-0">{formatRelativeTime(entry.modifiedAt)}</span>
       )}
       {onDiscard && (
         <Button

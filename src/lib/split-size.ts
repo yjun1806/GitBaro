@@ -17,7 +17,10 @@ export const MAX_FILE_LIST_WIDTH = 420;
 /** diff 칸의 최소 폭(5.4). 모자라면 2단계에서만 가로 스크롤을 허용한다. */
 export const MIN_DIFF_PANE_WIDTH = 424;
 
-/** 1단계(그래프 46% + 상세, diff 없음)에서 상세 칸의 최소 폭(시안 `layout-explore.html`). */
+/**
+ * 1단계(그래프 46% + 상세, diff 없음)에서 상세 칸의 바람직한 최소 폭(시안 `layout-explore.html`). 옆 칸이 이보다
+ * 좁게(280까지) 줄 수 있으므로 `min(360px, 100%)`로 쓴다 — 부모보다 넓어지면 안쪽이 잘린다.
+ */
 export const LEVEL1_DETAIL_MIN_WIDTH = 360;
 
 /**

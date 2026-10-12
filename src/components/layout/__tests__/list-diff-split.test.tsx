@@ -99,7 +99,7 @@ describe("ListDiffSplit", () => {
         <ListDiffSplit variant="inline" list={<div>list</div>} detail={<div>diff</div>} files={makeFiles(null)} />,
       );
       expect(screen.getByTestId("list-pane").style.width).toBe("");
-      expect(screen.getByTestId("list-pane").style.minWidth).toBe(`${LEVEL1_DETAIL_MIN_WIDTH}px`);
+      expect(screen.getByTestId("list-pane").style.minWidth).toBe(`min(${LEVEL1_DETAIL_MIN_WIDTH}px, 100%)`);
       expect(screen.getByTestId("list-pane").className).toContain("flex-1");
       expect(screen.getByTestId("detail-pane").getAttribute("aria-hidden")).toBe("true");
       expect(screen.queryByRole("separator")).toBeNull();

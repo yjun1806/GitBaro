@@ -66,6 +66,7 @@ export function WorkSwitcher({
         </>
       ),
       disabled: commitDisabled,
+      title: commitDisabled ? t("workSwitcher.noCommit") : `${t("workSwitcher.commit")} ${commitShortId}`,
     },
   ];
 
