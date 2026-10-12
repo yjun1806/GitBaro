@@ -159,7 +159,7 @@ describe("GRAPH_COLUMNS narrowing (container query, @container/graph)", () => {
     expect(GRAPH_COLUMNS).toContain("grid-cols-[minmax(0,1fr)_128px_16px_112px_64px]");
     expect(GRAPH_COLUMNS).toContain("@max-[820px]/graph:grid-cols-[minmax(0,1fr)_128px_16px_36px_64px]");
     expect(GRAPH_COLUMNS).toContain("@max-[680px]/graph:grid-cols-[minmax(0,1fr)_64px_16px_36px_64px]");
-    expect(GRAPH_COLUMNS).toContain("@max-[560px]/graph:grid-cols-[minmax(0,1fr)_0px_16px_36px_64px]");
+    expect(GRAPH_COLUMNS).toContain("@max-[560px]/graph:grid-cols-[minmax(0,1fr)_18px_40px]");
     // D47 2단계의 좁은 커밋 목록(240px): 설명·시각 두 칸만 남는다.
     expect(GRAPH_COLUMNS).toContain("@max-[400px]/graph:grid-cols-[minmax(0,1fr)_auto]");
   });
@@ -182,14 +182,13 @@ describe("GRAPH_COLUMNS narrowing (container query, @container/graph)", () => {
     expect(linesEl?.className ?? "").not.toContain("@max-[680px]/graph:hidden");
   });
 
-  it("hides the whole change cell (bar and lines together) at the third stage", () => {
+  it("drops the change and CI cells at the third stage, with their grid tracks, so the description gets the room", () => {
     const c = commit();
-    render(<GraphRow {...baseProps} commit={c} stats={stats({ filesChanged: 3, additions: 12, deletions: 4 })} />);
-    const fileCountEl = screen.getByText("3 files");
-    const cell = fileCountEl.parentElement;
-    // display:none 이면 뒤 칸이 0px 칸으로 밀려 머리 줄과 어긋난다 — 자리는 두고 보이지만 않게 한다.
-    expect(cell?.className).toContain("@max-[560px]/graph:invisible");
-    expect(cell?.className).not.toContain("@max-[560px]/graph:hidden");
+    render(<GraphRow {...baseProps} commit={c} stats={stats({ filesChanged: 3, additions: 12, deletions: 4 })} ci={{ state: "failed", names: ["build"] }} />);
+    const cell = screen.getByText("3 files").parentElement;
+    expect(cell?.className).toContain("@max-[560px]/graph:hidden");
+    // 셋째 단계의 칸 정의는 설명·작성자(아바타)·시각 세 칸이다 — 감춘 칸 수와 칸 정의가 맞는다.
+    expect(GRAPH_COLUMNS).toContain("@max-[560px]/graph:grid-cols-[minmax(0,1fr)_18px_40px]");
   });
 });
 
@@ -221,8 +220,11 @@ describe("GraphColumnHeader stays in step with the row columns", () => {
       expect(classesOf(hc[i])).toContain("@max-[400px]/graph:hidden");
       expect(classesOf(rc[i])).toContain("@max-[400px]/graph:hidden");
     }
-    expect(classesOf(hc[1])).toContain("@max-[560px]/graph:invisible");
-    expect(classesOf(rc[1])).toContain("@max-[560px]/graph:invisible");
+    // 변경(1)·CI(2)는 560px 아래에서 줄과 머리가 함께 빠진다(칸 정의도 세 칸으로 줄어든다).
+    for (const i of [1, 2]) {
+      expect(classesOf(hc[i])).toContain("@max-[560px]/graph:hidden");
+      expect(classesOf(rc[i])).toContain("@max-[560px]/graph:hidden");
+    }
     // 설명·시각은 어느 폭에서도 남는다.
     for (const i of [0, 4]) {
       expect(classesOf(hc[i])).not.toContain("@max-[400px]/graph:hidden");

@@ -40,7 +40,9 @@ export const GRAPH_COLUMNS = cn(
   "grid-cols-[minmax(0,1fr)_128px_16px_112px_64px]",
   "@max-[820px]/graph:grid-cols-[minmax(0,1fr)_128px_16px_36px_64px]",
   "@max-[680px]/graph:grid-cols-[minmax(0,1fr)_64px_16px_36px_64px]",
-  "@max-[560px]/graph:grid-cols-[minmax(0,1fr)_0px_16px_36px_64px]",
+  // 셋째 단계: 변경·CI 칸을 칸 정의째 빼고 작성자는 아바타 폭, 시각은 짧은 시각 폭만 둔다 — 남는 폭은 모두 설명이다.
+  // 줄마다 따로 그리드라 `auto`는 줄마다 폭이 달라 칸이 어긋난다. 고정 폭만 쓴다.
+  "@max-[560px]/graph:grid-cols-[minmax(0,1fr)_18px_40px] @max-[560px]/graph:gap-2",
   "@max-[400px]/graph:grid-cols-[minmax(0,1fr)_auto] @max-[400px]/graph:gap-2",
 );
 
@@ -61,8 +63,9 @@ export function GraphColumnHeader({ graphWidth }: { graphWidth: number }) {
     >
       <span className="pl-3.5">{t("graph.colDescription")}</span>
       <span className={cn(CHANGE_CELL_HIDDEN_CLASS, NARROW_HIDDEN_CLASS)}>{t("graph.colChange")}</span>
-      <span className={NARROW_HIDDEN_CLASS} title={t("graph.colCi")}>{t("graph.colCi")}</span>
-      <span className={NARROW_HIDDEN_CLASS}>{t("graph.colAuthor")}</span>
+      <span className={cn(CHANGE_CELL_HIDDEN_CLASS, NARROW_HIDDEN_CLASS)} title={t("graph.colCi")}>{t("graph.colCi")}</span>
+      {/* 셋째 단계의 작성자 칸은 아바타 폭(18px)이라 이름표가 들어가지 않는다: 자리는 두고 글자만 감춘다. */}
+      <span className={cn(NARROW_HIDDEN_CLASS, "@max-[560px]/graph:invisible")}>{t("graph.colAuthor")}</span>
       <span>{t("graph.colTime")}</span>
     </div>
   );
@@ -74,18 +77,17 @@ export const NARROW_HIDDEN_CLASS = "@max-[400px]/graph:hidden";
 /** 「변경」 칸을 좁아짐 둘째 단계에서 줄이는 표시(파일 수·크기 막대를 감춘다, `+ −` 숫자만 남긴다). */
 const CHANGE_DETAIL_CLASS = "@max-[680px]/graph:hidden";
 /**
- * 「변경」 칸을 좁아짐 셋째 단계에서 통째로 감추는 표시. `hidden`(display:none)이 아니라 `invisible`이다 —
- * 칸이 그리드에서 빠지면 뒤 칸(CI·작성자·시각)이 0px 칸으로 한 칸씩 밀려 머리 줄과 어긋난다.
- * 그리드 칸은 이미 0px이므로 자리는 그대로 두고 내용만 자른다.
+ * 「변경」·CI 칸을 좁아짐 셋째 단계에서 통째로 감추는 표시. 그 단계의 `GRAPH_COLUMNS`도 두 칸을 칸 정의에서 뺀다 —
+ * 감춘 칸 수와 칸 정의가 함께 줄어야 뒤 칸(작성자·시각)이 제자리에 남고 머리 줄과 맞는다.
  */
-export const CHANGE_CELL_HIDDEN_CLASS = "@max-[560px]/graph:invisible @max-[560px]/graph:overflow-hidden";
+export const CHANGE_CELL_HIDDEN_CLASS = "@max-[560px]/graph:hidden";
 /** 「작성자」 칸의 이름을 좁아짐 첫 단계에서 감추는 표시(아바타만 남는다). */
 const AUTHOR_NAME_HIDDEN_CLASS = "@max-[820px]/graph:hidden";
 
 /** 커밋 줄 「변경」 칸(3.15). 병합 커밋은 「병합」 글자 하나, 그 외는 파일 수·크기 막대·`+N −N`. */
 function ChangeCell({ stats }: { stats: CommitStats | undefined }) {
   const { t } = useTranslation();
-  if (!stats) return <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />;
+  if (!stats) return <span aria-hidden="true" className={cn(CHANGE_CELL_HIDDEN_CLASS, NARROW_HIDDEN_CLASS)} />;
   if (stats.merge) {
     return (
       <span className={cn("truncate text-[11.5px] text-muted-foreground", CHANGE_CELL_HIDDEN_CLASS, NARROW_HIDDEN_CLASS)}>
@@ -95,7 +97,8 @@ function ChangeCell({ stats }: { stats: CommitStats | undefined }) {
   }
   const { filesChanged, additions, deletions } = stats;
   // 바뀐 파일이 없는 커밋(빈 커밋)은 칸을 비운다 — 「파일 0 · +0 −0」은 읽을 거리가 없다.
-  if (filesChanged === null || filesChanged === 0) return <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />;
+  if (filesChanged === null || filesChanged === 0)
+    return <span aria-hidden="true" className={cn(CHANGE_CELL_HIDDEN_CLASS, NARROW_HIDDEN_CLASS)} />;
   const hasLines = additions !== null && deletions !== null;
   const bar = hasLines ? changeBarWidths(additions, deletions) : null;
   return (
@@ -120,9 +123,9 @@ function ChangeCell({ stats }: { stats: CommitStats | undefined }) {
 
 /** 커밋 줄 「CI」 칸(3.15). 실행 기록이 있을 때만 아이콘 하나(`CommitDetail`의 접힌 요약 줄과 같은 부품). */
 function CiCell({ ci }: { ci: CiSummary | null | undefined }) {
-  if (!ci) return <span aria-hidden="true" className={NARROW_HIDDEN_CLASS} />;
+  if (!ci) return <span aria-hidden="true" className={cn(CHANGE_CELL_HIDDEN_CLASS, NARROW_HIDDEN_CLASS)} />;
   return (
-    <span className={cn("flex items-center justify-center", NARROW_HIDDEN_CLASS)}>
+    <span className={cn("flex items-center justify-center", CHANGE_CELL_HIDDEN_CLASS, NARROW_HIDDEN_CLASS)}>
       <CiStateIcon ci={ci} />
     </span>
   );
@@ -630,7 +633,7 @@ export function GraphWipRow({
       </svg>
       <span className={cn(GRAPH_COLUMNS, "flex-1 min-w-0 pl-2 pr-3 text-[12.5px]")}>
         {/* 설명이 변경·CI·작성자 칸까지 넓게 쓴다(커밋 안 한 변경에는 그 칸들이 없다). 시각 칸만 맞춘다. */}
-        <span className="col-span-4 @max-[400px]/graph:col-span-1 flex items-center gap-2 min-w-0">
+        <span className="col-span-4 @max-[560px]/graph:col-span-2 @max-[400px]/graph:col-span-1 flex items-center gap-2 min-w-0">
           {leading && <span className={cn("contents", NARROW_HIDDEN_CLASS)}>{leading}</span>}
           {/* 좁으면 말줄임 대신 더 짧은 말로 바꾼다. */}
           <span className="italic text-(--fg2) shrink-0 whitespace-nowrap">{compact ? t("shell.uncommittedShort") : wipLabel}</span>
