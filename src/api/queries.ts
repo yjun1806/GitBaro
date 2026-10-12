@@ -37,6 +37,7 @@ import {
   continueMergeOrRebase,
 } from "./commands";
 import type { DefaultBranch, HistoryTarget, RepoSyncStatus } from "@/types";
+import { commitDiffKey, useDiffForceStore, workingDiffKey } from "@/stores/diff-force";
 import { useSelectionStore } from "@/stores/selection";
 import { selectionAfterStashPushed, selectionAfterStashRemoved } from "@/lib/stash-selection";
 import { useRepoAccountId } from "@/hooks/useRepoAccountId";
@@ -274,9 +275,13 @@ export function useSettings() {
 }
 
 export function useFileDiff(repoPath: string | null, filePath: string | null, staged: boolean) {
+  const force = useDiffForceStore(
+    (s) => repoPath !== null && filePath !== null && s.forced.has(workingDiffKey(repoPath, filePath, staged)),
+  );
   return useQuery({
-    queryKey: ["fileDiff", repoPath, filePath, staged],
-    queryFn: () => getFileDiff(repoPath!, filePath!, staged),
+    // 「그래도 보기」를 누른 뒤에만 키 끝에 붙는다 — 평소 키는 `fetchFileDiff`와 같은 항목을 쓴다.
+    queryKey: force ? ["fileDiff", repoPath, filePath, staged, "force"] : ["fileDiff", repoPath, filePath, staged],
+    queryFn: () => getFileDiff(repoPath!, filePath!, staged, force),
     enabled: repoPath !== null && filePath !== null,
   });
 }
@@ -299,9 +304,13 @@ export function useCommitDetail(repoPath: string | null, oid: string | null) {
 }
 
 export function useCommitFileDiff(repoPath: string | null, oid: string | null, filePath: string | null) {
+  const force = useDiffForceStore(
+    (s) =>
+      repoPath !== null && oid !== null && filePath !== null && s.forced.has(commitDiffKey(repoPath, oid, filePath)),
+  );
   return useQuery({
-    queryKey: ["commitFileDiff", repoPath, oid, filePath],
-    queryFn: () => getCommitFileDiff(repoPath!, oid!, filePath!),
+    queryKey: ["commitFileDiff", repoPath, oid, filePath, force],
+    queryFn: () => getCommitFileDiff(repoPath!, oid!, filePath!, force),
     enabled: repoPath !== null && oid !== null && filePath !== null,
   });
 }

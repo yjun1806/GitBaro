@@ -191,8 +191,45 @@ fn side_size(repo: &Repository, file: &git2::DiffFile) -> u64 {
     }
 }
 
+/// 저장소의 blob 하나의 크기. 내용은 읽지 않고 머리만 본다. 읽지 못하면 0.
+pub fn blob_size(repo: &Repository, id: Oid) -> u64 {
+    repo.odb().and_then(|odb| odb.read_header(id)).map(|(size, _)| size as u64).unwrap_or(0)
+}
+
+/// 한쪽이라도 `TRACKED_DIFF_LIMIT` 보다 큰가. 없는 쪽(`None`)은 0 으로 본다.
+pub fn exceeds_diff_limit(old_size: Option<u64>, new_size: Option<u64>) -> bool {
+    old_size.unwrap_or(0) > TRACKED_DIFF_LIMIT || new_size.unwrap_or(0) > TRACKED_DIFF_LIMIT
+}
+
+/// 읽지 않은 큰 파일의 `get_file_diff`·`get_commit_file_diff` 응답. 내용·구간은 비어 있고 `binary` 는 `true`,
+/// `binaryPreview.meta.tooLarge` 가 `true` 다(`TreeFileDiff::binary_preview` 와 같은 모양).
+pub fn too_large_file_diff(file_path: &str, staged: bool, old_size: Option<u64>, new_size: Option<u64>) -> serde_json::Value {
+    let preview = TooLargePreview {
+        meta: TooLargeMeta {
+            file_type: detect_file_type(file_path),
+            mime_type: extension_to_mime(file_path),
+            old_size,
+            new_size,
+            too_large: true,
+        },
+        old_base64: None,
+        new_base64: None,
+    };
+    serde_json::json!({
+        "filePath": file_path,
+        "staged": staged,
+        "binary": true,
+        "binaryPreview": preview,
+        "insertions": 0,
+        "deletions": 0,
+        "hunks": [],
+        "oldContent": "",
+        "newContent": "",
+    })
+}
+
 /// 어느 쪽이든 `TRACKED_DIFF_LIMIT` 보다 큰가. 크면 줄 단위로 비교하지 않는다.
-fn is_too_large_delta(repo: &Repository, delta: &git2::DiffDelta) -> bool {
+pub(crate) fn is_too_large_delta(repo: &Repository, delta: &git2::DiffDelta) -> bool {
     side_size(repo, &delta.old_file()) > TRACKED_DIFF_LIMIT || side_size(repo, &delta.new_file()) > TRACKED_DIFF_LIMIT
 }
 

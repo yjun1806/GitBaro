@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { commitDiffKey, workingDiffKey } from "@/stores/diff-force";
 import type {
   StatusEntry,
   FileStatus,
@@ -590,9 +591,11 @@ export async function getCommitFileDiff(
   repoPath: string,
   oid: string,
   filePath: string,
+  force = false,
 ): Promise<DiffOutput> {
-  const raw: RawFileDiff = await invoke("get_commit_file_diff", { repoPath, oid, filePath });
+  const raw: RawFileDiff = await invoke("get_commit_file_diff", { repoPath, oid, filePath, force });
   return {
+    forceKey: commitDiffKey(repoPath, oid, filePath),
     filePath: raw.filePath,
     oldContent: raw.oldContent ?? "",
     newContent: raw.newContent ?? "",
@@ -738,9 +741,11 @@ export async function getFileDiff(
   repoPath: string,
   filePath: string,
   staged: boolean,
+  force = false,
 ): Promise<DiffOutput> {
-  const raw: RawFileDiff = await invoke("get_file_diff", { repoPath, filePath, staged });
+  const raw: RawFileDiff = await invoke("get_file_diff", { repoPath, filePath, staged, force });
   return {
+    forceKey: workingDiffKey(repoPath, filePath, staged),
     filePath: raw.filePath,
     oldContent: raw.oldContent ?? "",
     newContent: raw.newContent ?? "",

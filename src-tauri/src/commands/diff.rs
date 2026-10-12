@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::git::binary::{detect_file_type, extension_to_mime, is_previewable, MAX_PREVIEW_SIZE};
 use crate::git::diff::{detect_renames, rename_source};
+use crate::git::file_diff::{blob_size, exceeds_diff_limit, too_large_file_diff};
 use base64::Engine;
 use serde_json::{json, Value};
 
@@ -61,7 +62,9 @@ pub async fn get_file_diff(
     repo_path: String,
     file_path: String,
     staged: bool,
+    force: Option<bool>,
 ) -> Result<Value, AppError> {
+    let force = force.unwrap_or(false);
     let result = tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
         let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
@@ -80,6 +83,29 @@ pub async fn get_file_diff(
         } else {
             None
         };
+
+        // Size check before any line is built or any content is read: a huge
+        // file would otherwise become tens of MB of JSON on every fs:change.
+        let full_path = std::path::Path::new(&repo_path).join(&file_path);
+        if !force {
+            let old_size = if staged {
+                let old_path = rename_from.as_deref().unwrap_or(&file_path);
+                head_tree
+                    .as_ref()
+                    .and_then(|tree| tree.get_path(std::path::Path::new(old_path)).ok())
+                    .map(|entry| blob_size(&repo, entry.id()))
+            } else {
+                index.get_path(rel_path, 0).map(|entry| blob_size(&repo, entry.id))
+            };
+            let new_size = if staged {
+                index.get_path(rel_path, 0).map(|entry| blob_size(&repo, entry.id))
+            } else {
+                std::fs::metadata(&full_path).ok().filter(|m| m.is_file()).map(|m| m.len())
+            };
+            if exceeds_diff_limit(old_size, new_size) {
+                return Ok(too_large_file_diff(&file_path, staged, old_size, new_size));
+            }
+        }
 
         let mut diff_opts = git2::DiffOptions::new();
         diff_opts
@@ -178,7 +204,6 @@ pub async fn get_file_diff(
         };
 
         // New side: the index for the staged diff, the disk for the unstaged one.
-        let full_path = std::path::Path::new(&repo_path).join(&file_path);
         let new_bytes: Option<Vec<u8>> = if staged {
             index_blob(&repo, &index, rel_path)
         } else {
@@ -290,7 +315,7 @@ mod tests {
     }
 
     async fn diff(dir: &std::path::Path, path: &str, staged: bool) -> Value {
-        get_file_diff(dir.to_string_lossy().to_string(), path.to_string(), staged)
+        get_file_diff(dir.to_string_lossy().to_string(), path.to_string(), staged, None)
             .await
             .unwrap()
     }
@@ -346,5 +371,64 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(d["oldContent"], "one\ntwo\nthree\n");
         assert_eq!(d["hunks"].as_array().unwrap().len(), 0, "{}", d["hunks"]);
+    }
+
+    fn over_limit() -> String {
+        "x\n".repeat(crate::git::file_diff::TRACKED_DIFF_LIMIT as usize / 2 + 1)
+    }
+
+    async fn forced(dir: &std::path::Path, path: &str, staged: bool) -> Value {
+        get_file_diff(dir.to_string_lossy().to_string(), path.to_string(), staged, Some(true))
+            .await
+            .unwrap()
+    }
+
+    /// 한도를 넘는 추적 파일은 줄도 내용도 싣지 않고 「너무 큼」 미리보기만 준다. force 면 전부 준다.
+    #[tokio::test]
+    async fn tracked_file_over_the_limit_is_not_loaded_unless_forced() {
+        let dir = temp_repo("big-tracked");
+        std::fs::write(dir.join("f.txt"), over_limit()).unwrap();
+
+        let d = diff(&dir, "f.txt", false).await;
+        assert_eq!(d["binary"], true);
+        assert_eq!(d["binaryPreview"]["meta"]["tooLarge"], true);
+        assert_eq!(d["hunks"].as_array().unwrap().len(), 0);
+        assert_eq!(d["newContent"], "");
+        assert_eq!(d["binaryPreview"]["meta"]["newSize"], over_limit().len());
+
+        let full = forced(&dir, "f.txt", false).await;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(full["binary"], false);
+        assert!(full["binaryPreview"].is_null());
+        assert!(!full["hunks"].as_array().unwrap().is_empty());
+        assert_eq!(full["newContent"], over_limit());
+    }
+
+    #[tokio::test]
+    async fn untracked_file_over_the_limit_is_not_read_unless_forced() {
+        let dir = temp_repo("big-untracked");
+        std::fs::write(dir.join("big.log"), over_limit()).unwrap();
+
+        let d = diff(&dir, "big.log", false).await;
+        assert_eq!(d["binaryPreview"]["meta"]["tooLarge"], true);
+        assert_eq!(d["hunks"].as_array().unwrap().len(), 0);
+        assert_eq!(d["newContent"], "");
+
+        let full = forced(&dir, "big.log", false).await;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(full["binaryPreview"].is_null());
+        assert!(full["insertions"].as_u64().unwrap() > 0);
+    }
+
+    #[tokio::test]
+    async fn staged_file_over_the_limit_is_not_loaded() {
+        let dir = temp_repo("big-staged");
+        std::fs::write(dir.join("f.txt"), over_limit()).unwrap();
+        git(&dir, &["add", "f.txt"]);
+
+        let d = diff(&dir, "f.txt", true).await;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(d["binaryPreview"]["meta"]["tooLarge"], true);
+        assert_eq!(d["oldContent"], "");
     }
 }

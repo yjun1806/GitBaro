@@ -8,6 +8,7 @@ use crate::commands::auth::{resolve_token, retry_with_fresh_token};
 use crate::error::AppError;
 use crate::git::cli::GitCliEngine;
 use crate::git::engine::{GitEngine, GitRemoteEngine};
+use crate::git::file_diff::is_too_large_delta;
 use crate::state::TokenStore;
 use serde_json::{json, Value};
 
@@ -63,7 +64,9 @@ pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
                     (Value::Null, Value::Null)
                 } else {
                     match diff_stats.get(path) {
-                        Some((ins, del)) => (json!(ins), json!(del)),
+                        Some(Some((ins, del))) => (json!(ins), json!(del)),
+                        // Too large to count (see `collect_diff_stats`): no numbers.
+                        Some(None) => (Value::Null, Value::Null),
                         None => (json!(0), json!(0)),
                     }
                 };
@@ -95,10 +98,12 @@ pub async fn get_status(repo_path: String) -> Result<Vec<Value>, AppError> {
 /// Insertions/deletions per path, summed over the staged (HEAD → index) and
 /// unstaged (index → worktree) diffs. Renames are detected on the staged side
 /// so a moved file is counted against its new path, not as a whole new file.
+/// A file over `TRACKED_DIFF_LIMIT` on either side is not counted (`None`):
+/// counting its lines costs 170-200 ms for 20 MB on every fs:change.
 fn collect_diff_stats(
     repo: &git2::Repository,
-) -> Result<std::collections::HashMap<String, (usize, usize)>, AppError> {
-    let mut diff_stats: std::collections::HashMap<String, (usize, usize)> =
+) -> Result<std::collections::HashMap<String, Option<(usize, usize)>>, AppError> {
+    let mut diff_stats: std::collections::HashMap<String, Option<(usize, usize)>> =
         std::collections::HashMap::new();
 
     let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
@@ -112,15 +117,24 @@ fn collect_diff_stats(
     let unstaged_diff = repo.diff_index_to_workdir(None, Some(&mut unstaged_opts))?;
 
     for diff in [&staged_diff, &unstaged_diff] {
-        for idx in 0..diff.deltas().count() {
+        for (idx, delta) in diff.deltas().enumerate() {
+            if is_too_large_delta(repo, &delta) {
+                let path = delta.new_file().path().or_else(|| delta.old_file().path());
+                if let Some(path) = path {
+                    diff_stats.insert(path.to_string_lossy().to_string(), None);
+                }
+                continue;
+            }
             if let Ok(Some(patch)) = git2::Patch::from_diff(diff, idx) {
                 let path = patch.delta().new_file().path()
                     .or_else(|| patch.delta().old_file().path())
                     .map(|p| p.to_string_lossy().to_string());
                 if let (Some(path), Ok((_, ins, del))) = (path, patch.line_stats()) {
-                    let entry = diff_stats.entry(path).or_insert((0, 0));
-                    entry.0 += ins;
-                    entry.1 += del;
+                    // A too-large side seen earlier (staged vs. unstaged) stays uncounted.
+                    if let Some((total_ins, total_del)) = diff_stats.entry(path).or_insert(Some((0, 0))) {
+                        *total_ins += ins;
+                        *total_del += del;
+                    }
                 }
             }
         }
@@ -1494,5 +1508,20 @@ mod tests {
             AppError::TokenExpired { account_id } => assert_eq!(account_id, "octocat"),
             other => panic!("expected TokenExpired, got {:?}", other),
         }
+    }
+
+    /// 한도를 넘는 파일은 줄 수를 세지 않는다(null). 작은 파일은 그대로 센다.
+    #[test]
+    fn diff_stats_skip_files_over_the_limit() {
+        let dir = temp_repo("stats-big");
+        std::fs::write(dir.join("big.txt"), "x\n".repeat(crate::git::file_diff::TRACKED_DIFF_LIMIT as usize / 2 + 1)).unwrap();
+        std::fs::write(dir.join("README.md"), "hello\nmore\n").unwrap();
+        git(&dir, &["add", "big.txt"]);
+
+        let repo = git2::Repository::open(&dir).unwrap();
+        let stats = collect_diff_stats(&repo).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(stats.get("big.txt"), Some(&None));
+        assert_eq!(stats.get("README.md"), Some(&Some((1, 0))));
     }
 }

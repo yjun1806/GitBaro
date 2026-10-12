@@ -8,6 +8,7 @@ import "./diff-theme.css";
 import type { DiffOutput, DiffHunk, FileStatus } from "@/types";
 import { DiffHeader } from "./DiffHeader";
 import { BinaryDiffViewer } from "./BinaryDiffViewer";
+import { highlightOffReason } from "./highlight-gate";
 import { VirtualizedDiffView, type DiffMenuLine } from "./VirtualizedDiffView";
 import { DiffContextMenu } from "./DiffContextMenu";
 import { DiffFindBar } from "./DiffFindBar";
@@ -38,8 +39,7 @@ function getFileLang(filePath: string): string {
 
 // 행 렌더링은 VirtualizedDiffView가 윈도잉하므로 행 수 자체는 병목이 아니다.
 // 다만 initSyntax는 파일 전체를 메인 스레드에서 파싱하므로, 큰 diff는 하이라이팅을
-// 기본 off로 두고(HIGHLIGHT_LIMIT) 사용자가 필요할 때 켤 수 있게 한다.
-const HIGHLIGHT_LIMIT = 2000;
+// 기본 off로 두고(highlight-gate.ts) 사용자가 필요할 때 켤 수 있게 한다.
 
 // DiffFile 캐시 — 같은 diff 객체에 대해 initRaw/initSyntax를 반복하지 않음.
 // 키가 diff 객체라 뷰어 인스턴스끼리 나눠 써도 안전하고, WeakMap이므로 diff 객체가 GC되면 캐시도 자동 정리.
@@ -184,8 +184,9 @@ export function DiffViewer({
     return { added, removed, total };
   }, [diff]);
 
-  // total = 실제 렌더되는 행 수(context 포함). 임계값은 이걸 기준으로 판정.
-  const wantHighlight = stats.total <= HIGHLIGHT_LIMIT || forceHighlight;
+  // total = 실제 렌더되는 행 수(context 포함). 행 수뿐 아니라 글자 수·한 줄 길이도 본다.
+  const highlightOff = useMemo(() => (diff ? highlightOffReason(diff, stats.total) : null), [diff, stats.total]);
+  const wantHighlight = highlightOff === null || forceHighlight;
 
   // 문서 보기는 이 파이프라인을 전혀 쓰지 않는다. 그런데도 빌드하면 `initSyntax`가 파일
   // 전체를 메인 스레드에서 파싱해, 문서 diff를 Worker로 밀어낸 이유를 그대로 되돌린다.
@@ -272,7 +273,7 @@ export function DiffViewer({
         />
         <div className="flex-1 min-h-0 overflow-auto">
           {diff.binaryPreview ? (
-            <BinaryDiffViewer filePath={diff.filePath} preview={diff.binaryPreview} />
+            <BinaryDiffViewer filePath={diff.filePath} preview={diff.binaryPreview} forceKey={diff.forceKey} />
           ) : (
             <EmptyState
               icon={FileQuestion}
@@ -316,7 +317,9 @@ export function DiffViewer({
             </Button>
           }
         >
-          {t("diff.highlightDisabled", { lines: stats.total })}
+          {highlightOff === "size"
+            ? t("diff.highlightDisabledSize")
+            : t("diff.highlightDisabled", { lines: stats.total })}
         </Notice>
       )}
 

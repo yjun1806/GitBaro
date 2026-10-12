@@ -92,6 +92,11 @@ export interface DiffOutput {
   hunks: DiffHunk[];
   binary: boolean;
   binaryPreview?: BinaryPreview;
+  /**
+   * 너무 커서 안 읽은 diff를 「그래도 보기」로 다시 읽을 때 쓰는 키(`stores/diff-force.ts`).
+   * 작업 트리·커밋 diff에만 있다.
+   */
+  forceKey?: string;
 }
 
 export interface DiffHunk {

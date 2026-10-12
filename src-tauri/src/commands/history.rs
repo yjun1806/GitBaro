@@ -6,6 +6,7 @@ use crate::git::binary::{detect_file_type, extension_to_mime, is_previewable, MA
 use crate::git::commit::{agent_attribution, parent_ids};
 use crate::git::commit_stats::{commit_stats, CommitStats};
 use crate::git::diff::{detect_renames, rename_source};
+use crate::git::file_diff::{blob_size, exceeds_diff_limit, too_large_file_diff};
 use crate::git::remote::parse_github_url;
 use crate::git::worktree_base::default_branch_with_fallback;
 use crate::git::unpushed::{commits_not_on_any_remote, upstream_tip, UNPUSHED_LIMIT};
@@ -339,7 +340,9 @@ pub async fn get_commit_file_diff(
     repo_path: String,
     oid: String,
     file_path: String,
+    force: Option<bool>,
 ) -> Result<Value, AppError> {
+    let force = force.unwrap_or(false);
     let result = tokio::task::spawn_blocking(move || {
         let repo = git2::Repository::open(&repo_path)?;
         let obj = repo.revparse_single(&oid)?;
@@ -365,6 +368,19 @@ pub async fn get_commit_file_diff(
             None
         };
         let old_path = rename_from.clone().unwrap_or_else(|| file_path.clone());
+
+        // Size check before any line is built or any content is read.
+        if !force {
+            let side_size = |tree: Option<&git2::Tree>, path: &str| {
+                tree.and_then(|t| t.get_path(std::path::Path::new(path)).ok())
+                    .map(|entry| blob_size(&repo, entry.id()))
+            };
+            let old_size = side_size(parent_tree.as_ref(), &old_path);
+            let new_size = side_size(Some(&commit_tree), &file_path);
+            if exceeds_diff_limit(old_size, new_size) {
+                return Ok(too_large_file_diff(&file_path, false, old_size, new_size));
+            }
+        }
 
         let mut diff_opts = git2::DiffOptions::new();
         diff_opts.pathspec(&file_path).disable_pathspec_match(true);
@@ -852,6 +868,28 @@ mod tests {
         assert!(commits.iter().all(|v| !v["isUnpushed"].as_bool().unwrap()));
     }
 
+    /// 한도를 넘는 커밋 파일은 줄도 내용도 싣지 않는다. force 면 전부 준다.
+    #[tokio::test]
+    async fn commit_file_diff_over_the_limit_is_not_loaded_unless_forced() {
+        let tmp = TempRepo::new();
+        let repo_path = tmp.path.to_str().unwrap().to_string();
+        let big = "x\n".repeat(crate::git::file_diff::TRACKED_DIFF_LIMIT as usize / 2 + 1);
+        let oid = commit(&tmp.open(), "big.txt", &big);
+
+        let d = get_commit_file_diff(repo_path.clone(), oid.to_string(), "big.txt".to_string(), None)
+            .await
+            .unwrap();
+        assert_eq!(d["binaryPreview"]["meta"]["tooLarge"], true);
+        assert_eq!(d["hunks"].as_array().unwrap().len(), 0);
+        assert_eq!(d["newContent"], "");
+
+        let full = get_commit_file_diff(repo_path, oid.to_string(), "big.txt".to_string(), Some(true))
+            .await
+            .unwrap();
+        assert!(full["binaryPreview"].is_null());
+        assert_eq!(full["newContent"], big);
+    }
+
     /// `git mv`로 옮긴 파일은 삭제+추가가 아니라 이름 변경으로 보여야 한다.
     #[tokio::test]
     async fn commit_detail_and_file_diff_detect_renames() {
@@ -876,7 +914,7 @@ mod tests {
         assert_eq!(files[0]["oldPath"], "old.txt");
         assert_eq!(files[0]["newPath"], "new.txt");
 
-        let diff = get_commit_file_diff(repo_path, oid.to_string(), "new.txt".to_string())
+        let diff = get_commit_file_diff(repo_path, oid.to_string(), "new.txt".to_string(), None)
             .await
             .unwrap();
         assert_eq!(diff["oldContent"], content);

@@ -46,6 +46,7 @@ GitBaro/
 │   │   ├── activity-targets.ts    # Paths each screen asks the activity watcher to watch
 │   │   ├── auto-sync.ts           # Last auto-sync result per repository
 │   │   ├── commit-draft.ts        # Unfinished commit message per repository
+│   │   ├── diff-force.ts          # Too-large diffs the user chose to load anyway
 │   │   ├── follow.ts              # Live follow on/off and the followed file
 │   │   ├── history-view.ts        # Branch being viewed without checkout
 │   │   ├── live-changes.ts        # Recent file activity per repo/worktree

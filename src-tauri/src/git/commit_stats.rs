@@ -19,6 +19,7 @@ use serde::Serialize;
 
 use crate::error::AppError;
 use crate::git::diff::detect_renames;
+use crate::git::file_diff::is_too_large_delta;
 use crate::git::worktree_base::common_dir;
 
 /// 바뀐 파일이 이보다 많으면 줄 수를 세지 않는다.
@@ -157,6 +158,10 @@ fn count(repo: &Repository, oid: Oid) -> Result<Counted, AppError> {
     if raw_files > MAX_FILES_FOR_LINES {
         return Ok(Counted { merge: false, files_changed: Some(raw_files), additions: None, deletions: None });
     }
+    // Counting lines reads every blob; skip it when a side is too large to diff.
+    if diff.deltas().any(|delta| is_too_large_delta(repo, &delta)) {
+        return Ok(Counted { merge: false, files_changed: Some(raw_files), additions: None, deletions: None });
+    }
     detect_renames(&mut diff)?;
     let stats = diff.stats()?;
     Ok(Counted {
@@ -248,6 +253,20 @@ mod tests {
         // 처음 커밋은 빈 트리와 비교한다.
         assert_eq!((out[1].files_changed, out[1].additions, out[1].deletions), (Some(1), Some(3), Some(0)));
         assert!(out.iter().all(|s| !s.merge && s.error.is_none()));
+    }
+
+    #[test]
+    fn a_file_over_the_diff_limit_is_not_counted() {
+        let tmp = TempDir::new("big");
+        init(&tmp.0);
+        write(&tmp.0, "a.txt", "a\n");
+        commit_all(&tmp.0, "base");
+        write(&tmp.0, "big.txt", &"x\n".repeat(crate::git::file_diff::TRACKED_DIFF_LIMIT as usize / 2 + 1));
+        let big = commit_all(&tmp.0, "big");
+
+        let out = stats(&tmp.0, &[&big]);
+        assert_eq!((out[0].files_changed, out[0].additions, out[0].deletions), (Some(1), None, None));
+        assert!(out[0].error.is_none());
     }
 
     #[test]
