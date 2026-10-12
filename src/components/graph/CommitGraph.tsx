@@ -21,7 +21,6 @@ import {
   useDivergencePoint,
   useCommitHistoryInfinite,
   useRemoteTags,
-  useWorktreeHeadHistories,
 } from "@/api/queries";
 import { createBranch, type ResetMode } from "@/api/commands";
 import { useCommitActions } from "@/hooks/useCommitActions";
@@ -66,7 +65,7 @@ import {
   type GraphWip,
 } from "./graph-model";
 import { repoLaneColor, type LaneWip, type RepoLaneGraph, type RepoLaneRow } from "./repo-lanes";
-import { mergeHistories, wipLaneOid, withWipLanes, worktreeColor } from "./worktree-history";
+import { wipLaneOid, withWipLanes, worktreeColor } from "./worktree-history";
 import {
   branchColors,
   mutedChainNames,
@@ -87,11 +86,6 @@ export interface CommitGraphProps {
   /** 맨 위 WIP 행(`useGraphReview`가 순서까지 정한 목록). */
   wips: GraphWip[];
   /**
-   * 칩 줄에서 고른 다른 워크트리의 HEAD(D5). 그 이력의 첫 페이지를 지금 연 워크트리의
-   * 이력과 합쳐 한 그래프에 그린다. 없으면 지금 연 워크트리의 이력만.
-   */
-  worktreeHeads?: readonly WorktreeHead[];
-  /**
    * 커밋 목록의 시작점. 기본은 HEAD(지금 체크아웃). 다른 브랜치나 모든 브랜치를 보면
    * 체크아웃하지 않고 그 이력을 그린다 — 그때는 main에서 갈라진 지점 행을 그리지 않고,
    * 커밋 메뉴의 reset·revert(체크아웃한 브랜치를 바꾸는 일)를 막는다.
@@ -104,14 +98,6 @@ export interface CommitGraphProps {
   ciRuns?: readonly WorkflowRun[];
 }
 
-/** 그래프에 함께 그릴 다른 워크트리. */
-export interface WorktreeHead {
-  path: string;
-  /** HEAD 커밋. 바뀌면 이력을 다시 읽는다. */
-  head: string;
-}
-
-const NO_WORKTREE_HEADS: readonly WorktreeHead[] = [];
 const NO_THROUGH: readonly { lane: number; chain: number }[] = [];
 const NO_CI_RUNS: readonly WorkflowRun[] = [];
 
@@ -305,7 +291,6 @@ function ChainHighlightStyle({ chain }: { chain: number | null }) {
 function CommitGraphList({
   wips,
   shownWips,
-  worktreeHeads = NO_WORKTREE_HEADS,
   historyTarget,
   ciRuns = NO_CI_RUNS,
   selection,
@@ -322,10 +307,6 @@ function CommitGraphList({
   const { data: historyData, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useCommitHistoryInfinite(activeRepoPath, historyTarget);
   const viewing = historyTarget !== undefined && historyTarget.kind !== "head";
-  const otherHistories = useWorktreeHeadHistories(worktreeHeads);
-  // 결과 배열은 렌더마다 새로 오므로, 받은 데이터 묶음이 바뀔 때만 다시 합친다.
-  const otherData = otherHistories.map((q) => q.data);
-  const otherKey = otherHistories.map((q) => q.dataUpdatedAt).join(",");
   const { data: remoteTagNames } = useRemoteTags(activeRepoPath, repoAccountId);
   // 원격 태그 목록을 모르는 동안은 null로 둬 태그를 로컬 전용으로 잘못 표시하지 않는다.
   const remoteTags = useMemo(
@@ -343,29 +324,25 @@ function CommitGraphList({
   // 페이지가 밀려 같은 커밋이 두 번 오면 레인 계산이 뺀 커밋을 목록에서도 뺀다.
   // WIP 행마다 제 레인을 연다(D5). 부모는 그 워크트리의 HEAD — 지금 연 워크트리는 제 이력의 첫 커밋.
   const ownHead = historyData?.pages[0]?.[0]?.id ?? null;
-  const wipLanes = useMemo(() => {
-    const headOf = new Map(worktreeHeads.map((h) => [h.path, h.head]));
-    return wips.map((w) => ({ path: w.path, head: w.isCurrent ? ownHead : (headOf.get(w.path) ?? null) }));
-  }, [wips, worktreeHeads, ownHead]);
+  const wipLanes = useMemo(
+    () => wips.map((w) => ({ path: w.path, head: w.isCurrent ? ownHead : null })),
+    [wips, ownHead],
+  );
   const wipLaneKey = wipLanes.map((w) => `${w.path}\u0000${w.head ?? ""}`).join("\u0001");
 
   // 그래프에 함께 그리는 워크트리(지금 연 워크트리가 먼저). 그 워크트리의 줄기와 브랜치 이름표를 그 색으로 칠한다.
-  const shown = useMemo<ShownWorktree[]>(() => {
-    const headOf = new Map(worktreeHeads.map((h) => [h.path, h.head]));
-    return [...shownWips]
-      .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent))
-      .map((w) => ({ path: w.path, branch: w.branch, head: w.isCurrent ? ownHead : (headOf.get(w.path) ?? null) }));
-  }, [shownWips, worktreeHeads, ownHead]);
+  const shown = useMemo<ShownWorktree[]>(
+    () =>
+      [...shownWips]
+        .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent))
+        .map((w) => ({ path: w.path, branch: w.branch, head: w.isCurrent ? ownHead : null })),
+    [shownWips, ownHead],
+  );
   const shownKey = shown.map((w) => `${w.path}\u0000${w.branch ?? ""}\u0000${w.head ?? ""}`).join("\u0001");
 
   const { commits, layouts, graphWidth, ownIds, chainColors, mutedNames } = useMemo(() => {
     const own = historyData?.pages.flat() ?? [];
-    // 다른 워크트리의 커밋을 시간순으로 끼워 넣는다(D5). 각 이력 안의 순서는 그대로다.
-    const all = mergeHistories(
-      own,
-      otherData.map((d) => d ?? []),
-      hasNextPage !== true,
-    );
+    const all = own;
     const result = computeGraphLanes(withWipLanes(wipLanes, all));
     const byOid = new Map(result.rows.map((r) => [r.oid, r]));
     const kept = new Set<string>();
@@ -385,9 +362,9 @@ function CommitGraphList({
       chainColors: colors,
       mutedNames: mutedChainNames(drawn, byOid, colors),
     };
-    // otherKey·wipLaneKey·shownKey가 다른 워크트리 이력, WIP 행, 칠할 워크트리 목록의 내용을 대신 비교한다.
+    // wipLaneKey·shownKey가 WIP 행, 칠할 워크트리 목록의 내용을 대신 비교한다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyData, hasNextPage, otherKey, wipLaneKey, shownKey]);
+  }, [historyData, wipLaneKey, shownKey]);
 
   // 기본 브랜치 머리(「main」, D4). `divergencePointKey`와 같은 조회(HEAD가 바뀔 때만 다시 읽음)를 쓴다.
   // 보는 중이면 그리지 않는다 — 그 기준(main 대비)은 체크아웃한 HEAD의 것이다.
@@ -567,19 +544,10 @@ function CommitGraphList({
     if (ciRuns.length === 0) return new Map<string, CiSummary | null>();
     return new Map(commitIds.map((id) => [id, summarizeCi(ciRuns as WorkflowRun[], id)]));
   }, [commitIds, ciRuns]);
-  const shownPathsKey = worktreeHeads
-    .map((h) => h.path)
-    .sort()
-    .join("\u0001");
-  // 자신의 이력은 먼저, 함께 그리는 다른 워크트리의 이력(`useWorktreeHeadHistories`)은 나중에 올 수
-  // 있다 — 그 사이에 목록에 끼어드는 커밋을 「방금 생긴 커밋」으로 잘못 비추지 않으려면, 다 불러올
-  // 때까지는 기록만 하게 한다(useNewCommits.ts).
-  const otherHistoriesReady = otherHistories.every((q) => q.isSuccess);
   const newCommits = useNewCommits(
     commitIds,
-    `${activeRepoPath ?? ""}\u0000${JSON.stringify(historyTarget ?? null)}\u0000${shownPathsKey}`,
+    `${activeRepoPath ?? ""}\u0000${JSON.stringify(historyTarget ?? null)}`,
     followTarget !== null,
-    otherHistoriesReady,
   );
 
   // 무한 스크롤: 맨 아래 표시가 보이면 다음 페이지를 불러온다.

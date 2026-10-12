@@ -84,7 +84,6 @@ vi.mock("@/api/queries", () => ({
   // 범위 화면 그래프의 「변경」 칸(3.15)
   useCommitStats: () => new Map(),
   // W6-T2 워크트리 칩·겹침 경고
-  useWorktreeHeadHistories: () => [],
   useWipFilesMany: () => [],
   useSiblingFileDiffs: (sides: unknown[]) => sides.map(() => ({ data: undefined })),
 }));

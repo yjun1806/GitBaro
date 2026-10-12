@@ -81,7 +81,6 @@ vi.mock("@/api/queries", () => ({
   useWorktrees: () => ({ data: [] }),
   useRemoteTags: () => ({ data: undefined }),
   useCommitAvatars: () => ({ data: undefined }),
-  useWorktreeHeadHistories: () => [],
   useCommitStats: () => new Map(),
 }));
 

@@ -138,8 +138,6 @@ vi.mock("@/api/queries", () => ({
   useRemoteTags: () => ({ data: undefined }),
   useCommitAvatars: () => ({ data: {} }),
   useWorktrees: () => ({ data: worktreeState.list }),
-  useWorktreeHeadHistories: (heads: { path: string; head: string }[]) =>
-    heads.map((h) => ({ data: worktreeState.histories[h.path], dataUpdatedAt: 1 })),
   useRepoSyncStatuses: (paths: string[]) => {
     syncCalls.push(paths);
     return { data: syncByPath };

@@ -114,7 +114,6 @@ vi.mock("@/api/queries", () => ({
   fetchFileDiff: () => new Promise(() => {}),
   useWorktrees: () => ({ data: [] }),
   // W6-T2 워크트리 칩·겹침 경고
-  useWorktreeHeadHistories: () => [],
   useWipFilesMany: () => [],
   useSiblingFileDiffs: (sides: unknown[]) => sides.map(() => ({ data: undefined })),
   // 「파일별 보기」: 이 스위트는 세그먼트 스위치 자체와 값 기억만 확인하므로 늘 빈 결과로 둔다.

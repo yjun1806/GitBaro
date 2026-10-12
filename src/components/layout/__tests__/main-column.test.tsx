@@ -113,8 +113,6 @@ vi.mock("@/api/queries", () => ({
   // 따라가기 줄의 「눈여겨볼 것」(D49)
   useUnpushedFileTouches: () => [{ status: "pending" }],
   // W6-T2 워크트리 칩·겹침 경고
-  // W6-T2 워크트리 칩·겹침 경고
-  useWorktreeHeadHistories: () => [],
   useWipFilesMany: () => [],
   useSiblingFileDiffs: (sides: unknown[]) => sides.map(() => ({ data: undefined })),
 }));
