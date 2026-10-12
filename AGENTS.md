@@ -29,7 +29,7 @@ GitBaro/
 │   │   ├── live/                  # Follow panel (live changes as an agent edits)
 │   │   ├── pr/                    # Read-only pull request list, detail, files
 │   │   ├── repository/            # Repo list, add/clone dialogs, sync indicator
-│   │   ├── review/                # Workspace review, git status line, multi-repo remote dialog
+│   │   ├── review/                # Workspace review, lane viewer shared with the repository step, git status line, multi-repo remote dialog
 │   │   ├── settings/              # Settings panel
 │   │   │   ├── app/               # App settings sections (general, appearance, tools, about)
 │   │   │   ├── repo/              # Repository settings dialog and its sections
@@ -251,7 +251,7 @@ cd src-tauri && cargo build          # Build
 ### Review model
 
 - The purpose is watching what agents change, not approving it. Never add approval, "viewed", "reviewed", or "N left to review" concepts; words describe what changed or what is happening now.
-- The workspace, repository, and branch screens are one screen with three scope steps (workspace ⊃ repository ⊃ branch): only the lane changes per step (repository, worktree, or branch). Contract table, the sidebar's worktree folder rows (only branches checked out in a worktree), and the footer status bar: `docs/design-system.md` § 범위 계약.
+- The workspace, repository, and branch screens are one screen with three scope steps (workspace ⊃ repository ⊃ branch): only the lane changes per step (repository, worktree, or branch). The repository step draws one lane per worktree with the same lane viewer as the workspace (`components/review/lane-viewer.tsx`, data from `get_workspace_history` per worktree path): each lane shows only the commits since it forked from the default branch and stops at the base row, so the default branch's own history is seen in the branch step. Contract table, the sidebar's worktree folder rows (only branches checked out in a worktree), and the footer status bar: `docs/design-system.md` § 범위 계약.
 - The basis is **commits not on any remote** (`git rev-list HEAD --not --remotes`, `git/unpushed.rs`), counted even when the branch has no upstream yet.
 - The unpushed range (remote boundary → HEAD, committed changes only) can be shown as one combined diff: `get_range_changed_files` / `get_range_file_diff` (`commands/range_changes.rs`) compare two commits' trees. The fork point from the default branch comes from `get_divergence_point`.
 - Viewing a branch in the graph does not check it out (`stores/history-view.ts`).
