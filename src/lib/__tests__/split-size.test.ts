@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   clampFileListWidth,
   clampGraphRatio,
+  clampNarrowListWidth,
   DEFAULT_FILE_LIST_WIDTH,
   DEFAULT_GRAPH_RATIO,
   graphRatioAfterDrag,
   MAX_FILE_LIST_WIDTH,
   MAX_GRAPH_RATIO,
+  MAX_NARROW_LIST_WIDTH,
+  MIN_NARROW_LIST_WIDTH,
   MIN_FILE_LIST_WIDTH,
   MIN_GRAPH_RATIO,
 } from "@/lib/split-size";
@@ -56,5 +59,14 @@ describe("graphRatioAfterDrag", () => {
 
   it("keeps the ratio while the container height is unknown", () => {
     expect(graphRatioAfterDrag(0.4, 100, 0)).toBe(0.4);
+  });
+});
+
+describe("clampNarrowListWidth", () => {
+  it("allows a wide commit list up to 640px and stops at 180px", () => {
+    expect(MAX_NARROW_LIST_WIDTH).toBe(640);
+    expect(clampNarrowListWidth(600)).toBe(600);
+    expect(clampNarrowListWidth(900)).toBe(640);
+    expect(clampNarrowListWidth(10)).toBe(MIN_NARROW_LIST_WIDTH);
   });
 });

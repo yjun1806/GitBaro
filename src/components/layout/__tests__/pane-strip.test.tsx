@@ -177,6 +177,35 @@ describe("PaneStrip resize handle (5.4)", () => {
     expect(useUIStore.getState().narrowListWidth).toBe(GRAPH_NARROW_WIDTH);
   });
 
+  it("2단계: keeps the narrow list on screen so the bottom pane keeps its minimum width, without touching the saved width", () => {
+    useUIStore.setState({ diffFileOpen: true, narrowListWidth: 600 });
+    renderStrip(true);
+    const pane = screen.getByTestId("graph-pane");
+    expect(pane.style.width).toBe("600px");
+    // 아래 칸 최소 폭 652 + 손잡이 간격 8 = 660. 창이 좁아도 목록은 180 밑으로 줄지 않는다.
+    expect(pane.style.maxWidth).toBe("calc(100% - 660px)");
+    expect(pane.style.minWidth).toBe("180px");
+    expect(useUIStore.getState().narrowListWidth).toBe(600);
+  });
+
+  it("2단계: drags from the width on screen and does not save more than the screen allows", () => {
+    // 줄 폭 1000px이면 화면에서 목록은 340px까지(1000 - 660). 저장값이 600이어도 보이는 폭에서 출발한다.
+    useUIStore.setState({ diffFileOpen: true, narrowListWidth: 600 });
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1000);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 340 } as DOMRect);
+    try {
+      renderStrip(true);
+      const handle = screen.getByRole("separator", { name: "Resize the graph pane (double-click to reset)" });
+      drag(handle, -40);
+      expect(useUIStore.getState().narrowListWidth).toBe(300);
+      fireEvent.pointerUp(handle, { clientX: 460, pointerId: 1 });
+      drag(handle, 500);
+      expect(useUIStore.getState().narrowListWidth).toBe(340);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it("moves with the arrow keys and resets with Enter", () => {
     useUIStore.setState({ diffFileOpen: true });
     renderStrip(true);

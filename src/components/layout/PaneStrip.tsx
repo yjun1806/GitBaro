@@ -7,6 +7,7 @@ import {
   GRAPH_NARROW_WIDTH,
   MIN_DIFF_PANE_WIDTH,
   MIN_FILE_LIST_SQUEEZED_WIDTH,
+  MIN_NARROW_LIST_WIDTH,
   MIN_PANE_DETAIL_WIDTH,
   MIN_PANE_GRAPH_WIDTH,
 } from "@/lib/split-size";
@@ -54,6 +55,22 @@ function level1GraphStyle(ratio: number, fileOpen: boolean): CSSProperties {
   };
 }
 
+/** 2단계 아래 칸이 지켜야 할 폭(파일 목록 220 + diff 424 + 간격)에 손잡이 간격을 더한 값. */
+const LEVEL2_REST = MIN_FILE_LIST_SQUEEZED_WIDTH + MIN_DIFF_PANE_WIDTH + GAP + GAP;
+
+/**
+ * 2단계 좁은 커밋 목록의 화면 폭. 저장한 폭을 쓰되 아래 칸 최소 폭을 지키려고 줄인다 — 목록을 넓혀도
+ * 그것만으로는 가로 스크롤이 생기지 않는다. 창이 너무 좁으면 목록은 180 밑으로 줄지 않는다(그때는
+ * 지금처럼 가로 스크롤). 저장값은 건드리지 않는다.
+ */
+function level2GraphStyle(width: number): CSSProperties {
+  return {
+    width,
+    minWidth: MIN_NARROW_LIST_WIDTH,
+    maxWidth: `calc(100% - ${LEVEL2_REST}px)`,
+  };
+}
+
 function graphTargetWidth(
   level: 0 | 1 | 2 | 3,
   containerWidth: number,
@@ -66,7 +83,7 @@ function graphTargetWidth(
     const max = containerWidth - detailMinWidth(fileOpen) - GAP;
     return Math.max(0, Math.round(Math.min(max, Math.max(Math.min(MIN_PANE_GRAPH_WIDTH, max), containerWidth * ratio))));
   }
-  if (level === 2) return narrowWidth;
+  if (level === 2) return Math.max(MIN_NARROW_LIST_WIDTH, Math.min(narrowWidth, containerWidth - LEVEL2_REST));
   return 0;
 }
 
@@ -82,7 +99,7 @@ function graphTargetWidth(
  * 않는다 — 시안 `layout-explore.html`의 새로 뜨는 칸과 같다).
  *
  * 1·2단계에서는 그래프 칸과 옆 칸 사이 간격이 손잡이(`SplitHandle`)다. 1단계는 그래프 비율
- * (`ui.paneGraphRatio`, 기본 46%), 2단계는 좁은 목록 폭(`ui.narrowListWidth`, 180~400px)을 바꿔 저장하고,
+ * (`ui.paneGraphRatio`, 기본 46%), 2단계는 좁은 목록 폭(`ui.narrowListWidth`, 180~640px, 화면에서는 아래 칸 최소 폭을 지키게 줄인다)을 바꿔 저장하고,
  * 두 번 누르면(또는 Enter) 기본값으로 돌아간다. 끄는 동안에는 폭 전환 애니메이션을 끈다.
  */
 export function PaneStrip({ graph, hasSelection, bottom }: PaneStripProps) {
@@ -157,7 +174,10 @@ export function PaneStrip({ graph, hasSelection, bottom }: PaneStripProps) {
   const handleDrag = (delta: number) => {
     const start = dragStart.current;
     if (level === 2) {
-      setNarrowWidth(start.narrowWidth + delta);
+      // 화면에 보이던 폭(최소·최대로 맞춰졌을 수 있다)에서 출발하고, 화면이 허락하는 폭을 넘겨 저장하지 않는다.
+      const from = start.graphPx > 0 ? start.graphPx : start.narrowWidth;
+      const screenMax = start.rowPx > 0 ? Math.max(MIN_NARROW_LIST_WIDTH, start.rowPx - LEVEL2_REST) : Infinity;
+      setNarrowWidth(Math.min(from + delta, screenMax));
     } else if (start.rowPx > 0) {
       // 화면에 보이던 폭(최소 폭으로 맞춰졌을 수 있다)에서 출발해 비율로 바꿔 저장한다.
       setRatio((start.graphPx + delta) / start.rowPx);
@@ -169,7 +189,7 @@ export function PaneStrip({ graph, hasSelection, bottom }: PaneStripProps) {
   };
 
   const graphStyle: CSSProperties =
-    level === 0 ? { width: "100%" } : level === 1 ? level1GraphStyle(ratio, fileOpen) : level === 2 ? { width: narrowWidth } : { width: 0 };
+    level === 0 ? { width: "100%" } : level === 1 ? level1GraphStyle(ratio, fileOpen) : level === 2 ? level2GraphStyle(narrowWidth) : { width: 0 };
   const resizable = level === 1 || level === 2;
 
   return (

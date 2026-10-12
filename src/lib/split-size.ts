@@ -42,7 +42,7 @@ export const MIN_PANE_DETAIL_WIDTH = 280;
 
 /** 2단계 좁은 커밋 목록 폭의 범위(px). 기본은 {@link GRAPH_NARROW_WIDTH}. */
 export const MIN_NARROW_LIST_WIDTH = 180;
-export const MAX_NARROW_LIST_WIDTH = 400;
+export const MAX_NARROW_LIST_WIDTH = 640;
 
 /** 크게 보기(3단계)에서 diff 옆에 남는 파일 목록의 폭(px, 펼침·접힘). */
 export const MAXIMIZED_LIST_WIDTH = 260;
