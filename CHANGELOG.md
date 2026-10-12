@@ -2,6 +2,59 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [2.2.0](https://github.com/yjun1806/GitBaro/compare/v2.1.0...v2.2.0) (2026-10-12)
+
+
+### Features
+
+* **graph:** show only the branch's own commits in the branch step ([a146629](https://github.com/yjun1806/GitBaro/commit/a1466293df090ce1cf39752ce02a70e6ca0090fa))
+* **layout:** close the side panes from the narrow list's expand button ([6235fd8](https://github.com/yjun1806/GitBaro/commit/6235fd8c3d69770de151b0c99a52342661feb373))
+* **layout:** let the narrow commit list grow to 640px ([5cbb972](https://github.com/yjun1806/GitBaro/commit/5cbb9725b1a74b941d9ac77f2a555a0379551d1b))
+* **layout:** open the diff for uncommitted changes only when a file is picked ([80c26a6](https://github.com/yjun1806/GitBaro/commit/80c26a6c58b2d835282f2db0519e2de273b3a658))
+* **layout:** open the diff only when a file is picked ([bd2c64a](https://github.com/yjun1806/GitBaro/commit/bd2c64a87bfa93ef292f37acd060b4cc37898ac9))
+* **motion:** adopt transitions.dev motion recipes ([fe48da9](https://github.com/yjun1806/GitBaro/commit/fe48da9671888bdd070e44b75aa8a45815895b40))
+* **scope:** show worktrees as lanes in the repository step ([482b0bd](https://github.com/yjun1806/GitBaro/commit/482b0bd153d55efba14e95fc64e05b0269ceeefd))
+* **sidebar:** mark the checked-out branch and the default branch ([7027a19](https://github.com/yjun1806/GitBaro/commit/7027a19ea42dc2bbeacbc2d10d10ab78787d79b6))
+* **sidebar:** show only branches checked out in a worktree ([acf4b75](https://github.com/yjun1806/GitBaro/commit/acf4b75cf420d5ed9088cdd9a956b6c5acf18ab9))
+
+
+### Bug Fixes
+
+* **commit:** keep the working changes panel inside narrow panes ([8968209](https://github.com/yjun1806/GitBaro/commit/896820968146c6306e1bc1d89a6fe7073a0991e6))
+* **events:** unlisten git events even when unmounted early ([2d20936](https://github.com/yjun1806/GitBaro/commit/2d20936bfdf01442daa97e9e8f1518bf00aad800))
+* **graph:** give the description the room in a narrow graph ([0414fce](https://github.com/yjun1806/GitBaro/commit/0414fce83d8fead2d65df6d127020b0320c5e682))
+* **graph:** keep the column header in step with the row columns ([b0fffa8](https://github.com/yjun1806/GitBaro/commit/b0fffa80e2315aabceb0abffa40afbfa0714dddb))
+* **graph:** leave the repository step when a folder row is clicked ([6b6174c](https://github.com/yjun1806/GitBaro/commit/6b6174c74fedeb4d5e56bf024afed800cea266e1))
+* **scope:** enter the branch step when a local branch is picked ([d7cc762](https://github.com/yjun1806/GitBaro/commit/d7cc76283d997bf1db76935b66c6288031f020e6))
+* **sidebar:** select the repository row in the repository step ([eb7c199](https://github.com/yjun1806/GitBaro/commit/eb7c199acc7e545844506d2a00e5d70362c86acd))
+* **sync:** allow fetch and pull on read-only repositories ([b671c86](https://github.com/yjun1806/GitBaro/commit/b671c86fa89352c59f95a0c625ea73a7a1b12715))
+
+
+### Performance
+
+* **activity:** stop rewriting the activity log on every progress line ([29a3ec0](https://github.com/yjun1806/GitBaro/commit/29a3ec071f3f94a871db57d4863b85e51921fdf9))
+* **diff:** cap large file diffs and skip highlighting long lines ([f0b766f](https://github.com/yjun1806/GitBaro/commit/f0b766f97c3700707548c2a8173ec8dcad3f263e))
+* **diff:** keep at most 2 MB diffs in memory by default ([4906c63](https://github.com/yjun1806/GitBaro/commit/4906c63e4397d3a112dc33eebae1b49689e28df1))
+* **git:** truncate long command output in logs ([816d3f1](https://github.com/yjun1806/GitBaro/commit/816d3f1181b40a5856b9b76a690a46b04ebb4b50))
+* **graph:** re-render only the hovered rows and virtualize the commit list ([4fb80ed](https://github.com/yjun1806/GitBaro/commit/4fb80ed3d8bdb080e3cd706250791a1f6e928bd1))
+* **sync:** invalidate only the synced repositories ([0c3d4b4](https://github.com/yjun1806/GitBaro/commit/0c3d4b42cc4a372e372f1fb31f6918c0c93d6c3f))
+* **watch:** refresh only the changed repository's status ([1777cdb](https://github.com/yjun1806/GitBaro/commit/1777cdb5ac6e6497415d5e31304226b937cbea1d))
+* **workspace:** virtualize the lane graph and load stats for visible rows only ([9cc2bb6](https://github.com/yjun1806/GitBaro/commit/9cc2bb6c526fbbfcac8b70ed9b1543addae52080))
+
+
+### Refactoring
+
+* **api:** drop the per-worktree head history query ([92ac882](https://github.com/yjun1806/GitBaro/commit/92ac8827b74e417489496e405b8108e56bc80659))
+* **graph:** drop the shared-DAG worktree lanes from the commit graph ([2626d9a](https://github.com/yjun1806/GitBaro/commit/2626d9a4b1202a5dc8e159a4baf82e48c4bac379))
+* **layout:** split the file list and the diff into two cards everywhere ([e94bdbf](https://github.com/yjun1806/GitBaro/commit/e94bdbf2817f7b32f97f9ca8f3ebbe714a54d0d6))
+* **review:** extract the lane viewer frame ([0577f2d](https://github.com/yjun1806/GitBaro/commit/0577f2d0c095c1edda9d56e4a41f453503748859))
+
+
+### Documentation
+
+* **motion:** record transitions.dev as the source of motion values ([77eeba2](https://github.com/yjun1806/GitBaro/commit/77eeba2d486044cc139569e9a3af70f755e1d2a2))
+* **scope:** describe worktree lanes in the repository step ([6a5a188](https://github.com/yjun1806/GitBaro/commit/6a5a1889c0b79bb3e13b30b65af05e670b1d0369))
+
 ## [2.1.0](https://github.com/yjun1806/GitBaro/compare/v2.0.0...v2.1.0) (2026-09-27)
 
 
